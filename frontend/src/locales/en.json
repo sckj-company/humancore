@@ -112,5 +112,69 @@
   },
   "documents": {
     "title": "Documents"
+  },
+  "reports": {
+    "title": "Reports",
+    "description": "Aggregated analysis of headcount, turnover, payroll and attendance.",
+    "tabs": {
+      "headcount": "Headcount",
+      "turnover": "Turnover",
+      "payroll": "Payroll",
+      "attendance": "Attendance"
+    },
+    "filters": {
+      "startDate": "Start date",
+      "endDate": "End date",
+      "apply": "Apply",
+      "reset": "Reset",
+      "last6": "Last 6 months",
+      "last12": "Last 12 months"
+    },
+    "export": "Export CSV",
+    "headcount": {
+      "summary": "Summary",
+      "total": "Total",
+      "active": "Active",
+      "hired": "Hired in period",
+      "terminated": "Terminated in period",
+      "byDepartment": "By department",
+      "byStatus": "By status",
+      "trend": "Monthly trend"
+    },
+    "turnover": {
+      "summary": "Summary",
+      "hired": "Hired",
+      "terminated": "Terminated",
+      "averageHeadcount": "Average headcount",
+      "rate": "Turnover rate",
+      "monthly": "Monthly",
+      "byReason": "Termination reasons"
+    },
+    "payroll": {
+      "totals": "Totals",
+      "period": "Period",
+      "gross": "Gross salary",
+      "net": "Net",
+      "taxes": "Taxes",
+      "deductions": "Deductions",
+      "overtime": "Overtime",
+      "employees": "Employees",
+      "absentDays": "Absent days",
+      "byDepartment": "By department"
+    },
+    "attendance": {
+      "summary": "Summary",
+      "records": "Records",
+      "totalHours": "Total hours",
+      "lateMinutes": "Late minutes",
+      "overtimeMinutes": "Overtime minutes",
+      "leavesApproved": "Approved leaves",
+      "leavesPending": "Pending leaves",
+      "byStatus": "By status",
+      "byDepartment": "By department"
+    },
+    "empty": "No data for the selected period.",
+    "loading": "Generating report…",
+    "error": "Could not generate the report."
   }
 }

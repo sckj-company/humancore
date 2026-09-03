@@ -112,5 +112,69 @@
   },
   "documents": {
     "title": "文档"
+  },
+  "reports": {
+    "title": "报表",
+    "description": "员工人数、流失率、薪资和考勤的汇总分析。",
+    "tabs": {
+      "headcount": "员工人数",
+      "turnover": "流失率",
+      "payroll": "薪资",
+      "attendance": "考勤"
+    },
+    "filters": {
+      "startDate": "开始日期",
+      "endDate": "结束日期",
+      "apply": "应用",
+      "reset": "重置",
+      "last6": "最近 6 个月",
+      "last12": "最近 12 个月"
+    },
+    "export": "导出 CSV",
+    "headcount": {
+      "summary": "摘要",
+      "total": "总计",
+      "active": "在职",
+      "hired": "期内入职",
+      "terminated": "期内离职",
+      "byDepartment": "按部门",
+      "byStatus": "按状态",
+      "trend": "月度趋势"
+    },
+    "turnover": {
+      "summary": "摘要",
+      "hired": "入职",
+      "terminated": "离职",
+      "averageHeadcount": "平均人数",
+      "rate": "流失率",
+      "monthly": "月度",
+      "byReason": "离职原因"
+    },
+    "payroll": {
+      "totals": "合计",
+      "period": "期间",
+      "gross": "应发工资",
+      "net": "实发",
+      "taxes": "税费",
+      "deductions": "扣除",
+      "overtime": "加班",
+      "employees": "员工数",
+      "absentDays": "缺勤天数",
+      "byDepartment": "按部门"
+    },
+    "attendance": {
+      "summary": "摘要",
+      "records": "记录数",
+      "totalHours": "总工时",
+      "lateMinutes": "迟到分钟",
+      "overtimeMinutes": "加班分钟",
+      "leavesApproved": "已批准休假",
+      "leavesPending": "待批休假",
+      "byStatus": "按状态",
+      "byDepartment": "按部门"
+    },
+    "empty": "所选期间无数据。",
+    "loading": "正在生成报表…",
+    "error": "无法生成报表。"
   }
 }

@@ -57,7 +57,17 @@
     "organization": "Organização",
     "departments": "Departamentos",
     "positions": "Cargos",
-    "branches": "Filiais"
+    "branches": "Filiais",
+    "section_people": "Pessoas",
+    "section_time": "Tempo",
+    "section_management": "Gestão",
+    "section_analytics": "Análise"
+  },
+  "settings": {
+    "title": "Configurações",
+    "theme": {
+      "label": "Tema"
+    }
   },
   "dashboard": {
     "title": "Dashboard",
@@ -112,5 +122,69 @@
   },
   "documents": {
     "title": "Documentos"
+  },
+  "reports": {
+    "title": "Relatórios",
+    "description": "Análise agregada de headcount, turnover, payroll e presenças.",
+    "tabs": {
+      "headcount": "Headcount",
+      "turnover": "Turnover",
+      "payroll": "Payroll",
+      "attendance": "Presenças"
+    },
+    "filters": {
+      "startDate": "Data inicial",
+      "endDate": "Data final",
+      "apply": "Aplicar",
+      "reset": "Repor",
+      "last6": "Últimos 6 meses",
+      "last12": "Últimos 12 meses"
+    },
+    "export": "Exportar CSV",
+    "headcount": {
+      "summary": "Resumo",
+      "total": "Total",
+      "active": "Ativos",
+      "hired": "Admitidos no período",
+      "terminated": "Desligados no período",
+      "byDepartment": "Por departamento",
+      "byStatus": "Por estado",
+      "trend": "Evolução mensal"
+    },
+    "turnover": {
+      "summary": "Resumo",
+      "hired": "Admissões",
+      "terminated": "Desligamentos",
+      "averageHeadcount": "Headcount médio",
+      "rate": "Taxa de turnover",
+      "monthly": "Mensal",
+      "byReason": "Motivos de desligamento"
+    },
+    "payroll": {
+      "totals": "Totais",
+      "period": "Período",
+      "gross": "Salário bruto",
+      "net": "Líquido",
+      "taxes": "Impostos",
+      "deductions": "Deduções",
+      "overtime": "Horas extras",
+      "employees": "Funcionários",
+      "absentDays": "Dias falta",
+      "byDepartment": "Por departamento"
+    },
+    "attendance": {
+      "summary": "Resumo",
+      "records": "Registos",
+      "totalHours": "Horas totais",
+      "lateMinutes": "Minutos de atraso",
+      "overtimeMinutes": "Minutos extra",
+      "leavesApproved": "Férias aprovadas",
+      "leavesPending": "Férias pendentes",
+      "byStatus": "Por estado",
+      "byDepartment": "Por departamento"
+    },
+    "empty": "Sem dados para o período selecionado.",
+    "loading": "A gerar relatório…",
+    "error": "Não foi possível gerar o relatório."
   }
 }

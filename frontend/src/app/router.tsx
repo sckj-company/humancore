@@ -21,6 +21,7 @@ const LeavePage = lazy(() => import('@/features/leave/leave-page').then((m) => (
 const SettingsPage = lazy(() => import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })))
 const DocumentsPage = lazy(() => import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })))
 const NotificationsPage = lazy(() => import('@/features/notifications/notifications-page').then((m) => ({ default: m.NotificationsPage })))
+const ReportsPage = lazy(() => import('@/features/reports/reports-page').then((m) => ({ default: m.ReportsPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
 
 function PageLoader() {
@@ -76,7 +77,7 @@ export function AppRouter() {
           <Route path="/recruitment" element={<PlaceholderPage title="Recrutamento" />} />
           <Route path="/performance" element={<PlaceholderPage title="Desempenho" />} />
           <Route path="/training" element={<PlaceholderPage title="Formação" />} />
-          <Route path="/reports" element={<PlaceholderPage title="Relatórios" />} />
+          <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

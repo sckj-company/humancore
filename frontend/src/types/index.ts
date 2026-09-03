@@ -310,3 +310,78 @@ export interface AppNotification {
   created_at?: string
 }
 
+
+// Reports
+export interface ReportRange {
+  start: string
+  end: string
+}
+
+export interface HeadcountReport {
+  range: ReportRange
+  summary: {
+    total_employees: number
+    active_employees: number
+    hired_in_range: number
+    terminated_in_range: number
+  }
+  by_department: { department_id?: number; department: string; total: number }[]
+  by_status: Record<string, number>
+  trend: { month: string; label: string; count: number }[]
+}
+
+export interface TurnoverReport {
+  range: ReportRange
+  summary: {
+    hired: number
+    terminated: number
+    average_headcount: number
+    turnover_rate: number
+  }
+  monthly: { month: string; label: string; hired: number; terminated: number; turnover_rate: number }[]
+  by_reason: { reason: string; total: number }[]
+}
+
+export interface PayrollReportTotals {
+  total_gross: number
+  total_net: number
+  total_taxes: number
+  total_deductions: number
+  total_overtime: number
+}
+
+export interface PayrollReport {
+  range: ReportRange
+  totals: PayrollReportTotals
+  rows: {
+    period_id: number
+    name: string
+    period_start: string
+    period_end: string
+    status: string
+    employees: number
+    total_gross: number
+    total_net: number
+    total_taxes: number
+    total_deductions: number
+    total_overtime: number
+    total_absent_days: number
+  }[]
+  by_department: { department: string; employees: number; total_gross: number; total_net: number }[]
+}
+
+export interface AttendanceReport {
+  range: ReportRange
+  summary: {
+    records: number
+    total_hours: number
+    late_minutes: number
+    overtime_minutes: number
+    leaves_approved: number
+    leaves_pending: number
+  }
+  by_status: Record<string, number>
+  by_department: { department: string; records: number; total_hours: number; late_minutes: number; overtime_minutes: number }[]
+}
+
+export type ReportType = 'headcount' | 'turnover' | 'payroll' | 'attendance'

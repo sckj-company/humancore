@@ -112,5 +112,69 @@
   },
   "documents": {
     "title": "Documents"
+  },
+  "reports": {
+    "title": "Rapports",
+    "description": "Analyse agrégée des effectifs, du turnover, de la paie et des présences.",
+    "tabs": {
+      "headcount": "Effectifs",
+      "turnover": "Turnover",
+      "payroll": "Paie",
+      "attendance": "Présences"
+    },
+    "filters": {
+      "startDate": "Date de début",
+      "endDate": "Date de fin",
+      "apply": "Appliquer",
+      "reset": "Réinitialiser",
+      "last6": "6 derniers mois",
+      "last12": "12 derniers mois"
+    },
+    "export": "Exporter CSV",
+    "headcount": {
+      "summary": "Résumé",
+      "total": "Total",
+      "active": "Actifs",
+      "hired": "Embauches sur la période",
+      "terminated": "Départs sur la période",
+      "byDepartment": "Par département",
+      "byStatus": "Par statut",
+      "trend": "Évolution mensuelle"
+    },
+    "turnover": {
+      "summary": "Résumé",
+      "hired": "Embauches",
+      "terminated": "Départs",
+      "averageHeadcount": "Effectif moyen",
+      "rate": "Taux de turnover",
+      "monthly": "Mensuel",
+      "byReason": "Motifs de départ"
+    },
+    "payroll": {
+      "totals": "Totaux",
+      "period": "Période",
+      "gross": "Salaire brut",
+      "net": "Net",
+      "taxes": "Impôts",
+      "deductions": "Déductions",
+      "overtime": "Heures supp.",
+      "employees": "Employés",
+      "absentDays": "Jours d'absence",
+      "byDepartment": "Par département"
+    },
+    "attendance": {
+      "summary": "Résumé",
+      "records": "Enregistrements",
+      "totalHours": "Heures totales",
+      "lateMinutes": "Minutes de retard",
+      "overtimeMinutes": "Minutes supp.",
+      "leavesApproved": "Congés approuvés",
+      "leavesPending": "Congés en attente",
+      "byStatus": "Par statut",
+      "byDepartment": "Par département"
+    },
+    "empty": "Aucune donnée pour la période sélectionnée.",
+    "loading": "Génération du rapport…",
+    "error": "Impossible de générer le rapport."
   }
 }

@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\Organization\DepartmentController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollController;
 use App\Http\Controllers\Api\V1\Payroll\PayslipController;
+use App\Http\Controllers\Api\V1\Report\ReportController;
 use App\Http\Controllers\Api\V1\Setting\SettingController;
 use App\Http\Controllers\Api\V1\Tenant\TenantController;
 use Illuminate\Support\Facades\Route;
@@ -92,5 +93,12 @@ Route::prefix('v1')->group(function () {
         Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
         Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
         Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead']);
+
+        // Relatórios
+        Route::get('reports/headcount', [ReportController::class, 'headcount']);
+        Route::get('reports/turnover', [ReportController::class, 'turnover']);
+        Route::get('reports/payroll-summary', [ReportController::class, 'payrollSummary']);
+        Route::get('reports/attendance-summary', [ReportController::class, 'attendanceSummary']);
+        Route::get('reports/{type}/export', [ReportController::class, 'export']);
     });
 });
