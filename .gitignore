@@ -9,5 +9,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/.env
+# Apache DocumentRoot symlink (local deployment: /var/www/html/RH/public -> backend/public)
+/public
 *.log
 .DS_Store
