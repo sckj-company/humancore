@@ -20,6 +20,10 @@ class SetTenantContext
             $tenant = $user->tenant ?? Tenant::query()->find($user->tenant_id);
             if ($tenant) {
                 $this->tenantManager->set($tenant);
+                if ($tenant->timezone) {
+                    date_default_timezone_set($tenant->timezone);
+                    config(['app.timezone' => $tenant->timezone]);
+                }
             }
         }
 

@@ -39,7 +39,8 @@
     "details": "Details",
     "active": "Active",
     "inactive": "Inactive",
-    "periods": "periods"
+    "periods": "periods",
+    "date": "Date"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -93,5 +94,17 @@
     "title": "Payroll",
     "newPeriod": "New Period",
     "periods": "periods"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "myDescription": "Clock in and out",
+    "allDescription": "Overview of attendance records",
+    "clockIn": "Clock In",
+    "clockOut": "Clock Out",
+    "myHistory": "My history"
+  },
+  "leave": {
+    "title": "Leaves & Absences",
+    "newRequest": "New Request"
   }
 }

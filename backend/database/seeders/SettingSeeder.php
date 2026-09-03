@@ -20,6 +20,8 @@ class SettingSeeder extends Seeder
                 'workweek' => ['mon', 'tue', 'wed', 'thu', 'fri'],
                 'daily_hours' => 8,
                 'late_grace_minutes' => 10,
+                'work_start_time' => '08:00',
+                'work_end_time' => '17:00',
                 'overtime_enabled' => true,
                 'overtime_rate_normal' => 1.5,
                 'overtime_rate_holiday' => 2.0,
@@ -46,8 +48,8 @@ class SettingSeeder extends Seeder
             ],
             'communication' => [
                 'email_enabled' => true,
-                'sender_name' => null,
-                'sender_email' => null,
+                'sender_name' => '',
+                'sender_email' => '',
             ],
         ];
 

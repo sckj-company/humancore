@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Attendance\AttendanceController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Contract\ContractController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
+use App\Http\Controllers\Api\V1\Leave\LeaveController;
 use App\Http\Controllers\Api\V1\Organization\BranchController;
 use App\Http\Controllers\Api\V1\Organization\DepartmentController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
@@ -54,6 +56,23 @@ Route::prefix('v1')->group(function () {
         Route::get('payroll/periods/{period}/records', [PayrollController::class, 'records']);
         Route::get('payroll/records/{record}/payslip', [PayslipController::class, 'show']);
         Route::get('payroll/records/{record}/payslip.pdf', [PayslipController::class, 'download']);
+
+        // Presenças
+        Route::post('attendance/toggle', [AttendanceController::class, 'toggle']);
+        Route::get('attendance/today', [AttendanceController::class, 'today']);
+        Route::get('attendance/my-history', [AttendanceController::class, 'myHistory']);
+        Route::get('attendance', [AttendanceController::class, 'index']);
+        Route::put('attendance/{record}', [AttendanceController::class, 'update']);
+
+        // Férias / Ausências
+        Route::get('leave/types', [LeaveController::class, 'types']);
+        Route::get('leave/balance', [LeaveController::class, 'balance']);
+        Route::get('leave/my-requests', [LeaveController::class, 'myRequests']);
+        Route::get('leave', [LeaveController::class, 'index']);
+        Route::post('leave', [LeaveController::class, 'store']);
+        Route::post('leave/{leave}/approve', [LeaveController::class, 'approve']);
+        Route::post('leave/{leave}/reject', [LeaveController::class, 'reject']);
+        Route::post('leave/{leave}/cancel', [LeaveController::class, 'cancel']);
 
         // Settings
         Route::get('settings', [SettingController::class, 'index']);

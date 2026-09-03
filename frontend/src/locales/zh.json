@@ -39,7 +39,8 @@
     "details": "详情",
     "active": "在职",
     "inactive": "离职",
-    "periods": "周期"
+    "periods": "周期",
+    "date": "日期"
   },
   "nav": {
     "dashboard": "仪表板",
@@ -93,5 +94,17 @@
     "title": "工资",
     "newPeriod": "新周期",
     "periods": "周期"
+  },
+  "attendance": {
+    "title": "考勤",
+    "myDescription": "登记上下班",
+    "allDescription": "考勤记录概览",
+    "clockIn": "签到",
+    "clockOut": "签退",
+    "myHistory": "我的记录"
+  },
+  "leave": {
+    "title": "休假与缺勤",
+    "newRequest": "新申请"
   }
 }

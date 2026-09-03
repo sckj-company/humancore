@@ -217,3 +217,55 @@ export interface PayrollRecord {
   }
   employee?: EmployeeSummary
 }
+
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'vacation' | 'sick' | 'justified'
+
+export interface AttendanceRecord {
+  id: number
+  employee_id: number
+  date: string
+  clock_in?: string | null
+  clock_out?: string | null
+  break_start?: string | null
+  break_end?: string | null
+  total_worked?: number | null
+  status: AttendanceStatus
+  late_minutes: number
+  overtime_minutes?: number
+  notes?: string | null
+  employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'>
+}
+
+export interface LeaveBalance {
+  annual_entitlement: number
+  days_used: number
+  days_remaining: number
+  days_pending: number
+}
+
+export type LeaveStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export interface LeaveTypeSummary {
+  id: number
+  name: string
+  code: string
+  days_per_year?: number
+  is_paid: boolean
+  category: string
+}
+
+export interface LeaveRequest {
+  id: number
+  employee_id: number
+  leave_type_id: number
+  start_date: string
+  end_date: string
+  total_days: number
+  reason?: string | null
+  status: LeaveStatus
+  approved_at?: string | null
+  rejected_reason?: string | null
+  employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'>
+  leave_type?: { id: number; name: string; code: string; is_paid: boolean }
+  approved_by?: { id: number; name: string }
+}

@@ -39,7 +39,8 @@
     "details": "Detalhes",
     "active": "Ativo",
     "inactive": "Inativo",
-    "periods": "períodos"
+    "periods": "períodos",
+    "date": "Data"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -93,5 +94,17 @@
     "title": "Folha Salarial",
     "newPeriod": "Novo Período",
     "periods": "períodos"
+  },
+  "attendance": {
+    "title": "Presenças",
+    "myDescription": "Registe a sua entrada e saída",
+    "allDescription": "Vista geral dos registos de presença",
+    "clockIn": "Registar Entrada",
+    "clockOut": "Registar Saída",
+    "myHistory": "O meu histórico"
+  },
+  "leave": {
+    "title": "Férias e Ausências",
+    "newRequest": "Novo Pedido"
   }
 }

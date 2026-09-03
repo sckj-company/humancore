@@ -39,7 +39,8 @@
     "details": "Détails",
     "active": "Actif",
     "inactive": "Inactif",
-    "periods": "périodes"
+    "periods": "périodes",
+    "date": "Date"
   },
   "nav": {
     "dashboard": "Tableau de bord",
@@ -93,5 +94,17 @@
     "title": "Paie",
     "newPeriod": "Nouvelle Période",
     "periods": "périodes"
+  },
+  "attendance": {
+    "title": "Présences",
+    "myDescription": "Enregistrez vos entrées et sorties",
+    "allDescription": "Vue d'ensemble des présences",
+    "clockIn": "Pointer l'entrée",
+    "clockOut": "Pointer la sortie",
+    "myHistory": "Mon historique"
+  },
+  "leave": {
+    "title": "Congés & Absences",
+    "newRequest": "Nouvelle Demande"
   }
 }

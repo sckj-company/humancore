@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
 use App\Models\EmployeeSalaryComponent;
+use App\Models\LeaveType;
 use App\Models\Position;
 use App\Models\SalaryComponent;
 use App\Models\Tenant;
@@ -122,6 +123,23 @@ class DemoSeeder extends Seeder
             SalaryComponent::firstOrCreate(
                 ['tenant_id' => $tenant->id, 'code' => $component['code']],
                 $component,
+            );
+        }
+
+        // Tipos de férias/ausência
+        $leaveTypes = [
+            ['name' => 'Férias Anuais', 'code' => 'vacation', 'category' => 'vacation', 'days_per_year' => 22, 'is_paid' => true],
+            ['name' => 'Doença (Justificada)', 'code' => 'sick', 'category' => 'sick', 'days_per_year' => 30, 'is_paid' => true],
+            ['name' => 'Casamento', 'code' => 'marriage', 'category' => 'family', 'days_per_year' => 3, 'is_paid' => true],
+            ['name' => 'Falecimento', 'code' => 'bereavement', 'category' => 'family', 'days_per_year' => 5, 'is_paid' => true],
+            ['name' => 'Licença sem Vencimento', 'code' => 'unpaid', 'category' => 'unpaid', 'days_per_year' => 30, 'is_paid' => false],
+            ['name' => 'Maternidade', 'code' => 'maternity', 'category' => 'maternity', 'days_per_year' => 90, 'is_paid' => true],
+        ];
+
+        foreach ($leaveTypes as $type) {
+            LeaveType::firstOrCreate(
+                ['tenant_id' => $tenant->id, 'code' => $type['code']],
+                $type,
             );
         }
 
