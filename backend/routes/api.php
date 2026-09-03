@@ -7,6 +7,9 @@ use App\Http\Controllers\Api\V1\Employee\EmployeeController;
 use App\Http\Controllers\Api\V1\Organization\BranchController;
 use App\Http\Controllers\Api\V1\Organization\DepartmentController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
+use App\Http\Controllers\Api\V1\Payroll\PayrollController;
+use App\Http\Controllers\Api\V1\Payroll\PayslipController;
+use App\Http\Controllers\Api\V1\Setting\SettingController;
 use App\Http\Controllers\Api\V1\Tenant\TenantController;
 use Illuminate\Support\Facades\Route;
 
@@ -40,5 +43,20 @@ Route::prefix('v1')->group(function () {
 
         // Contratos
         Route::apiResource('contracts', ContractController::class);
+
+        // Payroll
+        Route::get('payroll/periods', [PayrollController::class, 'index']);
+        Route::post('payroll/periods', [PayrollController::class, 'store']);
+        Route::get('payroll/periods/{period}', [PayrollController::class, 'show']);
+        Route::post('payroll/periods/{period}/process', [PayrollController::class, 'process']);
+        Route::post('payroll/periods/{period}/approve', [PayrollController::class, 'approve']);
+        Route::post('payroll/periods/{period}/close', [PayrollController::class, 'close']);
+        Route::get('payroll/periods/{period}/records', [PayrollController::class, 'records']);
+        Route::get('payroll/records/{record}/payslip', [PayslipController::class, 'show']);
+        Route::get('payroll/records/{record}/payslip.pdf', [PayslipController::class, 'download']);
+
+        // Settings
+        Route::get('settings', [SettingController::class, 'index']);
+        Route::put('settings', [SettingController::class, 'update']);
     });
 });

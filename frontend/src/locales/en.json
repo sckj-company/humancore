@@ -38,7 +38,8 @@
     "export": "Export",
     "details": "Details",
     "active": "Active",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "periods": "periods"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -87,5 +88,10 @@
     "position": "Position",
     "hired_at": "Hired At",
     "employee_code": "Employee Code"
+  },
+  "payroll": {
+    "title": "Payroll",
+    "newPeriod": "New Period",
+    "periods": "periods"
   }
 }

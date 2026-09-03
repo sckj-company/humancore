@@ -1,0 +1,97 @@
+{
+  "app": {
+    "name": "HRMS",
+    "tagline": "Système de Gestion des Ressources Humaines"
+  },
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "email": "Email",
+    "password": "Mot de passe",
+    "remember": "Se souvenir",
+    "forgot": "Mot de passe oublié ?",
+    "invalid": "Email ou mot de passe invalide",
+    "logged_in": "Connexion réussie",
+    "logged_out": "Déconnecté"
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "create": "Créer",
+    "search": "Rechercher",
+    "loading": "Chargement...",
+    "no_data": "Aucune donnée",
+    "actions": "Actions",
+    "status": "Statut",
+    "name": "Nom",
+    "email": "Email",
+    "phone": "Téléphone",
+    "yes": "Oui",
+    "no": "Non",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "all": "Tous",
+    "filter": "Filtrer",
+    "export": "Exporter",
+    "details": "Détails",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "periods": "périodes"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "employees": "Employés",
+    "attendance": "Présence",
+    "leave": "Congés",
+    "payroll": "Paie",
+    "documents": "Documents",
+    "recruitment": "Recrutement",
+    "performance": "Performance",
+    "training": "Formation",
+    "reports": "Rapports",
+    "settings": "Paramètres",
+    "organization": "Organisation",
+    "departments": "Départements",
+    "positions": "Postes",
+    "branches": "Filiales"
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "hr": {
+      "title": "Tableau de bord RH",
+      "total_employees": "Total des employés",
+      "active_employees": "Employés actifs",
+      "hired_this_month": "Embauches ce mois",
+      "terminated_this_month": "Départs ce mois",
+      "turnover_rate": "Taux de rotation",
+      "monthly_payroll_cost": "Coût salarial mensuel",
+      "headcount_trend": "Évolution des effectifs",
+      "by_department": "Par département",
+      "upcoming_birthdays": "Anniversaires à venir",
+      "expiring_contracts": "Contrats expirant",
+      "pending_leaves": "Congés en attente",
+      "recent_hires": "Embauches récentes"
+    }
+  },
+  "employees": {
+    "title": "Employés",
+    "list": "Liste des employés",
+    "add": "Nouvel employé",
+    "code": "Code",
+    "first_name": "Prénom",
+    "last_name": "Nom",
+    "full_name": "Nom complet",
+    "department": "Département",
+    "position": "Poste",
+    "hired_at": "Date d'embauche",
+    "employee_code": "Code employé"
+  },
+  "payroll": {
+    "title": "Paie",
+    "newPeriod": "Nouvelle Période",
+    "periods": "périodes"
+  }
+}

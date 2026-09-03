@@ -8,6 +8,7 @@ export interface User {
   roles: string[]
   permissions: string[]
   employee?: EmployeeSummary | null
+  tenant?: Tenant | null
 }
 
 export interface Tenant {
@@ -33,6 +34,8 @@ export interface EmployeeSummary {
   position?: string
   department?: string
   status: EmployeeStatus
+  hired_at?: string
+  active_contract?: { id: number; base_salary: number; contract_type: ContractType }
 }
 
 export type EmployeeStatus = 'active' | 'inactive' | 'suspended' | 'terminated'
@@ -157,4 +160,60 @@ export interface Paginated<T> {
     per_page: number
     total: number
   }
+}
+
+export type PayrollPeriodStatus = 'open' | 'processing' | 'completed' | 'closed' | 'cancelled'
+
+export interface PayrollPeriod {
+  id: number
+  tenant_id: number
+  name: string
+  period_type: 'monthly' | 'biweekly' | 'weekly'
+  period_start: string
+  period_end: string
+  payment_date?: string
+  status: PayrollPeriodStatus
+  processed_at?: string
+  closed_at?: string
+  employee_count?: number
+  total_gross?: number
+  total_net?: number
+  records?: PayrollRecord[]
+}
+
+export type PayrollRecordStatus = 'calculated' | 'approved' | 'paid' | 'rejected'
+
+export interface PayrollBreakdownItem {
+  code: string
+  name: string
+  type: 'earning' | 'deduction' | 'tax' | 'benefit'
+  priority: number
+  amount: number
+}
+
+export interface PayrollRecord {
+  id: number
+  employee_id: number
+  payroll_period_id: number
+  base_salary: number
+  gross_salary: number
+  total_earnings: number
+  total_deductions: number
+  total_taxes: number
+  net_salary: number
+  work_days: number
+  absent_days: number
+  overtime_hours: number
+  overtime_amount: number
+  status: PayrollRecordStatus
+  approved_at?: string
+  paid_at?: string
+  details?: {
+    breakdown?: PayrollBreakdownItem[]
+    work_days?: number
+    absent_days?: number
+    late_minutes?: number
+    overtime_hours?: number
+  }
+  employee?: EmployeeSummary
 }

@@ -6,7 +6,9 @@ use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\EmployeeSalaryComponent;
 use App\Models\Position;
+use App\Models\SalaryComponent;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenant\TenantManager;
@@ -106,6 +108,23 @@ class DemoSeeder extends Seeder
         $posOps = Position::where('tenant_id', $tenant->id)->where('title', 'Coordenador de Operações')->first();
         $posAccountant = Position::where('tenant_id', $tenant->id)->where('title', 'Contabilista')->first();
 
+        // Componentes salariais padrão
+        $components = [
+            ['code' => 'base_salary', 'name' => 'Salário Base', 'type' => 'earning', 'calculation_type' => 'fixed', 'is_mandatory' => true, 'priority' => 10],
+            ['code' => 'meal_allowance', 'name' => 'Subsídio de Refeição', 'type' => 'benefit', 'calculation_type' => 'fixed', 'default_value' => 5000, 'is_mandatory' => true, 'priority' => 20],
+            ['code' => 'transport_allowance', 'name' => 'Subsídio de Transporte', 'type' => 'benefit', 'calculation_type' => 'fixed', 'default_value' => 30000, 'is_mandatory' => true, 'priority' => 21],
+            ['code' => 'overtime', 'name' => 'Horas Extraordinárias', 'type' => 'earning', 'calculation_type' => 'formula', 'is_mandatory' => true, 'priority' => 30],
+            ['code' => 'inss', 'name' => 'INSS (Funcionário)', 'type' => 'deduction', 'calculation_type' => 'percentage', 'default_value' => 3, 'is_mandatory' => true, 'priority' => 100],
+            ['code' => 'irt', 'name' => 'IRT', 'type' => 'tax', 'calculation_type' => 'formula', 'is_mandatory' => true, 'priority' => 110],
+        ];
+
+        foreach ($components as $component) {
+            SalaryComponent::firstOrCreate(
+                ['tenant_id' => $tenant->id, 'code' => $component['code']],
+                $component,
+            );
+        }
+
         // Funcionários demo
         $demoPeople = [
             [
@@ -179,6 +198,17 @@ class DemoSeeder extends Seeder
             $user->syncRoles([$person['role']]);
 
             $employee->update(['user_id' => $user->id]);
+
+            // Componentes salariais do funcionário (a partir dos padrões)
+            $contract = EmployeeContract::where('tenant_id', $tenant->id)->where('employee_id', $employee->id)->where('is_active', true)->first();
+            if ($contract) {
+                foreach (SalaryComponent::where('tenant_id', $tenant->id)->where('is_mandatory', true)->get() as $comp) {
+                    EmployeeSalaryComponent::updateOrCreate(
+                        ['employee_id' => $employee->id, 'contract_id' => $contract->id, 'salary_component_id' => $comp->id],
+                        ['is_active' => true, 'start_date' => $contract->start_date],
+                    );
+                }
+            }
         }
     }
 }

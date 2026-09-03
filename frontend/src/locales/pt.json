@@ -38,7 +38,8 @@
     "export": "Exportar",
     "details": "Detalhes",
     "active": "Ativo",
-    "inactive": "Inativo"
+    "inactive": "Inativo",
+    "periods": "períodos"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -87,5 +88,10 @@
     "position": "Cargo",
     "hired_at": "Data de Admissão",
     "employee_code": "Código de Funcionário"
+  },
+  "payroll": {
+    "title": "Folha Salarial",
+    "newPeriod": "Novo Período",
+    "periods": "períodos"
   }
 }

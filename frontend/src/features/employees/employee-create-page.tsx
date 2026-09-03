@@ -44,7 +44,7 @@ export function EmployeeCreatePage() {
     setValue,
     watch,
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as never,
     defaultValues: { status: 'active', gender: 'male' },
   })
 

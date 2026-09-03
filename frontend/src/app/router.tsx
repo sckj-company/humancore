@@ -14,6 +14,8 @@ const EmployeeCreatePage = lazy(() => import('@/features/employees/employee-crea
 const OrganizationLayout = lazy(() => import('@/features/organization/organization-layout').then((m) => ({ default: m.OrganizationLayout })))
 const DepartmentsPage = lazy(() => import('@/features/organization/departments-page').then((m) => ({ default: m.DepartmentsPage })))
 const PositionsPage = lazy(() => import('@/features/organization/positions-page').then((m) => ({ default: m.PositionsPage })))
+const PayrollPeriodsPage = lazy(() => import('@/features/payroll/payroll-periods-page').then((m) => ({ default: m.PayrollPeriodsPage })))
+const PayrollPeriodDetailPage = lazy(() => import('@/features/payroll/payroll-period-detail-page').then((m) => ({ default: m.PayrollPeriodDetailPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
 
 function PageLoader() {
@@ -62,7 +64,8 @@ export function AppRouter() {
 
           <Route path="/attendance" element={<PlaceholderPage title="Presenças" />} />
           <Route path="/leave" element={<PlaceholderPage title="Férias e Ausências" />} />
-          <Route path="/payroll" element={<PlaceholderPage title="Folha Salarial" />} />
+          <Route path="/payroll" element={<PayrollPeriodsPage />} />
+          <Route path="/payroll/:id" element={<PayrollPeriodDetailPage />} />
           <Route path="/documents" element={<PlaceholderPage title="Documentos" />} />
           <Route path="/recruitment" element={<PlaceholderPage title="Recrutamento" />} />
           <Route path="/performance" element={<PlaceholderPage title="Desempenho" />} />

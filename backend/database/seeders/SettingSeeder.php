@@ -30,9 +30,18 @@ class SettingSeeder extends Seeder
                 'allow_negative_balance' => false,
             ],
             'payroll' => [
-                'inss_rate' => 7.5,
-                'irt_enabled' => true,
-                'irt_tables' => [],
+                'inss.employee_rate' => 3.0,
+                'inss.employer_rate' => 5.5,
+                'irt.enabled' => true,
+                'irt.brackets' => [
+                    ['min' => 0, 'max' => 100000, 'rate' => 0],
+                    ['min' => 100000, 'max' => 200000, 'rate' => 7],
+                    ['min' => 200000, 'max' => 500000, 'rate' => 11],
+                    ['min' => 500000, 'max' => 1000000, 'rate' => 15],
+                    ['min' => 1000000, 'rate' => 19],
+                ],
+                'subsidies.meal.daily' => 5000,
+                'subsidies.transport.monthly' => 30000,
                 'payment_date' => 5,
             ],
             'communication' => [

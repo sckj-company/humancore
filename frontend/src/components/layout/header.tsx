@@ -27,7 +27,7 @@ export function Header() {
   const clear = useAuthStore((s) => s.clear)
   const navigate = useNavigate()
 
-  const switchLang = (lng: 'pt' | 'en') => {
+  const switchLang = (lng: 'pt' | 'en' | 'fr' | 'zh') => {
     void i18n.changeLanguage(lng)
     localStorage.setItem('hrms_locale', lng)
   }
@@ -58,6 +58,8 @@ export function Header() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => switchLang('pt')}>Português</DropdownMenuItem>
             <DropdownMenuItem onClick={() => switchLang('en')}>English</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => switchLang('fr')}>Français</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => switchLang('zh')}>中文</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
