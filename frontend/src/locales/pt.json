@@ -1,0 +1,91 @@
+{
+  "app": {
+    "name": "HRMS",
+    "tagline": "Sistema de Gestão de Recursos Humanos"
+  },
+  "auth": {
+    "login": "Entrar",
+    "logout": "Sair",
+    "email": "Email",
+    "password": "Palavra-passe",
+    "remember": "Lembrar-me",
+    "forgot": "Esqueceu a palavra-passe?",
+    "invalid": "Email ou palavra-passe incorretos",
+    "logged_in": "Sessão iniciada com sucesso",
+    "logged_out": "Sessão terminada"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "create": "Criar",
+    "search": "Pesquisar",
+    "loading": "A carregar...",
+    "no_data": "Sem dados para mostrar",
+    "actions": "Ações",
+    "status": "Estado",
+    "name": "Nome",
+    "email": "Email",
+    "phone": "Telefone",
+    "yes": "Sim",
+    "no": "Não",
+    "back": "Voltar",
+    "next": "Seguinte",
+    "previous": "Anterior",
+    "all": "Todos",
+    "filter": "Filtrar",
+    "export": "Exportar",
+    "details": "Detalhes",
+    "active": "Ativo",
+    "inactive": "Inativo"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "employees": "Funcionários",
+    "attendance": "Presenças",
+    "leave": "Férias",
+    "payroll": "Folha Salarial",
+    "documents": "Documentos",
+    "recruitment": "Recrutamento",
+    "performance": "Desempenho",
+    "training": "Formação",
+    "reports": "Relatórios",
+    "settings": "Configurações",
+    "organization": "Organização",
+    "departments": "Departamentos",
+    "positions": "Cargos",
+    "branches": "Filiais"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "hr": {
+      "title": "Dashboard de RH",
+      "total_employees": "Total de Funcionários",
+      "active_employees": "Funcionários Ativos",
+      "hired_this_month": "Admissões este mês",
+      "terminated_this_month": "Desligamentos este mês",
+      "turnover_rate": "Taxa de Turnover",
+      "monthly_payroll_cost": "Custo Salarial Mensal",
+      "headcount_trend": "Evolução do Headcount",
+      "by_department": "Distribuição por Departamento",
+      "upcoming_birthdays": "Próximos Aniversários",
+      "expiring_contracts": "Contratos a Expirar",
+      "pending_leaves": "Férias Pendentes",
+      "recent_hires": "Admissões Recentes"
+    }
+  },
+  "employees": {
+    "title": "Funcionários",
+    "list": "Lista de Funcionários",
+    "add": "Novo Funcionário",
+    "code": "Código",
+    "first_name": "Nome",
+    "last_name": "Apelido",
+    "full_name": "Nome Completo",
+    "department": "Departamento",
+    "position": "Cargo",
+    "hired_at": "Data de Admissão",
+    "employee_code": "Código de Funcionário"
+  }
+}

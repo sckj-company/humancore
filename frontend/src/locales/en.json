@@ -1,0 +1,91 @@
+{
+  "app": {
+    "name": "HRMS",
+    "tagline": "Human Resources Management System"
+  },
+  "auth": {
+    "login": "Sign in",
+    "logout": "Sign out",
+    "email": "Email",
+    "password": "Password",
+    "remember": "Remember me",
+    "forgot": "Forgot password?",
+    "invalid": "Invalid email or password",
+    "logged_in": "Signed in successfully",
+    "logged_out": "Signed out"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "search": "Search",
+    "loading": "Loading...",
+    "no_data": "No data to display",
+    "actions": "Actions",
+    "status": "Status",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "yes": "Yes",
+    "no": "No",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "all": "All",
+    "filter": "Filter",
+    "export": "Export",
+    "details": "Details",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "employees": "Employees",
+    "attendance": "Attendance",
+    "leave": "Leave",
+    "payroll": "Payroll",
+    "documents": "Documents",
+    "recruitment": "Recruitment",
+    "performance": "Performance",
+    "training": "Training",
+    "reports": "Reports",
+    "settings": "Settings",
+    "organization": "Organization",
+    "departments": "Departments",
+    "positions": "Positions",
+    "branches": "Branches"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "hr": {
+      "title": "HR Dashboard",
+      "total_employees": "Total Employees",
+      "active_employees": "Active Employees",
+      "hired_this_month": "Hires this month",
+      "terminated_this_month": "Terminations this month",
+      "turnover_rate": "Turnover Rate",
+      "monthly_payroll_cost": "Monthly Payroll Cost",
+      "headcount_trend": "Headcount Trend",
+      "by_department": "By Department",
+      "upcoming_birthdays": "Upcoming Birthdays",
+      "expiring_contracts": "Expiring Contracts",
+      "pending_leaves": "Pending Leaves",
+      "recent_hires": "Recent Hires"
+    }
+  },
+  "employees": {
+    "title": "Employees",
+    "list": "Employee List",
+    "add": "New Employee",
+    "code": "Code",
+    "first_name": "First Name",
+    "last_name": "Last Name",
+    "full_name": "Full Name",
+    "department": "Department",
+    "position": "Position",
+    "hired_at": "Hired At",
+    "employee_code": "Employee Code"
+  }
+}
