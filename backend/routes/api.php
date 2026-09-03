@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Document\EmployeeDocumentController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
 use App\Http\Controllers\Api\V1\Leave\LeaveController;
+use App\Http\Controllers\Api\V1\Notification\NotificationController;
 use App\Http\Controllers\Api\V1\Organization\BranchController;
 use App\Http\Controllers\Api\V1\Organization\DepartmentController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
@@ -85,5 +86,11 @@ Route::prefix('v1')->group(function () {
         Route::post('documents', [EmployeeDocumentController::class, 'store']);
         Route::get('documents/{document}/download', [EmployeeDocumentController::class, 'download']);
         Route::delete('documents/{document}', [EmployeeDocumentController::class, 'destroy']);
+
+        // Notificações
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead']);
     });
 });

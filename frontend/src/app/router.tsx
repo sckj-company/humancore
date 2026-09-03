@@ -20,6 +20,7 @@ const AttendancePage = lazy(() => import('@/features/attendance/attendance-page'
 const LeavePage = lazy(() => import('@/features/leave/leave-page').then((m) => ({ default: m.LeavePage })))
 const SettingsPage = lazy(() => import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })))
 const DocumentsPage = lazy(() => import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })))
+const NotificationsPage = lazy(() => import('@/features/notifications/notifications-page').then((m) => ({ default: m.NotificationsPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
 
 function PageLoader() {
@@ -71,6 +72,7 @@ export function AppRouter() {
           <Route path="/payroll" element={<PayrollPeriodsPage />} />
           <Route path="/payroll/:id" element={<PayrollPeriodDetailPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/recruitment" element={<PlaceholderPage title="Recrutamento" />} />
           <Route path="/performance" element={<PlaceholderPage title="Desempenho" />} />
           <Route path="/training" element={<PlaceholderPage title="Formação" />} />

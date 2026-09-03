@@ -9,6 +9,8 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\Setting;
+use App\Models\User;
+use App\Notifications\LeaveRequestNotification;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,6 +103,13 @@ class LeaveController extends BaseController
             'status' => 'pending',
         ]);
 
+        $this->notifyApprovers(
+            $employee->first_name.' '.$employee->last_name,
+            $totalDays,
+            $start->format('d/m/Y'),
+            $end->format('d/m/Y'),
+        );
+
         return $this->success(new LeaveRequestResource($leave->load(['employee', 'leaveType'])), 'Pedido de férias criado.', 201);
     }
 
@@ -113,6 +122,13 @@ class LeaveController extends BaseController
             'approved_by' => auth()->id(),
             'approved_at' => now(),
         ]);
+
+        $leave->employee?->user?->notify(new LeaveRequestNotification(
+            title: 'Pedido de férias aprovado',
+            message: 'O seu pedido de '.$leave->total_days.' dias foi aprovado.',
+            icon: 'check-circle',
+            actionUrl: '/leave',
+        ));
 
         return $this->success(new LeaveRequestResource($leave->load('leaveType')), 'Pedido aprovado.');
     }
@@ -127,6 +143,13 @@ class LeaveController extends BaseController
             'status' => 'rejected',
             'rejected_reason' => $validated['reason'] ?? null,
         ]);
+
+        $leave->employee?->user?->notify(new LeaveRequestNotification(
+            title: 'Pedido de férias rejeitado',
+            message: $validated['reason'] ? 'Motivo: '.$validated['reason'] : 'O seu pedido de férias foi rejeitado.',
+            icon: 'x-circle',
+            actionUrl: '/leave',
+        ));
 
         return $this->success(new LeaveRequestResource($leave->load('leaveType')), 'Pedido rejeitado.');
     }
@@ -150,5 +173,22 @@ class LeaveController extends BaseController
             ->where('group', $group)
             ->where('key', $k)
             ->value('value');
+    }
+
+    protected function notifyApprovers(string $employeeName, int $days, string $start, string $end): void
+    {
+        $approvers = User::permission('approve_leave')
+            ->where('tenant_id', tenant_id())
+            ->where('is_active', true)
+            ->get();
+
+        foreach ($approvers as $approver) {
+            $approver->notify(new LeaveRequestNotification(
+                title: 'Novo pedido de férias',
+                message: $employeeName.' solicitou '.$days.' dias ('.$start.' a '.$end.').',
+                icon: 'calendar',
+                actionUrl: '/leave',
+            ));
+        }
     }
 }

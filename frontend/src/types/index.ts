@@ -298,3 +298,15 @@ export interface EmployeeDocument {
   employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'>
 }
 
+export interface AppNotification {
+  id: string
+  data: {
+    title?: string
+    message?: string
+    icon?: string
+    action_url?: string
+  }
+  read_at?: string | null
+  created_at?: string
+}
+

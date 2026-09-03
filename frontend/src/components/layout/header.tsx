@@ -1,5 +1,5 @@
 import { useAuthStore } from '@/stores/auth-store'
-import { Bell, Search, UserCircle, LogOut, Globe, ChevronDown } from 'lucide-react'
+import { Search, UserCircle, LogOut, Globe, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import i18n from '@/lib/i18n'
+import { NotificationBell } from '@/components/layout/notification-bell'
 
 function initials(name?: string): string {
   if (!name) return '?'
@@ -63,10 +64,7 @@ export function Header() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button variant="ghost" size="icon-sm" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
-        </Button>
+        <NotificationBell />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
