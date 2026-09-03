@@ -115,6 +115,6 @@ class AttendanceTest extends TestCase
         $this->actingAs($user, 'sanctum');
         $this->getJson('/api/v1/attendance/my-history')
             ->assertOk()
-            ->assertJsonCount(1, 'data');
+            ->assertJsonCount(1, 'data.data');
     }
 }

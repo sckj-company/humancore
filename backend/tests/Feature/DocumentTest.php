@@ -100,7 +100,7 @@ class DocumentTest extends TestCase
 
         $this->getJson('/api/v1/documents')
             ->assertOk()
-            ->assertJsonCount(1, 'data')
+            ->assertJsonCount(1, 'data.data')
             ->assertJsonMissing(['name' => 'Doc de outrem']);
     }
 

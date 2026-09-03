@@ -140,6 +140,6 @@ class LeaveTest extends TestCase
         $this->actingAs($user, 'sanctum');
         $this->getJson('/api/v1/leave/my-requests')
             ->assertOk()
-            ->assertJsonCount(0, 'data');
+            ->assertJsonCount(0, 'data.data');
     }
 }

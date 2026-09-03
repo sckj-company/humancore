@@ -2,11 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Department;
+use App\Models\Employee;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenant\TenantManager;
 use Database\Seeders\PermissionSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class TenantIsolationTest extends TestCase
@@ -37,12 +38,12 @@ class TenantIsolationTest extends TestCase
         [$tenantA, $adminA] = $this->createTenantAdmin();
         [$tenantB] = $this->createTenantAdmin();
 
-        $employeeA = \App\Models\Employee::factory()->create([
+        $employeeA = Employee::factory()->create([
             'tenant_id' => $tenantA->id,
             'first_name' => 'Visivel',
             'last_name' => 'Fora',
         ]);
-        $employeeB = \App\Models\Employee::factory()->create([
+        $employeeB = Employee::factory()->create([
             'tenant_id' => $tenantB->id,
             'first_name' => 'Invisivel',
             'last_name' => 'Secreto',
@@ -53,8 +54,8 @@ class TenantIsolationTest extends TestCase
         $response = $this->actingAs($adminA)->getJson('/api/v1/employees');
 
         $response->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.full_name', 'Visivel Fora')
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.full_name', 'Visivel Fora')
             ->assertJsonMissing(['full_name' => 'Invisivel Secreto']);
     }
 
@@ -63,7 +64,7 @@ class TenantIsolationTest extends TestCase
         [$tenantA, $adminA] = $this->createTenantAdmin();
         [$tenantB] = $this->createTenantAdmin();
 
-        $departmentB = \App\Models\Department::factory()->create(['tenant_id' => $tenantB->id]);
+        $departmentB = Department::factory()->create(['tenant_id' => $tenantB->id]);
 
         app(TenantManager::class)->set($tenantA);
 
@@ -83,8 +84,8 @@ class TenantIsolationTest extends TestCase
         [$tenantA, $adminA] = $this->createTenantAdmin();
         [$tenantB] = $this->createTenantAdmin();
 
-        \App\Models\Employee::factory()->count(3)->create(['tenant_id' => $tenantA->id]);
-        \App\Models\Employee::factory()->count(7)->create(['tenant_id' => $tenantB->id]);
+        Employee::factory()->count(3)->create(['tenant_id' => $tenantA->id]);
+        Employee::factory()->count(7)->create(['tenant_id' => $tenantB->id]);
 
         app(TenantManager::class)->set($tenantA);
 
@@ -100,7 +101,7 @@ class TenantIsolationTest extends TestCase
         [$tenantA, $adminA] = $this->createTenantAdmin();
         [$tenantB] = $this->createTenantAdmin();
 
-        $employeeB = \App\Models\Employee::factory()->create(['tenant_id' => $tenantB->id]);
+        $employeeB = Employee::factory()->create(['tenant_id' => $tenantB->id]);
 
         app(TenantManager::class)->set($tenantA);
 
