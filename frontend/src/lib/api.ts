@@ -50,6 +50,18 @@ class ApiClient {
     return this.request<T>({ method: 'POST', url, data })
   }
 
+  async upload<T>(url: string, formData: FormData, onUploadProgress?: (percent: number) => void): Promise<T> {
+    const response = await this.client.post<ApiResponse<T>>(url, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => {
+        if (onUploadProgress && e.total) {
+          onUploadProgress(Math.round((e.loaded * 100) / e.total))
+        }
+      },
+    })
+    return response.data.data
+  }
+
   async put<T>(url: string, data?: unknown): Promise<T> {
     return this.request<T>({ method: 'PUT', url, data })
   }
@@ -60,6 +72,19 @@ class ApiClient {
 
   async delete<T>(url: string): Promise<T> {
     return this.request<T>({ method: 'DELETE', url })
+  }
+
+  async downloadFile(url: string, filename?: string): Promise<void> {
+    const response = await this.client.get(url, { responseType: 'blob' })
+    const blob = response.data
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = filename ?? 'download'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(objectUrl)
   }
 }
 

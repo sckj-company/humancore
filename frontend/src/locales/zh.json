@@ -109,5 +109,8 @@
   },
   "settings": {
     "title": "设置"
+  },
+  "documents": {
+    "title": "文档"
   }
 }

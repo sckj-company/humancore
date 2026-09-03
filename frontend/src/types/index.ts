@@ -280,3 +280,21 @@ export interface SettingItem {
 
 export type SettingGroups = Record<string, SettingItem[]>
 
+export interface EmployeeDocument {
+  id: number
+  employee_id: number
+  name: string
+  document_type: string
+  original_name?: string | null
+  mime_type?: string | null
+  file_size?: number
+  size_label?: string
+  expiry_date?: string | null
+  is_expiring?: boolean
+  is_expired?: boolean
+  notes?: string | null
+  is_confidential: boolean
+  created_at?: string
+  employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'>
+}
+

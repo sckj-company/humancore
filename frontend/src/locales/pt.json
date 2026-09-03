@@ -109,5 +109,8 @@
   },
   "settings": {
     "title": "Configurações"
+  },
+  "documents": {
+    "title": "Documentos"
   }
 }

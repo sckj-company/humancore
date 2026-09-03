@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Attendance\AttendanceController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Contract\ContractController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
+use App\Http\Controllers\Api\V1\Document\EmployeeDocumentController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
 use App\Http\Controllers\Api\V1\Leave\LeaveController;
 use App\Http\Controllers\Api\V1\Organization\BranchController;
@@ -78,5 +79,11 @@ Route::prefix('v1')->group(function () {
         Route::get('settings', [SettingController::class, 'index']);
         Route::put('settings', [SettingController::class, 'update']);
         Route::put('settings/bulk', [SettingController::class, 'bulkUpdate']);
+
+        // Documentos
+        Route::get('documents', [EmployeeDocumentController::class, 'index']);
+        Route::post('documents', [EmployeeDocumentController::class, 'store']);
+        Route::get('documents/{document}/download', [EmployeeDocumentController::class, 'download']);
+        Route::delete('documents/{document}', [EmployeeDocumentController::class, 'destroy']);
     });
 });
