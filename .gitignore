@@ -1,0 +1,13 @@
+backend/.env
+backend/vendor/
+backend/node_modules/
+backend/storage/
+backend/.phpunit.cache/
+backend/.phpunit.result.cache
+backend/bootstrap/cache/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+*.log
+.DS_Store
