@@ -106,5 +106,8 @@
   "leave": {
     "title": "Congés & Absences",
     "newRequest": "Nouvelle Demande"
+  },
+  "settings": {
+    "title": "Paramètres"
   }
 }

@@ -18,6 +18,7 @@ const PayrollPeriodsPage = lazy(() => import('@/features/payroll/payroll-periods
 const PayrollPeriodDetailPage = lazy(() => import('@/features/payroll/payroll-period-detail-page').then((m) => ({ default: m.PayrollPeriodDetailPage })))
 const AttendancePage = lazy(() => import('@/features/attendance/attendance-page').then((m) => ({ default: m.AttendancePage })))
 const LeavePage = lazy(() => import('@/features/leave/leave-page').then((m) => ({ default: m.LeavePage })))
+const SettingsPage = lazy(() => import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
 
 function PageLoader() {
@@ -73,7 +74,7 @@ export function AppRouter() {
           <Route path="/performance" element={<PlaceholderPage title="Desempenho" />} />
           <Route path="/training" element={<PlaceholderPage title="Formação" />} />
           <Route path="/reports" element={<PlaceholderPage title="Relatórios" />} />
-          <Route path="/settings" element={<PlaceholderPage title="Configurações" />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

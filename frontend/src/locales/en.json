@@ -106,5 +106,8 @@
   "leave": {
     "title": "Leaves & Absences",
     "newRequest": "New Request"
+  },
+  "settings": {
+    "title": "Settings"
   }
 }

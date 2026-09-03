@@ -106,5 +106,8 @@
   "leave": {
     "title": "休假与缺勤",
     "newRequest": "新申请"
+  },
+  "settings": {
+    "title": "设置"
   }
 }

@@ -269,3 +269,14 @@ export interface LeaveRequest {
   leave_type?: { id: number; name: string; code: string; is_paid: boolean }
   approved_by?: { id: number; name: string }
 }
+
+export interface SettingItem {
+  id: number
+  tenant_id: number
+  group: string
+  key: string
+  value: string | number | boolean | Array<unknown> | Record<string, unknown> | null
+}
+
+export type SettingGroups = Record<string, SettingItem[]>
+

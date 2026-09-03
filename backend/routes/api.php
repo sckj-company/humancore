@@ -77,5 +77,6 @@ Route::prefix('v1')->group(function () {
         // Settings
         Route::get('settings', [SettingController::class, 'index']);
         Route::put('settings', [SettingController::class, 'update']);
+        Route::put('settings/bulk', [SettingController::class, 'bulkUpdate']);
     });
 });

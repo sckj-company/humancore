@@ -28,13 +28,14 @@ class SettingController extends BaseController
 
     public function update(Request $request): JsonResponse
     {
-        $this->authorize('update', Setting::class);
-
         $validated = Validator::make($request->all(), [
             'group' => ['required', 'string'],
             'key' => ['required', 'string'],
             'value' => ['required'],
         ])->validate();
+
+        $setting = Setting::query()->where('group', $validated['group'])->first() ?? new Setting;
+        $this->authorize('update', $setting);
 
         $setting = Setting::updateOrCreate(
             ['tenant_id' => tenant_id(), 'group' => $validated['group'], 'key' => $validated['key']],
@@ -42,5 +43,32 @@ class SettingController extends BaseController
         );
 
         return $this->success($setting, 'Configuração atualizada com sucesso.');
+    }
+
+    public function bulkUpdate(Request $request): JsonResponse
+    {
+        $validated = Validator::make($request->all(), [
+            'group' => ['required', 'string'],
+            'values' => ['required', 'array'],
+        ])->validate();
+
+        $groupId = $validated['group'];
+        $values = $validated['values'];
+
+        $setting = Setting::query()->where('group', $groupId)->first() ?? new Setting;
+        $this->authorize('update', $setting);
+
+        $tid = tenant_id();
+        $saved = [];
+
+        foreach ($values as $key => $value) {
+            $setting = Setting::updateOrCreate(
+                ['tenant_id' => $tid, 'group' => $groupId, 'key' => (string) $key],
+                ['value' => $value],
+            );
+            $saved[$key] = $setting->value;
+        }
+
+        return $this->success(['group' => $groupId, 'values' => $saved], 'Configurações atualizadas com sucesso.');
     }
 }
