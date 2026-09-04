@@ -52,6 +52,7 @@
     "recruitment": "Recrutement",
     "performance": "Performance",
     "training": "Formation",
+    "trainings": "Catalogue de Formations",
     "reports": "Rapports",
     "settings": "Paramètres",
     "organization": "Organisation",
@@ -312,6 +313,62 @@
       "cancelled": "Annulée"
     },
     "empty": "Aucune donnée à afficher.",
+    "loading": "Chargement…",
+    "error": "Impossible de charger."
+  },
+  "trainingPage": {
+    "title": "Formation",
+    "description": "Catalogue de formations, inscriptions et complétion.",
+    "newTraining": "Nouvelle formation",
+    "training": {
+      "title": "Titre",
+      "description": "Description",
+      "category": "Catégorie",
+      "duration_hours": "Durée (h)",
+      "provider": "Formateur",
+      "location": "Lieu",
+      "cost": "Coût",
+      "max_participants": "Max participants",
+      "start_date": "Date début",
+      "end_date": "Date fin",
+      "status": "Statut",
+      "notes": "Notes"
+    },
+    "categoryOptions": {
+      "technical": "Technique",
+      "soft_skills": "Compétences personnelles",
+      "leadership": "Leadership",
+      "compliance": "Conformité",
+      "safety": "Sécurité",
+      "onboarding": "Intégration",
+      "other": "Autre"
+    },
+    "statuses": {
+      "planned": "Planifiée",
+      "open": "Ouverte",
+      "in_progress": "En cours",
+      "completed": "Terminée",
+      "cancelled": "Annulée"
+    },
+    "actions": {
+      "enroll": "Inscrire",
+      "complete": "Terminer"
+    },
+    "participants": "Participants",
+    "assignment": {
+      "employee": "Employé",
+      "status": "Statut",
+      "score": "Note",
+      "notes": "Notes"
+    },
+    "assignmentStatuses": {
+      "enrolled": "Inscrit",
+      "in_progress": "En cours",
+      "completed": "Terminé",
+      "cancelled": "Annulé",
+      "no_show": "Absent"
+    },
+    "empty": "Aucune formation à afficher.",
     "loading": "Chargement…",
     "error": "Impossible de charger."
   }

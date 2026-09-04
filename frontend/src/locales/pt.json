@@ -74,6 +74,7 @@
     "recruitment": "Recrutamento",
     "performance": "Desempenho",
     "training": "Formação",
+    "trainings": "Catálogo de Formações",
     "reports": "Relatórios",
     "settings": "Configurações",
     "profile": "Perfil",
@@ -357,6 +358,62 @@
       "cancelled": "Cancelada"
     },
     "empty": "Sem dados para mostrar.",
+    "loading": "A carregar…",
+    "error": "Não foi possível carregar."
+  },
+  "trainingPage": {
+    "title": "Formação",
+    "description": "Catálogo de formações, inscrições e conclusão.",
+    "newTraining": "Nova formação",
+    "training": {
+      "title": "Título",
+      "description": "Descrição",
+      "category": "Categoria",
+      "duration_hours": "Duração (h)",
+      "provider": "Formador",
+      "location": "Local",
+      "cost": "Custo",
+      "max_participants": "Máx. participantes",
+      "start_date": "Data início",
+      "end_date": "Data fim",
+      "status": "Estado",
+      "notes": "Notas"
+    },
+    "categoryOptions": {
+      "technical": "Técnica",
+      "soft_skills": "Competências pessoais",
+      "leadership": "Liderança",
+      "compliance": "Conformidade",
+      "safety": "Segurança",
+      "onboarding": "Integração",
+      "other": "Outra"
+    },
+    "statuses": {
+      "planned": "Planejada",
+      "open": "Aberta",
+      "in_progress": "Em curso",
+      "completed": "Concluída",
+      "cancelled": "Cancelada"
+    },
+    "actions": {
+      "enroll": "Inscrever",
+      "complete": "Concluir"
+    },
+    "participants": "Participantes",
+    "assignment": {
+      "employee": "Funcionário",
+      "status": "Estado",
+      "score": "Nota",
+      "notes": "Notas"
+    },
+    "assignmentStatuses": {
+      "enrolled": "Inscrito",
+      "in_progress": "Em curso",
+      "completed": "Concluído",
+      "cancelled": "Cancelado",
+      "no_show": "Não compareceu"
+    },
+    "empty": "Sem formações para mostrar.",
     "loading": "A carregar…",
     "error": "Não foi possível carregar."
   }

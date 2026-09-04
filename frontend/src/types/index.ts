@@ -540,3 +540,49 @@ export interface OnboardingTask {
   completer?: { id: number; name: string } | null
   created_at?: string
 }
+
+// Training
+export type TrainingStatus = 'planned' | 'open' | 'in_progress' | 'completed' | 'cancelled'
+export type TrainingCategory = 'technical' | 'soft_skills' | 'leadership' | 'compliance' | 'safety' | 'onboarding' | 'other'
+export type TrainingAssignmentStatus = 'enrolled' | 'in_progress' | 'completed' | 'cancelled' | 'no_show'
+
+export interface Training {
+  id: number
+  title: string
+  description?: string | null
+  category: TrainingCategory
+  category_label: string
+  duration_hours: number
+  provider?: string | null
+  location?: string | null
+  cost: number
+  currency: string
+  max_participants?: number | null
+  start_date?: string | null
+  end_date?: string | null
+  status: TrainingStatus
+  status_label: string
+  status_variant: 'success' | 'info' | 'destructive' | 'secondary'
+  notes?: string | null
+  enrolled_count: number
+  creator?: { id: number; name: string } | null
+  assignments?: TrainingAssignment[]
+  created_at?: string
+}
+
+export interface TrainingAssignment {
+  id: number
+  training_id: number
+  employee_id: number
+  status: TrainingAssignmentStatus
+  status_label: string
+  status_variant: 'success' | 'info' | 'destructive' | 'secondary'
+  enrolled_at?: string | null
+  completed_at?: string | null
+  score: number
+  notes?: string | null
+  employee?: { id: number; full_name: string; employee_code: string } | null
+  training?: { id: number; title: string } | null
+  completer?: { id: number; name: string } | null
+  created_at?: string
+}

@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\V1\Schedule\HolidayController;
 use App\Http\Controllers\Api\V1\Schedule\ShiftController;
 use App\Http\Controllers\Api\V1\Search\GlobalSearchController;
 use App\Http\Controllers\Api\V1\Setting\SettingController;
+use App\Http\Controllers\Api\V1\Training\TrainingController;
 use App\Http\Controllers\Api\V1\Tenant\TenantController;
 use Illuminate\Support\Facades\Route;
 
@@ -156,5 +157,10 @@ Route::prefix('v1')->group(function () {
         Route::post('onboarding/templates/{template}/assign', [OnboardingTemplateController::class, 'assign']);
         Route::apiResource('onboarding/tasks', OnboardingTaskController::class);
         Route::post('onboarding/tasks/{task}/complete', [OnboardingTaskController::class, 'complete']);
+
+        // Formação
+        Route::apiResource('trainings', TrainingController::class);
+        Route::post('trainings/{training}/enroll', [TrainingController::class, 'enroll']);
+        Route::post('trainings/assignments/{assignment}/complete', [TrainingController::class, 'complete']);
     });
 });

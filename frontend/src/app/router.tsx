@@ -30,6 +30,7 @@ const RecruitmentPage = lazy(() => import('@/features/recruitment/recruitment-pa
 const RecruitmentDetailPage = lazy(() => import('@/features/recruitment/recruitment-detail-page').then((m) => ({ default: m.RecruitmentDetailPage })))
 const PerformancePage = lazy(() => import('@/features/performance/performance-page').then((m) => ({ default: m.PerformancePage })))
 const OnboardingPage = lazy(() => import('@/features/onboarding/onboarding-page').then((m) => ({ default: m.OnboardingPage })))
+const TrainingCatalogPage = lazy(() => import('@/features/training/training-catalog-page').then((m) => ({ default: m.TrainingCatalogPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
 
 function PageLoader() {
@@ -90,6 +91,7 @@ export function AppRouter() {
           <Route path="/recruitment/:id" element={<RecruitmentDetailPage />} />
           <Route path="/performance" element={<PerformancePage />} />
           <Route path="/training" element={<OnboardingPage />} />
+          <Route path="/trainings" element={<TrainingCatalogPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

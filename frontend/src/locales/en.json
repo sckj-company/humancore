@@ -52,6 +52,7 @@
     "recruitment": "Recruitment",
     "performance": "Performance",
     "training": "Training",
+    "trainings": "Training Catalog",
     "reports": "Reports",
     "settings": "Settings",
     "organization": "Organization",
@@ -321,6 +322,62 @@
       "cancelled": "Cancelled"
     },
     "empty": "No data to show.",
+    "loading": "Loading…",
+    "error": "Could not load."
+  },
+  "trainingPage": {
+    "title": "Training",
+    "description": "Training catalog, enrollments and completion.",
+    "newTraining": "New training",
+    "training": {
+      "title": "Title",
+      "description": "Description",
+      "category": "Category",
+      "duration_hours": "Duration (h)",
+      "provider": "Provider",
+      "location": "Location",
+      "cost": "Cost",
+      "max_participants": "Max participants",
+      "start_date": "Start date",
+      "end_date": "End date",
+      "status": "Status",
+      "notes": "Notes"
+    },
+    "categoryOptions": {
+      "technical": "Technical",
+      "soft_skills": "Soft skills",
+      "leadership": "Leadership",
+      "compliance": "Compliance",
+      "safety": "Safety",
+      "onboarding": "Onboarding",
+      "other": "Other"
+    },
+    "statuses": {
+      "planned": "Planned",
+      "open": "Open",
+      "in_progress": "In progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "actions": {
+      "enroll": "Enroll",
+      "complete": "Complete"
+    },
+    "participants": "Participants",
+    "assignment": {
+      "employee": "Employee",
+      "status": "Status",
+      "score": "Score",
+      "notes": "Notes"
+    },
+    "assignmentStatuses": {
+      "enrolled": "Enrolled",
+      "in_progress": "In progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "no_show": "No show"
+    },
+    "empty": "No trainings to show.",
     "loading": "Loading…",
     "error": "Could not load."
   }

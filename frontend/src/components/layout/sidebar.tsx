@@ -71,6 +71,7 @@ const sections: NavSection[] = [
       { titleKey: 'nav.documents', href: '/documents', icon: FileText },
       { titleKey: 'nav.performance', href: '/performance', icon: TrendingUp, roles: ['admin', 'hr-manager', 'manager'] },
       { titleKey: 'nav.training', href: '/training', icon: GraduationCap, roles: ['admin', 'hr-manager', 'manager'] },
+      { titleKey: 'nav.trainings', href: '/trainings', icon: GraduationCap, roles: ['admin', 'hr-manager'] },
     ],
   },
   {
