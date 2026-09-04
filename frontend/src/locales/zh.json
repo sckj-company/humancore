@@ -176,5 +176,72 @@
     "empty": "所选期间无数据。",
     "loading": "正在生成报表…",
     "error": "无法生成报表。"
+  },
+  "recruitment": {
+    "title": "招聘",
+    "description": "职位发布与候选人流程管理。",
+    "tabs": {
+      "jobs": "职位",
+      "candidates": "候选人"
+    },
+    "newJob": "新增职位",
+    "editJob": "编辑职位",
+    "newCandidate": "添加候选人",
+    "job": {
+      "title": "标题",
+      "department": "部门",
+      "position": "岗位",
+      "location": "地点",
+      "employmentType": "雇佣类型",
+      "experienceLevel": "经验",
+      "salaryMin": "最低薪资",
+      "salaryMax": "最高薪资",
+      "currency": "货币",
+      "openingsCount": "招聘人数",
+      "description": "描述",
+      "requirements": "要求",
+      "status": "状态",
+      "publishedAt": "发布日期",
+      "closesAt": "截止日期",
+      "candidates": "候选人",
+      "actions": {
+        "publish": "发布",
+        "close": "关闭",
+        "reopen": "重新开放"
+      }
+    },
+    "candidate": {
+      "name": "姓名",
+      "email": "邮箱",
+      "phone": "电话",
+      "yearsExperience": "工作年限",
+      "source": "来源",
+      "status": "状态",
+      "rating": "评分",
+      "expectedSalary": "期望薪资",
+      "appliedAt": "申请时间",
+      "move": "移至",
+      "addToJob": "添加到职位"
+    },
+    "statuses": {
+      "draft": "草稿",
+      "open": "开放",
+      "on_hold": "暂停",
+      "closed": "已关闭",
+      "cancelled": "已取消",
+      "applied": "已申请",
+      "screening": "筛选中",
+      "interview": "面试中",
+      "test": "评估中",
+      "offer": "已发offer",
+      "hired": "已入职",
+      "rejected": "已拒绝",
+      "withdrawn": "已撤回"
+    },
+    "empty": "暂无数据。",
+    "loading": "加载中…",
+    "error": "无法加载。",
+    "saved": "保存成功。",
+    "deleted": "删除成功。"
   }
 }

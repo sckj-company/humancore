@@ -1,7 +1,28 @@
 {
   "app": {
     "name": "HRMS",
-    "tagline": "Sistema de Gestão de Recursos Humanos"
+    "tagline": "Sistema de Gestão de Recursos Humanos",
+    "tagline_short": "Enterprise",
+    "system_status": "Sistema operacional"
+  },
+  "tenant": {
+    "current": "Empresa atual",
+    "switch": "Trocar empresa",
+    "search": "Pesquisar empresa...",
+    "new": "Nova empresa"
+  },
+  "command": {
+    "placeholder": "Pesquisar no HRMS — funcionários, módulos, ações...",
+    "search": "Pesquisar...",
+    "empty": "Nenhum resultado encontrado.",
+    "modules": "Módulos",
+    "navigate": "Navegar",
+    "select": "Selecionar"
+  },
+  "theme": {
+    "light": "Claro",
+    "dark": "Escuro",
+    "system": "Sistema"
   },
   "auth": {
     "login": "Entrar",
@@ -40,7 +61,8 @@
     "active": "Ativo",
     "inactive": "Inativo",
     "periods": "períodos",
-    "date": "Data"
+    "date": "Data",
+    "thisMonth": "Este mês"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -54,6 +76,8 @@
     "training": "Formação",
     "reports": "Relatórios",
     "settings": "Configurações",
+    "profile": "Perfil",
+    "help": "Ajuda",
     "organization": "Organização",
     "departments": "Departamentos",
     "positions": "Cargos",
@@ -111,7 +135,16 @@
     "allDescription": "Vista geral dos registos de presença",
     "clockIn": "Registar Entrada",
     "clockOut": "Registar Saída",
-    "myHistory": "O meu histórico"
+    "myHistory": "O meu histórico",
+    "qr": {
+      "cta": "Mostrar QR Code",
+      "title": "QR Code de registo",
+      "description": "Apresente este código no terminal de presença. O código expira em segundos.",
+      "expiresIn": "Expira em",
+      "refresh": "Gerar novo código",
+      "regenerating": "A regenerar…",
+      "scanSuccess": "Registo efetuado com sucesso"
+    }
   },
   "leave": {
     "title": "Férias e Ausências",
@@ -186,5 +219,72 @@
     "empty": "Sem dados para o período selecionado.",
     "loading": "A gerar relatório…",
     "error": "Não foi possível gerar o relatório."
+  },
+  "recruitment": {
+    "title": "Recrutamento",
+    "description": "Gestão de vagas e candidatos com pipeline de seleção.",
+    "tabs": {
+      "jobs": "Vagas",
+      "candidates": "Candidatos"
+    },
+    "newJob": "Nova vaga",
+    "editJob": "Editar vaga",
+    "newCandidate": "Adicionar candidato",
+    "job": {
+      "title": "Título",
+      "department": "Departamento",
+      "position": "Cargo",
+      "location": "Localização",
+      "employmentType": "Tipo de contrato",
+      "experienceLevel": "Experiência",
+      "salaryMin": "Salário mínimo",
+      "salaryMax": "Salário máximo",
+      "currency": "Moeda",
+      "openingsCount": "Nº de vagas",
+      "description": "Descrição",
+      "requirements": "Requisitos",
+      "status": "Estado",
+      "publishedAt": "Publicada em",
+      "closesAt": "Data limite",
+      "candidates": "Candidatos",
+      "actions": {
+        "publish": "Publicar",
+        "close": "Fechar",
+        "reopen": "Reabrir"
+      }
+    },
+    "candidate": {
+      "name": "Nome",
+      "email": "Email",
+      "phone": "Telefone",
+      "yearsExperience": "Anos exp.",
+      "source": "Origem",
+      "status": "Estado",
+      "rating": "Avaliação",
+      "expectedSalary": "Salário esperado",
+      "appliedAt": "Candidatura em",
+      "move": "Mover para",
+      "addToJob": "Adicionar à vaga"
+    },
+    "statuses": {
+      "draft": "Rascunho",
+      "open": "Aberta",
+      "on_hold": "Em pausa",
+      "closed": "Fechada",
+      "cancelled": "Cancelada",
+      "applied": "Candidatura recebida",
+      "screening": "Triagem",
+      "interview": "Em entrevista",
+      "test": "Em avaliação",
+      "offer": "Oferta enviada",
+      "hired": "Contratado",
+      "rejected": "Rejeitado",
+      "withdrawn": "Desistiu"
+    },
+    "empty": "Sem dados para mostrar.",
+    "loading": "A carregar…",
+    "error": "Não foi possível carregar.",
+    "saved": "Guardado com sucesso.",
+    "deleted": "Removido com sucesso."
   }
 }

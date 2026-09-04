@@ -176,5 +176,72 @@
     "empty": "Aucune donnée pour la période sélectionnée.",
     "loading": "Génération du rapport…",
     "error": "Impossible de générer le rapport."
+  },
+  "recruitment": {
+    "title": "Recrutement",
+    "description": "Gestion des offres d'emploi et pipeline de candidats.",
+    "tabs": {
+      "jobs": "Offres",
+      "candidates": "Candidats"
+    },
+    "newJob": "Nouvelle offre",
+    "editJob": "Modifier l'offre",
+    "newCandidate": "Ajouter un candidat",
+    "job": {
+      "title": "Titre",
+      "department": "Département",
+      "position": "Poste",
+      "location": "Localisation",
+      "employmentType": "Type de contrat",
+      "experienceLevel": "Expérience",
+      "salaryMin": "Salaire min",
+      "salaryMax": "Salaire max",
+      "currency": "Devise",
+      "openingsCount": "Postes",
+      "description": "Description",
+      "requirements": "Exigences",
+      "status": "Statut",
+      "publishedAt": "Publié le",
+      "closesAt": "Date limite",
+      "candidates": "Candidats",
+      "actions": {
+        "publish": "Publier",
+        "close": "Fermer",
+        "reopen": "Rouvrir"
+      }
+    },
+    "candidate": {
+      "name": "Nom",
+      "email": "Email",
+      "phone": "Téléphone",
+      "yearsExperience": "Années d'exp.",
+      "source": "Source",
+      "status": "Statut",
+      "rating": "Évaluation",
+      "expectedSalary": "Salaire souhaité",
+      "appliedAt": "Candidature le",
+      "move": "Déplacer vers",
+      "addToJob": "Ajouter à l'offre"
+    },
+    "statuses": {
+      "draft": "Brouillon",
+      "open": "Ouverte",
+      "on_hold": "En pause",
+      "closed": "Fermée",
+      "cancelled": "Annulée",
+      "applied": "Candidature reçue",
+      "screening": "Présélection",
+      "interview": "Entretien",
+      "test": "Évaluation",
+      "offer": "Offre envoyée",
+      "hired": "Embauché",
+      "rejected": "Rejeté",
+      "withdrawn": "Abandonné"
+    },
+    "empty": "Aucune donnée à afficher.",
+    "loading": "Chargement…",
+    "error": "Impossible de charger.",
+    "saved": "Enregistré avec succès.",
+    "deleted": "Supprimé avec succès."
   }
 }

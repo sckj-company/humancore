@@ -101,7 +101,16 @@
     "allDescription": "Overview of attendance records",
     "clockIn": "Clock In",
     "clockOut": "Clock Out",
-    "myHistory": "My history"
+    "myHistory": "My history",
+    "qr": {
+      "cta": "Show QR Code",
+      "title": "Clock-in QR Code",
+      "description": "Present this code at the attendance terminal. The code expires in seconds.",
+      "expiresIn": "Expires in",
+      "refresh": "Generate new code",
+      "regenerating": "Regenerating…",
+      "scanSuccess": "Clock recorded successfully"
+    }
   },
   "leave": {
     "title": "Leaves & Absences",
@@ -176,5 +185,72 @@
     "empty": "No data for the selected period.",
     "loading": "Generating report…",
     "error": "Could not generate the report."
+  },
+  "recruitment": {
+    "title": "Recruitment",
+    "description": "Job openings and candidate pipeline management.",
+    "tabs": {
+      "jobs": "Jobs",
+      "candidates": "Candidates"
+    },
+    "newJob": "New job",
+    "editJob": "Edit job",
+    "newCandidate": "Add candidate",
+    "job": {
+      "title": "Title",
+      "department": "Department",
+      "position": "Position",
+      "location": "Location",
+      "employmentType": "Employment type",
+      "experienceLevel": "Experience",
+      "salaryMin": "Min salary",
+      "salaryMax": "Max salary",
+      "currency": "Currency",
+      "openingsCount": "Openings",
+      "description": "Description",
+      "requirements": "Requirements",
+      "status": "Status",
+      "publishedAt": "Published at",
+      "closesAt": "Closes at",
+      "candidates": "Candidates",
+      "actions": {
+        "publish": "Publish",
+        "close": "Close",
+        "reopen": "Reopen"
+      }
+    },
+    "candidate": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "yearsExperience": "Years exp.",
+      "source": "Source",
+      "status": "Status",
+      "rating": "Rating",
+      "expectedSalary": "Expected salary",
+      "appliedAt": "Applied at",
+      "move": "Move to",
+      "addToJob": "Add to job"
+    },
+    "statuses": {
+      "draft": "Draft",
+      "open": "Open",
+      "on_hold": "On hold",
+      "closed": "Closed",
+      "cancelled": "Cancelled",
+      "applied": "Applied",
+      "screening": "Screening",
+      "interview": "Interview",
+      "test": "Assessment",
+      "offer": "Offer sent",
+      "hired": "Hired",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn"
+    },
+    "empty": "No data to show.",
+    "loading": "Loading…",
+    "error": "Could not load.",
+    "saved": "Saved successfully.",
+    "deleted": "Deleted successfully."
   }
 }
