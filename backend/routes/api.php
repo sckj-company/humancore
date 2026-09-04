@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Attendance\AttendanceController;
+use App\Http\Controllers\Api\V1\Attendance\AttendanceQrController;
+use App\Http\Controllers\Api\V1\Audit\AuditController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Contract\ContractController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
@@ -8,12 +10,22 @@ use App\Http\Controllers\Api\V1\Document\EmployeeDocumentController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
 use App\Http\Controllers\Api\V1\Leave\LeaveController;
 use App\Http\Controllers\Api\V1\Notification\NotificationController;
+use App\Http\Controllers\Api\V1\Onboarding\OnboardingTaskController;
+use App\Http\Controllers\Api\V1\Onboarding\OnboardingTemplateController;
 use App\Http\Controllers\Api\V1\Organization\BranchController;
 use App\Http\Controllers\Api\V1\Organization\DepartmentController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
+use App\Http\Controllers\Api\V1\Payroll\MyPayslipsController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollController;
 use App\Http\Controllers\Api\V1\Payroll\PayslipController;
+use App\Http\Controllers\Api\V1\Performance\PerformanceEvaluationController;
+use App\Http\Controllers\Api\V1\Recruitment\CandidateController;
+use App\Http\Controllers\Api\V1\Recruitment\JobOpeningController;
 use App\Http\Controllers\Api\V1\Report\ReportController;
+use App\Http\Controllers\Api\V1\Schedule\EmployeeScheduleController;
+use App\Http\Controllers\Api\V1\Schedule\HolidayController;
+use App\Http\Controllers\Api\V1\Schedule\ShiftController;
+use App\Http\Controllers\Api\V1\Search\GlobalSearchController;
 use App\Http\Controllers\Api\V1\Setting\SettingController;
 use App\Http\Controllers\Api\V1\Tenant\TenantController;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +38,9 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::get('auth/me', [AuthController::class, 'me']);
+        Route::put('auth/profile', [AuthController::class, 'updateProfile']);
+        Route::put('auth/password', [AuthController::class, 'updatePassword']);
+        Route::post('auth/avatar', [AuthController::class, 'uploadAvatar']);
 
         // Dashboard
         Route::get('dashboard/hr', [DashboardController::class, 'hr']);
@@ -59,6 +74,7 @@ Route::prefix('v1')->group(function () {
         Route::get('payroll/periods/{period}/records', [PayrollController::class, 'records']);
         Route::get('payroll/records/{record}/payslip', [PayslipController::class, 'show']);
         Route::get('payroll/records/{record}/payslip.pdf', [PayslipController::class, 'download']);
+        Route::get('payroll/my-payslips', [MyPayslipsController::class, 'index']);
 
         // Presenças
         Route::post('attendance/toggle', [AttendanceController::class, 'toggle']);
@@ -66,6 +82,20 @@ Route::prefix('v1')->group(function () {
         Route::get('attendance/my-history', [AttendanceController::class, 'myHistory']);
         Route::get('attendance', [AttendanceController::class, 'index']);
         Route::put('attendance/{record}', [AttendanceController::class, 'update']);
+        Route::post('attendance/{record}/justify', [AttendanceController::class, 'justify']);
+
+        // Presenças — QR Code
+        Route::post('attendance/qr/issue', [AttendanceQrController::class, 'issue']);
+        Route::post('attendance/qr/scan', [AttendanceQrController::class, 'scan']);
+
+        // Recrutamento
+        Route::apiResource('recruitment/jobs', JobOpeningController::class);
+        Route::post('recruitment/jobs/{job}/publish', [JobOpeningController::class, 'publish']);
+        Route::post('recruitment/jobs/{job}/close', [JobOpeningController::class, 'close']);
+        Route::get('recruitment/jobs/{job}/candidates', [CandidateController::class, 'byJobOpening']);
+
+        Route::apiResource('recruitment/candidates', CandidateController::class);
+        Route::post('recruitment/candidates/{candidate}/move', [CandidateController::class, 'move']);
 
         // Férias / Ausências
         Route::get('leave/types', [LeaveController::class, 'types']);
@@ -94,11 +124,37 @@ Route::prefix('v1')->group(function () {
         Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
         Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
+        // Pesquisa global
+        Route::get('search', [GlobalSearchController::class, 'search']);
+
+        // Auditoria
+        Route::get('audits', [AuditController::class, 'index']);
+        Route::get('audits/{audit}', [AuditController::class, 'show']);
+
         // Relatórios
         Route::get('reports/headcount', [ReportController::class, 'headcount']);
         Route::get('reports/turnover', [ReportController::class, 'turnover']);
         Route::get('reports/payroll-summary', [ReportController::class, 'payrollSummary']);
         Route::get('reports/attendance-summary', [ReportController::class, 'attendanceSummary']);
+        Route::get('reports/absenteeism', [ReportController::class, 'absenteeism']);
+        Route::get('reports/cost', [ReportController::class, 'cost']);
         Route::get('reports/{type}/export', [ReportController::class, 'export']);
+
+        // Horários e Turnos
+        Route::apiResource('shifts', ShiftController::class);
+        Route::apiResource('employee-schedules', EmployeeScheduleController::class);
+        Route::get('my-schedule', [EmployeeScheduleController::class, 'mySchedule']);
+        Route::apiResource('holidays', HolidayController::class)->except(['show']);
+
+        // Avaliação de Desempenho
+        Route::apiResource('performance', PerformanceEvaluationController::class);
+        Route::post('performance/{evaluation}/approve', [PerformanceEvaluationController::class, 'approve']);
+        Route::post('performance/{evaluation}/reject', [PerformanceEvaluationController::class, 'reject']);
+
+        // Onboarding
+        Route::apiResource('onboarding/templates', OnboardingTemplateController::class);
+        Route::post('onboarding/templates/{template}/assign', [OnboardingTemplateController::class, 'assign']);
+        Route::apiResource('onboarding/tasks', OnboardingTaskController::class);
+        Route::post('onboarding/tasks/{task}/complete', [OnboardingTaskController::class, 'complete']);
     });
 });

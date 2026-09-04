@@ -252,5 +252,76 @@
     "error": "Could not load.",
     "saved": "Saved successfully.",
     "deleted": "Deleted successfully."
+  },
+  "performance": {
+    "title": "Performance Reviews",
+    "description": "Evaluation cycles, criteria and employee scoring.",
+    "newEvaluation": "New evaluation",
+    "period": "Period",
+    "cycle": "Cycle",
+    "cycleOptions": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "semi_annual": "Semi-annual",
+      "annual": "Annual",
+      "probation": "Probation"
+    },
+    "score": "Score",
+    "criteria": "Criteria",
+    "strengths": "Strengths",
+    "improvements": "Improvements",
+    "goals": "Goals",
+    "comments": "Comments",
+    "statuses": {
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "actions": {
+      "submit": "Submit",
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "empty": "No evaluations to show.",
+    "loading": "Loading…",
+    "error": "Could not load."
+  },
+  "onboarding": {
+    "title": "Onboarding",
+    "description": "Templates and tasks for integrating new employees.",
+    "tabs": {
+      "templates": "Templates",
+      "tasks": "Tasks"
+    },
+    "newTemplate": "New template",
+    "newTask": "New task",
+    "template": {
+      "name": "Name",
+      "description": "Description",
+      "is_active": "Active",
+      "tasks": "Tasks",
+      "addTask": "Add task"
+    },
+    "task": {
+      "title": "Title",
+      "description": "Description",
+      "due_days": "Due in days",
+      "due_date": "Due date",
+      "assignee": "Assignee",
+      "employee": "Employee",
+      "status": "Status",
+      "complete": "Complete",
+      "assignTo": "Assign to"
+    },
+    "statuses": {
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "empty": "No data to show.",
+    "loading": "Loading…",
+    "error": "Could not load."
   }
 }

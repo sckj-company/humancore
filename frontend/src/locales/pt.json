@@ -85,7 +85,9 @@
     "section_people": "Pessoas",
     "section_time": "Tempo",
     "section_management": "Gestão",
-    "section_analytics": "Análise"
+    "section_analytics": "Análise",
+    "schedules": "Horários/Turnos",
+    "audits": "Auditoria"
   },
   "settings": {
     "title": "Configurações",
@@ -286,5 +288,76 @@
     "error": "Não foi possível carregar.",
     "saved": "Guardado com sucesso.",
     "deleted": "Removido com sucesso."
+  },
+  "performance": {
+    "title": "Avaliação de Desempenho",
+    "description": "Ciclos de avaliação, critérios e scoring dos funcionários.",
+    "newEvaluation": "Nova avaliação",
+    "period": "Período",
+    "cycle": "Ciclo",
+    "cycleOptions": {
+      "monthly": "Mensal",
+      "quarterly": "Trimestral",
+      "semi_annual": "Semestral",
+      "annual": "Anual",
+      "probation": "Período experimental"
+    },
+    "score": "Pontuação",
+    "criteria": "Critérios",
+    "strengths": "Pontos fortes",
+    "improvements": "A melhorar",
+    "goals": "Objetivos",
+    "comments": "Comentários",
+    "statuses": {
+      "draft": "Rascunho",
+      "submitted": "Submetida",
+      "approved": "Aprovada",
+      "rejected": "Rejeitada"
+    },
+    "actions": {
+      "submit": "Submeter",
+      "approve": "Aprovar",
+      "reject": "Rejeitar"
+    },
+    "empty": "Sem avaliações para mostrar.",
+    "loading": "A carregar…",
+    "error": "Não foi possível carregar."
+  },
+  "onboarding": {
+    "title": "Onboarding",
+    "description": "Templates e tarefas de integração de novos funcionários.",
+    "tabs": {
+      "templates": "Templates",
+      "tasks": "Tarefas"
+    },
+    "newTemplate": "Novo template",
+    "newTask": "Nova tarefa",
+    "template": {
+      "name": "Nome",
+      "description": "Descrição",
+      "is_active": "Ativo",
+      "tasks": "Tarefas",
+      "addTask": "Adicionar tarefa"
+    },
+    "task": {
+      "title": "Título",
+      "description": "Descrição",
+      "due_days": "Dias limite",
+      "due_date": "Data limite",
+      "assignee": "Responsável",
+      "employee": "Funcionário",
+      "status": "Estado",
+      "complete": "Concluir",
+      "assignTo": "Atribuir a"
+    },
+    "statuses": {
+      "pending": "Pendente",
+      "in_progress": "Em curso",
+      "completed": "Concluída",
+      "cancelled": "Cancelada"
+    },
+    "empty": "Sem dados para mostrar.",
+    "loading": "A carregar…",
+    "error": "Não foi possível carregar."
   }
 }

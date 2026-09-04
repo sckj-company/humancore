@@ -30,9 +30,14 @@ export interface EmployeeSummary {
   employee_code: string
   full_name: string
   email?: string
+  phone?: string
   photo_path?: string
   position?: string
   department?: string
+  address?: string
+  city?: string
+  state?: string
+  postal_code?: string
   status: EmployeeStatus
   hired_at?: string
   active_contract?: { id: number; base_salary: number; contract_type: ContractType }
@@ -384,4 +389,154 @@ export interface AttendanceReport {
   by_department: { department: string; records: number; total_hours: number; late_minutes: number; overtime_minutes: number }[]
 }
 
-export type ReportType = 'headcount' | 'turnover' | 'payroll' | 'attendance'
+export type ReportType = 'headcount' | 'turnover' | 'payroll' | 'attendance' | 'absenteeism' | 'cost'
+
+export type JobOpeningStatus = 'draft' | 'open' | 'on_hold' | 'closed' | 'cancelled'
+
+export type EmploymentType =
+  | 'full_time'
+  | 'part_time'
+  | 'contract'
+  | 'temporary'
+  | 'internship'
+
+export type ExperienceLevel = 'intern' | 'junior' | 'mid' | 'senior' | 'lead'
+
+export interface JobOpening {
+  id: number
+  title: string
+  slug?: string
+  description?: string | null
+  requirements?: string | null
+  location?: string | null
+  employment_type: EmploymentType
+  employment_type_label: string
+  experience_level?: ExperienceLevel | null
+  experience_level_label?: string
+  salary_min: number | null
+  salary_max: number | null
+  salary_range?: string | null
+  currency: string
+  openings_count: number
+  status: JobOpeningStatus
+  status_label: string
+  status_variant: 'success' | 'secondary' | 'warning' | 'info' | 'destructive'
+  published_at?: string | null
+  closes_at?: string | null
+  closed_at?: string | null
+  notes?: string | null
+  candidates_count?: number
+  department?: { id: number; name: string } | null
+  position?: { id: number; title: string } | null
+  created_by?: { id: number; name: string } | null
+  created_at?: string
+  updated_at?: string
+}
+
+export type CandidateStatus =
+  | 'applied'
+  | 'screening'
+  | 'interview'
+  | 'test'
+  | 'offer'
+  | 'hired'
+  | 'rejected'
+  | 'withdrawn'
+
+export interface Candidate {
+  id: number
+  job_opening_id: number
+  first_name: string
+  last_name: string
+  full_name: string
+  email: string
+  phone?: string | null
+  location?: string | null
+  source?: string | null
+  resume_path?: string | null
+  resume_url?: string | null
+  cover_letter?: string | null
+  linkedin_url?: string | null
+  years_experience?: number | null
+  status: CandidateStatus
+  status_label: string
+  expected_salary: number
+  rating?: number | null
+  notes?: string | null
+  applied_at?: string | null
+  last_status_at?: string | null
+  job_opening?: { id: number; title: string } | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface QrCodePayload {
+  hash: string
+  action: 'clock_in' | 'clock_out'
+  expires_at: string
+  ttl_seconds: number
+  qr_svg: string
+}
+
+// Performance
+export type PerformanceStatus = 'draft' | 'submitted' | 'approved' | 'rejected'
+export type PerformanceCycle = 'monthly' | 'quarterly' | 'semi_annual' | 'annual' | 'probation'
+
+export interface PerformanceEvaluation {
+  id: number
+  period: string
+  cycle: PerformanceCycle
+  cycle_label: string
+  period_start?: string | null
+  period_end?: string | null
+  score: number
+  criteria: Record<string, number>
+  strengths?: string | null
+  improvements?: string | null
+  goals?: string | null
+  comments?: string | null
+  status: PerformanceStatus
+  status_label: string
+  status_variant: 'success' | 'info' | 'destructive' | 'secondary'
+  submitted_at?: string | null
+  approved_at?: string | null
+  employee?: { id: number; full_name: string; employee_code: string } | null
+  evaluator?: { id: number; name: string } | null
+  approver?: { id: number; name: string } | null
+  created_at?: string
+}
+
+// Onboarding
+export type OnboardingTaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
+
+export interface OnboardingTemplate {
+  id: number
+  name: string
+  description?: string | null
+  is_active: boolean
+  tasks_count?: number
+  creator?: { id: number; name: string } | null
+  tasks?: OnboardingTask[]
+  created_at?: string
+}
+
+export interface OnboardingTask {
+  id: number
+  template_id?: number | null
+  employee_id?: number | null
+  assignee_id?: number | null
+  title: string
+  description?: string | null
+  due_days: number
+  due_date?: string | null
+  sort_order: number
+  status: OnboardingTaskStatus
+  status_label: string
+  status_variant: 'success' | 'info' | 'destructive' | 'secondary'
+  completed_at?: string | null
+  notes?: string | null
+  employee?: { id: number; full_name: string; employee_code: string } | null
+  assignee?: { id: number; name: string } | null
+  completer?: { id: number; name: string } | null
+  created_at?: string
+}

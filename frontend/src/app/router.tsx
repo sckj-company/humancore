@@ -16,12 +16,20 @@ const DepartmentsPage = lazy(() => import('@/features/organization/departments-p
 const PositionsPage = lazy(() => import('@/features/organization/positions-page').then((m) => ({ default: m.PositionsPage })))
 const PayrollPeriodsPage = lazy(() => import('@/features/payroll/payroll-periods-page').then((m) => ({ default: m.PayrollPeriodsPage })))
 const PayrollPeriodDetailPage = lazy(() => import('@/features/payroll/payroll-period-detail-page').then((m) => ({ default: m.PayrollPeriodDetailPage })))
+const PayslipsPage = lazy(() => import('@/features/payslips/payslips-page').then((m) => ({ default: m.PayslipsPage })))
 const AttendancePage = lazy(() => import('@/features/attendance/attendance-page').then((m) => ({ default: m.AttendancePage })))
 const LeavePage = lazy(() => import('@/features/leave/leave-page').then((m) => ({ default: m.LeavePage })))
+const SchedulesPage = lazy(() => import('@/features/schedules/schedules-page').then((m) => ({ default: m.SchedulesPage })))
 const SettingsPage = lazy(() => import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })))
 const DocumentsPage = lazy(() => import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })))
 const NotificationsPage = lazy(() => import('@/features/notifications/notifications-page').then((m) => ({ default: m.NotificationsPage })))
+const AuditPage = lazy(() => import('@/features/audit/audit-page').then((m) => ({ default: m.AuditPage })))
+const ProfilePage = lazy(() => import('@/features/profile/profile-page').then((m) => ({ default: m.ProfilePage })))
 const ReportsPage = lazy(() => import('@/features/reports/reports-page').then((m) => ({ default: m.ReportsPage })))
+const RecruitmentPage = lazy(() => import('@/features/recruitment/recruitment-page').then((m) => ({ default: m.RecruitmentPage })))
+const RecruitmentDetailPage = lazy(() => import('@/features/recruitment/recruitment-detail-page').then((m) => ({ default: m.RecruitmentDetailPage })))
+const PerformancePage = lazy(() => import('@/features/performance/performance-page').then((m) => ({ default: m.PerformancePage })))
+const OnboardingPage = lazy(() => import('@/features/onboarding/onboarding-page').then((m) => ({ default: m.OnboardingPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
 
 function PageLoader() {
@@ -70,13 +78,18 @@ export function AppRouter() {
 
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/leave" element={<LeavePage />} />
+          <Route path="/schedules" element={<SchedulesPage />} />
           <Route path="/payroll" element={<PayrollPeriodsPage />} />
           <Route path="/payroll/:id" element={<PayrollPeriodDetailPage />} />
+          <Route path="/my-payslips" element={<PayslipsPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/recruitment" element={<PlaceholderPage title="Recrutamento" />} />
-          <Route path="/performance" element={<PlaceholderPage title="Desempenho" />} />
-          <Route path="/training" element={<PlaceholderPage title="Formação" />} />
+          <Route path="/audits" element={<AuditPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/recruitment" element={<RecruitmentPage />} />
+          <Route path="/recruitment/:id" element={<RecruitmentDetailPage />} />
+          <Route path="/performance" element={<PerformancePage />} />
+          <Route path="/training" element={<OnboardingPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

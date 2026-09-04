@@ -243,5 +243,76 @@
     "error": "无法加载。",
     "saved": "保存成功。",
     "deleted": "删除成功。"
+  },
+  "performance": {
+    "title": "绩效评估",
+    "description": "评估周期、评分标准与员工评分。",
+    "newEvaluation": "新建评估",
+    "period": "周期",
+    "cycle": "频率",
+    "cycleOptions": {
+      "monthly": "月度",
+      "quarterly": "季度",
+      "semi_annual": "半年度",
+      "annual": "年度",
+      "probation": "试用期"
+    },
+    "score": "分数",
+    "criteria": "评估项",
+    "strengths": "优势",
+    "improvements": "待改进",
+    "goals": "目标",
+    "comments": "评语",
+    "statuses": {
+      "draft": "草稿",
+      "submitted": "已提交",
+      "approved": "已批准",
+      "rejected": "已拒绝"
+    },
+    "actions": {
+      "submit": "提交",
+      "approve": "批准",
+      "reject": "拒绝"
+    },
+    "empty": "暂无评估。",
+    "loading": "加载中…",
+    "error": "无法加载。"
+  },
+  "onboarding": {
+    "title": "入职",
+    "description": "新员工入职的模板和任务。",
+    "tabs": {
+      "templates": "模板",
+      "tasks": "任务"
+    },
+    "newTemplate": "新建模板",
+    "newTask": "新建任务",
+    "template": {
+      "name": "名称",
+      "description": "描述",
+      "is_active": "启用",
+      "tasks": "任务",
+      "addTask": "添加任务"
+    },
+    "task": {
+      "title": "标题",
+      "description": "描述",
+      "due_days": "完成天数",
+      "due_date": "截止日期",
+      "assignee": "负责人",
+      "employee": "员工",
+      "status": "状态",
+      "complete": "完成",
+      "assignTo": "分配给"
+    },
+    "statuses": {
+      "pending": "待办",
+      "in_progress": "进行中",
+      "completed": "已完成",
+      "cancelled": "已取消"
+    },
+    "empty": "暂无数据。",
+    "loading": "加载中…",
+    "error": "无法加载。"
   }
 }

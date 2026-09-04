@@ -243,5 +243,76 @@
     "error": "Impossible de charger.",
     "saved": "Enregistré avec succès.",
     "deleted": "Supprimé avec succès."
+  },
+  "performance": {
+    "title": "Évaluation de Performance",
+    "description": "Cycles d'évaluation, critères et notation des employés.",
+    "newEvaluation": "Nouvelle évaluation",
+    "period": "Période",
+    "cycle": "Cycle",
+    "cycleOptions": {
+      "monthly": "Mensuel",
+      "quarterly": "Trimestriel",
+      "semi_annual": "Semestriel",
+      "annual": "Annuel",
+      "probation": "Période d'essai"
+    },
+    "score": "Score",
+    "criteria": "Critères",
+    "strengths": "Points forts",
+    "improvements": "À améliorer",
+    "goals": "Objectifs",
+    "comments": "Commentaires",
+    "statuses": {
+      "draft": "Brouillon",
+      "submitted": "Soumise",
+      "approved": "Approuvée",
+      "rejected": "Rejetée"
+    },
+    "actions": {
+      "submit": "Soumettre",
+      "approve": "Approuver",
+      "reject": "Rejeter"
+    },
+    "empty": "Aucune évaluation à afficher.",
+    "loading": "Chargement…",
+    "error": "Impossible de charger."
+  },
+  "onboarding": {
+    "title": "Onboarding",
+    "description": "Modèles et tâches pour intégrer les nouveaux employés.",
+    "tabs": {
+      "templates": "Modèles",
+      "tasks": "Tâches"
+    },
+    "newTemplate": "Nouveau modèle",
+    "newTask": "Nouvelle tâche",
+    "template": {
+      "name": "Nom",
+      "description": "Description",
+      "is_active": "Actif",
+      "tasks": "Tâches",
+      "addTask": "Ajouter une tâche"
+    },
+    "task": {
+      "title": "Titre",
+      "description": "Description",
+      "due_days": "Délai (jours)",
+      "due_date": "Date limite",
+      "assignee": "Responsable",
+      "employee": "Employé",
+      "status": "Statut",
+      "complete": "Terminer",
+      "assignTo": "Assigner à"
+    },
+    "statuses": {
+      "pending": "En attente",
+      "in_progress": "En cours",
+      "completed": "Terminée",
+      "cancelled": "Annulée"
+    },
+    "empty": "Aucune donnée à afficher.",
+    "loading": "Chargement…",
+    "error": "Impossible de charger."
   }
 }
