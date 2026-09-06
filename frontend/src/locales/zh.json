@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "HRMS",
-    "tagline": "人力资源管理系统"
+    "name": "HumaCore",
+    "tagline": "Human Capital Management"
   },
   "auth": {
     "login": "登录",
@@ -371,5 +371,15 @@
     "empty": "暂无培训。",
     "loading": "加载中…",
     "error": "无法加载。"
+  },
+  "superAdminDashboard": {
+    "title": "超级管理员仪表盘",
+    "subtitle": "所有租户和平台用户的全局视图。",
+    "manageTenants": "管理组织",
+    "tenantTrend": "租户增长",
+    "byStatus": "状态分布",
+    "segments": "按规模细分",
+    "tenantsTable": "租户",
+    "tenantsTableDescription": "平台上的所有租户"
   }
 }

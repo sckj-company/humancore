@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "HRMS",
-    "tagline": "Human Resources Management System"
+    "name": "HumaCore",
+    "tagline": "Human Capital Management"
   },
   "auth": {
     "login": "Sign in",
@@ -380,5 +380,15 @@
     "empty": "No trainings to show.",
     "loading": "Loading…",
     "error": "Could not load."
+  },
+  "superAdminDashboard": {
+    "title": "Super Admin Dashboard",
+    "subtitle": "Global view of all tenants and platform users.",
+    "manageTenants": "Manage organization",
+    "tenantTrend": "Tenant Growth",
+    "byStatus": "Status Distribution",
+    "segments": "Segmentation by size",
+    "tenantsTable": "Tenants",
+    "tenantsTableDescription": "All tenants on the platform"
   }
 }

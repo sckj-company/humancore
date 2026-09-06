@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "HRMS",
-    "tagline": "Système de Gestion des Ressources Humaines"
+    "name": "HumaCore",
+    "tagline": "Human Capital Management"
   },
   "auth": {
     "login": "Connexion",
@@ -371,5 +371,15 @@
     "empty": "Aucune formation à afficher.",
     "loading": "Chargement…",
     "error": "Impossible de charger."
+  },
+  "superAdminDashboard": {
+    "title": "Tableau de bord Super Admin",
+    "subtitle": "Vue globale de tous les tenants et utilisateurs de la plateforme.",
+    "manageTenants": "Gérer l'organisation",
+    "tenantTrend": "Croissance des Tenants",
+    "byStatus": "Répartition par statut",
+    "segments": "Segmentation par taille",
+    "tenantsTable": "Tenants",
+    "tenantsTableDescription": "Tous les tenants de la plateforme"
   }
 }

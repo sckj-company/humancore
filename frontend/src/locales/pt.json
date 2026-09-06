@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "HRMS",
-    "tagline": "Sistema de Gestão de Recursos Humanos",
+    "name": "HumaCore",
+    "tagline": "Human Capital Management",
     "tagline_short": "Enterprise",
     "system_status": "Sistema operacional"
   },
@@ -12,7 +12,7 @@
     "new": "Nova empresa"
   },
   "command": {
-    "placeholder": "Pesquisar no HRMS — funcionários, módulos, ações...",
+    "placeholder": "Pesquisar no HumaCore — funcionários, módulos, ações...",
     "search": "Pesquisar...",
     "empty": "Nenhum resultado encontrado.",
     "modules": "Módulos",
@@ -62,7 +62,9 @@
     "inactive": "Inativo",
     "periods": "períodos",
     "date": "Data",
-    "thisMonth": "Este mês"
+    "thisMonth": "Este mês",
+    "notes": "Notas",
+    "select": "Selecionar"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -88,7 +90,9 @@
     "section_management": "Gestão",
     "section_analytics": "Análise",
     "schedules": "Horários/Turnos",
-    "audits": "Auditoria"
+    "audits": "Auditoria",
+    "benefits": "Benefícios",
+    "deductions": "Descontos"
   },
   "settings": {
     "title": "Configurações",
@@ -416,5 +420,102 @@
     "empty": "Sem formações para mostrar.",
     "loading": "A carregar…",
     "error": "Não foi possível carregar."
+  },
+  "benefitsPage": {
+    "eyebrow": "COMPENSAÇÃO",
+    "title": "Benefícios",
+    "description": "Gestão de benefícios atribuídos aos funcionários (seguros, subsídios, regalias).",
+    "newBenefit": "Novo Benefício",
+    "editBenefit": "Editar Benefício",
+    "searchPlaceholder": "Pesquisar benefício…",
+    "employee": "Funcionário",
+    "name": "Nome",
+    "type": "Tipo",
+    "amount": "Valor",
+    "percentage": "Percentagem",
+    "amountType": "Tipo de valor",
+    "amountTypes": {
+      "fixed": "Valor fixo",
+      "percentage": "Percentagem"
+    },
+    "provider": "Fornecedor",
+    "period": "Período",
+    "startDate": "Data de início",
+    "endDate": "Data de fim",
+    "status": "Estado",
+    "statuses": {
+      "active": "Ativo",
+      "inactive": "Inativo"
+    },
+    "taxable": "Tributável",
+    "typeOptions": {
+      "health_insurance": "Seguro de Saúde",
+      "transport": "Subsídio de Transporte",
+      "meal": "Subsídio de Alimentação",
+      "housing": "Alojamento",
+      "vehicle": "Veículo",
+      "phone": "Telefone",
+      "education": "Educação",
+      "gym": "Ginásio",
+      "other": "Outro"
+    },
+    "empty": "Sem benefícios registados.",
+    "emptyDescription": "Crie o primeiro benefício para começar.",
+    "deleteConfirm": "Eliminar benefício",
+    "error": "Não foi possível carregar."
+  },
+  "deductionsPage": {
+    "eyebrow": "COMPENSAÇÃO",
+    "title": "Descontos",
+    "description": "Gestão de descontos salariais (empréstimos, adiantamentos, pensões).",
+    "newDeduction": "Novo Desconto",
+    "editDeduction": "Editar Desconto",
+    "searchPlaceholder": "Pesquisar desconto…",
+    "employee": "Funcionário",
+    "name": "Nome",
+    "type": "Tipo",
+    "amount": "Valor",
+    "percentage": "Percentagem",
+    "amountType": "Tipo de valor",
+    "amountTypes": {
+      "fixed": "Valor fixo",
+      "percentage": "Percentagem"
+    },
+    "status": "Estado",
+    "statuses": {
+      "active": "Ativa",
+      "paused": "Pausada",
+      "completed": "Concluída",
+      "cancelled": "Cancelada"
+    },
+    "typeOptions": {
+      "loan": "Empréstimo",
+      "advance": "Adiantamento",
+      "pension": "Pensão Alimentícia",
+      "insurance": "Seguro",
+      "garnishment": "Penhora",
+      "union_fee": "Quota Sindical",
+      "other": "Outro"
+    },
+    "progress": "Progresso",
+    "recurring": "Recorrente",
+    "installments": "Prestações",
+    "installmentCount": "Nº de prestações",
+    "installmentAmount": "Valor por prestação",
+    "totalAmount": "Valor total",
+    "empty": "Sem descontos registados.",
+    "emptyDescription": "Crie o primeiro desconto para começar.",
+    "deleteConfirm": "Eliminar desconto",
+    "error": "Não foi possível carregar."
+  },
+  "superAdminDashboard": {
+    "title": "Dashboard Super Admin",
+    "subtitle": "Visão global de todos os tenants e utilizadores da plataforma.",
+    "manageTenants": "Gerir organização",
+    "tenantTrend": "Crescimento de Tenants",
+    "byStatus": "Distribuição por Estado",
+    "segments": "Segmentação por dimensão",
+    "tenantsTable": "Tenants",
+    "tenantsTableDescription": "Todos os tenants da plataforma"
   }
 }

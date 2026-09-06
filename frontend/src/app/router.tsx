@@ -2,12 +2,14 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/app-layout'
 import { ProtectedRoute } from '@/components/layout/protected-route'
+import { useAuthStore } from '@/stores/auth-store'
 import { Loader2 } from 'lucide-react'
 
 const LoginPage = lazy(() => import('@/features/auth/login-page').then((m) => ({ default: m.LoginPage })))
 const HrDashboardPage = lazy(() => import('@/features/dashboard/hr-dashboard-page').then((m) => ({ default: m.HrDashboardPage })))
 const ManagerDashboardPage = lazy(() => import('@/features/dashboard/manager-dashboard-page').then((m) => ({ default: m.ManagerDashboardPage })))
 const EmployeeDashboardPage = lazy(() => import('@/features/dashboard/employee-dashboard-page').then((m) => ({ default: m.EmployeeDashboardPage })))
+const SuperAdminDashboardPage = lazy(() => import('@/features/dashboard/super-admin-dashboard-page').then((m) => ({ default: m.SuperAdminDashboardPage })))
 const EmployeesPage = lazy(() => import('@/features/employees/employees-page').then((m) => ({ default: m.EmployeesPage })))
 const EmployeeDetailPage = lazy(() => import('@/features/employees/employee-detail-page').then((m) => ({ default: m.EmployeeDetailPage })))
 const EmployeeCreatePage = lazy(() => import('@/features/employees/employee-create-page').then((m) => ({ default: m.EmployeeCreatePage })))
@@ -31,6 +33,8 @@ const RecruitmentDetailPage = lazy(() => import('@/features/recruitment/recruitm
 const PerformancePage = lazy(() => import('@/features/performance/performance-page').then((m) => ({ default: m.PerformancePage })))
 const OnboardingPage = lazy(() => import('@/features/onboarding/onboarding-page').then((m) => ({ default: m.OnboardingPage })))
 const TrainingCatalogPage = lazy(() => import('@/features/training/training-catalog-page').then((m) => ({ default: m.TrainingCatalogPage })))
+const BenefitsPage = lazy(() => import('@/features/benefits/benefits-page').then((m) => ({ default: m.BenefitsPage })))
+const DeductionsPage = lazy(() => import('@/features/deductions/deductions-page').then((m) => ({ default: m.DeductionsPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
 
 function PageLoader() {
@@ -42,12 +46,15 @@ function PageLoader() {
 }
 
 function DashboardRouter() {
+  const user = useAuthStore((s) => s.user)
+  const isSuperAdmin = user?.roles?.includes('super-admin')
   return (
     <Routes>
+      <Route path="superadmin" element={<SuperAdminDashboardPage />} />
       <Route path="hr" element={<HrDashboardPage />} />
       <Route path="manager" element={<ManagerDashboardPage />} />
       <Route path="employee" element={<EmployeeDashboardPage />} />
-      <Route index element={<HrDashboardPage />} />
+      <Route index element={isSuperAdmin ? <SuperAdminDashboardPage /> : <HrDashboardPage />} />
     </Routes>
   )
 }
@@ -92,6 +99,8 @@ export function AppRouter() {
           <Route path="/performance" element={<PerformancePage />} />
           <Route path="/training" element={<OnboardingPage />} />
           <Route path="/trainings" element={<TrainingCatalogPage />} />
+          <Route path="/benefits" element={<BenefitsPage />} />
+          <Route path="/deductions" element={<DeductionsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
