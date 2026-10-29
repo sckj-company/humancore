@@ -1,385 +1,546 @@
 {
-  "app": {
-    "name": "HumaCore",
-    "tagline": "Human Capital Management"
-  },
-  "auth": {
-    "login": "Connexion",
-    "logout": "Déconnexion",
-    "email": "Email",
-    "password": "Mot de passe",
-    "remember": "Se souvenir",
-    "forgot": "Mot de passe oublié ?",
-    "invalid": "Email ou mot de passe invalide",
-    "logged_in": "Connexion réussie",
-    "logged_out": "Déconnecté"
-  },
-  "common": {
-    "save": "Enregistrer",
-    "cancel": "Annuler",
-    "edit": "Modifier",
-    "delete": "Supprimer",
-    "create": "Créer",
-    "search": "Rechercher",
-    "loading": "Chargement...",
-    "no_data": "Aucune donnée",
-    "actions": "Actions",
-    "status": "Statut",
-    "name": "Nom",
-    "email": "Email",
-    "phone": "Téléphone",
-    "yes": "Oui",
-    "no": "Non",
-    "back": "Retour",
-    "next": "Suivant",
-    "previous": "Précédent",
-    "all": "Tous",
-    "filter": "Filtrer",
-    "export": "Exporter",
-    "details": "Détails",
-    "active": "Actif",
-    "inactive": "Inactif",
-    "periods": "périodes",
-    "date": "Date"
-  },
-  "nav": {
-    "dashboard": "Tableau de bord",
-    "employees": "Employés",
-    "attendance": "Présence",
-    "leave": "Congés",
-    "payroll": "Paie",
-    "documents": "Documents",
-    "recruitment": "Recrutement",
-    "performance": "Performance",
-    "training": "Formation",
-    "trainings": "Catalogue de Formations",
-    "reports": "Rapports",
-    "settings": "Paramètres",
-    "organization": "Organisation",
-    "departments": "Départements",
-    "positions": "Postes",
-    "branches": "Filiales"
-  },
-  "dashboard": {
-    "title": "Tableau de bord",
-    "hr": {
-      "title": "Tableau de bord RH",
-      "total_employees": "Total des employés",
-      "active_employees": "Employés actifs",
-      "hired_this_month": "Embauches ce mois",
-      "terminated_this_month": "Départs ce mois",
-      "turnover_rate": "Taux de rotation",
-      "monthly_payroll_cost": "Coût salarial mensuel",
-      "headcount_trend": "Évolution des effectifs",
-      "by_department": "Par département",
-      "upcoming_birthdays": "Anniversaires à venir",
-      "expiring_contracts": "Contrats expirant",
-      "pending_leaves": "Congés en attente",
-      "recent_hires": "Embauches récentes"
-    }
-  },
-  "employees": {
-    "title": "Employés",
-    "list": "Liste des employés",
-    "add": "Nouvel employé",
-    "code": "Code",
-    "first_name": "Prénom",
-    "last_name": "Nom",
-    "full_name": "Nom complet",
-    "department": "Département",
-    "position": "Poste",
-    "hired_at": "Date d'embauche",
-    "employee_code": "Code employé"
-  },
-  "payroll": {
-    "title": "Paie",
-    "newPeriod": "Nouvelle Période",
-    "periods": "périodes"
-  },
-  "attendance": {
-    "title": "Présences",
-    "myDescription": "Enregistrez vos entrées et sorties",
-    "allDescription": "Vue d'ensemble des présences",
-    "clockIn": "Pointer l'entrée",
-    "clockOut": "Pointer la sortie",
-    "myHistory": "Mon historique"
-  },
-  "leave": {
-    "title": "Congés & Absences",
-    "newRequest": "Nouvelle Demande"
-  },
-  "settings": {
-    "title": "Paramètres"
-  },
-  "documents": {
-    "title": "Documents"
-  },
-  "reports": {
-    "title": "Rapports",
-    "description": "Analyse agrégée des effectifs, du turnover, de la paie et des présences.",
-    "tabs": {
-      "headcount": "Effectifs",
-      "turnover": "Turnover",
-      "payroll": "Paie",
-      "attendance": "Présences"
+    "app": {
+        "name": "HumaCore",
+        "tagline": "Human Capital Management",
+        "tagline_short": "Gestion RH",
+        "system_status": "État du système"
     },
-    "filters": {
-      "startDate": "Date de début",
-      "endDate": "Date de fin",
-      "apply": "Appliquer",
-      "reset": "Réinitialiser",
-      "last6": "6 derniers mois",
-      "last12": "12 derniers mois"
+    "auth": {
+        "login": "Connexion",
+        "logout": "Déconnexion",
+        "email": "Email",
+        "password": "Mot de passe",
+        "remember": "Se souvenir",
+        "forgot": "Mot de passe oublié ?",
+        "invalid": "Email ou mot de passe invalide",
+        "logged_in": "Connexion réussie",
+        "logged_out": "Déconnecté"
     },
-    "export": "Exporter CSV",
-    "headcount": {
-      "summary": "Résumé",
-      "total": "Total",
-      "active": "Actifs",
-      "hired": "Embauches sur la période",
-      "terminated": "Départs sur la période",
-      "byDepartment": "Par département",
-      "byStatus": "Par statut",
-      "trend": "Évolution mensuelle"
+    "common": {
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "edit": "Modifier",
+        "delete": "Supprimer",
+        "create": "Créer",
+        "search": "Rechercher",
+        "loading": "Chargement...",
+        "no_data": "Aucune donnée",
+        "actions": "Actions",
+        "status": "Statut",
+        "name": "Nom",
+        "email": "Email",
+        "phone": "Téléphone",
+        "yes": "Oui",
+        "no": "Non",
+        "back": "Retour",
+        "next": "Suivant",
+        "previous": "Précédent",
+        "all": "Tous",
+        "filter": "Filtrer",
+        "export": "Exporter",
+        "details": "Détails",
+        "active": "Actif",
+        "inactive": "Inactif",
+        "periods": "périodes",
+        "date": "Date",
+        "thisMonth": "Ce mois",
+        "notes": "Notes",
+        "select": "Sélectionner"
     },
-    "turnover": {
-      "summary": "Résumé",
-      "hired": "Embauches",
-      "terminated": "Départs",
-      "averageHeadcount": "Effectif moyen",
-      "rate": "Taux de turnover",
-      "monthly": "Mensuel",
-      "byReason": "Motifs de départ"
+    "nav": {
+        "dashboard": "Tableau de bord",
+        "employees": "Employés",
+        "attendance": "Présence",
+        "leave": "Congés",
+        "payroll": "Paie",
+        "documents": "Documents",
+        "recruitment": "Recrutement",
+        "performance": "Performance",
+        "training": "Formation",
+        "trainings": "Catalogue de Formations",
+        "reports": "Rapports",
+        "settings": "Paramètres",
+        "organization": "Organisation",
+        "departments": "Départements",
+        "positions": "Postes",
+        "branches": "Filiales",
+        "profile": "Mon profil",
+        "help": "Aide",
+        "section_people": "Personnel",
+        "section_time": "Temps",
+        "section_management": "Gestion",
+        "section_analytics": "Analytique",
+        "schedules": "Horaires",
+        "audits": "Journal d\\u2019audit",
+        "benefits": "Avantages",
+        "deductions": "Retenues",
+        "emailTemplates": "Modèles d\\u2019email"
+    },
+    "dashboard": {
+        "title": "Tableau de bord",
+        "hr": {
+            "title": "Tableau de bord RH",
+            "total_employees": "Total des employés",
+            "active_employees": "Employés actifs",
+            "hired_this_month": "Embauches ce mois",
+            "terminated_this_month": "Départs ce mois",
+            "turnover_rate": "Taux de rotation",
+            "monthly_payroll_cost": "Coût salarial mensuel",
+            "headcount_trend": "Évolution des effectifs",
+            "by_department": "Par département",
+            "upcoming_birthdays": "Anniversaires à venir",
+            "expiring_contracts": "Contrats expirant",
+            "pending_leaves": "Congés en attente",
+            "recent_hires": "Embauches récentes"
+        }
+    },
+    "employees": {
+        "title": "Employés",
+        "list": "Liste des employés",
+        "add": "Nouvel employé",
+        "code": "Code",
+        "first_name": "Prénom",
+        "last_name": "Nom",
+        "full_name": "Nom complet",
+        "department": "Département",
+        "position": "Poste",
+        "hired_at": "Date d'embauche",
+        "employee_code": "Code employé"
     },
     "payroll": {
-      "totals": "Totaux",
-      "period": "Période",
-      "gross": "Salaire brut",
-      "net": "Net",
-      "taxes": "Impôts",
-      "deductions": "Déductions",
-      "overtime": "Heures supp.",
-      "employees": "Employés",
-      "absentDays": "Jours d'absence",
-      "byDepartment": "Par département"
+        "title": "Paie",
+        "newPeriod": "Nouvelle Période",
+        "periods": "périodes"
     },
     "attendance": {
-      "summary": "Résumé",
-      "records": "Enregistrements",
-      "totalHours": "Heures totales",
-      "lateMinutes": "Minutes de retard",
-      "overtimeMinutes": "Minutes supp.",
-      "leavesApproved": "Congés approuvés",
-      "leavesPending": "Congés en attente",
-      "byStatus": "Par statut",
-      "byDepartment": "Par département"
+        "title": "Présences",
+        "myDescription": "Enregistrez vos entrées et sorties",
+        "allDescription": "Vue d'ensemble des présences",
+        "clockIn": "Pointer l'entrée",
+        "clockOut": "Pointer la sortie",
+        "myHistory": "Mon historique",
+        "qr": {
+            "cta": "Utiliser le QR code",
+            "title": "Pointage par QR",
+            "description": "Scannez ce code pour pointer",
+            "expiresIn": "Expire dans",
+            "refresh": "Actualiser",
+            "regenerating": "Régénération…",
+            "scanSuccess": "Pointage enregistré !"
+        }
     },
-    "empty": "Aucune donnée pour la période sélectionnée.",
-    "loading": "Génération du rapport…",
-    "error": "Impossible de générer le rapport."
-  },
-  "recruitment": {
-    "title": "Recrutement",
-    "description": "Gestion des offres d'emploi et pipeline de candidats.",
-    "tabs": {
-      "jobs": "Offres",
-      "candidates": "Candidats"
+    "leave": {
+        "title": "Congés & Absences",
+        "newRequest": "Nouvelle Demande"
     },
-    "newJob": "Nouvelle offre",
-    "editJob": "Modifier l'offre",
-    "newCandidate": "Ajouter un candidat",
-    "job": {
-      "title": "Titre",
-      "department": "Département",
-      "position": "Poste",
-      "location": "Localisation",
-      "employmentType": "Type de contrat",
-      "experienceLevel": "Expérience",
-      "salaryMin": "Salaire min",
-      "salaryMax": "Salaire max",
-      "currency": "Devise",
-      "openingsCount": "Postes",
-      "description": "Description",
-      "requirements": "Exigences",
-      "status": "Statut",
-      "publishedAt": "Publié le",
-      "closesAt": "Date limite",
-      "candidates": "Candidats",
-      "actions": {
-        "publish": "Publier",
-        "close": "Fermer",
-        "reopen": "Rouvrir"
-      }
+    "settings": {
+        "title": "Paramètres"
     },
-    "candidate": {
-      "name": "Nom",
-      "email": "Email",
-      "phone": "Téléphone",
-      "yearsExperience": "Années d'exp.",
-      "source": "Source",
-      "status": "Statut",
-      "rating": "Évaluation",
-      "expectedSalary": "Salaire souhaité",
-      "appliedAt": "Candidature le",
-      "move": "Déplacer vers",
-      "addToJob": "Ajouter à l'offre"
+    "documents": {
+        "title": "Documents"
     },
-    "statuses": {
-      "draft": "Brouillon",
-      "open": "Ouverte",
-      "on_hold": "En pause",
-      "closed": "Fermée",
-      "cancelled": "Annulée",
-      "applied": "Candidature reçue",
-      "screening": "Présélection",
-      "interview": "Entretien",
-      "test": "Évaluation",
-      "offer": "Offre envoyée",
-      "hired": "Embauché",
-      "rejected": "Rejeté",
-      "withdrawn": "Abandonné"
+    "reports": {
+        "title": "Rapports",
+        "description": "Analyse agrégée des effectifs, du turnover, de la paie et des présences.",
+        "tabs": {
+            "headcount": "Effectifs",
+            "turnover": "Turnover",
+            "payroll": "Paie",
+            "attendance": "Présences"
+        },
+        "filters": {
+            "startDate": "Date de début",
+            "endDate": "Date de fin",
+            "apply": "Appliquer",
+            "reset": "Réinitialiser",
+            "last6": "6 derniers mois",
+            "last12": "12 derniers mois"
+        },
+        "export": "Exporter CSV",
+        "headcount": {
+            "summary": "Résumé",
+            "total": "Total",
+            "active": "Actifs",
+            "hired": "Embauches sur la période",
+            "terminated": "Départs sur la période",
+            "byDepartment": "Par département",
+            "byStatus": "Par statut",
+            "trend": "Évolution mensuelle"
+        },
+        "turnover": {
+            "summary": "Résumé",
+            "hired": "Embauches",
+            "terminated": "Départs",
+            "averageHeadcount": "Effectif moyen",
+            "rate": "Taux de turnover",
+            "monthly": "Mensuel",
+            "byReason": "Motifs de départ"
+        },
+        "payroll": {
+            "totals": "Totaux",
+            "period": "Période",
+            "gross": "Salaire brut",
+            "net": "Net",
+            "taxes": "Impôts",
+            "deductions": "Déductions",
+            "overtime": "Heures supp.",
+            "employees": "Employés",
+            "absentDays": "Jours d'absence",
+            "byDepartment": "Par département"
+        },
+        "attendance": {
+            "summary": "Résumé",
+            "records": "Enregistrements",
+            "totalHours": "Heures totales",
+            "lateMinutes": "Minutes de retard",
+            "overtimeMinutes": "Minutes supp.",
+            "leavesApproved": "Congés approuvés",
+            "leavesPending": "Congés en attente",
+            "byStatus": "Par statut",
+            "byDepartment": "Par département"
+        },
+        "empty": "Aucune donnée pour la période sélectionnée.",
+        "loading": "Génération du rapport…",
+        "error": "Impossible de générer le rapport."
     },
-    "empty": "Aucune donnée à afficher.",
-    "loading": "Chargement…",
-    "error": "Impossible de charger.",
-    "saved": "Enregistré avec succès.",
-    "deleted": "Supprimé avec succès."
-  },
-  "performance": {
-    "title": "Évaluation de Performance",
-    "description": "Cycles d'évaluation, critères et notation des employés.",
-    "newEvaluation": "Nouvelle évaluation",
-    "period": "Période",
-    "cycle": "Cycle",
-    "cycleOptions": {
-      "monthly": "Mensuel",
-      "quarterly": "Trimestriel",
-      "semi_annual": "Semestriel",
-      "annual": "Annuel",
-      "probation": "Période d'essai"
+    "recruitment": {
+        "title": "Recrutement",
+        "description": "Gestion des offres d'emploi et pipeline de candidats.",
+        "tabs": {
+            "jobs": "Offres",
+            "candidates": "Candidats"
+        },
+        "newJob": "Nouvelle offre",
+        "editJob": "Modifier l'offre",
+        "newCandidate": "Ajouter un candidat",
+        "job": {
+            "title": "Titre",
+            "department": "Département",
+            "position": "Poste",
+            "location": "Localisation",
+            "employmentType": "Type de contrat",
+            "experienceLevel": "Expérience",
+            "salaryMin": "Salaire min",
+            "salaryMax": "Salaire max",
+            "currency": "Devise",
+            "openingsCount": "Postes",
+            "description": "Description",
+            "requirements": "Exigences",
+            "status": "Statut",
+            "publishedAt": "Publié le",
+            "closesAt": "Date limite",
+            "candidates": "Candidats",
+            "actions": {
+                "publish": "Publier",
+                "close": "Fermer",
+                "reopen": "Rouvrir"
+            }
+        },
+        "candidate": {
+            "name": "Nom",
+            "email": "Email",
+            "phone": "Téléphone",
+            "yearsExperience": "Années d'exp.",
+            "source": "Source",
+            "status": "Statut",
+            "rating": "Évaluation",
+            "expectedSalary": "Salaire souhaité",
+            "appliedAt": "Candidature le",
+            "move": "Déplacer vers",
+            "addToJob": "Ajouter à l'offre"
+        },
+        "statuses": {
+            "draft": "Brouillon",
+            "open": "Ouverte",
+            "on_hold": "En pause",
+            "closed": "Fermée",
+            "cancelled": "Annulée",
+            "applied": "Candidature reçue",
+            "screening": "Présélection",
+            "interview": "Entretien",
+            "test": "Évaluation",
+            "offer": "Offre envoyée",
+            "hired": "Embauché",
+            "rejected": "Rejeté",
+            "withdrawn": "Abandonné"
+        },
+        "empty": "Aucune donnée à afficher.",
+        "loading": "Chargement…",
+        "error": "Impossible de charger.",
+        "saved": "Enregistré avec succès.",
+        "deleted": "Supprimé avec succès."
     },
-    "score": "Score",
-    "criteria": "Critères",
-    "strengths": "Points forts",
-    "improvements": "À améliorer",
-    "goals": "Objectifs",
-    "comments": "Commentaires",
-    "statuses": {
-      "draft": "Brouillon",
-      "submitted": "Soumise",
-      "approved": "Approuvée",
-      "rejected": "Rejetée"
+    "performance": {
+        "title": "Évaluation de Performance",
+        "description": "Cycles d'évaluation, critères et notation des employés.",
+        "newEvaluation": "Nouvelle évaluation",
+        "period": "Période",
+        "cycle": "Cycle",
+        "cycleOptions": {
+            "monthly": "Mensuel",
+            "quarterly": "Trimestriel",
+            "semi_annual": "Semestriel",
+            "annual": "Annuel",
+            "probation": "Période d'essai"
+        },
+        "score": "Score",
+        "criteria": "Critères",
+        "strengths": "Points forts",
+        "improvements": "À améliorer",
+        "goals": "Objectifs",
+        "comments": "Commentaires",
+        "statuses": {
+            "draft": "Brouillon",
+            "submitted": "Soumise",
+            "approved": "Approuvée",
+            "rejected": "Rejetée"
+        },
+        "actions": {
+            "submit": "Soumettre",
+            "approve": "Approuver",
+            "reject": "Rejeter"
+        },
+        "empty": "Aucune évaluation à afficher.",
+        "loading": "Chargement…",
+        "error": "Impossible de charger."
     },
-    "actions": {
-      "submit": "Soumettre",
-      "approve": "Approuver",
-      "reject": "Rejeter"
+    "onboarding": {
+        "title": "Onboarding",
+        "description": "Modèles et tâches pour intégrer les nouveaux employés.",
+        "tabs": {
+            "templates": "Modèles",
+            "tasks": "Tâches"
+        },
+        "newTemplate": "Nouveau modèle",
+        "newTask": "Nouvelle tâche",
+        "template": {
+            "name": "Nom",
+            "description": "Description",
+            "is_active": "Actif",
+            "tasks": "Tâches",
+            "addTask": "Ajouter une tâche"
+        },
+        "task": {
+            "title": "Titre",
+            "description": "Description",
+            "due_days": "Délai (jours)",
+            "due_date": "Date limite",
+            "assignee": "Responsable",
+            "employee": "Employé",
+            "status": "Statut",
+            "complete": "Terminer",
+            "assignTo": "Assigner à"
+        },
+        "statuses": {
+            "pending": "En attente",
+            "in_progress": "En cours",
+            "completed": "Terminée",
+            "cancelled": "Annulée"
+        },
+        "empty": "Aucune donnée à afficher.",
+        "loading": "Chargement…",
+        "error": "Impossible de charger."
     },
-    "empty": "Aucune évaluation à afficher.",
-    "loading": "Chargement…",
-    "error": "Impossible de charger."
-  },
-  "onboarding": {
-    "title": "Onboarding",
-    "description": "Modèles et tâches pour intégrer les nouveaux employés.",
-    "tabs": {
-      "templates": "Modèles",
-      "tasks": "Tâches"
+    "trainingPage": {
+        "title": "Formation",
+        "description": "Catalogue de formations, inscriptions et complétion.",
+        "newTraining": "Nouvelle formation",
+        "training": {
+            "title": "Titre",
+            "description": "Description",
+            "category": "Catégorie",
+            "duration_hours": "Durée (h)",
+            "provider": "Formateur",
+            "location": "Lieu",
+            "cost": "Coût",
+            "max_participants": "Max participants",
+            "start_date": "Date début",
+            "end_date": "Date fin",
+            "status": "Statut",
+            "notes": "Notes"
+        },
+        "categoryOptions": {
+            "technical": "Technique",
+            "soft_skills": "Compétences personnelles",
+            "leadership": "Leadership",
+            "compliance": "Conformité",
+            "safety": "Sécurité",
+            "onboarding": "Intégration",
+            "other": "Autre"
+        },
+        "statuses": {
+            "planned": "Planifiée",
+            "open": "Ouverte",
+            "in_progress": "En cours",
+            "completed": "Terminée",
+            "cancelled": "Annulée"
+        },
+        "actions": {
+            "enroll": "Inscrire",
+            "complete": "Terminer"
+        },
+        "participants": "Participants",
+        "assignment": {
+            "employee": "Employé",
+            "status": "Statut",
+            "score": "Note",
+            "notes": "Notes"
+        },
+        "assignmentStatuses": {
+            "enrolled": "Inscrit",
+            "in_progress": "En cours",
+            "completed": "Terminé",
+            "cancelled": "Annulé",
+            "no_show": "Absent"
+        },
+        "empty": "Aucune formation à afficher.",
+        "loading": "Chargement…",
+        "error": "Impossible de charger."
     },
-    "newTemplate": "Nouveau modèle",
-    "newTask": "Nouvelle tâche",
-    "template": {
-      "name": "Nom",
-      "description": "Description",
-      "is_active": "Actif",
-      "tasks": "Tâches",
-      "addTask": "Ajouter une tâche"
+    "superAdminDashboard": {
+        "title": "Tableau de bord Super Admin",
+        "subtitle": "Vue globale de tous les tenants et utilisateurs de la plateforme.",
+        "manageTenants": "Gérer l'organisation",
+        "tenantTrend": "Croissance des Tenants",
+        "byStatus": "Répartition par statut",
+        "segments": "Segmentation par taille",
+        "tenantsTable": "Tenants",
+        "tenantsTableDescription": "Tous les tenants de la plateforme"
     },
-    "task": {
-      "title": "Titre",
-      "description": "Description",
-      "due_days": "Délai (jours)",
-      "due_date": "Date limite",
-      "assignee": "Responsable",
-      "employee": "Employé",
-      "status": "Statut",
-      "complete": "Terminer",
-      "assignTo": "Assigner à"
+    "tenant": {
+        "current": "Entreprise actuelle",
+        "switch": "Changer d\\u2019entreprise",
+        "search": "Rechercher une entreprise…",
+        "new": "Nouvelle entreprise"
     },
-    "statuses": {
-      "pending": "En attente",
-      "in_progress": "En cours",
-      "completed": "Terminée",
-      "cancelled": "Annulée"
+    "command": {
+        "placeholder": "Tapez une commande ou recherchez…",
+        "search": "Rechercher",
+        "empty": "Aucun résultat trouvé.",
+        "modules": "Modules",
+        "navigate": "Naviguer",
+        "select": "Sélectionner"
     },
-    "empty": "Aucune donnée à afficher.",
-    "loading": "Chargement…",
-    "error": "Impossible de charger."
-  },
-  "trainingPage": {
-    "title": "Formation",
-    "description": "Catalogue de formations, inscriptions et complétion.",
-    "newTraining": "Nouvelle formation",
-    "training": {
-      "title": "Titre",
-      "description": "Description",
-      "category": "Catégorie",
-      "duration_hours": "Durée (h)",
-      "provider": "Formateur",
-      "location": "Lieu",
-      "cost": "Coût",
-      "max_participants": "Max participants",
-      "start_date": "Date début",
-      "end_date": "Date fin",
-      "status": "Statut",
-      "notes": "Notes"
+    "theme": {
+        "light": "Clair",
+        "dark": "Sombre",
+        "system": "Système"
     },
-    "categoryOptions": {
-      "technical": "Technique",
-      "soft_skills": "Compétences personnelles",
-      "leadership": "Leadership",
-      "compliance": "Conformité",
-      "safety": "Sécurité",
-      "onboarding": "Intégration",
-      "other": "Autre"
+    "benefitsPage": {
+        "eyebrow": "RÉMUNÉRATION",
+        "title": "Avantages",
+        "description": "Gérez les avantages et subventions des employés",
+        "newBenefit": "Nouvel avantage",
+        "editBenefit": "Modifier l\\u2019avantage",
+        "searchPlaceholder": "Rechercher des avantages…",
+        "employee": "Employé",
+        "name": "Nom",
+        "type": "Type",
+        "amount": "Montant",
+        "percentage": "Pourcentage",
+        "amountType": "Type de montant",
+        "amountTypes": {
+            "fixed": "Montant fixe",
+            "percentage": "Pourcentage"
+        },
+        "provider": "Fournisseur",
+        "period": "Période",
+        "startDate": "Date de début",
+        "endDate": "Date de fin",
+        "status": "Statut",
+        "statuses": {
+            "active": "Actif",
+            "inactive": "Inactif"
+        },
+        "taxable": "Imposable",
+        "typeOptions": {
+            "health_insurance": "Assurance santé",
+            "transport": "Subvention de transport",
+            "meal": "Subvention de repas",
+            "housing": "Logement",
+            "vehicle": "Véhicule",
+            "phone": "Téléphone",
+            "education": "Éducation",
+            "gym": "Salle de sport",
+            "other": "Autre"
+        },
+        "empty": "Aucun avantage enregistré",
+        "emptyDescription": "Créez le premier avantage employé pour commencer.",
+        "deleteConfirm": "Voulez-vous vraiment supprimer cet avantage ?",
+        "error": "Erreur lors de l\\u2019enregistrement de l\\u2019avantage"
     },
-    "statuses": {
-      "planned": "Planifiée",
-      "open": "Ouverte",
-      "in_progress": "En cours",
-      "completed": "Terminée",
-      "cancelled": "Annulée"
+    "deductionsPage": {
+        "eyebrow": "RÉMUNÉRATION",
+        "title": "Retenues",
+        "description": "Gérez les prêts, avances et retenues salariales",
+        "newDeduction": "Nouvelle retenue",
+        "editDeduction": "Modifier la retenue",
+        "searchPlaceholder": "Rechercher des retenues…",
+        "employee": "Employé",
+        "name": "Nom",
+        "type": "Type",
+        "amount": "Montant",
+        "percentage": "Pourcentage",
+        "amountType": "Type de montant",
+        "amountTypes": {
+            "fixed": "Montant fixe",
+            "percentage": "Pourcentage"
+        },
+        "status": "Statut",
+        "statuses": {
+            "active": "Active",
+            "paused": "En pause",
+            "completed": "Terminée",
+            "cancelled": "Annulée"
+        },
+        "typeOptions": {
+            "loan": "Prêt",
+            "advance": "Avance sur salaire",
+            "pension": "Pension alimentaire",
+            "insurance": "Assurance",
+            "garnishment": "Saisie",
+            "union_fee": "Cotisation syndicale",
+            "other": "Autre"
+        },
+        "progress": "Progression",
+        "recurring": "Récurrente",
+        "installments": "Échéances",
+        "installmentCount": "Nombre d\\u2019échéances",
+        "installmentAmount": "Montant de l\\u2019échéance",
+        "totalAmount": "Montant total",
+        "empty": "Aucune retenue enregistrée",
+        "emptyDescription": "Créez la première retenue pour commencer.",
+        "deleteConfirm": "Voulez-vous vraiment supprimer cette retenue ?",
+        "error": "Erreur lors de l\\u2019enregistrement de la retenue"
     },
-    "actions": {
-      "enroll": "Inscrire",
-      "complete": "Terminer"
-    },
-    "participants": "Participants",
-    "assignment": {
-      "employee": "Employé",
-      "status": "Statut",
-      "score": "Note",
-      "notes": "Notes"
-    },
-    "assignmentStatuses": {
-      "enrolled": "Inscrit",
-      "in_progress": "En cours",
-      "completed": "Terminé",
-      "cancelled": "Annulé",
-      "no_show": "Absent"
-    },
-    "empty": "Aucune formation à afficher.",
-    "loading": "Chargement…",
-    "error": "Impossible de charger."
-  },
-  "superAdminDashboard": {
-    "title": "Tableau de bord Super Admin",
-    "subtitle": "Vue globale de tous les tenants et utilisateurs de la plateforme.",
-    "manageTenants": "Gérer l'organisation",
-    "tenantTrend": "Croissance des Tenants",
-    "byStatus": "Répartition par statut",
-    "segments": "Segmentation par taille",
-    "tenantsTable": "Tenants",
-    "tenantsTableDescription": "Tous les tenants de la plateforme"
-  }
+    "emailTemplates": {
+        "eyebrow": "COMMUNICATION",
+        "title": "Modèles d\\u2019email",
+        "description": "Gérez les modèles d\\u2019email pour les notifications automatiques",
+        "newTemplate": "Nouveau modèle",
+        "editTemplate": "Modifier le modèle",
+        "searchPlaceholder": "Rechercher des modèles…",
+        "name": "Nom",
+        "code": "Code",
+        "event": "Événement",
+        "subject": "Objet",
+        "body": "Corps",
+        "status": "Statut",
+        "active": "Actif",
+        "inactive": "Inactif",
+        "system": "Système",
+        "preview": "Aperçu",
+        "empty": "Aucun modèle créé",
+        "emptyDescription": "Créez le premier modèle d\\u2019email pour commencer.",
+        "deleteConfirm": "Voulez-vous vraiment supprimer ce modèle ?",
+        "error": "Erreur lors de l\\u2019enregistrement du modèle",
+        "events": {
+            "all": "Tous les événements",
+            "employee_created": "Admission d\\u2019un employé",
+            "leave_approved": "Congés approuvés",
+            "payslip_available": "Bulletin disponible",
+            "contract_expiring": "Contrat expirant",
+            "custom": "Personnalisé"
+        }
+    }
 }

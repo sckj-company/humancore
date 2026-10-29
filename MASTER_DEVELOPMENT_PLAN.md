@@ -1032,35 +1032,35 @@ trait HasTenant
 
 | # | Módulo | Prioridade | Estado | Depende de |
 |---|--------|:----------:|:------:|:----------:|
-| 1 | Tenant (Empresas) | P0 | Plan | - |
-| 2 | Autenticação + RBAC | P0 | Plan | 1 |
-| 3 | Estrutura Organizacional | P0 | Plan | 1, 2 |
-| 4 | Funcionários | P0 | Plan | 1, 2, 3 |
-| 5 | Contratos | P0 | Plan | 1, 2, 4 |
-| 6 | Dashboard RH | P0 | Plan | 1, 2, 4 |
-| 7 | Payroll Engine | P0 | Plan | 1, 2, 4, 5 |
-| 8 | Recibos de Vencimento | P0 | Plan | 7 |
-| 9 | Presenças | P1 | Plan | 1, 2, 4 |
-| 10 | Férias e Ausências | P1 | Plan | 1, 2, 4 |
-| 11 | Horários e Turnos | P1 | Plan | 1, 2 |
-| 12 | Design System + Layout | P1 | Plan | - |
-| 13 | Internacionalização | P1 | Plan | - |
-| 14 | Notificações | P1 | Plan | 1, 2 |
-| 15 | Dashboard Manager | P1 | Plan | 4, 9, 10 |
-| 16 | Portal do Funcionário | P1 | Plan | 4, 7, 8, 9, 10 |
-| 17 | Documentos | P1 | Plan | 1, 2, 4 |
-| 18 | Configurações do Sistema | P1 | Plan | 1, 2 |
-| 19 | QR Code | P2 | Plan | 9 |
-| 20 | Recrutamento | P2 | Plan | 1, 2, 4 |
-| 21 | Onboarding | P2 | Plan | 4, 20 |
-| 22 | Avaliação de Desempenho | P2 | Plan | 1, 2, 4 |
-| 23 | Formação | P2 | Plan | 1, 2, 4 |
-| 24 | Benefícios e Descontos | P2 | Plan | 4, 5, 7 |
-| 25 | Relatórios | P2 | Plan | 4, 7, 9, 10 |
-| 26 | Pesquisa Global | P2 | Plan | 4, 7, 10 |
-| 27 | Auditoria | P2 | Plan | 1, 2 |
-| 28 | Dashboard Super Admin | P2 | Plan | 1, 2 |
-| 29 | Email Templates | P2 | Plan | 14 |
+| 1 | Tenant (Empresas) | P0 | Done | - |
+| 2 | Autenticação + RBAC | P0 | Done | 1 |
+| 3 | Estrutura Organizacional | P0 | Done | 1, 2 |
+| 4 | Funcionários | P0 | Done | 1, 2, 3 |
+| 5 | Contratos | P0 | Done | 1, 2, 4 |
+| 6 | Dashboard RH | P0 | Done | 1, 2, 4 |
+| 7 | Payroll Engine | P0 | Done | 1, 2, 4, 5 |
+| 8 | Recibos de Vencimento | P0 | Done | 7 |
+| 9 | Presenças | P1 | Done | 1, 2, 4 |
+| 10 | Férias e Ausências | P1 | Done | 1, 2, 4 |
+| 11 | Horários e Turnos | P1 | Done | 1, 2 |
+| 12 | Design System + Layout | P1 | Done | - |
+| 13 | Internacionalização | P1 | Done | - |
+| 14 | Notificações | P1 | Done | 1, 2 |
+| 15 | Dashboard Manager | P1 | Done | 4, 9, 10 |
+| 16 | Portal do Funcionário | P1 | Done | 4, 7, 8, 9, 10 |
+| 17 | Documentos | P1 | Done | 1, 2, 4 |
+| 18 | Configurações do Sistema | P1 | Done | 1, 2 |
+| 19 | QR Code | P2 | Done | 9 |
+| 20 | Recrutamento | P2 | Done | 1, 2, 4 |
+| 21 | Onboarding | P2 | Done | 4, 20 |
+| 22 | Avaliação de Desempenho | P2 | Done | 1, 2, 4 |
+| 23 | Formação | P2 | Done | 1, 2, 4 |
+| 24 | Benefícios e Descontos | P2 | Done | 4, 5, 7 |
+| 25 | Relatórios | P2 | Done | 4, 7, 9, 10 |
+| 26 | Pesquisa Global | P2 | Done | 4, 7, 10 |
+| 27 | Auditoria | P2 | Done | 1, 2 |
+| 28 | Dashboard Super Admin | P2 | Done | 1, 2 |
+| 29 | Email Templates | P2 | Done | 14 |
 | 30 | MFA (2FA) | P3 | Plan | 2 |
 | 31 | API Pública | P3 | Plan | 2 |
 | 32 | Importação/Exportação | P3 | Plan | 4, 25 |

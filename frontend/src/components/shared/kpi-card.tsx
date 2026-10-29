@@ -9,7 +9,8 @@ interface KpiCardProps {
   icon: LucideIcon
   trend?: { value: number; direction: 'up' | 'down' | 'flat' }
   currency?: string
-  accent?: 'primary' | 'success' | 'warning' | 'info' | 'destructive'
+  accent?: 'primary' | 'success' | 'warning' | 'info' | 'destructive' | 'neutral'
+  sparkline?: number[]
   className?: string
 }
 
@@ -19,9 +20,10 @@ const accentMap = {
   warning: 'bg-warning/10 text-warning',
   info: 'bg-info/10 text-info',
   destructive: 'bg-destructive/10 text-destructive',
+  neutral: 'bg-muted text-muted-foreground',
 }
 
-export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'primary', className }: KpiCardProps) {
+export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'primary', sparkline, className }: KpiCardProps) {
   const { i18n } = useTranslation()
   const formatted = typeof value === 'number'
     ? new Intl.NumberFormat(i18n.language, {
@@ -53,6 +55,28 @@ export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'p
             <Icon className="h-5 w-5" />
           </div>
         </div>
+        {sparkline && sparkline.length > 1 && (
+          <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="mt-3 h-6 w-full">
+            <polyline
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-primary/60"
+              points={sparkline
+                .map((v, i) => {
+                  const min = Math.min(...sparkline)
+                  const max = Math.max(...sparkline)
+                  const range = max - min || 1
+                  const x = (i / (sparkline.length - 1)) * 100
+                  const y = 22 - ((v - min) / range) * 20
+                  return `${x},${y}`
+                })
+                .join(' ')}
+            />
+          </svg>
+        )}
       </CardContent>
     </Card>
   )

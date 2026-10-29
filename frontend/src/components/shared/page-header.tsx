@@ -8,13 +8,17 @@ interface PageHeaderProps {
   title: string
   description?: string
   actions?: ReactNode
+  eyebrow?: string
   className?: string
 }
 
-export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, eyebrow, className }: PageHeaderProps) {
   return (
     <div className={cn('mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', className)}>
       <div>
+        {eyebrow && (
+          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">{eyebrow}</p>
+        )}
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
@@ -32,12 +36,12 @@ export function LoadingState({ className }: { className?: string }) {
   )
 }
 
-export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+export function EmptyState({ title, description, action, icon }: { title: string; description?: string; action?: ReactNode; icon?: ReactNode }) {
   return (
     <Card className="border-dashed">
       <CardContent className="flex flex-col items-center justify-center px-6 py-16 text-center">
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Inbox className="h-6 w-6 text-muted-foreground" />
+          {icon ?? <Inbox className="h-6 w-6 text-muted-foreground" />}
         </div>
         <h3 className="text-base font-medium">{title}</h3>
         {description && <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>}

@@ -18,6 +18,7 @@ class PermissionSeeder extends Seeder
             'contract', 'attendance', 'leave', 'payroll', 'payslip',
             'salary-component', 'benefit', 'deduction', 'recruitment',
             'document', 'performance', 'training', 'report', 'setting', 'audit',
+            'email-template',
         ];
 
         $actions = [

@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\SuperAdminController;
 use App\Http\Controllers\Api\V1\Attendance\AttendanceController;
 use App\Http\Controllers\Api\V1\Attendance\AttendanceQrController;
 use App\Http\Controllers\Api\V1\Audit\AuditController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\Compensation\BenefitController;
+use App\Http\Controllers\Api\V1\Compensation\DeductionController;
 use App\Http\Controllers\Api\V1\Contract\ContractController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Document\EmployeeDocumentController;
@@ -26,9 +29,10 @@ use App\Http\Controllers\Api\V1\Schedule\EmployeeScheduleController;
 use App\Http\Controllers\Api\V1\Schedule\HolidayController;
 use App\Http\Controllers\Api\V1\Schedule\ShiftController;
 use App\Http\Controllers\Api\V1\Search\GlobalSearchController;
+use App\Http\Controllers\Api\V1\Setting\EmailTemplateController;
 use App\Http\Controllers\Api\V1\Setting\SettingController;
-use App\Http\Controllers\Api\V1\Training\TrainingController;
 use App\Http\Controllers\Api\V1\Tenant\TenantController;
+use App\Http\Controllers\Api\V1\Training\TrainingController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -162,5 +166,22 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('trainings', TrainingController::class);
         Route::post('trainings/{training}/enroll', [TrainingController::class, 'enroll']);
         Route::post('trainings/assignments/{assignment}/complete', [TrainingController::class, 'complete']);
+
+        // Super Admin — gestão da plataforma
+        Route::get('superadmin/dashboard', [SuperAdminController::class, 'dashboard']);
+        Route::get('superadmin/tenants', [SuperAdminController::class, 'tenants']);
+        Route::post('superadmin/tenants', [SuperAdminController::class, 'storeTenant']);
+        Route::get('superadmin/tenants/{tenant}', [SuperAdminController::class, 'showTenant']);
+        Route::put('superadmin/tenants/{tenant}', [SuperAdminController::class, 'updateTenant']);
+        Route::delete('superadmin/tenants/{tenant}', [SuperAdminController::class, 'destroyTenant']);
+
+        // Benefícios e Descontos
+        Route::apiResource('benefits', BenefitController::class);
+        Route::apiResource('deductions', DeductionController::class);
+        Route::post('deductions/{deduction}/approve', [DeductionController::class, 'approve']);
+
+        // Templates de Email
+        Route::apiResource('email-templates', EmailTemplateController::class);
+        Route::post('email-templates/{email_template}/preview', [EmailTemplateController::class, 'preview']);
     });
 });

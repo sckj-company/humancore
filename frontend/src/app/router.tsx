@@ -23,6 +23,7 @@ const AttendancePage = lazy(() => import('@/features/attendance/attendance-page'
 const LeavePage = lazy(() => import('@/features/leave/leave-page').then((m) => ({ default: m.LeavePage })))
 const SchedulesPage = lazy(() => import('@/features/schedules/schedules-page').then((m) => ({ default: m.SchedulesPage })))
 const SettingsPage = lazy(() => import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })))
+const EmailTemplatesPage = lazy(() => import('@/features/settings/email-templates-page').then((m) => ({ default: m.EmailTemplatesPage })))
 const DocumentsPage = lazy(() => import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })))
 const NotificationsPage = lazy(() => import('@/features/notifications/notifications-page').then((m) => ({ default: m.NotificationsPage })))
 const AuditPage = lazy(() => import('@/features/audit/audit-page').then((m) => ({ default: m.AuditPage })))
@@ -103,6 +104,7 @@ export function AppRouter() {
           <Route path="/deductions" element={<DeductionsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/email-templates" element={<EmailTemplatesPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

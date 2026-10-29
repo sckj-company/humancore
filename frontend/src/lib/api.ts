@@ -28,8 +28,9 @@ class ApiClient {
       (error) => {
         if (error.response?.status === 401) {
           localStorage.removeItem('hrms_token')
-          if (!window.location.pathname.startsWith('/login')) {
-            window.location.href = '/login'
+          const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+          if (!window.location.pathname.startsWith(`${base}/login`)) {
+            window.location.href = `${base}/login`
           }
         }
         return Promise.reject(error)

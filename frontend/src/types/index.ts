@@ -23,6 +23,9 @@ export interface Tenant {
   locale: string
   timezone: string
   status: 'active' | 'inactive' | 'suspended'
+  stats?: { employees: number; departments: number; users: number } | null
+  created_at?: string
+  updated_at?: string
 }
 
 export interface EmployeeSummary {
@@ -585,4 +588,181 @@ export interface TrainingAssignment {
   training?: { id: number; title: string } | null
   completer?: { id: number; name: string } | null
   created_at?: string
+}
+
+// Benefits & Deductions
+export type BenefitType =
+  | 'health_insurance'
+  | 'transport'
+  | 'meal'
+  | 'housing'
+  | 'vehicle'
+  | 'phone'
+  | 'education'
+  | 'gym'
+  | 'other'
+
+export type DeductionType =
+  | 'loan'
+  | 'advance'
+  | 'pension'
+  | 'insurance'
+  | 'garnishment'
+  | 'union_fee'
+  | 'other'
+
+export type DeductionStatus = 'active' | 'paused' | 'completed' | 'cancelled'
+export type BenefitStatus = 'active' | 'inactive'
+export type AmountType = 'fixed' | 'percentage'
+
+export interface Benefit {
+  id: number
+  employee_id: number
+  name: string
+  benefit_type: BenefitType
+  type_label: string
+  amount_type: AmountType
+  amount_type_label: string
+  amount: number
+  percentage?: number | null
+  amount_label: string
+  is_taxable: boolean
+  provider?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  status: BenefitStatus
+  status_label: string
+  status_variant: 'success' | 'secondary'
+  is_current: boolean
+  notes?: string | null
+  employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'> | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface Deduction {
+  id: number
+  employee_id: number
+  name: string
+  deduction_type: DeductionType
+  type_label: string
+  amount_type: AmountType
+  amount_type_label: string
+  amount: number
+  percentage?: number | null
+  amount_label: string
+  total_amount?: number | null
+  paid_amount: number
+  installment_count?: number | null
+  installment_amount?: number | null
+  is_recurring: boolean
+  status: DeductionStatus
+  status_label: string
+  status_variant: 'success' | 'warning' | 'info' | 'destructive'
+  progress_label: string
+  approved_by?: number | null
+  approved_at?: string | null
+  notes?: string | null
+  employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'> | null
+  approver?: { id: number; name: string } | null
+  created_at?: string
+  updated_at?: string
+}
+
+// Schedules & Shifts
+export type ShiftWorkingDay = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+export interface Shift {
+  id: number
+  name: string
+  code?: string | null
+  start_time: string
+  end_time: string
+  break_minutes?: number | null
+  work_hours: number
+  late_tolerance_minutes?: number | null
+  working_days?: number[] | null
+  color?: string | null
+  is_night_shift: boolean
+  is_active: boolean
+  notes?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface EmployeeSchedule {
+  id: number
+  employee_id: number
+  shift_id: number
+  effective_from?: string | null
+  effective_to?: string | null
+  custom_days?: number[] | null
+  is_active: boolean
+  notes?: string | null
+  employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'> | null
+  shift?: Pick<Shift, 'id' | 'name' | 'code' | 'start_time' | 'end_time' | 'color'> | null
+  created_at?: string
+}
+
+export interface Holiday {
+  id: number
+  name: string
+  date: string
+  is_recurring: boolean
+  type?: string | null
+  description?: string | null
+  created_at?: string
+}
+
+// Global search
+export interface GlobalSearchResult {
+  type: 'employee' | 'department' | 'payroll_record'
+  id: number
+  title: string
+  subtitle?: string
+  status?: string
+  avatar?: string | null
+}
+
+// Email Templates
+export type EmailTemplateEvent =
+  | 'employee_created'
+  | 'employee_terminated'
+  | 'leave_requested'
+  | 'leave_approved'
+  | 'leave_rejected'
+  | 'payslip_available'
+  | 'payroll_processed'
+  | 'contract_expiring'
+  | 'document_expiring'
+  | 'custom'
+
+export interface EmailTemplate {
+  id: number
+  name: string
+  code: string
+  event: EmailTemplateEvent | null
+  event_label: string
+  subject: string
+  body: string
+  variables: string[]
+  is_active: boolean
+  is_system: boolean
+  notes?: string | null
+  creator?: { id: number; name: string } | null
+  created_at?: string
+  updated_at?: string
+}
+
+// Super Admin
+export interface SuperAdminDashboard {
+  kpis: {
+    total_tenants: number
+    active_tenants: number
+    suspended_tenants: number
+    total_employees: number
+    total_users: number
+  }
+  tenant_trend: { month: string; label: string; count: number }[]
+  segments: { small: number; medium: number; large: number }
 }
