@@ -16,6 +16,7 @@ const EmployeeCreatePage = lazy(() => import('@/features/employees/employee-crea
 const OrganizationLayout = lazy(() => import('@/features/organization/organization-layout').then((m) => ({ default: m.OrganizationLayout })))
 const DepartmentsPage = lazy(() => import('@/features/organization/departments-page').then((m) => ({ default: m.DepartmentsPage })))
 const PositionsPage = lazy(() => import('@/features/organization/positions-page').then((m) => ({ default: m.PositionsPage })))
+const BranchesPage = lazy(() => import('@/features/organization/branches-page').then((m) => ({ default: m.BranchesPage })))
 const PayrollPeriodsPage = lazy(() => import('@/features/payroll/payroll-periods-page').then((m) => ({ default: m.PayrollPeriodsPage })))
 const PayrollPeriodDetailPage = lazy(() => import('@/features/payroll/payroll-period-detail-page').then((m) => ({ default: m.PayrollPeriodDetailPage })))
 const PayslipsPage = lazy(() => import('@/features/payslips/payslips-page').then((m) => ({ default: m.PayslipsPage })))
@@ -82,7 +83,7 @@ export function AppRouter() {
           <Route path="/organization" element={<OrganizationLayout />}>
             <Route index element={<DepartmentsPage />} />
             <Route path="positions" element={<PositionsPage />} />
-            <Route path="branches" element={<PlaceholderPage title="Filiais" />} />
+            <Route path="branches" element={<BranchesPage />} />
           </Route>
 
           <Route path="/attendance" element={<AttendancePage />} />

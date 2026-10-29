@@ -15,6 +15,8 @@ class EmployeeDocumentResource extends JsonResource
             'name' => $this->name,
             'document_type' => $this->document_type,
             'original_name' => $this->original_name,
+            'file_path' => $this->file_path,
+            'file_url' => str_starts_with($this->file_path ?? '', 'http') ? $this->file_path : url($this->file_path ?? ''),
             'mime_type' => $this->mime_type,
             'file_size' => $this->file_size,
             'size_label' => $this->sizeLabel(),

@@ -41,7 +41,9 @@ class EmployeeDocumentController extends BaseController
         $validated = $request->validated();
 
         $file = $request->file('file');
-        $path = $file->store('documents', 'local');
+        $filename = time().'_'.uniqid().'_'.str_replace(' ', '_', $file->getClientOriginalName());
+        $file->move(public_path('uploads/documents'), $filename);
+        $url = '/uploads/documents/'.$filename;
 
         $document = EmployeeDocument::create([
             'employee_id' => $validated['employee_id'],
@@ -49,7 +51,7 @@ class EmployeeDocumentController extends BaseController
             'uploader_id' => $request->user()->id,
             'name' => $validated['name'],
             'document_type' => $validated['document_type'],
-            'file_path' => $path,
+            'file_path' => $url,
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $file->getMimeType(),
             'file_size' => $file->getSize(),
@@ -69,21 +71,29 @@ class EmployeeDocumentController extends BaseController
     {
         $this->authorize('view', $document);
 
-        if (! Storage::disk('local')->exists($document->file_path)) {
-            return $this->error('Ficheiro não encontrado.', 404);
+        $publicFile = public_path(ltrim($document->file_path, '/'));
+        if (file_exists($publicFile)) {
+            return response()->download($publicFile, $document->original_name ?? $document->name);
         }
 
-        return Storage::disk('local')->download(
-            $document->file_path,
-            $document->original_name ?? $document->name
-        );
+        if (Storage::disk('local')->exists($document->file_path)) {
+            return Storage::disk('local')->download(
+                $document->file_path,
+                $document->original_name ?? $document->name
+            );
+        }
+
+        return $this->error('Ficheiro não encontrado.', 404);
     }
 
     public function destroy(EmployeeDocument $document): JsonResponse
     {
         $this->authorize('delete', $document);
 
-        if (Storage::disk('local')->exists($document->file_path)) {
+        $publicFile = public_path(ltrim($document->file_path, '/'));
+        if (file_exists($publicFile)) {
+            @unlink($publicFile);
+        } elseif (Storage::disk('local')->exists($document->file_path)) {
             Storage::disk('local')->delete($document->file_path);
         }
 

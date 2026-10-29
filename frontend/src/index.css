@@ -155,7 +155,44 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scrollbar-gutter: stable;
+  }
+  html,
   body {
     @apply bg-background text-foreground antialiased;
+    overflow-x: hidden;
+    min-height: 100%;
   }
+}
+
+/* Prevent Radix UI from shifting page width or jumping when dropdowns/selects open */
+body[data-scroll-locked] {
+  margin-right: 0px !important;
+  padding-right: 0px !important;
+  overflow: auto !important;
+}
+
+/* Custom scrollbar utility to keep scrollbars sleek, styled, and within container scope */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sidebar-border) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: var(--sidebar-border);
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sidebar-accent);
 }

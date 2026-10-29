@@ -146,12 +146,12 @@ export function Sidebar() {
     <TooltipProvider delayDuration={200}>
       <aside
         className={cn(
-          'flex h-screen flex-col border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'w-72' : 'w-[68px]',
+          'relative flex h-screen flex-col border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground transition-all duration-300 ease-in-out',
+          sidebarOpen ? 'w-64' : 'w-16',
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-4">
+        <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
           <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30">
             <Briefcase className="h-5 w-5 text-primary-foreground" />
             <div className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-success ring-2 ring-sidebar-background" />
@@ -159,44 +159,47 @@ export function Sidebar() {
           {sidebarOpen && (
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold tracking-tight">{t('app.name')}</span>
-                <Sparkles className="h-3 w-3 text-warning" />
+                <span className="text-sm font-bold tracking-tight truncate">{t('app.name')}</span>
+                <Sparkles className="h-3 w-3 shrink-0 text-warning" />
               </div>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/50 truncate">
                 {t('app.tagline_short', { defaultValue: 'Enterprise' })}
               </span>
             </div>
           )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4 scrollbar-thin">
-          {sections.map((section, idx) => {
-            const visibleItems = section.items.filter(
-              (item) => !item.roles || hasAnyRole(user, item.roles),
-            )
-            if (visibleItems.length === 0) return null
+        {/* Navigation & all items housed inside sidebar scroll */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-4 scrollbar-thin">
+          <nav className="space-y-5">
+            {sections.map((section, idx) => {
+              const visibleItems = section.items.filter(
+                (item) => !item.roles || hasAnyRole(user, item.roles),
+              )
+              if (visibleItems.length === 0) return null
 
-            return (
-              <div key={idx} className="space-y-1">
-                {section.titleKey && sidebarOpen && (
-                  <h3 className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-                    {t(section.titleKey)}
-                  </h3>
-                )}
-                {sidebarOpen && idx > 0 && visibleItems.length > 0 && (
-                  <Separator className="my-2 bg-sidebar-border/50" />
-                )}
-                {visibleItems.map((item) => (
-                  <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
-                ))}
-              </div>
-            )
-          })}
-        </nav>
+              return (
+                <div key={idx} className="space-y-1">
+                  {section.titleKey && sidebarOpen && (
+                    <h3 className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                      {t(section.titleKey)}
+                    </h3>
+                  )}
+                  {sidebarOpen && idx > 0 && visibleItems.length > 0 && (
+                    <Separator className="my-2 bg-sidebar-border/50" />
+                  )}
+                  {visibleItems.map((item) => (
+                    <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
+                  ))}
+                </div>
+              )
+            })}
+          </nav>
 
-        {/* Footer */}
-        <div className="border-t border-sidebar-border p-3">
+          {/* Separator before footer items */}
+          <div className="my-4 border-t border-sidebar-border/50" />
+
+          {/* Footer items housed inside the scroll */}
           <div className="space-y-1">
             {footerItems
               .filter((item) => !item.roles || hasAnyRole(user, item.roles))
@@ -204,13 +207,14 @@ export function Sidebar() {
                 <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
               ))}
           </div>
+
           {sidebarOpen && (
-            <div className="mt-3 flex items-center gap-2 rounded-lg bg-sidebar-accent/40 px-3 py-2">
-              <ShieldCheck className="h-3.5 w-3.5 text-success" />
-              <span className="text-[10px] font-medium text-sidebar-foreground/70">
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-sidebar-accent/40 px-3 py-2">
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-success" />
+              <span className="text-[10px] font-medium text-sidebar-foreground/70 truncate">
                 {t('app.system_status', { defaultValue: 'Sistema operacional' })}
               </span>
-              <span className="ml-auto h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+              <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-success" />
             </div>
           )}
         </div>
@@ -221,15 +225,15 @@ export function Sidebar() {
           size="icon-sm"
           onClick={toggleSidebar}
           className={cn(
-            'absolute -right-3 top-20 z-10 h-6 w-6 rounded-full border border-sidebar-border bg-sidebar-background text-sidebar-foreground/60 shadow-md',
+            'absolute -right-3 top-20 z-50 h-6 w-6 rounded-full border border-sidebar-border bg-sidebar-background text-sidebar-foreground/70 shadow-md',
             'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
           )}
           aria-label="Toggle sidebar"
         >
           {sidebarOpen ? (
-            <ChevronsLeft className="h-3 w-3" />
+            <ChevronsLeft className="h-3.5 w-3.5" />
           ) : (
-            <ChevronsRight className="h-3 w-3" />
+            <ChevronsRight className="h-3.5 w-3.5" />
           )}
         </Button>
       </aside>

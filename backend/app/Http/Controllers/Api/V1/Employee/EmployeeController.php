@@ -11,8 +11,10 @@ use App\Http\Resources\V1\EmployeeListResource;
 use App\Http\Resources\V1\EmployeeResource;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\EmployeeDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class EmployeeController extends BaseController
 {
@@ -36,24 +38,119 @@ class EmployeeController extends BaseController
     {
         $this->authorize('create', Employee::class);
 
-        $data = $request->validated();
+        $validated = $request->validated();
 
-        if (! isset($data['employee_code'])) {
-            $data['employee_code'] = $this->generateEmployeeCode();
-        }
+        $employee = DB::transaction(function () use ($request, $validated) {
+            $employeeData = collect($validated)->except([
+                'contract_type',
+                'base_salary',
+                'salary_frequency',
+                'work_hours_per_week',
+                'contract_start_date',
+                'contract_end_date',
+                'contract_signed_at',
+                'contract_notes',
+                'contract_file',
+                'documents',
+                'document_names',
+                'document_types',
+            ])->toArray();
 
-        $photoPath = null;
-        if ($request->hasFile('photo')) {
-            $photoPath = $request->file('photo')->store('tenants/'.tenant_id().'/employees/photos', 'public');
-        }
+            if (! isset($employeeData['employee_code'])) {
+                $employeeData['employee_code'] = $this->generateEmployeeCode();
+            }
 
-        $data['photo_path'] = $photoPath;
+            if ($request->hasFile('photo')) {
+                $photoFile = $request->file('photo');
+                $photoFilename = time().'_'.uniqid().'.'.$photoFile->getClientOriginalExtension();
+                $photoFile->move(public_path('uploads/photos'), $photoFilename);
+                $employeeData['photo_path'] = '/uploads/photos/'.$photoFilename;
+            }
 
-        /** @var Employee $employee */
-        $employee = Employee::query()->create($data);
+            /** @var Employee $employee */
+            $employee = Employee::query()->create($employeeData);
+
+            // 1. Criar contrato caso tenham sido preenchidas informações de contrato
+            $hasContractInfo = $request->filled('contract_type') ||
+                $request->filled('base_salary') ||
+                $request->filled('contract_start_date') ||
+                $request->hasFile('contract_file');
+
+            if ($hasContractInfo) {
+                $contractDocPath = null;
+                if ($request->hasFile('contract_file')) {
+                    $contractFile = $request->file('contract_file');
+                    $contractFilename = time().'_'.uniqid().'.'.$contractFile->getClientOriginalExtension();
+                    $contractFile->move(public_path('uploads/contracts'), $contractFilename);
+                    $contractDocPath = '/uploads/contracts/'.$contractFilename;
+                }
+
+                EmployeeContract::query()->create([
+                    'employee_id' => $employee->id,
+                    'tenant_id' => $employee->tenant_id,
+                    'position_id' => $employee->position_id,
+                    'department_id' => $employee->department_id,
+                    'manager_id' => $employee->manager_id,
+                    'contract_type' => $validated['contract_type'] ?? 'permanent',
+                    'base_salary' => $validated['base_salary'] ?? 0,
+                    'salary_frequency' => $validated['salary_frequency'] ?? 'monthly',
+                    'work_hours_per_week' => $validated['work_hours_per_week'] ?? 40,
+                    'start_date' => $validated['contract_start_date'] ?? ($employee->hired_at ?? now()->toDateString()),
+                    'end_date' => $validated['contract_end_date'] ?? null,
+                    'signed_at' => $validated['contract_signed_at'] ?? null,
+                    'document_path' => $contractDocPath,
+                    'notes' => $validated['contract_notes'] ?? null,
+                    'is_active' => true,
+                ]);
+
+                if ($contractDocPath && $request->hasFile('contract_file')) {
+                    $contractFile = $request->file('contract_file');
+                    EmployeeDocument::query()->create([
+                        'employee_id' => $employee->id,
+                        'tenant_id' => tenant_id(),
+                        'uploader_id' => $request->user()->id,
+                        'name' => 'Contrato de Trabalho',
+                        'document_type' => 'contract',
+                        'file_path' => $contractDocPath,
+                        'original_name' => $contractFile->getClientOriginalName(),
+                        'mime_type' => $contractFile->getMimeType(),
+                        'file_size' => $contractFile->getSize(),
+                        'is_confidential' => false,
+                    ]);
+                }
+            }
+
+            // 2. Registar documentos adicionais enviados (Imagens ou PDFs)
+            if ($request->hasFile('documents')) {
+                $files = $request->file('documents');
+                $docNames = $request->input('document_names', []);
+                $docTypes = $request->input('document_types', []);
+
+                foreach ($files as $idx => $docFile) {
+                    $docFilename = time().'_'.uniqid().'_'.str_replace(' ', '_', $docFile->getClientOriginalName());
+                    $docFile->move(public_path('uploads/documents'), $docFilename);
+                    $docUrl = '/uploads/documents/'.$docFilename;
+
+                    EmployeeDocument::query()->create([
+                        'employee_id' => $employee->id,
+                        'tenant_id' => tenant_id(),
+                        'uploader_id' => $request->user()->id,
+                        'name' => $docNames[$idx] ?? $docFile->getClientOriginalName(),
+                        'document_type' => $docTypes[$idx] ?? 'other',
+                        'file_path' => $docUrl,
+                        'original_name' => $docFile->getClientOriginalName(),
+                        'mime_type' => $docFile->getMimeType(),
+                        'file_size' => $docFile->getSize(),
+                        'is_confidential' => false,
+                    ]);
+                }
+            }
+
+            return $employee;
+        });
 
         return $this->success(
-            new EmployeeResource($employee->load('department', 'position', 'manager')),
+            new EmployeeResource($employee->load('department', 'position', 'manager', 'activeContract', 'documents')),
             'Funcionário criado com sucesso.',
             201,
         );

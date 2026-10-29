@@ -43,6 +43,25 @@ class StoreEmployeeRequest extends FormRequest
             'position_id' => ['nullable', 'integer', Rule::exists('positions', 'id')],
             'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')],
             'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+
+            // Informações Contratuais (Aba Contrato)
+            'contract_type' => ['nullable', Rule::in(['permanent', 'fixed_term', 'temporary', 'probation', 'internship', 'outsourced'])],
+            'base_salary' => ['nullable', 'numeric', 'min:0'],
+            'salary_frequency' => ['nullable', Rule::in(['monthly', 'biweekly', 'weekly', 'hourly'])],
+            'work_hours_per_week' => ['nullable', 'numeric', 'min:1', 'max:168'],
+            'contract_start_date' => ['nullable', 'date'],
+            'contract_end_date' => ['nullable', 'date', 'after_or_equal:contract_start_date'],
+            'contract_signed_at' => ['nullable', 'date'],
+            'contract_notes' => ['nullable', 'string'],
+            'contract_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
+
+            // Documentos Anexados (Imagens ou PDFs)
+            'documents' => ['nullable', 'array'],
+            'documents.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
+            'document_names' => ['nullable', 'array'],
+            'document_names.*' => ['nullable', 'string', 'max:255'],
+            'document_types' => ['nullable', 'array'],
+            'document_types.*' => ['nullable', 'string', 'max:50'],
         ];
     }
 
@@ -54,6 +73,7 @@ class StoreEmployeeRequest extends FormRequest
             'email.required' => 'O email é obrigatório.',
             'email.unique' => 'Já existe um funcionário com este email.',
             'status.required' => 'O estado é obrigatório.',
+            'contract_end_date.after_or_equal' => 'A data de término do contrato deve ser posterior ou igual à data de início.',
         ];
     }
 }
