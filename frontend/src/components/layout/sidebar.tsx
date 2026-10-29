@@ -24,6 +24,7 @@ import {
   User,
   ShieldCheck,
   Mail,
+  Globe2,
 } from 'lucide-react'
 import { useUiStore } from '@/stores/ui-store'
 import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
@@ -81,6 +82,12 @@ const sections: NavSection[] = [
       { titleKey: 'nav.reports', href: '/reports', icon: BarChart3, roles: ['admin', 'hr-manager', 'manager'] },
       { titleKey: 'nav.audits', href: '/audits', icon: Activity, roles: ['admin', 'super-admin', 'hr-manager'] },
       { titleKey: 'nav.emailTemplates', href: '/email-templates', icon: Mail, roles: ['admin', 'super-admin'] },
+    ],
+  },
+  {
+    titleKey: 'nav.section_platform',
+    items: [
+      { titleKey: 'nav.tenants', href: '/admin/tenants', icon: Globe2, roles: ['super-admin'] },
     ],
   },
 ]

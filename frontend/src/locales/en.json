@@ -1,546 +1,548 @@
 {
-    "app": {
-        "name": "HumaCore",
-        "tagline": "Human Capital Management",
-        "tagline_short": "HR Management",
-        "system_status": "System status"
+  "app": {
+    "name": "HumaCore",
+    "tagline": "Human Capital Management",
+    "tagline_short": "HR Management",
+    "system_status": "System status"
+  },
+  "auth": {
+    "login": "Sign in",
+    "logout": "Sign out",
+    "email": "Email",
+    "password": "Password",
+    "remember": "Remember me",
+    "forgot": "Forgot password?",
+    "invalid": "Invalid email or password",
+    "logged_in": "Signed in successfully",
+    "logged_out": "Signed out"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "search": "Search",
+    "loading": "Loading...",
+    "no_data": "No data to display",
+    "actions": "Actions",
+    "status": "Status",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "yes": "Yes",
+    "no": "No",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "all": "All",
+    "filter": "Filter",
+    "export": "Export",
+    "details": "Details",
+    "active": "Active",
+    "inactive": "Inactive",
+    "periods": "periods",
+    "date": "Date",
+    "thisMonth": "This month",
+    "notes": "Notes",
+    "select": "Select"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "employees": "Employees",
+    "attendance": "Attendance",
+    "leave": "Leave",
+    "payroll": "Payroll",
+    "documents": "Documents",
+    "recruitment": "Recruitment",
+    "performance": "Performance",
+    "training": "Training",
+    "trainings": "Training Catalog",
+    "reports": "Reports",
+    "settings": "Settings",
+    "organization": "Organization",
+    "departments": "Departments",
+    "positions": "Positions",
+    "branches": "Branches",
+    "profile": "My Profile",
+    "help": "Help",
+    "section_people": "People",
+    "section_time": "Time",
+    "section_management": "Management",
+    "section_analytics": "Analytics",
+    "schedules": "Schedules",
+    "audits": "Audit Logs",
+    "benefits": "Benefits",
+    "deductions": "Deductions",
+    "emailTemplates": "Email Templates",
+    "section_platform": "Platform",
+    "tenants": "Company Management"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "hr": {
+      "title": "HR Dashboard",
+      "total_employees": "Total Employees",
+      "active_employees": "Active Employees",
+      "hired_this_month": "Hires this month",
+      "terminated_this_month": "Terminations this month",
+      "turnover_rate": "Turnover Rate",
+      "monthly_payroll_cost": "Monthly Payroll Cost",
+      "headcount_trend": "Headcount Trend",
+      "by_department": "By Department",
+      "upcoming_birthdays": "Upcoming Birthdays",
+      "expiring_contracts": "Expiring Contracts",
+      "pending_leaves": "Pending Leaves",
+      "recent_hires": "Recent Hires"
+    }
+  },
+  "employees": {
+    "title": "Employees",
+    "list": "Employee List",
+    "add": "New Employee",
+    "code": "Code",
+    "first_name": "First Name",
+    "last_name": "Last Name",
+    "full_name": "Full Name",
+    "department": "Department",
+    "position": "Position",
+    "hired_at": "Hired At",
+    "employee_code": "Employee Code"
+  },
+  "payroll": {
+    "title": "Payroll",
+    "newPeriod": "New Period",
+    "periods": "periods"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "myDescription": "Clock in and out",
+    "allDescription": "Overview of attendance records",
+    "clockIn": "Clock In",
+    "clockOut": "Clock Out",
+    "myHistory": "My history",
+    "qr": {
+      "cta": "Show QR Code",
+      "title": "Clock-in QR Code",
+      "description": "Present this code at the attendance terminal. The code expires in seconds.",
+      "expiresIn": "Expires in",
+      "refresh": "Generate new code",
+      "regenerating": "Regenerating…",
+      "scanSuccess": "Clock recorded successfully"
+    }
+  },
+  "leave": {
+    "title": "Leaves & Absences",
+    "newRequest": "New Request"
+  },
+  "settings": {
+    "title": "Settings"
+  },
+  "documents": {
+    "title": "Documents"
+  },
+  "reports": {
+    "title": "Reports",
+    "description": "Aggregated analysis of headcount, turnover, payroll and attendance.",
+    "tabs": {
+      "headcount": "Headcount",
+      "turnover": "Turnover",
+      "payroll": "Payroll",
+      "attendance": "Attendance"
     },
-    "auth": {
-        "login": "Sign in",
-        "logout": "Sign out",
-        "email": "Email",
-        "password": "Password",
-        "remember": "Remember me",
-        "forgot": "Forgot password?",
-        "invalid": "Invalid email or password",
-        "logged_in": "Signed in successfully",
-        "logged_out": "Signed out"
+    "filters": {
+      "startDate": "Start date",
+      "endDate": "End date",
+      "apply": "Apply",
+      "reset": "Reset",
+      "last6": "Last 6 months",
+      "last12": "Last 12 months"
     },
-    "common": {
-        "save": "Save",
-        "cancel": "Cancel",
-        "edit": "Edit",
-        "delete": "Delete",
-        "create": "Create",
-        "search": "Search",
-        "loading": "Loading...",
-        "no_data": "No data to display",
-        "actions": "Actions",
-        "status": "Status",
-        "name": "Name",
-        "email": "Email",
-        "phone": "Phone",
-        "yes": "Yes",
-        "no": "No",
-        "back": "Back",
-        "next": "Next",
-        "previous": "Previous",
-        "all": "All",
-        "filter": "Filter",
-        "export": "Export",
-        "details": "Details",
-        "active": "Active",
-        "inactive": "Inactive",
-        "periods": "periods",
-        "date": "Date",
-        "thisMonth": "This month",
-        "notes": "Notes",
-        "select": "Select"
+    "export": "Export CSV",
+    "headcount": {
+      "summary": "Summary",
+      "total": "Total",
+      "active": "Active",
+      "hired": "Hired in period",
+      "terminated": "Terminated in period",
+      "byDepartment": "By department",
+      "byStatus": "By status",
+      "trend": "Monthly trend"
     },
-    "nav": {
-        "dashboard": "Dashboard",
-        "employees": "Employees",
-        "attendance": "Attendance",
-        "leave": "Leave",
-        "payroll": "Payroll",
-        "documents": "Documents",
-        "recruitment": "Recruitment",
-        "performance": "Performance",
-        "training": "Training",
-        "trainings": "Training Catalog",
-        "reports": "Reports",
-        "settings": "Settings",
-        "organization": "Organization",
-        "departments": "Departments",
-        "positions": "Positions",
-        "branches": "Branches",
-        "profile": "My Profile",
-        "help": "Help",
-        "section_people": "People",
-        "section_time": "Time",
-        "section_management": "Management",
-        "section_analytics": "Analytics",
-        "schedules": "Schedules",
-        "audits": "Audit Logs",
-        "benefits": "Benefits",
-        "deductions": "Deductions",
-        "emailTemplates": "Email Templates"
-    },
-    "dashboard": {
-        "title": "Dashboard",
-        "hr": {
-            "title": "HR Dashboard",
-            "total_employees": "Total Employees",
-            "active_employees": "Active Employees",
-            "hired_this_month": "Hires this month",
-            "terminated_this_month": "Terminations this month",
-            "turnover_rate": "Turnover Rate",
-            "monthly_payroll_cost": "Monthly Payroll Cost",
-            "headcount_trend": "Headcount Trend",
-            "by_department": "By Department",
-            "upcoming_birthdays": "Upcoming Birthdays",
-            "expiring_contracts": "Expiring Contracts",
-            "pending_leaves": "Pending Leaves",
-            "recent_hires": "Recent Hires"
-        }
-    },
-    "employees": {
-        "title": "Employees",
-        "list": "Employee List",
-        "add": "New Employee",
-        "code": "Code",
-        "first_name": "First Name",
-        "last_name": "Last Name",
-        "full_name": "Full Name",
-        "department": "Department",
-        "position": "Position",
-        "hired_at": "Hired At",
-        "employee_code": "Employee Code"
+    "turnover": {
+      "summary": "Summary",
+      "hired": "Hired",
+      "terminated": "Terminated",
+      "averageHeadcount": "Average headcount",
+      "rate": "Turnover rate",
+      "monthly": "Monthly",
+      "byReason": "Termination reasons"
     },
     "payroll": {
-        "title": "Payroll",
-        "newPeriod": "New Period",
-        "periods": "periods"
+      "totals": "Totals",
+      "period": "Period",
+      "gross": "Gross salary",
+      "net": "Net",
+      "taxes": "Taxes",
+      "deductions": "Deductions",
+      "overtime": "Overtime",
+      "employees": "Employees",
+      "absentDays": "Absent days",
+      "byDepartment": "By department"
     },
     "attendance": {
-        "title": "Attendance",
-        "myDescription": "Clock in and out",
-        "allDescription": "Overview of attendance records",
-        "clockIn": "Clock In",
-        "clockOut": "Clock Out",
-        "myHistory": "My history",
-        "qr": {
-            "cta": "Show QR Code",
-            "title": "Clock-in QR Code",
-            "description": "Present this code at the attendance terminal. The code expires in seconds.",
-            "expiresIn": "Expires in",
-            "refresh": "Generate new code",
-            "regenerating": "Regenerating…",
-            "scanSuccess": "Clock recorded successfully"
-        }
+      "summary": "Summary",
+      "records": "Records",
+      "totalHours": "Total hours",
+      "lateMinutes": "Late minutes",
+      "overtimeMinutes": "Overtime minutes",
+      "leavesApproved": "Approved leaves",
+      "leavesPending": "Pending leaves",
+      "byStatus": "By status",
+      "byDepartment": "By department"
     },
-    "leave": {
-        "title": "Leaves & Absences",
-        "newRequest": "New Request"
+    "empty": "No data for the selected period.",
+    "loading": "Generating report…",
+    "error": "Could not generate the report."
+  },
+  "recruitment": {
+    "title": "Recruitment",
+    "description": "Job openings and candidate pipeline management.",
+    "tabs": {
+      "jobs": "Jobs",
+      "candidates": "Candidates"
     },
-    "settings": {
-        "title": "Settings"
+    "newJob": "New job",
+    "editJob": "Edit job",
+    "newCandidate": "Add candidate",
+    "job": {
+      "title": "Title",
+      "department": "Department",
+      "position": "Position",
+      "location": "Location",
+      "employmentType": "Employment type",
+      "experienceLevel": "Experience",
+      "salaryMin": "Min salary",
+      "salaryMax": "Max salary",
+      "currency": "Currency",
+      "openingsCount": "Openings",
+      "description": "Description",
+      "requirements": "Requirements",
+      "status": "Status",
+      "publishedAt": "Published at",
+      "closesAt": "Closes at",
+      "candidates": "Candidates",
+      "actions": {
+        "publish": "Publish",
+        "close": "Close",
+        "reopen": "Reopen"
+      }
     },
-    "documents": {
-        "title": "Documents"
+    "candidate": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "yearsExperience": "Years exp.",
+      "source": "Source",
+      "status": "Status",
+      "rating": "Rating",
+      "expectedSalary": "Expected salary",
+      "appliedAt": "Applied at",
+      "move": "Move to",
+      "addToJob": "Add to job"
     },
-    "reports": {
-        "title": "Reports",
-        "description": "Aggregated analysis of headcount, turnover, payroll and attendance.",
-        "tabs": {
-            "headcount": "Headcount",
-            "turnover": "Turnover",
-            "payroll": "Payroll",
-            "attendance": "Attendance"
-        },
-        "filters": {
-            "startDate": "Start date",
-            "endDate": "End date",
-            "apply": "Apply",
-            "reset": "Reset",
-            "last6": "Last 6 months",
-            "last12": "Last 12 months"
-        },
-        "export": "Export CSV",
-        "headcount": {
-            "summary": "Summary",
-            "total": "Total",
-            "active": "Active",
-            "hired": "Hired in period",
-            "terminated": "Terminated in period",
-            "byDepartment": "By department",
-            "byStatus": "By status",
-            "trend": "Monthly trend"
-        },
-        "turnover": {
-            "summary": "Summary",
-            "hired": "Hired",
-            "terminated": "Terminated",
-            "averageHeadcount": "Average headcount",
-            "rate": "Turnover rate",
-            "monthly": "Monthly",
-            "byReason": "Termination reasons"
-        },
-        "payroll": {
-            "totals": "Totals",
-            "period": "Period",
-            "gross": "Gross salary",
-            "net": "Net",
-            "taxes": "Taxes",
-            "deductions": "Deductions",
-            "overtime": "Overtime",
-            "employees": "Employees",
-            "absentDays": "Absent days",
-            "byDepartment": "By department"
-        },
-        "attendance": {
-            "summary": "Summary",
-            "records": "Records",
-            "totalHours": "Total hours",
-            "lateMinutes": "Late minutes",
-            "overtimeMinutes": "Overtime minutes",
-            "leavesApproved": "Approved leaves",
-            "leavesPending": "Pending leaves",
-            "byStatus": "By status",
-            "byDepartment": "By department"
-        },
-        "empty": "No data for the selected period.",
-        "loading": "Generating report…",
-        "error": "Could not generate the report."
+    "statuses": {
+      "draft": "Draft",
+      "open": "Open",
+      "on_hold": "On hold",
+      "closed": "Closed",
+      "cancelled": "Cancelled",
+      "applied": "Applied",
+      "screening": "Screening",
+      "interview": "Interview",
+      "test": "Assessment",
+      "offer": "Offer sent",
+      "hired": "Hired",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn"
     },
-    "recruitment": {
-        "title": "Recruitment",
-        "description": "Job openings and candidate pipeline management.",
-        "tabs": {
-            "jobs": "Jobs",
-            "candidates": "Candidates"
-        },
-        "newJob": "New job",
-        "editJob": "Edit job",
-        "newCandidate": "Add candidate",
-        "job": {
-            "title": "Title",
-            "department": "Department",
-            "position": "Position",
-            "location": "Location",
-            "employmentType": "Employment type",
-            "experienceLevel": "Experience",
-            "salaryMin": "Min salary",
-            "salaryMax": "Max salary",
-            "currency": "Currency",
-            "openingsCount": "Openings",
-            "description": "Description",
-            "requirements": "Requirements",
-            "status": "Status",
-            "publishedAt": "Published at",
-            "closesAt": "Closes at",
-            "candidates": "Candidates",
-            "actions": {
-                "publish": "Publish",
-                "close": "Close",
-                "reopen": "Reopen"
-            }
-        },
-        "candidate": {
-            "name": "Name",
-            "email": "Email",
-            "phone": "Phone",
-            "yearsExperience": "Years exp.",
-            "source": "Source",
-            "status": "Status",
-            "rating": "Rating",
-            "expectedSalary": "Expected salary",
-            "appliedAt": "Applied at",
-            "move": "Move to",
-            "addToJob": "Add to job"
-        },
-        "statuses": {
-            "draft": "Draft",
-            "open": "Open",
-            "on_hold": "On hold",
-            "closed": "Closed",
-            "cancelled": "Cancelled",
-            "applied": "Applied",
-            "screening": "Screening",
-            "interview": "Interview",
-            "test": "Assessment",
-            "offer": "Offer sent",
-            "hired": "Hired",
-            "rejected": "Rejected",
-            "withdrawn": "Withdrawn"
-        },
-        "empty": "No data to show.",
-        "loading": "Loading…",
-        "error": "Could not load.",
-        "saved": "Saved successfully.",
-        "deleted": "Deleted successfully."
+    "empty": "No data to show.",
+    "loading": "Loading…",
+    "error": "Could not load.",
+    "saved": "Saved successfully.",
+    "deleted": "Deleted successfully."
+  },
+  "performance": {
+    "title": "Performance Reviews",
+    "description": "Evaluation cycles, criteria and employee scoring.",
+    "newEvaluation": "New evaluation",
+    "period": "Period",
+    "cycle": "Cycle",
+    "cycleOptions": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "semi_annual": "Semi-annual",
+      "annual": "Annual",
+      "probation": "Probation"
     },
-    "performance": {
-        "title": "Performance Reviews",
-        "description": "Evaluation cycles, criteria and employee scoring.",
-        "newEvaluation": "New evaluation",
-        "period": "Period",
-        "cycle": "Cycle",
-        "cycleOptions": {
-            "monthly": "Monthly",
-            "quarterly": "Quarterly",
-            "semi_annual": "Semi-annual",
-            "annual": "Annual",
-            "probation": "Probation"
-        },
-        "score": "Score",
-        "criteria": "Criteria",
-        "strengths": "Strengths",
-        "improvements": "Improvements",
-        "goals": "Goals",
-        "comments": "Comments",
-        "statuses": {
-            "draft": "Draft",
-            "submitted": "Submitted",
-            "approved": "Approved",
-            "rejected": "Rejected"
-        },
-        "actions": {
-            "submit": "Submit",
-            "approve": "Approve",
-            "reject": "Reject"
-        },
-        "empty": "No evaluations to show.",
-        "loading": "Loading…",
-        "error": "Could not load."
+    "score": "Score",
+    "criteria": "Criteria",
+    "strengths": "Strengths",
+    "improvements": "Improvements",
+    "goals": "Goals",
+    "comments": "Comments",
+    "statuses": {
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected"
     },
-    "onboarding": {
-        "title": "Onboarding",
-        "description": "Templates and tasks for integrating new employees.",
-        "tabs": {
-            "templates": "Templates",
-            "tasks": "Tasks"
-        },
-        "newTemplate": "New template",
-        "newTask": "New task",
-        "template": {
-            "name": "Name",
-            "description": "Description",
-            "is_active": "Active",
-            "tasks": "Tasks",
-            "addTask": "Add task"
-        },
-        "task": {
-            "title": "Title",
-            "description": "Description",
-            "due_days": "Due in days",
-            "due_date": "Due date",
-            "assignee": "Assignee",
-            "employee": "Employee",
-            "status": "Status",
-            "complete": "Complete",
-            "assignTo": "Assign to"
-        },
-        "statuses": {
-            "pending": "Pending",
-            "in_progress": "In progress",
-            "completed": "Completed",
-            "cancelled": "Cancelled"
-        },
-        "empty": "No data to show.",
-        "loading": "Loading…",
-        "error": "Could not load."
+    "actions": {
+      "submit": "Submit",
+      "approve": "Approve",
+      "reject": "Reject"
     },
-    "trainingPage": {
-        "title": "Training",
-        "description": "Training catalog, enrollments and completion.",
-        "newTraining": "New training",
-        "training": {
-            "title": "Title",
-            "description": "Description",
-            "category": "Category",
-            "duration_hours": "Duration (h)",
-            "provider": "Provider",
-            "location": "Location",
-            "cost": "Cost",
-            "max_participants": "Max participants",
-            "start_date": "Start date",
-            "end_date": "End date",
-            "status": "Status",
-            "notes": "Notes"
-        },
-        "categoryOptions": {
-            "technical": "Technical",
-            "soft_skills": "Soft skills",
-            "leadership": "Leadership",
-            "compliance": "Compliance",
-            "safety": "Safety",
-            "onboarding": "Onboarding",
-            "other": "Other"
-        },
-        "statuses": {
-            "planned": "Planned",
-            "open": "Open",
-            "in_progress": "In progress",
-            "completed": "Completed",
-            "cancelled": "Cancelled"
-        },
-        "actions": {
-            "enroll": "Enroll",
-            "complete": "Complete"
-        },
-        "participants": "Participants",
-        "assignment": {
-            "employee": "Employee",
-            "status": "Status",
-            "score": "Score",
-            "notes": "Notes"
-        },
-        "assignmentStatuses": {
-            "enrolled": "Enrolled",
-            "in_progress": "In progress",
-            "completed": "Completed",
-            "cancelled": "Cancelled",
-            "no_show": "No show"
-        },
-        "empty": "No trainings to show.",
-        "loading": "Loading…",
-        "error": "Could not load."
+    "empty": "No evaluations to show.",
+    "loading": "Loading…",
+    "error": "Could not load."
+  },
+  "onboarding": {
+    "title": "Onboarding",
+    "description": "Templates and tasks for integrating new employees.",
+    "tabs": {
+      "templates": "Templates",
+      "tasks": "Tasks"
     },
-    "superAdminDashboard": {
-        "title": "Super Admin Dashboard",
-        "subtitle": "Global view of all tenants and platform users.",
-        "manageTenants": "Manage organization",
-        "tenantTrend": "Tenant Growth",
-        "byStatus": "Status Distribution",
-        "segments": "Segmentation by size",
-        "tenantsTable": "Tenants",
-        "tenantsTableDescription": "All tenants on the platform"
+    "newTemplate": "New template",
+    "newTask": "New task",
+    "template": {
+      "name": "Name",
+      "description": "Description",
+      "is_active": "Active",
+      "tasks": "Tasks",
+      "addTask": "Add task"
     },
-    "tenant": {
-        "current": "Current company",
-        "switch": "Switch company",
-        "search": "Search company…",
-        "new": "New company"
+    "task": {
+      "title": "Title",
+      "description": "Description",
+      "due_days": "Due in days",
+      "due_date": "Due date",
+      "assignee": "Assignee",
+      "employee": "Employee",
+      "status": "Status",
+      "complete": "Complete",
+      "assignTo": "Assign to"
     },
-    "command": {
-        "placeholder": "Type a command or search…",
-        "search": "Search",
-        "empty": "No results found.",
-        "modules": "Modules",
-        "navigate": "Navigate",
-        "select": "Select"
+    "statuses": {
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
     },
-    "theme": {
-        "light": "Light",
-        "dark": "Dark",
-        "system": "System"
+    "empty": "No data to show.",
+    "loading": "Loading…",
+    "error": "Could not load."
+  },
+  "trainingPage": {
+    "title": "Training",
+    "description": "Training catalog, enrollments and completion.",
+    "newTraining": "New training",
+    "training": {
+      "title": "Title",
+      "description": "Description",
+      "category": "Category",
+      "duration_hours": "Duration (h)",
+      "provider": "Provider",
+      "location": "Location",
+      "cost": "Cost",
+      "max_participants": "Max participants",
+      "start_date": "Start date",
+      "end_date": "End date",
+      "status": "Status",
+      "notes": "Notes"
     },
-    "benefitsPage": {
-        "eyebrow": "COMPENSATION",
-        "title": "Benefits",
-        "description": "Manage employee benefits and subsidies",
-        "newBenefit": "New Benefit",
-        "editBenefit": "Edit Benefit",
-        "searchPlaceholder": "Search benefits…",
-        "employee": "Employee",
-        "name": "Name",
-        "type": "Type",
-        "amount": "Amount",
-        "percentage": "Percentage",
-        "amountType": "Amount type",
-        "amountTypes": {
-            "fixed": "Fixed amount",
-            "percentage": "Percentage"
-        },
-        "provider": "Provider",
-        "period": "Period",
-        "startDate": "Start date",
-        "endDate": "End date",
-        "status": "Status",
-        "statuses": {
-            "active": "Active",
-            "inactive": "Inactive"
-        },
-        "taxable": "Taxable",
-        "typeOptions": {
-            "health_insurance": "Health Insurance",
-            "transport": "Transport Allowance",
-            "meal": "Meal Allowance",
-            "housing": "Housing",
-            "vehicle": "Vehicle",
-            "phone": "Phone",
-            "education": "Education",
-            "gym": "Gym",
-            "other": "Other"
-        },
-        "empty": "No benefits registered",
-        "emptyDescription": "Create the first employee benefit to get started.",
-        "deleteConfirm": "Are you sure you want to delete this benefit?",
-        "error": "Error saving benefit"
+    "categoryOptions": {
+      "technical": "Technical",
+      "soft_skills": "Soft skills",
+      "leadership": "Leadership",
+      "compliance": "Compliance",
+      "safety": "Safety",
+      "onboarding": "Onboarding",
+      "other": "Other"
     },
-    "deductionsPage": {
-        "eyebrow": "COMPENSATION",
-        "title": "Deductions",
-        "description": "Manage loans, advances and salary deductions",
-        "newDeduction": "New Deduction",
-        "editDeduction": "Edit Deduction",
-        "searchPlaceholder": "Search deductions…",
-        "employee": "Employee",
-        "name": "Name",
-        "type": "Type",
-        "amount": "Amount",
-        "percentage": "Percentage",
-        "amountType": "Amount type",
-        "amountTypes": {
-            "fixed": "Fixed amount",
-            "percentage": "Percentage"
-        },
-        "status": "Status",
-        "statuses": {
-            "active": "Active",
-            "paused": "Paused",
-            "completed": "Completed",
-            "cancelled": "Cancelled"
-        },
-        "typeOptions": {
-            "loan": "Loan",
-            "advance": "Salary Advance",
-            "pension": "Alimony",
-            "insurance": "Insurance",
-            "garnishment": "Garnishment",
-            "union_fee": "Union Fee",
-            "other": "Other"
-        },
-        "progress": "Progress",
-        "recurring": "Recurring",
-        "installments": "Installments",
-        "installmentCount": "Installment count",
-        "installmentAmount": "Installment amount",
-        "totalAmount": "Total amount",
-        "empty": "No deductions registered",
-        "emptyDescription": "Create the first deduction to get started.",
-        "deleteConfirm": "Are you sure you want to delete this deduction?",
-        "error": "Error saving deduction"
+    "statuses": {
+      "planned": "Planned",
+      "open": "Open",
+      "in_progress": "In progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
     },
-    "emailTemplates": {
-        "eyebrow": "COMMUNICATION",
-        "title": "Email Templates",
-        "description": "Manage email templates for automatic notifications",
-        "newTemplate": "New Template",
-        "editTemplate": "Edit Template",
-        "searchPlaceholder": "Search templates…",
-        "name": "Name",
-        "code": "Code",
-        "event": "Event",
-        "subject": "Subject",
-        "body": "Body",
-        "status": "Status",
-        "active": "Active",
-        "inactive": "Inactive",
-        "system": "System",
-        "preview": "Preview",
-        "empty": "No templates created",
-        "emptyDescription": "Create the first email template to get started.",
-        "deleteConfirm": "Are you sure you want to delete this template?",
-        "error": "Error saving template",
-        "events": {
-            "all": "All events",
-            "employee_created": "Employee onboarding",
-            "leave_approved": "Leave approved",
-            "payslip_available": "Payslip available",
-            "contract_expiring": "Contract expiring",
-            "custom": "Custom"
-        }
+    "actions": {
+      "enroll": "Enroll",
+      "complete": "Complete"
+    },
+    "participants": "Participants",
+    "assignment": {
+      "employee": "Employee",
+      "status": "Status",
+      "score": "Score",
+      "notes": "Notes"
+    },
+    "assignmentStatuses": {
+      "enrolled": "Enrolled",
+      "in_progress": "In progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "no_show": "No show"
+    },
+    "empty": "No trainings to show.",
+    "loading": "Loading…",
+    "error": "Could not load."
+  },
+  "superAdminDashboard": {
+    "title": "Super Admin Dashboard",
+    "subtitle": "Global view of all tenants and platform users.",
+    "manageTenants": "Manage organization",
+    "tenantTrend": "Tenant Growth",
+    "byStatus": "Status Distribution",
+    "segments": "Segmentation by size",
+    "tenantsTable": "Tenants",
+    "tenantsTableDescription": "All tenants on the platform"
+  },
+  "tenant": {
+    "current": "Current company",
+    "switch": "Switch company",
+    "search": "Search company…",
+    "new": "New company"
+  },
+  "command": {
+    "placeholder": "Type a command or search…",
+    "search": "Search",
+    "empty": "No results found.",
+    "modules": "Modules",
+    "navigate": "Navigate",
+    "select": "Select"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "benefitsPage": {
+    "eyebrow": "COMPENSATION",
+    "title": "Benefits",
+    "description": "Manage employee benefits and subsidies",
+    "newBenefit": "New Benefit",
+    "editBenefit": "Edit Benefit",
+    "searchPlaceholder": "Search benefits…",
+    "employee": "Employee",
+    "name": "Name",
+    "type": "Type",
+    "amount": "Amount",
+    "percentage": "Percentage",
+    "amountType": "Amount type",
+    "amountTypes": {
+      "fixed": "Fixed amount",
+      "percentage": "Percentage"
+    },
+    "provider": "Provider",
+    "period": "Period",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "status": "Status",
+    "statuses": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "taxable": "Taxable",
+    "typeOptions": {
+      "health_insurance": "Health Insurance",
+      "transport": "Transport Allowance",
+      "meal": "Meal Allowance",
+      "housing": "Housing",
+      "vehicle": "Vehicle",
+      "phone": "Phone",
+      "education": "Education",
+      "gym": "Gym",
+      "other": "Other"
+    },
+    "empty": "No benefits registered",
+    "emptyDescription": "Create the first employee benefit to get started.",
+    "deleteConfirm": "Are you sure you want to delete this benefit?",
+    "error": "Error saving benefit"
+  },
+  "deductionsPage": {
+    "eyebrow": "COMPENSATION",
+    "title": "Deductions",
+    "description": "Manage loans, advances and salary deductions",
+    "newDeduction": "New Deduction",
+    "editDeduction": "Edit Deduction",
+    "searchPlaceholder": "Search deductions…",
+    "employee": "Employee",
+    "name": "Name",
+    "type": "Type",
+    "amount": "Amount",
+    "percentage": "Percentage",
+    "amountType": "Amount type",
+    "amountTypes": {
+      "fixed": "Fixed amount",
+      "percentage": "Percentage"
+    },
+    "status": "Status",
+    "statuses": {
+      "active": "Active",
+      "paused": "Paused",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "typeOptions": {
+      "loan": "Loan",
+      "advance": "Salary Advance",
+      "pension": "Alimony",
+      "insurance": "Insurance",
+      "garnishment": "Garnishment",
+      "union_fee": "Union Fee",
+      "other": "Other"
+    },
+    "progress": "Progress",
+    "recurring": "Recurring",
+    "installments": "Installments",
+    "installmentCount": "Installment count",
+    "installmentAmount": "Installment amount",
+    "totalAmount": "Total amount",
+    "empty": "No deductions registered",
+    "emptyDescription": "Create the first deduction to get started.",
+    "deleteConfirm": "Are you sure you want to delete this deduction?",
+    "error": "Error saving deduction"
+  },
+  "emailTemplates": {
+    "eyebrow": "COMMUNICATION",
+    "title": "Email Templates",
+    "description": "Manage email templates for automatic notifications",
+    "newTemplate": "New Template",
+    "editTemplate": "Edit Template",
+    "searchPlaceholder": "Search templates…",
+    "name": "Name",
+    "code": "Code",
+    "event": "Event",
+    "subject": "Subject",
+    "body": "Body",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "system": "System",
+    "preview": "Preview",
+    "empty": "No templates created",
+    "emptyDescription": "Create the first email template to get started.",
+    "deleteConfirm": "Are you sure you want to delete this template?",
+    "error": "Error saving template",
+    "events": {
+      "all": "All events",
+      "employee_created": "Employee onboarding",
+      "leave_approved": "Leave approved",
+      "payslip_available": "Payslip available",
+      "contract_expiring": "Contract expiring",
+      "custom": "Custom"
     }
+  }
 }

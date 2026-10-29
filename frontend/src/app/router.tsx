@@ -38,6 +38,7 @@ const TrainingCatalogPage = lazy(() => import('@/features/training/training-cata
 const BenefitsPage = lazy(() => import('@/features/benefits/benefits-page').then((m) => ({ default: m.BenefitsPage })))
 const DeductionsPage = lazy(() => import('@/features/deductions/deductions-page').then((m) => ({ default: m.DeductionsPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
+const SuperAdminPage = lazy(() => import('@/features/admin/super-admin-page').then((m) => ({ default: m.SuperAdminPage })))
 
 function PageLoader() {
   return (
@@ -106,6 +107,7 @@ export function AppRouter() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/email-templates" element={<EmailTemplatesPage />} />
+          <Route path="/admin/tenants" element={<SuperAdminPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

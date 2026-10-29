@@ -1,546 +1,548 @@
 {
-    "app": {
-        "name": "HumaCore",
-        "tagline": "Human Capital Management",
-        "tagline_short": "Enterprise",
-        "system_status": "Sistema operacional"
+  "app": {
+    "name": "HumaCore",
+    "tagline": "Human Capital Management",
+    "tagline_short": "Enterprise",
+    "system_status": "Sistema operacional"
+  },
+  "tenant": {
+    "current": "Empresa atual",
+    "switch": "Trocar empresa",
+    "search": "Pesquisar empresa...",
+    "new": "Nova empresa"
+  },
+  "command": {
+    "placeholder": "Pesquisar no HumaCore — funcionários, módulos, ações...",
+    "search": "Pesquisar...",
+    "empty": "Nenhum resultado encontrado.",
+    "modules": "Módulos",
+    "navigate": "Navegar",
+    "select": "Selecionar"
+  },
+  "theme": {
+    "light": "Claro",
+    "dark": "Escuro",
+    "system": "Sistema"
+  },
+  "auth": {
+    "login": "Entrar",
+    "logout": "Sair",
+    "email": "Email",
+    "password": "Palavra-passe",
+    "remember": "Lembrar-me",
+    "forgot": "Esqueceu a palavra-passe?",
+    "invalid": "Email ou palavra-passe incorretos",
+    "logged_in": "Sessão iniciada com sucesso",
+    "logged_out": "Sessão terminada"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "create": "Criar",
+    "search": "Pesquisar",
+    "loading": "A carregar...",
+    "no_data": "Sem dados para mostrar",
+    "actions": "Ações",
+    "status": "Estado",
+    "name": "Nome",
+    "email": "Email",
+    "phone": "Telefone",
+    "yes": "Sim",
+    "no": "Não",
+    "back": "Voltar",
+    "next": "Seguinte",
+    "previous": "Anterior",
+    "all": "Todos",
+    "filter": "Filtrar",
+    "export": "Exportar",
+    "details": "Detalhes",
+    "active": "Ativo",
+    "inactive": "Inativo",
+    "periods": "períodos",
+    "date": "Data",
+    "thisMonth": "Este mês",
+    "notes": "Notas",
+    "select": "Selecionar"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "employees": "Funcionários",
+    "attendance": "Presenças",
+    "leave": "Férias",
+    "payroll": "Folha Salarial",
+    "documents": "Documentos",
+    "recruitment": "Recrutamento",
+    "performance": "Desempenho",
+    "training": "Formação",
+    "trainings": "Catálogo de Formações",
+    "reports": "Relatórios",
+    "settings": "Configurações",
+    "profile": "Perfil",
+    "help": "Ajuda",
+    "organization": "Organização",
+    "departments": "Departamentos",
+    "positions": "Cargos",
+    "branches": "Filiais",
+    "section_people": "Pessoas",
+    "section_time": "Tempo",
+    "section_management": "Gestão",
+    "section_analytics": "Análise",
+    "schedules": "Horários/Turnos",
+    "audits": "Auditoria",
+    "benefits": "Benefícios",
+    "deductions": "Descontos",
+    "emailTemplates": "Templates de Email",
+    "section_platform": "Plataforma",
+    "tenants": "Gestão de Empresas"
+  },
+  "settings": {
+    "title": "Configurações"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "hr": {
+      "title": "Dashboard de RH",
+      "total_employees": "Total de Funcionários",
+      "active_employees": "Funcionários Ativos",
+      "hired_this_month": "Admissões este mês",
+      "terminated_this_month": "Desligamentos este mês",
+      "turnover_rate": "Taxa de Turnover",
+      "monthly_payroll_cost": "Custo Salarial Mensal",
+      "headcount_trend": "Evolução do Headcount",
+      "by_department": "Distribuição por Departamento",
+      "upcoming_birthdays": "Próximos Aniversários",
+      "expiring_contracts": "Contratos a Expirar",
+      "pending_leaves": "Férias Pendentes",
+      "recent_hires": "Admissões Recentes"
+    }
+  },
+  "employees": {
+    "title": "Funcionários",
+    "list": "Lista de Funcionários",
+    "add": "Novo Funcionário",
+    "code": "Código",
+    "first_name": "Nome",
+    "last_name": "Apelido",
+    "full_name": "Nome Completo",
+    "department": "Departamento",
+    "position": "Cargo",
+    "hired_at": "Data de Admissão",
+    "employee_code": "Código de Funcionário"
+  },
+  "payroll": {
+    "title": "Folha Salarial",
+    "newPeriod": "Novo Período",
+    "periods": "períodos"
+  },
+  "attendance": {
+    "title": "Presenças",
+    "myDescription": "Registe a sua entrada e saída",
+    "allDescription": "Vista geral dos registos de presença",
+    "clockIn": "Registar Entrada",
+    "clockOut": "Registar Saída",
+    "myHistory": "O meu histórico",
+    "qr": {
+      "cta": "Mostrar QR Code",
+      "title": "QR Code de registo",
+      "description": "Apresente este código no terminal de presença. O código expira em segundos.",
+      "expiresIn": "Expira em",
+      "refresh": "Gerar novo código",
+      "regenerating": "A regenerar…",
+      "scanSuccess": "Registo efetuado com sucesso"
+    }
+  },
+  "leave": {
+    "title": "Férias e Ausências",
+    "newRequest": "Novo Pedido"
+  },
+  "documents": {
+    "title": "Documentos"
+  },
+  "reports": {
+    "title": "Relatórios",
+    "description": "Análise agregada de headcount, turnover, payroll e presenças.",
+    "tabs": {
+      "headcount": "Headcount",
+      "turnover": "Turnover",
+      "payroll": "Payroll",
+      "attendance": "Presenças"
     },
-    "tenant": {
-        "current": "Empresa atual",
-        "switch": "Trocar empresa",
-        "search": "Pesquisar empresa...",
-        "new": "Nova empresa"
+    "filters": {
+      "startDate": "Data inicial",
+      "endDate": "Data final",
+      "apply": "Aplicar",
+      "reset": "Repor",
+      "last6": "Últimos 6 meses",
+      "last12": "Últimos 12 meses"
     },
-    "command": {
-        "placeholder": "Pesquisar no HumaCore — funcionários, módulos, ações...",
-        "search": "Pesquisar...",
-        "empty": "Nenhum resultado encontrado.",
-        "modules": "Módulos",
-        "navigate": "Navegar",
-        "select": "Selecionar"
+    "export": "Exportar CSV",
+    "headcount": {
+      "summary": "Resumo",
+      "total": "Total",
+      "active": "Ativos",
+      "hired": "Admitidos no período",
+      "terminated": "Desligados no período",
+      "byDepartment": "Por departamento",
+      "byStatus": "Por estado",
+      "trend": "Evolução mensal"
     },
-    "theme": {
-        "light": "Claro",
-        "dark": "Escuro",
-        "system": "Sistema"
-    },
-    "auth": {
-        "login": "Entrar",
-        "logout": "Sair",
-        "email": "Email",
-        "password": "Palavra-passe",
-        "remember": "Lembrar-me",
-        "forgot": "Esqueceu a palavra-passe?",
-        "invalid": "Email ou palavra-passe incorretos",
-        "logged_in": "Sessão iniciada com sucesso",
-        "logged_out": "Sessão terminada"
-    },
-    "common": {
-        "save": "Guardar",
-        "cancel": "Cancelar",
-        "edit": "Editar",
-        "delete": "Eliminar",
-        "create": "Criar",
-        "search": "Pesquisar",
-        "loading": "A carregar...",
-        "no_data": "Sem dados para mostrar",
-        "actions": "Ações",
-        "status": "Estado",
-        "name": "Nome",
-        "email": "Email",
-        "phone": "Telefone",
-        "yes": "Sim",
-        "no": "Não",
-        "back": "Voltar",
-        "next": "Seguinte",
-        "previous": "Anterior",
-        "all": "Todos",
-        "filter": "Filtrar",
-        "export": "Exportar",
-        "details": "Detalhes",
-        "active": "Ativo",
-        "inactive": "Inativo",
-        "periods": "períodos",
-        "date": "Data",
-        "thisMonth": "Este mês",
-        "notes": "Notas",
-        "select": "Selecionar"
-    },
-    "nav": {
-        "dashboard": "Dashboard",
-        "employees": "Funcionários",
-        "attendance": "Presenças",
-        "leave": "Férias",
-        "payroll": "Folha Salarial",
-        "documents": "Documentos",
-        "recruitment": "Recrutamento",
-        "performance": "Desempenho",
-        "training": "Formação",
-        "trainings": "Catálogo de Formações",
-        "reports": "Relatórios",
-        "settings": "Configurações",
-        "profile": "Perfil",
-        "help": "Ajuda",
-        "organization": "Organização",
-        "departments": "Departamentos",
-        "positions": "Cargos",
-        "branches": "Filiais",
-        "section_people": "Pessoas",
-        "section_time": "Tempo",
-        "section_management": "Gestão",
-        "section_analytics": "Análise",
-        "schedules": "Horários/Turnos",
-        "audits": "Auditoria",
-        "benefits": "Benefícios",
-        "deductions": "Descontos",
-        "emailTemplates": "Templates de Email"
-    },
-    "settings": {
-        "title": "Configurações"
-    },
-    "dashboard": {
-        "title": "Dashboard",
-        "hr": {
-            "title": "Dashboard de RH",
-            "total_employees": "Total de Funcionários",
-            "active_employees": "Funcionários Ativos",
-            "hired_this_month": "Admissões este mês",
-            "terminated_this_month": "Desligamentos este mês",
-            "turnover_rate": "Taxa de Turnover",
-            "monthly_payroll_cost": "Custo Salarial Mensal",
-            "headcount_trend": "Evolução do Headcount",
-            "by_department": "Distribuição por Departamento",
-            "upcoming_birthdays": "Próximos Aniversários",
-            "expiring_contracts": "Contratos a Expirar",
-            "pending_leaves": "Férias Pendentes",
-            "recent_hires": "Admissões Recentes"
-        }
-    },
-    "employees": {
-        "title": "Funcionários",
-        "list": "Lista de Funcionários",
-        "add": "Novo Funcionário",
-        "code": "Código",
-        "first_name": "Nome",
-        "last_name": "Apelido",
-        "full_name": "Nome Completo",
-        "department": "Departamento",
-        "position": "Cargo",
-        "hired_at": "Data de Admissão",
-        "employee_code": "Código de Funcionário"
+    "turnover": {
+      "summary": "Resumo",
+      "hired": "Admissões",
+      "terminated": "Desligamentos",
+      "averageHeadcount": "Headcount médio",
+      "rate": "Taxa de turnover",
+      "monthly": "Mensal",
+      "byReason": "Motivos de desligamento"
     },
     "payroll": {
-        "title": "Folha Salarial",
-        "newPeriod": "Novo Período",
-        "periods": "períodos"
+      "totals": "Totais",
+      "period": "Período",
+      "gross": "Salário bruto",
+      "net": "Líquido",
+      "taxes": "Impostos",
+      "deductions": "Deduções",
+      "overtime": "Horas extras",
+      "employees": "Funcionários",
+      "absentDays": "Dias falta",
+      "byDepartment": "Por departamento"
     },
     "attendance": {
-        "title": "Presenças",
-        "myDescription": "Registe a sua entrada e saída",
-        "allDescription": "Vista geral dos registos de presença",
-        "clockIn": "Registar Entrada",
-        "clockOut": "Registar Saída",
-        "myHistory": "O meu histórico",
-        "qr": {
-            "cta": "Mostrar QR Code",
-            "title": "QR Code de registo",
-            "description": "Apresente este código no terminal de presença. O código expira em segundos.",
-            "expiresIn": "Expira em",
-            "refresh": "Gerar novo código",
-            "regenerating": "A regenerar…",
-            "scanSuccess": "Registo efetuado com sucesso"
-        }
+      "summary": "Resumo",
+      "records": "Registos",
+      "totalHours": "Horas totais",
+      "lateMinutes": "Minutos de atraso",
+      "overtimeMinutes": "Minutos extra",
+      "leavesApproved": "Férias aprovadas",
+      "leavesPending": "Férias pendentes",
+      "byStatus": "Por estado",
+      "byDepartment": "Por departamento"
     },
-    "leave": {
-        "title": "Férias e Ausências",
-        "newRequest": "Novo Pedido"
+    "empty": "Sem dados para o período selecionado.",
+    "loading": "A gerar relatório…",
+    "error": "Não foi possível gerar o relatório."
+  },
+  "recruitment": {
+    "title": "Recrutamento",
+    "description": "Gestão de vagas e candidatos com pipeline de seleção.",
+    "tabs": {
+      "jobs": "Vagas",
+      "candidates": "Candidatos"
     },
-    "documents": {
-        "title": "Documentos"
+    "newJob": "Nova vaga",
+    "editJob": "Editar vaga",
+    "newCandidate": "Adicionar candidato",
+    "job": {
+      "title": "Título",
+      "department": "Departamento",
+      "position": "Cargo",
+      "location": "Localização",
+      "employmentType": "Tipo de contrato",
+      "experienceLevel": "Experiência",
+      "salaryMin": "Salário mínimo",
+      "salaryMax": "Salário máximo",
+      "currency": "Moeda",
+      "openingsCount": "Nº de vagas",
+      "description": "Descrição",
+      "requirements": "Requisitos",
+      "status": "Estado",
+      "publishedAt": "Publicada em",
+      "closesAt": "Data limite",
+      "candidates": "Candidatos",
+      "actions": {
+        "publish": "Publicar",
+        "close": "Fechar",
+        "reopen": "Reabrir"
+      }
     },
-    "reports": {
-        "title": "Relatórios",
-        "description": "Análise agregada de headcount, turnover, payroll e presenças.",
-        "tabs": {
-            "headcount": "Headcount",
-            "turnover": "Turnover",
-            "payroll": "Payroll",
-            "attendance": "Presenças"
-        },
-        "filters": {
-            "startDate": "Data inicial",
-            "endDate": "Data final",
-            "apply": "Aplicar",
-            "reset": "Repor",
-            "last6": "Últimos 6 meses",
-            "last12": "Últimos 12 meses"
-        },
-        "export": "Exportar CSV",
-        "headcount": {
-            "summary": "Resumo",
-            "total": "Total",
-            "active": "Ativos",
-            "hired": "Admitidos no período",
-            "terminated": "Desligados no período",
-            "byDepartment": "Por departamento",
-            "byStatus": "Por estado",
-            "trend": "Evolução mensal"
-        },
-        "turnover": {
-            "summary": "Resumo",
-            "hired": "Admissões",
-            "terminated": "Desligamentos",
-            "averageHeadcount": "Headcount médio",
-            "rate": "Taxa de turnover",
-            "monthly": "Mensal",
-            "byReason": "Motivos de desligamento"
-        },
-        "payroll": {
-            "totals": "Totais",
-            "period": "Período",
-            "gross": "Salário bruto",
-            "net": "Líquido",
-            "taxes": "Impostos",
-            "deductions": "Deduções",
-            "overtime": "Horas extras",
-            "employees": "Funcionários",
-            "absentDays": "Dias falta",
-            "byDepartment": "Por departamento"
-        },
-        "attendance": {
-            "summary": "Resumo",
-            "records": "Registos",
-            "totalHours": "Horas totais",
-            "lateMinutes": "Minutos de atraso",
-            "overtimeMinutes": "Minutos extra",
-            "leavesApproved": "Férias aprovadas",
-            "leavesPending": "Férias pendentes",
-            "byStatus": "Por estado",
-            "byDepartment": "Por departamento"
-        },
-        "empty": "Sem dados para o período selecionado.",
-        "loading": "A gerar relatório…",
-        "error": "Não foi possível gerar o relatório."
+    "candidate": {
+      "name": "Nome",
+      "email": "Email",
+      "phone": "Telefone",
+      "yearsExperience": "Anos exp.",
+      "source": "Origem",
+      "status": "Estado",
+      "rating": "Avaliação",
+      "expectedSalary": "Salário esperado",
+      "appliedAt": "Candidatura em",
+      "move": "Mover para",
+      "addToJob": "Adicionar à vaga"
     },
-    "recruitment": {
-        "title": "Recrutamento",
-        "description": "Gestão de vagas e candidatos com pipeline de seleção.",
-        "tabs": {
-            "jobs": "Vagas",
-            "candidates": "Candidatos"
-        },
-        "newJob": "Nova vaga",
-        "editJob": "Editar vaga",
-        "newCandidate": "Adicionar candidato",
-        "job": {
-            "title": "Título",
-            "department": "Departamento",
-            "position": "Cargo",
-            "location": "Localização",
-            "employmentType": "Tipo de contrato",
-            "experienceLevel": "Experiência",
-            "salaryMin": "Salário mínimo",
-            "salaryMax": "Salário máximo",
-            "currency": "Moeda",
-            "openingsCount": "Nº de vagas",
-            "description": "Descrição",
-            "requirements": "Requisitos",
-            "status": "Estado",
-            "publishedAt": "Publicada em",
-            "closesAt": "Data limite",
-            "candidates": "Candidatos",
-            "actions": {
-                "publish": "Publicar",
-                "close": "Fechar",
-                "reopen": "Reabrir"
-            }
-        },
-        "candidate": {
-            "name": "Nome",
-            "email": "Email",
-            "phone": "Telefone",
-            "yearsExperience": "Anos exp.",
-            "source": "Origem",
-            "status": "Estado",
-            "rating": "Avaliação",
-            "expectedSalary": "Salário esperado",
-            "appliedAt": "Candidatura em",
-            "move": "Mover para",
-            "addToJob": "Adicionar à vaga"
-        },
-        "statuses": {
-            "draft": "Rascunho",
-            "open": "Aberta",
-            "on_hold": "Em pausa",
-            "closed": "Fechada",
-            "cancelled": "Cancelada",
-            "applied": "Candidatura recebida",
-            "screening": "Triagem",
-            "interview": "Em entrevista",
-            "test": "Em avaliação",
-            "offer": "Oferta enviada",
-            "hired": "Contratado",
-            "rejected": "Rejeitado",
-            "withdrawn": "Desistiu"
-        },
-        "empty": "Sem dados para mostrar.",
-        "loading": "A carregar…",
-        "error": "Não foi possível carregar.",
-        "saved": "Guardado com sucesso.",
-        "deleted": "Removido com sucesso."
+    "statuses": {
+      "draft": "Rascunho",
+      "open": "Aberta",
+      "on_hold": "Em pausa",
+      "closed": "Fechada",
+      "cancelled": "Cancelada",
+      "applied": "Candidatura recebida",
+      "screening": "Triagem",
+      "interview": "Em entrevista",
+      "test": "Em avaliação",
+      "offer": "Oferta enviada",
+      "hired": "Contratado",
+      "rejected": "Rejeitado",
+      "withdrawn": "Desistiu"
     },
-    "performance": {
-        "title": "Avaliação de Desempenho",
-        "description": "Ciclos de avaliação, critérios e scoring dos funcionários.",
-        "newEvaluation": "Nova avaliação",
-        "period": "Período",
-        "cycle": "Ciclo",
-        "cycleOptions": {
-            "monthly": "Mensal",
-            "quarterly": "Trimestral",
-            "semi_annual": "Semestral",
-            "annual": "Anual",
-            "probation": "Período experimental"
-        },
-        "score": "Pontuação",
-        "criteria": "Critérios",
-        "strengths": "Pontos fortes",
-        "improvements": "A melhorar",
-        "goals": "Objetivos",
-        "comments": "Comentários",
-        "statuses": {
-            "draft": "Rascunho",
-            "submitted": "Submetida",
-            "approved": "Aprovada",
-            "rejected": "Rejeitada"
-        },
-        "actions": {
-            "submit": "Submeter",
-            "approve": "Aprovar",
-            "reject": "Rejeitar"
-        },
-        "empty": "Sem avaliações para mostrar.",
-        "loading": "A carregar…",
-        "error": "Não foi possível carregar."
+    "empty": "Sem dados para mostrar.",
+    "loading": "A carregar…",
+    "error": "Não foi possível carregar.",
+    "saved": "Guardado com sucesso.",
+    "deleted": "Removido com sucesso."
+  },
+  "performance": {
+    "title": "Avaliação de Desempenho",
+    "description": "Ciclos de avaliação, critérios e scoring dos funcionários.",
+    "newEvaluation": "Nova avaliação",
+    "period": "Período",
+    "cycle": "Ciclo",
+    "cycleOptions": {
+      "monthly": "Mensal",
+      "quarterly": "Trimestral",
+      "semi_annual": "Semestral",
+      "annual": "Anual",
+      "probation": "Período experimental"
     },
-    "onboarding": {
-        "title": "Onboarding",
-        "description": "Templates e tarefas de integração de novos funcionários.",
-        "tabs": {
-            "templates": "Templates",
-            "tasks": "Tarefas"
-        },
-        "newTemplate": "Novo template",
-        "newTask": "Nova tarefa",
-        "template": {
-            "name": "Nome",
-            "description": "Descrição",
-            "is_active": "Ativo",
-            "tasks": "Tarefas",
-            "addTask": "Adicionar tarefa"
-        },
-        "task": {
-            "title": "Título",
-            "description": "Descrição",
-            "due_days": "Dias limite",
-            "due_date": "Data limite",
-            "assignee": "Responsável",
-            "employee": "Funcionário",
-            "status": "Estado",
-            "complete": "Concluir",
-            "assignTo": "Atribuir a"
-        },
-        "statuses": {
-            "pending": "Pendente",
-            "in_progress": "Em curso",
-            "completed": "Concluída",
-            "cancelled": "Cancelada"
-        },
-        "empty": "Sem dados para mostrar.",
-        "loading": "A carregar…",
-        "error": "Não foi possível carregar."
+    "score": "Pontuação",
+    "criteria": "Critérios",
+    "strengths": "Pontos fortes",
+    "improvements": "A melhorar",
+    "goals": "Objetivos",
+    "comments": "Comentários",
+    "statuses": {
+      "draft": "Rascunho",
+      "submitted": "Submetida",
+      "approved": "Aprovada",
+      "rejected": "Rejeitada"
     },
-    "trainingPage": {
-        "title": "Formação",
-        "description": "Catálogo de formações, inscrições e conclusão.",
-        "newTraining": "Nova formação",
-        "training": {
-            "title": "Título",
-            "description": "Descrição",
-            "category": "Categoria",
-            "duration_hours": "Duração (h)",
-            "provider": "Formador",
-            "location": "Local",
-            "cost": "Custo",
-            "max_participants": "Máx. participantes",
-            "start_date": "Data início",
-            "end_date": "Data fim",
-            "status": "Estado",
-            "notes": "Notas"
-        },
-        "categoryOptions": {
-            "technical": "Técnica",
-            "soft_skills": "Competências pessoais",
-            "leadership": "Liderança",
-            "compliance": "Conformidade",
-            "safety": "Segurança",
-            "onboarding": "Integração",
-            "other": "Outra"
-        },
-        "statuses": {
-            "planned": "Planejada",
-            "open": "Aberta",
-            "in_progress": "Em curso",
-            "completed": "Concluída",
-            "cancelled": "Cancelada"
-        },
-        "actions": {
-            "enroll": "Inscrever",
-            "complete": "Concluir"
-        },
-        "participants": "Participantes",
-        "assignment": {
-            "employee": "Funcionário",
-            "status": "Estado",
-            "score": "Nota",
-            "notes": "Notas"
-        },
-        "assignmentStatuses": {
-            "enrolled": "Inscrito",
-            "in_progress": "Em curso",
-            "completed": "Concluído",
-            "cancelled": "Cancelado",
-            "no_show": "Não compareceu"
-        },
-        "empty": "Sem formações para mostrar.",
-        "loading": "A carregar…",
-        "error": "Não foi possível carregar."
+    "actions": {
+      "submit": "Submeter",
+      "approve": "Aprovar",
+      "reject": "Rejeitar"
     },
-    "benefitsPage": {
-        "eyebrow": "COMPENSAÇÃO",
-        "title": "Benefícios",
-        "description": "Gestão de benefícios atribuídos aos funcionários (seguros, subsídios, regalias).",
-        "newBenefit": "Novo Benefício",
-        "editBenefit": "Editar Benefício",
-        "searchPlaceholder": "Pesquisar benefício…",
-        "employee": "Funcionário",
-        "name": "Nome",
-        "type": "Tipo",
-        "amount": "Valor",
-        "percentage": "Percentagem",
-        "amountType": "Tipo de valor",
-        "amountTypes": {
-            "fixed": "Valor fixo",
-            "percentage": "Percentagem"
-        },
-        "provider": "Fornecedor",
-        "period": "Período",
-        "startDate": "Data de início",
-        "endDate": "Data de fim",
-        "status": "Estado",
-        "statuses": {
-            "active": "Ativo",
-            "inactive": "Inativo"
-        },
-        "taxable": "Tributável",
-        "typeOptions": {
-            "health_insurance": "Seguro de Saúde",
-            "transport": "Subsídio de Transporte",
-            "meal": "Subsídio de Alimentação",
-            "housing": "Alojamento",
-            "vehicle": "Veículo",
-            "phone": "Telefone",
-            "education": "Educação",
-            "gym": "Ginásio",
-            "other": "Outro"
-        },
-        "empty": "Sem benefícios registados.",
-        "emptyDescription": "Crie o primeiro benefício para começar.",
-        "deleteConfirm": "Eliminar benefício",
-        "error": "Não foi possível carregar."
+    "empty": "Sem avaliações para mostrar.",
+    "loading": "A carregar…",
+    "error": "Não foi possível carregar."
+  },
+  "onboarding": {
+    "title": "Onboarding",
+    "description": "Templates e tarefas de integração de novos funcionários.",
+    "tabs": {
+      "templates": "Templates",
+      "tasks": "Tarefas"
     },
-    "deductionsPage": {
-        "eyebrow": "COMPENSAÇÃO",
-        "title": "Descontos",
-        "description": "Gestão de descontos salariais (empréstimos, adiantamentos, pensões).",
-        "newDeduction": "Novo Desconto",
-        "editDeduction": "Editar Desconto",
-        "searchPlaceholder": "Pesquisar desconto…",
-        "employee": "Funcionário",
-        "name": "Nome",
-        "type": "Tipo",
-        "amount": "Valor",
-        "percentage": "Percentagem",
-        "amountType": "Tipo de valor",
-        "amountTypes": {
-            "fixed": "Valor fixo",
-            "percentage": "Percentagem"
-        },
-        "status": "Estado",
-        "statuses": {
-            "active": "Ativa",
-            "paused": "Pausada",
-            "completed": "Concluída",
-            "cancelled": "Cancelada"
-        },
-        "typeOptions": {
-            "loan": "Empréstimo",
-            "advance": "Adiantamento",
-            "pension": "Pensão Alimentícia",
-            "insurance": "Seguro",
-            "garnishment": "Penhora",
-            "union_fee": "Quota Sindical",
-            "other": "Outro"
-        },
-        "progress": "Progresso",
-        "recurring": "Recorrente",
-        "installments": "Prestações",
-        "installmentCount": "Nº de prestações",
-        "installmentAmount": "Valor por prestação",
-        "totalAmount": "Valor total",
-        "empty": "Sem descontos registados.",
-        "emptyDescription": "Crie o primeiro desconto para começar.",
-        "deleteConfirm": "Eliminar desconto",
-        "error": "Não foi possível carregar."
+    "newTemplate": "Novo template",
+    "newTask": "Nova tarefa",
+    "template": {
+      "name": "Nome",
+      "description": "Descrição",
+      "is_active": "Ativo",
+      "tasks": "Tarefas",
+      "addTask": "Adicionar tarefa"
     },
-    "superAdminDashboard": {
-        "title": "Dashboard Super Admin",
-        "subtitle": "Visão global de todos os tenants e utilizadores da plataforma.",
-        "manageTenants": "Gerir organização",
-        "tenantTrend": "Crescimento de Tenants",
-        "byStatus": "Distribuição por Estado",
-        "segments": "Segmentação por dimensão",
-        "tenantsTable": "Tenants",
-        "tenantsTableDescription": "Todos os tenants da plataforma"
+    "task": {
+      "title": "Título",
+      "description": "Descrição",
+      "due_days": "Dias limite",
+      "due_date": "Data limite",
+      "assignee": "Responsável",
+      "employee": "Funcionário",
+      "status": "Estado",
+      "complete": "Concluir",
+      "assignTo": "Atribuir a"
     },
-    "emailTemplates": {
-        "eyebrow": "COMUNICAÇÃO",
-        "title": "Templates de Email",
-        "description": "Gerir templates de email para notificações automáticas",
-        "newTemplate": "Novo Template",
-        "editTemplate": "Editar Template",
-        "searchPlaceholder": "Pesquisar templates…",
-        "name": "Nome",
-        "code": "Código",
-        "event": "Evento",
-        "subject": "Assunto",
-        "body": "Corpo",
-        "status": "Estado",
-        "active": "Ativo",
-        "inactive": "Inativo",
-        "system": "Sistema",
-        "preview": "Pré-visualizar",
-        "empty": "Nenhum template criado",
-        "emptyDescription": "Crie o primeiro template de email para começar.",
-        "deleteConfirm": "Tem a certeza que pretende remover este template?",
-        "error": "Erro ao guardar template",
-        "events": {
-            "all": "Todos os eventos",
-            "employee_created": "Admissão de funcionário",
-            "leave_approved": "Férias aprovadas",
-            "payslip_available": "Recibo disponível",
-            "contract_expiring": "Contrato a expirar",
-            "custom": "Personalizado"
-        }
+    "statuses": {
+      "pending": "Pendente",
+      "in_progress": "Em curso",
+      "completed": "Concluída",
+      "cancelled": "Cancelada"
+    },
+    "empty": "Sem dados para mostrar.",
+    "loading": "A carregar…",
+    "error": "Não foi possível carregar."
+  },
+  "trainingPage": {
+    "title": "Formação",
+    "description": "Catálogo de formações, inscrições e conclusão.",
+    "newTraining": "Nova formação",
+    "training": {
+      "title": "Título",
+      "description": "Descrição",
+      "category": "Categoria",
+      "duration_hours": "Duração (h)",
+      "provider": "Formador",
+      "location": "Local",
+      "cost": "Custo",
+      "max_participants": "Máx. participantes",
+      "start_date": "Data início",
+      "end_date": "Data fim",
+      "status": "Estado",
+      "notes": "Notas"
+    },
+    "categoryOptions": {
+      "technical": "Técnica",
+      "soft_skills": "Competências pessoais",
+      "leadership": "Liderança",
+      "compliance": "Conformidade",
+      "safety": "Segurança",
+      "onboarding": "Integração",
+      "other": "Outra"
+    },
+    "statuses": {
+      "planned": "Planejada",
+      "open": "Aberta",
+      "in_progress": "Em curso",
+      "completed": "Concluída",
+      "cancelled": "Cancelada"
+    },
+    "actions": {
+      "enroll": "Inscrever",
+      "complete": "Concluir"
+    },
+    "participants": "Participantes",
+    "assignment": {
+      "employee": "Funcionário",
+      "status": "Estado",
+      "score": "Nota",
+      "notes": "Notas"
+    },
+    "assignmentStatuses": {
+      "enrolled": "Inscrito",
+      "in_progress": "Em curso",
+      "completed": "Concluído",
+      "cancelled": "Cancelado",
+      "no_show": "Não compareceu"
+    },
+    "empty": "Sem formações para mostrar.",
+    "loading": "A carregar…",
+    "error": "Não foi possível carregar."
+  },
+  "benefitsPage": {
+    "eyebrow": "COMPENSAÇÃO",
+    "title": "Benefícios",
+    "description": "Gestão de benefícios atribuídos aos funcionários (seguros, subsídios, regalias).",
+    "newBenefit": "Novo Benefício",
+    "editBenefit": "Editar Benefício",
+    "searchPlaceholder": "Pesquisar benefício…",
+    "employee": "Funcionário",
+    "name": "Nome",
+    "type": "Tipo",
+    "amount": "Valor",
+    "percentage": "Percentagem",
+    "amountType": "Tipo de valor",
+    "amountTypes": {
+      "fixed": "Valor fixo",
+      "percentage": "Percentagem"
+    },
+    "provider": "Fornecedor",
+    "period": "Período",
+    "startDate": "Data de início",
+    "endDate": "Data de fim",
+    "status": "Estado",
+    "statuses": {
+      "active": "Ativo",
+      "inactive": "Inativo"
+    },
+    "taxable": "Tributável",
+    "typeOptions": {
+      "health_insurance": "Seguro de Saúde",
+      "transport": "Subsídio de Transporte",
+      "meal": "Subsídio de Alimentação",
+      "housing": "Alojamento",
+      "vehicle": "Veículo",
+      "phone": "Telefone",
+      "education": "Educação",
+      "gym": "Ginásio",
+      "other": "Outro"
+    },
+    "empty": "Sem benefícios registados.",
+    "emptyDescription": "Crie o primeiro benefício para começar.",
+    "deleteConfirm": "Eliminar benefício",
+    "error": "Não foi possível carregar."
+  },
+  "deductionsPage": {
+    "eyebrow": "COMPENSAÇÃO",
+    "title": "Descontos",
+    "description": "Gestão de descontos salariais (empréstimos, adiantamentos, pensões).",
+    "newDeduction": "Novo Desconto",
+    "editDeduction": "Editar Desconto",
+    "searchPlaceholder": "Pesquisar desconto…",
+    "employee": "Funcionário",
+    "name": "Nome",
+    "type": "Tipo",
+    "amount": "Valor",
+    "percentage": "Percentagem",
+    "amountType": "Tipo de valor",
+    "amountTypes": {
+      "fixed": "Valor fixo",
+      "percentage": "Percentagem"
+    },
+    "status": "Estado",
+    "statuses": {
+      "active": "Ativa",
+      "paused": "Pausada",
+      "completed": "Concluída",
+      "cancelled": "Cancelada"
+    },
+    "typeOptions": {
+      "loan": "Empréstimo",
+      "advance": "Adiantamento",
+      "pension": "Pensão Alimentícia",
+      "insurance": "Seguro",
+      "garnishment": "Penhora",
+      "union_fee": "Quota Sindical",
+      "other": "Outro"
+    },
+    "progress": "Progresso",
+    "recurring": "Recorrente",
+    "installments": "Prestações",
+    "installmentCount": "Nº de prestações",
+    "installmentAmount": "Valor por prestação",
+    "totalAmount": "Valor total",
+    "empty": "Sem descontos registados.",
+    "emptyDescription": "Crie o primeiro desconto para começar.",
+    "deleteConfirm": "Eliminar desconto",
+    "error": "Não foi possível carregar."
+  },
+  "superAdminDashboard": {
+    "title": "Dashboard Super Admin",
+    "subtitle": "Visão global de todos os tenants e utilizadores da plataforma.",
+    "manageTenants": "Gerir organização",
+    "tenantTrend": "Crescimento de Tenants",
+    "byStatus": "Distribuição por Estado",
+    "segments": "Segmentação por dimensão",
+    "tenantsTable": "Tenants",
+    "tenantsTableDescription": "Todos os tenants da plataforma"
+  },
+  "emailTemplates": {
+    "eyebrow": "COMUNICAÇÃO",
+    "title": "Templates de Email",
+    "description": "Gerir templates de email para notificações automáticas",
+    "newTemplate": "Novo Template",
+    "editTemplate": "Editar Template",
+    "searchPlaceholder": "Pesquisar templates…",
+    "name": "Nome",
+    "code": "Código",
+    "event": "Evento",
+    "subject": "Assunto",
+    "body": "Corpo",
+    "status": "Estado",
+    "active": "Ativo",
+    "inactive": "Inativo",
+    "system": "Sistema",
+    "preview": "Pré-visualizar",
+    "empty": "Nenhum template criado",
+    "emptyDescription": "Crie o primeiro template de email para começar.",
+    "deleteConfirm": "Tem a certeza que pretende remover este template?",
+    "error": "Erro ao guardar template",
+    "events": {
+      "all": "Todos os eventos",
+      "employee_created": "Admissão de funcionário",
+      "leave_approved": "Férias aprovadas",
+      "payslip_available": "Recibo disponível",
+      "contract_expiring": "Contrato a expirar",
+      "custom": "Personalizado"
     }
+  }
 }

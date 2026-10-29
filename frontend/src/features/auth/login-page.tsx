@@ -86,6 +86,9 @@ export function LoginPage() {
           </form>
           <div className="mt-6 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
             <p className="mb-1 font-medium">Contas de demonstração</p>
+            <p className="mb-0.5 font-semibold text-primary">Super Admin (plataforma):</p>
+            <p>Super Admin: <code>superadmin@hrms.local</code> / <code>password</code></p>
+            <p className="mt-1.5 mb-0.5 font-semibold">Empresa Demo:</p>
             <p>Admin: <code>admin@empresa-demo.local</code> / <code>password</code></p>
             <p>HR: <code>joao.silva@empresa-demo.local</code> / <code>password</code></p>
             <p>Funcionário: <code>ana.costa@empresa-demo.local</code> / <code>password</code></p>
