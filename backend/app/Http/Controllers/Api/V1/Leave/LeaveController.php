@@ -24,11 +24,15 @@ class LeaveController extends BaseController
         return $this->success(LeaveType::query()->where('is_active', true)->get());
     }
 
-    public function balance(): JsonResponse
+    public function balance(Request $request): JsonResponse
     {
-        $employee = auth()->user()->employee;
+        $employeeId = $request->filled('employee_id')
+            ? $request->integer('employee_id')
+            : auth()->user()->employee?->id;
+
+        $employee = $employeeId ? Employee::find($employeeId) : null;
         if (! $employee) {
-            return $this->error('Utilizador sem funcionário associado.', 422);
+            return $this->error('Funcionário não encontrado.', 422);
         }
 
         $annual = (int) ($this->setting('leave.vacation_days_per_year') ?? 22);
@@ -43,9 +47,9 @@ class LeaveController extends BaseController
 
         return $this->success([
             'annual_entitlement' => $annual,
-            'days_used' => $daysUsed,
-            'days_remaining' => max(0, $annual - $daysUsed),
-            'days_pending' => $pending,
+            'days_used' => (int) $daysUsed,
+            'days_remaining' => max(0, $annual - (int) $daysUsed),
+            'days_pending' => (int) $pending,
         ]);
     }
 
@@ -55,6 +59,7 @@ class LeaveController extends BaseController
 
         $requests = LeaveRequest::query()
             ->with(['employee', 'leaveType', 'approvedBy'])
+            ->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))
             ->when($request->string('status')->toString(), fn ($q, $s) => $q->where('status', $s))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 20));
@@ -82,7 +87,11 @@ class LeaveController extends BaseController
         $this->authorize('create', LeaveRequest::class);
 
         $validated = $request->validated();
-        $employee = auth()->user()->employee ?? Employee::find($validated['employee_id'] ?? null);
+        $employeeId = $request->filled('employee_id')
+            ? $request->integer('employee_id')
+            : auth()->user()->employee?->id;
+
+        $employee = Employee::find($employeeId);
 
         if (! $employee) {
             return $this->error('Funcionário não encontrado.', 422);
@@ -92,25 +101,31 @@ class LeaveController extends BaseController
         $end = Carbon::parse($validated['end_date']);
         $totalDays = $start->diffInDays($end) + 1;
 
+        $status = $request->input('status', 'approved');
+
         $leave = LeaveRequest::create([
-            'employee_id' => $request->boolean('for_another') ? ($employee->id ?? $validated['employee_id']) : $employee->id,
-            'tenant_id' => tenant_id(),
+            'employee_id' => $employee->id,
+            'tenant_id' => tenant_id() ?: $employee->tenant_id,
             'leave_type_id' => $validated['leave_type_id'],
             'start_date' => $start->format('Y-m-d'),
             'end_date' => $end->format('Y-m-d'),
             'total_days' => $totalDays,
             'reason' => $validated['reason'] ?? null,
-            'status' => 'pending',
+            'status' => $status,
+            'approved_by' => $status === 'approved' ? auth()->id() : null,
+            'approved_at' => $status === 'approved' ? now() : null,
         ]);
 
-        $this->notifyApprovers(
-            $employee->first_name.' '.$employee->last_name,
-            $totalDays,
-            $start->format('d/m/Y'),
-            $end->format('d/m/Y'),
-        );
+        if ($status === 'pending') {
+            $this->notifyApprovers(
+                $employee->first_name.' '.$employee->last_name,
+                $totalDays,
+                $start->format('d/m/Y'),
+                $end->format('d/m/Y'),
+            );
+        }
 
-        return $this->success(new LeaveRequestResource($leave->load(['employee', 'leaveType'])), 'Pedido de férias criado.', 201);
+        return $this->success(new LeaveRequestResource($leave->load(['employee', 'leaveType'])), 'Registo de ausência/férias criado com sucesso.', 201);
     }
 
     public function approve(LeaveRequest $leave): JsonResponse

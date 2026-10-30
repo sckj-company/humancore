@@ -83,6 +83,7 @@ Route::prefix('v1')->group(function () {
 
         // Presenças
         Route::post('attendance/toggle', [AttendanceController::class, 'toggle']);
+        Route::post('attendance/manual', [AttendanceController::class, 'storeManual']);
         Route::get('attendance/today', [AttendanceController::class, 'today']);
         Route::get('attendance/my-history', [AttendanceController::class, 'myHistory']);
         Route::get('attendance', [AttendanceController::class, 'index']);
@@ -101,6 +102,7 @@ Route::prefix('v1')->group(function () {
 
         Route::apiResource('recruitment/candidates', CandidateController::class);
         Route::post('recruitment/candidates/{candidate}/move', [CandidateController::class, 'move']);
+        Route::post('recruitment/candidates/{candidate}/hire', [CandidateController::class, 'hire']);
 
         // Férias / Ausências
         Route::get('leave/types', [LeaveController::class, 'types']);
@@ -111,6 +113,11 @@ Route::prefix('v1')->group(function () {
         Route::post('leave/{leave}/approve', [LeaveController::class, 'approve']);
         Route::post('leave/{leave}/reject', [LeaveController::class, 'reject']);
         Route::post('leave/{leave}/cancel', [LeaveController::class, 'cancel']);
+        // Aliases para plural (leaves)
+        Route::get('leaves/types', [LeaveController::class, 'types']);
+        Route::get('leaves/balance', [LeaveController::class, 'balance']);
+        Route::get('leaves', [LeaveController::class, 'index']);
+        Route::post('leaves', [LeaveController::class, 'store']);
 
         // Settings
         Route::get('settings', [SettingController::class, 'index']);

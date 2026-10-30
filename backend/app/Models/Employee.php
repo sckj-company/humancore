@@ -128,6 +128,16 @@ class Employee extends Model
         return $this->hasMany(PayrollRecord::class);
     }
 
+    public function schedules()
+    {
+        return $this->hasMany(EmployeeSchedule::class);
+    }
+
+    public function activeSchedule()
+    {
+        return $this->hasOne(EmployeeSchedule::class)->where('is_active', true)->latestOfMany();
+    }
+
     public function getFullNameAttribute(): string
     {
         return trim($this->first_name.' '.$this->last_name);

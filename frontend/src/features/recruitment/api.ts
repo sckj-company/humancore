@@ -156,3 +156,30 @@ export const useDeleteCandidate = () => {
     },
   })
 }
+
+export interface HirePayload {
+  contract_type: string
+  base_salary: number
+  salary_frequency: string
+  work_hours_per_week?: number
+  start_date: string
+  end_date?: string | null
+  department_id?: number | null
+  position_id?: number | null
+  manager_id?: number | null
+  notes?: string | null
+}
+
+export const useHireCandidate = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: HirePayload }) =>
+      api.post<{ candidate: Candidate; employee: unknown; contract: unknown }>(`recruitment/candidates/${id}/hire`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recruitment-candidates'] })
+      qc.invalidateQueries({ queryKey: ['recruitment-candidates-by-job'] })
+      qc.invalidateQueries({ queryKey: ['employees'] })
+    },
+  })
+}
+

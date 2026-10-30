@@ -65,6 +65,15 @@ class EmployeeScheduleController extends BaseController
         $data['tenant_id'] = tenant_id();
         $data['assigned_by'] = $request->user()->id;
 
+        $isActive = $data['is_active'] ?? true;
+        if ($isActive) {
+            EmployeeSchedule::query()
+                ->where('employee_id', $data['employee_id'])
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+            $data['is_active'] = true;
+        }
+
         $schedule = EmployeeSchedule::query()->create($data);
 
         return $this->success(

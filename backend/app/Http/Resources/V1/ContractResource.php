@@ -22,6 +22,7 @@ class ContractResource extends JsonResource
             'is_active' => $this->is_active,
             'signed_at' => $this->signed_at?->format('Y-m-d'),
             'document_path' => $this->document_path,
+            'document_url' => $this->document_path ? (str_starts_with($this->document_path, 'http') ? $this->document_path : url($this->document_path)) : null,
             'notes' => $this->notes,
             'position_id' => $this->position_id,
             'department_id' => $this->department_id,

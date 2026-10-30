@@ -137,7 +137,12 @@ class AuthController extends BaseController
             return $this->error('Utilizador sem funcionário associado.', 422);
         }
 
-        $path = $request->file('avatar')->store('employees/'.$user->employee->id.'/avatars', 'public');
+        $cld = app(\App\Services\CloudinaryService::class)->upload(
+            $request->file('avatar'),
+            'humancore/employees/'.$user->employee->id.'/avatars',
+            'image'
+        );
+        $path = $cld['url'];
         $user->employee->update(['photo_path' => $path]);
 
         return $this->success([

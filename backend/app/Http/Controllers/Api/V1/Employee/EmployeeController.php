@@ -62,9 +62,12 @@ class EmployeeController extends BaseController
 
             if ($request->hasFile('photo')) {
                 $photoFile = $request->file('photo');
-                $photoFilename = time().'_'.uniqid().'.'.$photoFile->getClientOriginalExtension();
-                $photoFile->move(public_path('uploads/photos'), $photoFilename);
-                $employeeData['photo_path'] = '/uploads/photos/'.$photoFilename;
+                $cldPhoto = app(\App\Services\CloudinaryService::class)->upload(
+                    $photoFile,
+                    'humancore/tenants/'.($employeeData['tenant_id'] ?? tenant_id()).'/photos',
+                    'image'
+                );
+                $employeeData['photo_path'] = $cldPhoto['url'];
             }
 
             /** @var Employee $employee */
@@ -78,11 +81,15 @@ class EmployeeController extends BaseController
 
             if ($hasContractInfo) {
                 $contractDocPath = null;
+                $contractFile = null;
                 if ($request->hasFile('contract_file')) {
                     $contractFile = $request->file('contract_file');
-                    $contractFilename = time().'_'.uniqid().'.'.$contractFile->getClientOriginalExtension();
-                    $contractFile->move(public_path('uploads/contracts'), $contractFilename);
-                    $contractDocPath = '/uploads/contracts/'.$contractFilename;
+                    $cldContract = app(\App\Services\CloudinaryService::class)->upload(
+                        $contractFile,
+                        'humancore/tenants/'.$employee->tenant_id.'/contracts',
+                        'auto'
+                    );
+                    $contractDocPath = $cldContract['url'];
                 }
 
                 EmployeeContract::query()->create([
@@ -103,11 +110,10 @@ class EmployeeController extends BaseController
                     'is_active' => true,
                 ]);
 
-                if ($contractDocPath && $request->hasFile('contract_file')) {
-                    $contractFile = $request->file('contract_file');
+                if ($contractDocPath && $contractFile) {
                     EmployeeDocument::query()->create([
                         'employee_id' => $employee->id,
-                        'tenant_id' => tenant_id(),
+                        'tenant_id' => $employee->tenant_id,
                         'uploader_id' => $request->user()->id,
                         'name' => 'Contrato de Trabalho',
                         'document_type' => 'contract',
@@ -125,22 +131,23 @@ class EmployeeController extends BaseController
                 $files = $request->file('documents');
                 $docNames = $request->input('document_names', []);
                 $docTypes = $request->input('document_types', []);
+                $cld = app(\App\Services\CloudinaryService::class);
 
                 foreach ($files as $idx => $docFile) {
-                    $docFilename = time().'_'.uniqid().'_'.str_replace(' ', '_', $docFile->getClientOriginalName());
-                    $docFile->move(public_path('uploads/documents'), $docFilename);
-                    $docUrl = '/uploads/documents/'.$docFilename;
+                    $folder = 'humancore/tenants/'.$employee->tenant_id.'/documents';
+                    $uploadRes = $cld->upload($docFile, $folder, 'auto');
+                    $docUrl = $uploadRes['url'];
 
                     EmployeeDocument::query()->create([
                         'employee_id' => $employee->id,
-                        'tenant_id' => tenant_id(),
+                        'tenant_id' => $employee->tenant_id,
                         'uploader_id' => $request->user()->id,
                         'name' => $docNames[$idx] ?? $docFile->getClientOriginalName(),
                         'document_type' => $docTypes[$idx] ?? 'other',
                         'file_path' => $docUrl,
                         'original_name' => $docFile->getClientOriginalName(),
                         'mime_type' => $docFile->getMimeType(),
-                        'file_size' => $docFile->getSize(),
+                        'file_size' => $uploadRes['bytes'] ?? $docFile->getSize(),
                         'is_confidential' => false,
                     ]);
                 }
@@ -160,7 +167,7 @@ class EmployeeController extends BaseController
     {
         $this->authorize('view', $employee);
 
-        return $this->success(new EmployeeResource($employee->load('department', 'position', 'manager', 'activeContract')));
+        return $this->success(new EmployeeResource($employee->load('department', 'position', 'manager', 'activeContract', 'activeSchedule.shift')));
     }
 
     public function update(UpdateEmployeeRequest $request, Employee $employee): JsonResponse
@@ -170,7 +177,13 @@ class EmployeeController extends BaseController
         $data = $request->validated();
 
         if ($request->hasFile('photo')) {
-            $data['photo_path'] = $request->file('photo')->store('tenants/'.tenant_id().'/employees/photos', 'public');
+            $tenantId = tenant_id() ?? $employee->tenant_id;
+            $cld = app(\App\Services\CloudinaryService::class)->upload(
+                $request->file('photo'),
+                'humancore/tenants/'.$tenantId.'/photos',
+                'image'
+            );
+            $data['photo_path'] = $cld['url'];
         }
 
         $employee->update($data);
@@ -205,7 +218,12 @@ class EmployeeController extends BaseController
 
         $documentPath = null;
         if ($request->hasFile('document')) {
-            $documentPath = $request->file('document')->store('tenants/'.tenant_id().'/employees/contracts', 'public');
+            $cld = app(\App\Services\CloudinaryService::class)->upload(
+                $request->file('document'),
+                'humancore/tenants/'.$employee->tenant_id.'/contracts',
+                'auto'
+            );
+            $documentPath = $cld['url'];
         }
         $data['document_path'] = $documentPath;
 

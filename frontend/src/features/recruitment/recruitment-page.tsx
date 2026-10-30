@@ -1,16 +1,33 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Plus, Briefcase, Users, MapPin, Calendar, Send, CheckCircle2, XCircle, UserCheck, Loader2 } from 'lucide-react'
+import {
+  Plus,
+  Briefcase,
+  Users,
+  MapPin,
+  Calendar,
+  Send,
+  CheckCircle2,
+  XCircle,
+  UserCheck,
+  UserPlus,
+  Loader2,
+  ArrowRight,
+  Banknote,
+  Building2,
+  Search,
+  MoreHorizontal,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -27,31 +44,35 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/shared/page-header'
 import type {
   JobOpening,
   JobOpeningStatus,
   Candidate,
-  CandidateStatus,
   Paginated,
 } from '@/types'
-
-const CANDIDATE_PIPELINE: CandidateStatus[] = [
-  'applied',
-  'screening',
-  'interview',
-  'test',
-  'offer',
-  'hired',
-]
+import { useDepartments, usePositions } from '@/features/organization/api'
 
 export function RecruitmentPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const canCreate = hasPermission(user, 'create_recruitment')
   const canUpdate = hasPermission(user, 'update_recruitment')
 
-  const [tab, setTab] = useState<'jobs' | 'candidates'>('jobs')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
@@ -61,443 +82,477 @@ export function RecruitmentPage() {
       api.get<Paginated<JobOpening>>('recruitment/jobs', {
         search: search || undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
-        per_page: 30,
-      }),
-  })
-
-  const candidates = useQuery({
-    queryKey: ['recruitment', 'candidates', search, statusFilter],
-    queryFn: () =>
-      api.get<Paginated<Candidate>>('recruitment/candidates', {
-        search: search || undefined,
-        status: statusFilter !== 'all' ? statusFilter : undefined,
         per_page: 50,
       }),
-    enabled: tab === 'candidates',
   })
 
   return (
     <div className="space-y-6">
+      {/* Cabeçalho da Página: Apenas o botão de criação de vaga */}
       <PageHeader
-        title={t('recruitment.title')}
-        description={t('recruitment.description')}
+        title={t('recruitment.title', { defaultValue: 'Recrutamento & Seleção' })}
+        description={t('recruitment.description', { defaultValue: 'Gestão de vagas e processos de recrutamento da organização' })}
         actions={
           canCreate ? (
-            tab === 'jobs' ? (
-              <NewJobDialog onCreated={() => jobs.refetch()} />
-            ) : (
-              <NewCandidateDialog jobs={jobs.data?.data ?? []} onCreated={() => candidates.refetch()} />
-            )
+            <NewJobDialog onCreated={() => jobs.refetch()} />
           ) : undefined
         }
       />
 
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-3 pt-6">
-          <div className="flex-1 min-w-[200px] space-y-1.5">
-            <Label className="text-xs">{t('common.search')}</Label>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={tab === 'jobs' ? t('recruitment.job.title') : t('recruitment.candidate.name')}
-            />
+      {/* Barra de Filtros e Pesquisa */}
+      <Card className="border-border/80">
+        <CardContent className="flex flex-wrap items-end gap-3 pt-5 pb-5">
+          <div className="flex-1 min-w-[220px] space-y-1.5">
+            <Label className="text-xs font-semibold">{t('common.search', { defaultValue: 'Pesquisar' })}</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Pesquisar por título de vaga, localização ou departamento..."
+                className="pl-9 h-9 text-xs"
+              />
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">{t('recruitment.job.status')}</Label>
+
+          <div className="space-y-1.5 w-full sm:w-[200px]">
+            <Label className="text-xs font-semibold">{t('recruitment.job.status', { defaultValue: 'Estado da Vaga' })}</Label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="h-9 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('common.all')}</SelectItem>
-                {tab === 'jobs' ? (
-                  <>
-                    <SelectItem value="draft">{t('recruitment.statuses.draft')}</SelectItem>
-                    <SelectItem value="open">{t('recruitment.statuses.open')}</SelectItem>
-                    <SelectItem value="on_hold">{t('recruitment.statuses.on_hold')}</SelectItem>
-                    <SelectItem value="closed">{t('recruitment.statuses.closed')}</SelectItem>
-                  </>
-                ) : (
-                  CANDIDATE_PIPELINE.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {t(`recruitment.statuses.${s}`)}
-                    </SelectItem>
-                  ))
-                )}
+                <SelectItem value="all">{t('common.all', { defaultValue: 'Todos os Estados' })}</SelectItem>
+                <SelectItem value="open">Abertas</SelectItem>
+                <SelectItem value="draft">Rascunhos</SelectItem>
+                <SelectItem value="on_hold">Em Pausa</SelectItem>
+                <SelectItem value="closed">Fechadas</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'jobs' | 'candidates')}>
-        <TabsList>
-          <TabsTrigger value="jobs">
-            <Briefcase className="mr-2 h-3.5 w-3.5" />
-            {t('recruitment.tabs.jobs')} ({jobs.data?.meta?.total ?? 0})
-          </TabsTrigger>
-          <TabsTrigger value="candidates">
-            <Users className="mr-2 h-3.5 w-3.5" />
-            {t('recruitment.tabs.candidates')} ({candidates.data?.meta?.total ?? 0})
-          </TabsTrigger>
-        </TabsList>
+      {/* Listagem Direta de Vagas (Sem Abas) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <Briefcase className="h-4 w-4 text-primary" />
+            Vagas Publicadas & Processos ({jobs.data?.meta?.total ?? jobs.data?.data?.length ?? 0})
+          </h2>
+        </div>
 
-        <TabsContent value="jobs" className="space-y-3">
-          {jobs.isLoading ? (
-            <LoadingState />
-          ) : jobs.isError ? (
-            <ErrorState message={t('recruitment.error')} onRetry={jobs.refetch} />
-          ) : (jobs.data?.data?.length ?? 0) === 0 ? (
-            <EmptyState title={t('recruitment.empty')} />
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {jobs.data?.data?.map((job) => (
-                <JobCard key={job.id} job={job} canUpdate={canUpdate} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="candidates" className="space-y-3">
-          {candidates.isLoading ? (
-            <LoadingState />
-          ) : candidates.isError ? (
-            <ErrorState message={t('recruitment.error')} onRetry={candidates.refetch} />
-          ) : (candidates.data?.data?.length ?? 0) === 0 ? (
-            <EmptyState title={t('recruitment.empty')} />
-          ) : (
-            <Card>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                        <th className="px-4 py-3 font-medium">{t('recruitment.candidate.name')}</th>
-                        <th className="px-4 py-3 font-medium">{t('recruitment.candidate.email')}</th>
-                        <th className="px-4 py-3 font-medium">{t('recruitment.candidate.phone')}</th>
-                        <th className="px-4 py-3 font-medium">{t('recruitment.candidate.yearsExperience')}</th>
-                        <th className="px-4 py-3 font-medium">{t('recruitment.candidate.status')}</th>
-                        <th className="px-4 py-3 font-medium">{t('recruitment.candidate.appliedAt')}</th>
-                        <th className="px-4 py-3 text-right font-medium">{t('common.actions')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {candidates.data?.data?.map((c) => (
-                        <CandidateRow key={c.id} candidate={c} canUpdate={canUpdate} locale={i18n.language} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
+        {jobs.isLoading ? (
+          <LoadingState />
+        ) : jobs.isError ? (
+          <ErrorState message={t('recruitment.error', { defaultValue: 'Erro ao carregar vagas.' })} onRetry={jobs.refetch} />
+        ) : (jobs.data?.data?.length ?? 0) === 0 ? (
+          <EmptyState
+            icon={<Briefcase className="h-8 w-8 text-primary" />}
+            title="Nenhuma vaga encontrada"
+            description="Crie uma nova vaga de recrutamento para receber candidaturas e iniciar processos seletivos."
+            action={
+              canCreate ? (
+                <NewJobDialog onCreated={() => jobs.refetch()} />
+              ) : undefined
+            }
+          />
+        ) : (
+          <Card className="border-border/80 shadow-xs overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/40">
+                <TableRow>
+                  <TableHead className="font-semibold text-xs text-foreground w-[32%]">Vaga & Posição</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[14%]">Localização</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[15%]">Vagas & Candidatos</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[14%]">Remuneração</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[10%]">Estado</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground text-right w-[15%]">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {jobs.data?.data?.map((job) => (
+                  <JobRow
+                    key={job.id}
+                    job={job}
+                    canUpdate={canUpdate}
+                    canCreateCandidate={canCreate}
+                    onRefresh={() => jobs.refetch()}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )}
+      </div>
     </div>
   )
 }
 
-function JobCard({ job, canUpdate }: { job: JobOpening; canUpdate: boolean }) {
-  const { t } = useTranslation()
-  const qc = useQueryClient()
+function JobRow({
+  job,
+  canUpdate,
+  canCreateCandidate,
+  onRefresh,
+}: {
+  job: JobOpening
+  canUpdate: boolean
+  canCreateCandidate: boolean
+  onRefresh: () => void
+}) {
   const publish = useMutation({
     mutationFn: () => api.post<JobOpening>(`recruitment/jobs/${job.id}/publish`),
     onSuccess: () => {
-      toast.success(t('recruitment.saved'))
-      qc.invalidateQueries({ queryKey: ['recruitment', 'jobs'] })
+      toast.success('Vaga reaberta com sucesso.')
+      onRefresh()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitment.error'))),
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao reabrir vaga.')),
   })
+
   const close = useMutation({
     mutationFn: () => api.post<JobOpening>(`recruitment/jobs/${job.id}/close`),
     onSuccess: () => {
-      toast.success(t('recruitment.saved'))
-      qc.invalidateQueries({ queryKey: ['recruitment', 'jobs'] })
+      toast.success('Vaga fechada com sucesso.')
+      onRefresh()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitment.error'))),
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao fechar vaga.')),
   })
 
+  const isClosed = job.status === 'closed'
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <CardTitle className="truncate text-base">{job.title}</CardTitle>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {job.department && <span>{job.department.name}</span>}
-              {job.position && <span>· {job.position.title}</span>}
-              {job.location && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" /> {job.location}
-                </span>
-              )}
-            </div>
+    <TableRow className="hover:bg-muted/30 transition-colors">
+      {/* Vaga & Posição */}
+      <TableCell className="py-2.5">
+        <div className="space-y-1">
+          <Link
+            to={`/recruitment/${job.id}`}
+            className="font-semibold text-foreground hover:text-primary transition-colors text-sm line-clamp-1"
+          >
+            {job.title}
+          </Link>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+            {job.department && (
+              <span className="flex items-center gap-1 font-medium text-foreground/90">
+                <Building2 className="h-3 w-3 text-primary shrink-0" />
+                {job.department.name}
+              </span>
+            )}
+            {job.position && (
+              <span className="text-muted-foreground">• {job.position.title}</span>
+            )}
+            {job.employment_type_label && (
+              <span className="inline-block px-1.5 py-0.2 rounded bg-muted text-[10px] font-medium text-muted-foreground">
+                {job.employment_type_label}
+              </span>
+            )}
           </div>
-          <Badge variant={job.status_variant}>{job.status_label}</Badge>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {job.description && (
-          <p className="line-clamp-2 text-sm text-muted-foreground">{job.description}</p>
+      </TableCell>
+
+      {/* Localização */}
+      <TableCell className="py-2.5 text-xs text-muted-foreground">
+        {job.location ? (
+          <div className="flex items-center gap-1">
+            <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="truncate">{job.location}</span>
+          </div>
+        ) : (
+          <span>Presencial</span>
         )}
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span>{job.openings_count} {t('recruitment.job.openingsCount').toLowerCase()}</span>
-          {job.salary_range && <span>· {job.salary_range}</span>}
-          {job.published_at && (
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {job.published_at}
-            </span>
-          )}
-          <span className="flex items-center gap-1">
-            <Users className="h-3 w-3" /> {job.candidates_count ?? 0}
+      </TableCell>
+
+      {/* Vagas & Candidatos */}
+      <TableCell className="py-2.5">
+        <div className="space-y-0.5 text-xs">
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <Briefcase className="h-3 w-3 text-primary shrink-0" />
+            <span className="font-semibold text-foreground">{job.openings_count}</span> vaga(s)
+          </div>
+          <div>
+            <Link
+              to={`/recruitment/${job.id}`}
+              className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
+            >
+              <Users className="h-3 w-3 shrink-0" />
+              <span>{job.candidates_count ?? 0} candidato(s)</span>
+            </Link>
+          </div>
+        </div>
+      </TableCell>
+
+      {/* Faixa Salarial */}
+      <TableCell className="py-2.5 font-mono text-xs">
+        {job.salary_range ? (
+          <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+            {job.salary_range}
           </span>
+        ) : (
+          <span className="text-muted-foreground">A combinar</span>
+        )}
+      </TableCell>
+
+      {/* Estado */}
+      <TableCell className="py-2.5">
+        <Badge variant={job.status_variant} className="font-medium text-[11px] whitespace-nowrap">
+          {job.status_label}
+        </Badge>
+      </TableCell>
+
+      {/* Ações em cada linha */}
+      <TableCell className="py-2.5 text-right">
+        <div className="flex items-center justify-end gap-1.5">
+          {/* Se a vaga NÃO estiver fechada, permite adicionar candidatos */}
+          {canCreateCandidate && !isClosed ? (
+            <AddCandidateToJobDialog job={job} onCreated={onRefresh} />
+          ) : isClosed ? (
+            <Badge variant="secondary" className="text-[10px] text-muted-foreground font-normal py-0.5 px-1.5 border-dashed whitespace-nowrap">
+              Fechada
+            </Badge>
+          ) : null}
+
+          {/* Botão Ver Detalhes e Candidatos */}
+          <Button size="icon-sm" variant="outline" className="h-7 w-7 shrink-0" asChild title="Ver Candidatos e Detalhes">
+            <Link to={`/recruitment/${job.id}`}>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+
+          {/* Botão de Fechar Vaga / Reabrir Vaga */}
+          {canUpdate && (
+            !isClosed ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 shrink-0"
+                onClick={() => close.mutate()}
+                disabled={close.isPending}
+                title="Fechar Vaga"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Fechar</span>
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs gap-1 text-emerald-600 hover:bg-emerald-500/10 border-emerald-300 dark:border-emerald-800 shrink-0"
+                onClick={() => publish.mutate()}
+                disabled={publish.isPending}
+                title="Reabrir Vaga"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Reabrir</span>
+              </Button>
+            )
+          )}
         </div>
-        {canUpdate && (
-          <div className="flex gap-2">
-            {job.status === 'draft' && (
-              <Button size="sm" onClick={() => publish.mutate()} disabled={publish.isPending}>
-                <Send className="mr-1.5 h-3.5 w-3.5" />
-                {t('recruitment.job.actions.publish')}
-              </Button>
-            )}
-            {(job.status === 'open' || job.status === 'on_hold') && (
-              <Button size="sm" variant="outline" onClick={() => close.mutate()} disabled={close.isPending}>
-                <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                {t('recruitment.job.actions.close')}
-              </Button>
-            )}
-            {job.status === 'closed' && (
-              <Button size="sm" variant="outline" onClick={() => publish.mutate()} disabled={publish.isPending}>
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                {t('recruitment.job.actions.reopen')}
-              </Button>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </TableCell>
+    </TableRow>
   )
-}
-
-function CandidateRow({
-  candidate,
-  canUpdate,
-  locale: _locale,
-}: {
-  candidate: Candidate
-  canUpdate: boolean
-  locale: string
-}) {
-  const { t } = useTranslation()
-  const qc = useQueryClient()
-  const [moveOpen, setMoveOpen] = useState(false)
-  const [newStatus, setNewStatus] = useState<CandidateStatus>('screening')
-
-  const move = useMutation({
-    mutationFn: () => api.post<Candidate>(`recruitment/candidates/${candidate.id}/move`, { status: newStatus }),
-    onSuccess: () => {
-      toast.success(t('recruitment.saved'))
-      qc.invalidateQueries({ queryKey: ['recruitment', 'candidates'] })
-      setMoveOpen(false)
-    },
-    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitment.error'))),
-  })
-
-  return (
-    <tr className="border-b last:border-0">
-      <td className="px-4 py-3 font-medium">{candidate.full_name}</td>
-      <td className="px-4 py-3 text-muted-foreground">{candidate.email}</td>
-      <td className="px-4 py-3 text-muted-foreground">{candidate.phone ?? '—'}</td>
-      <td className="px-4 py-3 text-muted-foreground">{candidate.years_experience ?? '—'}</td>
-      <td className="px-4 py-3">
-        <Badge variant="secondary">{candidate.status_label}</Badge>
-      </td>
-      <td className="px-4 py-3 text-muted-foreground">
-        {candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : '—'}
-      </td>
-      <td className="px-4 py-3 text-right">
-        {canUpdate && (
-          <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="ghost">
-                {t('recruitment.candidate.move')}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{candidate.full_name}</DialogTitle>
-                <DialogDescription>{t('recruitment.candidate.move')}</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-2">
-                <Label>{t('recruitment.candidate.status')}</Label>
-                <Select value={newStatus} onValueChange={(v) => setNewStatus(v as CandidateStatus)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CandidateRow_STATUSES_LABELS).map(([k]) => (
-                      <SelectItem key={k} value={k}>
-                        {t(`recruitment.statuses.${k}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setMoveOpen(false)}>
-                  {t('common.cancel')}
-                </Button>
-                <Button onClick={() => move.mutate()} disabled={move.isPending}>
-                  {move.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {t('common.save')}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
-      </td>
-    </tr>
-  )
-}
-
-const CandidateRow_STATUSES_LABELS: Record<string, string> = {
-  applied: '',
-  screening: '',
-  interview: '',
-  test: '',
-  offer: '',
-  hired: '',
-  rejected: '',
-  withdrawn: '',
 }
 
 function NewJobDialog({ onCreated }: { onCreated: () => void }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const { data: departments } = useDepartments()
+  const { data: positions } = usePositions()
+
   const [form, setForm] = useState({
     title: '',
+    department_id: '',
+    position_id: '',
     location: '',
-    employment_type: 'full_time' as 'full_time' | 'part_time' | 'contract' | 'temporary' | 'internship',
-    experience_level: 'mid' as 'intern' | 'junior' | 'mid' | 'senior' | 'lead',
     openings_count: 1,
+    employment_type: 'full_time',
+    experience_level: 'mid',
     salary_min: '',
     salary_max: '',
-    description: '',
     status: 'open' as JobOpeningStatus,
+    description: '',
+    requirements: '',
   })
 
   const create = useMutation({
     mutationFn: () =>
       api.post<JobOpening>('recruitment/jobs', {
-        title: form.title,
-        location: form.location || null,
-        employment_type: form.employment_type,
-        experience_level: form.experience_level,
-        openings_count: form.openings_count,
+        ...form,
+        department_id: form.department_id ? Number(form.department_id) : null,
+        position_id: form.position_id ? Number(form.position_id) : null,
         salary_min: form.salary_min ? Number(form.salary_min) : null,
         salary_max: form.salary_max ? Number(form.salary_max) : null,
-        description: form.description || null,
-        status: form.status,
       }),
     onSuccess: () => {
-      toast.success(t('recruitment.saved'))
+      toast.success('Vaga criada com sucesso.')
       setOpen(false)
-      setForm({ ...form, title: '', description: '', location: '' })
       onCreated()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitment.error'))),
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar vaga.')),
   })
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          {t('recruitment.newJob')}
+        <Button size="sm" className="gap-1.5 shadow-xs">
+          <Plus className="h-4 w-4" />
+          Nova Vaga
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t('recruitment.newJob')}</DialogTitle>
+      <DialogContent className="max-w-2xl max-h-[85vh] p-0 flex flex-col overflow-hidden">
+        <DialogHeader className="p-6 pb-4 border-b border-border shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <Briefcase className="h-5 w-5 text-primary" />
+            Criar Nova Vaga de Emprego
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Publique uma vaga para abrir processo seletivo e receber candidaturas.
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5 md:col-span-2">
-            <Label>{t('recruitment.job.title')} *</Label>
-            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.job.location')}</Label>
-            <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.job.openingsCount')}</Label>
-            <Input
-              type="number"
-              min={1}
-              value={form.openings_count}
-              onChange={(e) => setForm({ ...form, openings_count: Number(e.target.value) })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.job.employmentType')}</Label>
-            <Select value={form.employment_type} onValueChange={(v) => setForm({ ...form, employment_type: v as typeof form.employment_type })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="full_time">{t('recruitment.job.employmentType') === 'Tipo de contrato' ? 'Tempo integral' : 'Full time'}</SelectItem>
-                <SelectItem value="part_time">Part time</SelectItem>
-                <SelectItem value="contract">Contract</SelectItem>
-                <SelectItem value="temporary">Temporary</SelectItem>
-                <SelectItem value="internship">Internship</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.job.experienceLevel')}</Label>
-            <Select value={form.experience_level} onValueChange={(v) => setForm({ ...form, experience_level: v as typeof form.experience_level })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="intern">Intern</SelectItem>
-                <SelectItem value="junior">Junior</SelectItem>
-                <SelectItem value="mid">Mid</SelectItem>
-                <SelectItem value="senior">Senior</SelectItem>
-                <SelectItem value="lead">Lead</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.job.salaryMin')}</Label>
-            <Input type="number" value={form.salary_min} onChange={(e) => setForm({ ...form, salary_min: e.target.value })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.job.salaryMax')}</Label>
-            <Input type="number" value={form.salary_max} onChange={(e) => setForm({ ...form, salary_max: e.target.value })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.job.status')}</Label>
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as JobOpeningStatus })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">{t('recruitment.statuses.draft')}</SelectItem>
-                <SelectItem value="open">{t('recruitment.statuses.open')}</SelectItem>
-                <SelectItem value="on_hold">{t('recruitment.statuses.on_hold')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5 md:col-span-2">
-            <Label>{t('recruitment.job.description')}</Label>
-            <textarea
-              className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
+
+        {/* Corpo do formulário com scroll bem apresentado e organizado */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs font-semibold">Título da Vaga *</Label>
+              <Input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Ex: Engenheiro de Software Sénior"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Departamento</Label>
+              <Select
+                value={form.department_id}
+                onValueChange={(v) => setForm({ ...form, department_id: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione o departamento..." /></SelectTrigger>
+                <SelectContent>
+                  {(departments ?? []).map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Cargo Associado</Label>
+              <Select
+                value={form.position_id}
+                onValueChange={(v) => setForm({ ...form, position_id: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione o cargo..." /></SelectTrigger>
+                <SelectContent>
+                  {(positions ?? []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Localização</Label>
+              <Input
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                placeholder="Ex: Luanda, Talatona (ou Remoto)"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Número de Vagas</Label>
+              <Input
+                type="number"
+                min={1}
+                value={form.openings_count}
+                onChange={(e) => setForm({ ...form, openings_count: Number(e.target.value) })}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Regime de Trabalho</Label>
+              <Select
+                value={form.employment_type}
+                onValueChange={(v) => setForm({ ...form, employment_type: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full_time">Tempo Integral</SelectItem>
+                  <SelectItem value="part_time">Tempo Parcial</SelectItem>
+                  <SelectItem value="contract">Contrato a Termo</SelectItem>
+                  <SelectItem value="temporary">Temporário</SelectItem>
+                  <SelectItem value="internship">Estágio</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Nível de Experiência</Label>
+              <Select
+                value={form.experience_level}
+                onValueChange={(v) => setForm({ ...form, experience_level: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="intern">Estagiário</SelectItem>
+                  <SelectItem value="junior">Júnior</SelectItem>
+                  <SelectItem value="mid">Pleno</SelectItem>
+                  <SelectItem value="senior">Sénior</SelectItem>
+                  <SelectItem value="lead">Lead / Especialista</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Salário Mínimo (AOA)</Label>
+              <Input
+                type="number"
+                value={form.salary_min}
+                onChange={(e) => setForm({ ...form, salary_min: e.target.value })}
+                placeholder="Ex: 300000"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Salário Máximo (AOA)</Label>
+              <Input
+                type="number"
+                value={form.salary_max}
+                onChange={(e) => setForm({ ...form, salary_max: e.target.value })}
+                placeholder="Ex: 500000"
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs font-semibold">Descrição das Responsabilidades</Label>
+              <textarea
+                className="flex min-h-[90px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Descreva as principais funções, tarefas e objetivos da posição..."
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs font-semibold">Requisitos e Competências</Label>
+              <textarea
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={form.requirements}
+                onChange={(e) => setForm({ ...form, requirements: e.target.value })}
+                placeholder="Qualificações obrigatórias, línguas, ferramentas..."
+              />
+            </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => create.mutate()} disabled={!form.title || create.isPending}>
+
+        <DialogFooter className="p-4 px-6 border-t border-border bg-muted/20 shrink-0 flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+            Cancelar
+          </Button>
+          <Button size="sm" onClick={() => create.mutate()} disabled={!form.title || create.isPending}>
             {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t('common.save')}
+            Guardar Vaga
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -505,106 +560,176 @@ function NewJobDialog({ onCreated }: { onCreated: () => void }) {
   )
 }
 
-function NewCandidateDialog({ jobs, onCreated }: { jobs: JobOpening[]; onCreated: () => void }) {
-  const { t } = useTranslation()
+function AddCandidateToJobDialog({
+  job,
+  onCreated,
+}: {
+  job: JobOpening
+  onCreated: () => void
+}) {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({
-    job_opening_id: jobs[0]?.id ?? 0,
     first_name: '',
     last_name: '',
     email: '',
     phone: '',
     years_experience: '',
+    expected_salary: '',
+    notes: '',
   })
 
   const create = useMutation({
     mutationFn: () =>
       api.post<Candidate>('recruitment/candidates', {
-        job_opening_id: form.job_opening_id,
+        job_opening_id: job.id,
         first_name: form.first_name,
         last_name: form.last_name,
         email: form.email,
         phone: form.phone || null,
         years_experience: form.years_experience ? Number(form.years_experience) : null,
+        expected_salary: form.expected_salary ? Number(form.expected_salary) : null,
+        notes: form.notes || null,
         status: 'applied',
       }),
     onSuccess: () => {
-      toast.success(t('recruitment.saved'))
+      toast.success(`Candidato adicionado com sucesso à vaga "${job.title}".`)
       setOpen(false)
-      setForm({ ...form, first_name: '', last_name: '', email: '', phone: '', years_experience: '' })
+      setForm({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        years_experience: '',
+        expected_salary: '',
+        notes: '',
+      })
       onCreated()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitment.error'))),
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar candidato.')),
   })
-
-  const openJobs = useMemo(() => jobs.filter((j) => j.status === 'open' || j.status === 'draft'), [jobs])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <UserCheck className="mr-2 h-4 w-4" />
-          {t('recruitment.newCandidate')}
+        <Button size="sm" className="h-7 px-2.5 gap-1 text-xs bg-primary text-primary-foreground shrink-0 shadow-xs">
+          <UserPlus className="h-3.5 w-3.5" />
+          <span>+ Candidato</span>
         </Button>
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('recruitment.newCandidate')}</DialogTitle>
+      <DialogContent className="max-w-md max-h-[85vh] p-0 flex flex-col overflow-hidden">
+        <DialogHeader className="p-6 pb-4 border-b border-border shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-primary" />
+            Adicionar Candidato
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Inscreva um candidato na vaga <span className="font-semibold text-foreground">{job.title}</span>.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.candidate.addToJob')}</Label>
-            <Select
-              value={String(form.job_opening_id)}
-              onValueChange={(v) => setForm({ ...form, job_opening_id: Number(v) })}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            create.mutate()
+          }}
+          className="flex-1 min-h-0 flex flex-col justify-between"
+        >
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-3.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Nome Próprio *</Label>
+                <Input
+                  required
+                  value={form.first_name}
+                  onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                  placeholder="Ex: Carlos"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Apelido *</Label>
+                <Input
+                  required
+                  value={form.last_name}
+                  onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                  placeholder="Ex: Sousa"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Email *</Label>
+              <Input
+                type="email"
+                required
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="candidato@exemplo.com"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Telefone</Label>
+              <Input
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="+244 9..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Anos de Experiência</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.years_experience}
+                  onChange={(e) => setForm({ ...form, years_experience: e.target.value })}
+                  placeholder="Ex: 3"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Pretensão Salarial (AOA)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.expected_salary}
+                  onChange={(e) => setForm({ ...form, expected_salary: e.target.value })}
+                  placeholder="Ex: 350000"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Observações / Resumo</Label>
+              <Input
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="Competências ou fonte da candidatura"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="p-4 px-6 border-t border-border bg-muted/20 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setOpen(false)}
+              disabled={create.isPending}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {openJobs.length === 0 ? (
-                  <SelectItem value="0" disabled>—</SelectItem>
-                ) : (
-                  openJobs.map((j) => (
-                    <SelectItem key={j.id} value={String(j.id)}>{j.title}</SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>{t('recruitment.candidate.name')}</Label>
-              <Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} placeholder="Primeiro" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>&nbsp;</Label>
-              <Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} placeholder="Último" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('recruitment.candidate.email')} *</Label>
-            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>{t('recruitment.candidate.phone')}</Label>
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('recruitment.candidate.yearsExperience')}</Label>
-              <Input type="number" min={0} value={form.years_experience} onChange={(e) => setForm({ ...form, years_experience: e.target.value })} />
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-          <Button
-            onClick={() => create.mutate()}
-            disabled={!form.first_name || !form.last_name || !form.email || !form.job_opening_id || create.isPending}
-          >
-            {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t('common.save')}
-          </Button>
-        </DialogFooter>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!form.first_name || !form.last_name || !form.email || create.isPending}
+            >
+              {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar Candidato
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

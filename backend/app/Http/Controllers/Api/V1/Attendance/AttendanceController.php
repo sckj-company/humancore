@@ -14,22 +14,23 @@ class AttendanceController extends BaseController
 {
     public function toggle(Request $request): JsonResponse
     {
-        $employee = auth()->user()->employee;
+        $employeeId = $request->input('employee_id') ?: auth()->user()->employee?->id;
+        $employee = \App\Models\Employee::find($employeeId);
         if (! $employee) {
-            return $this->error('Utilizador sem funcionário associado.', 422);
+            return $this->error('Funcionário não encontrado.', 422);
         }
 
-        $today = now()->toDateString();
+        $today = $request->input('date', now()->toDateString());
 
         $record = AttendanceRecord::where('employee_id', $employee->id)
-            ->where('tenant_id', tenant_id())
+            ->where('tenant_id', tenant_id() ?: $employee->tenant_id)
             ->whereDate('date', $today)
             ->first();
 
         if (! $record) {
             $record = AttendanceRecord::create([
                 'employee_id' => $employee->id,
-                'tenant_id' => tenant_id(),
+                'tenant_id' => tenant_id() ?: $employee->tenant_id,
                 'date' => $today,
                 'status' => 'present',
             ]);
@@ -54,18 +55,64 @@ class AttendanceController extends BaseController
         return $this->success(new AttendanceResource($record), 'Entrada registada.');
     }
 
-    public function today(): JsonResponse
+    public function today(Request $request): JsonResponse
     {
-        $employee = auth()->user()->employee;
-        if (! $employee) {
-            return $this->error('Utilizador sem funcionário associado.', 422);
+        $employeeId = $request->input('employee_id') ?: auth()->user()->employee?->id;
+        if (! $employeeId) {
+            return $this->error('Funcionário não especificado.', 422);
         }
 
-        $record = AttendanceRecord::where('employee_id', $employee->id)
+        $record = AttendanceRecord::where('employee_id', $employeeId)
             ->whereDate('date', now()->toDateString())
             ->first();
 
         return $this->success($record ? new AttendanceResource($record) : null);
+    }
+
+    public function storeManual(Request $request): JsonResponse
+    {
+        $this->authorize('create', AttendanceRecord::class);
+
+        $validated = $request->validate([
+            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'date' => ['required', 'date'],
+            'clock_in' => ['nullable', 'string'],
+            'clock_out' => ['nullable', 'string'],
+            'status' => ['required', 'in:present,late,absent,half_day,excused'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $employee = \App\Models\Employee::findOrFail($validated['employee_id']);
+        $totalMinutes = 0;
+
+        $inDateTime = null;
+        $outDateTime = null;
+        if (! empty($validated['clock_in'])) {
+            $inDateTime = Carbon::parse($validated['date'] . ' ' . $validated['clock_in']);
+        }
+        if (! empty($validated['clock_out'])) {
+            $outDateTime = Carbon::parse($validated['date'] . ' ' . $validated['clock_out']);
+        }
+        if ($inDateTime && $outDateTime) {
+            $totalMinutes = max(0, (int) $inDateTime->diffInMinutes($outDateTime));
+        }
+
+        $record = AttendanceRecord::updateOrCreate(
+            [
+                'employee_id' => $employee->id,
+                'date' => $validated['date'],
+            ],
+            [
+                'tenant_id' => tenant_id() ?: $employee->tenant_id,
+                'clock_in' => $inDateTime,
+                'clock_out' => $outDateTime,
+                'total_worked' => $totalMinutes,
+                'status' => $validated['status'],
+                'notes' => $validated['notes'] ?? null,
+            ]
+        );
+
+        return $this->success(new AttendanceResource($record), 'Presença registada com sucesso.', 201);
     }
 
     public function index(Request $request): JsonResponse
@@ -74,6 +121,7 @@ class AttendanceController extends BaseController
 
         $records = AttendanceRecord::query()
             ->with('employee')
+            ->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))
             ->when($request->string('date')->toString(), fn ($q, $d) => $q->where('date', $d))
             ->when($request->string('status')->toString(), fn ($q, $s) => $q->where('status', $s))
             ->when($request->string('search')->toString(), function ($q, $s) {

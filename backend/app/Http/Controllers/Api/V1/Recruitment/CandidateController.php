@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Api\V1\Recruitment;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\CandidateResource;
 use App\Models\Candidate;
+use App\Models\Employee;
+use App\Models\EmployeeContract;
 use App\Models\JobOpening;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CandidateController extends BaseController
 {
@@ -146,5 +149,82 @@ class CandidateController extends BaseController
             ->get();
 
         return $this->success(CandidateResource::collection($candidates));
+    }
+
+    public function hire(Request $request, Candidate $candidate): JsonResponse
+    {
+        $this->authorize('update', $candidate);
+
+        $validated = $request->validate([
+            'contract_type' => ['required', 'string', 'in:permanent,fixed_term,temporary,probation,internship,outsourced'],
+            'base_salary' => ['required', 'numeric', 'min:0'],
+            'salary_frequency' => ['required', 'string', 'in:monthly,biweekly,weekly,hourly'],
+            'work_hours_per_week' => ['nullable', 'numeric', 'min:1', 'max:168'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'signed_at' => ['nullable', 'date'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'position_id' => ['nullable', 'integer', 'exists:positions,id'],
+            'manager_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        return DB::transaction(function () use ($candidate, $validated) {
+            $job = $candidate->jobOpening;
+            $tenantId = $candidate->tenant_id ?? tenant_id();
+            $deptId = $validated['department_id'] ?? $job?->department_id;
+            $posId = $validated['position_id'] ?? $job?->position_id;
+
+            // Generate unique employee code
+            $count = Employee::withoutGlobalScopes()->where('tenant_id', $tenantId)->count() + 1;
+            $code = 'EMP-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
+            while (Employee::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('employee_code', $code)->exists()) {
+                $count++;
+                $code = 'EMP-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
+            }
+
+            $employee = Employee::create([
+                'tenant_id' => $tenantId,
+                'employee_code' => $code,
+                'first_name' => $candidate->first_name,
+                'last_name' => $candidate->last_name,
+                'email' => $candidate->email,
+                'phone' => $candidate->phone,
+                'department_id' => $deptId,
+                'position_id' => $posId,
+                'manager_id' => $validated['manager_id'] ?? null,
+                'status' => 'active',
+                'hired_at' => $validated['start_date'],
+            ]);
+
+            $contract = EmployeeContract::create([
+                'tenant_id' => $tenantId,
+                'employee_id' => $employee->id,
+                'department_id' => $deptId,
+                'position_id' => $posId,
+                'manager_id' => $validated['manager_id'] ?? null,
+                'contract_type' => $validated['contract_type'],
+                'base_salary' => $validated['base_salary'],
+                'salary_frequency' => $validated['salary_frequency'],
+                'work_hours_per_week' => $validated['work_hours_per_week'] ?? 40,
+                'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'] ?? null,
+                'signed_at' => $validated['signed_at'] ?? now()->toDateString(),
+                'notes' => $validated['notes'] ?? ('Candidato contratado via processo seletivo: ' . ($job?->title ?? '')),
+                'is_active' => true,
+            ]);
+
+            $candidate->update([
+                'status' => 'hired',
+                'last_status_at' => now(),
+                'notes' => trim(($candidate->notes ?? '') . "\n[Contratado em " . now()->format('Y-m-d') . " como funcionário #{$employee->employee_code}]"),
+            ]);
+
+            return $this->success([
+                'candidate' => new CandidateResource($candidate->fresh()->load('jobOpening')),
+                'employee' => new \App\Http\Resources\V1\EmployeeResource($employee->load('department', 'position', 'activeContract')),
+                'contract' => new \App\Http\Resources\V1\ContractResource($contract),
+            ], 'Candidato contratado e convertido em funcionário com sucesso!', 201);
+        });
     }
 }

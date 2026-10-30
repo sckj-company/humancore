@@ -81,6 +81,7 @@ export interface Employee {
   tax_id?: string
   social_security_id?: string
   photo_path?: string
+  photo_url?: string
   status: EmployeeStatus
   hired_at?: string
   probation_end?: string
@@ -93,6 +94,26 @@ export interface Employee {
   position?: Position
   manager?: EmployeeSummary
   active_contract?: EmployeeContract
+  active_schedule?: {
+    id: number
+    employee_id: number
+    shift_id: number
+    effective_from?: string
+    effective_to?: string | null
+    custom_days?: number[] | null
+    is_active: boolean
+    notes?: string | null
+    shift?: {
+      id: number
+      name: string
+      code?: string | null
+      start_time: string
+      end_time: string
+      work_hours: number
+      color?: string | null
+      is_night_shift: boolean
+    }
+  } | null
   created_at: string
   updated_at: string
 }
@@ -155,6 +176,7 @@ export interface EmployeeContract {
   is_active: boolean
   signed_at?: string
   document_path?: string
+  document_url?: string
   notes?: string
   position?: Position
   department?: Department
@@ -294,6 +316,8 @@ export interface EmployeeDocument {
   name: string
   document_type: string
   original_name?: string | null
+  file_path?: string | null
+  file_url?: string | null
   mime_type?: string | null
   file_size?: number
   size_label?: string
@@ -429,6 +453,8 @@ export interface JobOpening {
   closed_at?: string | null
   notes?: string | null
   candidates_count?: number
+  department_id?: number | null
+  position_id?: number | null
   department?: { id: number; name: string } | null
   position?: { id: number; title: string } | null
   created_by?: { id: number; name: string } | null

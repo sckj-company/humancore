@@ -19,7 +19,8 @@ class StoreLeaveRequest extends FormRequest
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'for_another' => ['sometimes', 'boolean'],
-            'employee_id' => ['required_if:for_another,true', 'nullable', 'integer', 'exists:employees,id'],
+            'employee_id' => ['sometimes', 'nullable', 'integer', 'exists:employees,id'],
+            'status' => ['sometimes', 'in:pending,approved,rejected'],
         ];
     }
 }
