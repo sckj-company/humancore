@@ -12,8 +12,27 @@ trait HasTenant
         static::addGlobalScope(new TenantScope);
 
         static::creating(function ($model) {
-            if (empty($model->tenant_id) && app()->bound('currentTenant')) {
-                $model->tenant_id = app('currentTenant')?->id;
+            if (empty($model->tenant_id)) {
+                if (app()->bound('currentTenant') && app('currentTenant')?->id) {
+                    $model->tenant_id = app('currentTenant')->id;
+                } elseif (! app()->runningInConsole()) {
+                    throw new \RuntimeException(
+                        'Segurança Multitenant: Não é possível registar ['.class_basename($model).'] sem um tenant ativo.'
+                    );
+                }
+            } elseif (app()->bound('currentTenant') && app('currentTenant')?->id) {
+                // Em requisições HTTP, impede qualquer tentativa de forjar tenant_id de outra empresa
+                if (! app()->runningInConsole() && (int) $model->tenant_id !== (int) app('currentTenant')->id) {
+                    $model->tenant_id = app('currentTenant')->id;
+                }
+            }
+        });
+
+        static::updating(function ($model) {
+            if (app()->bound('currentTenant') && app('currentTenant')?->id && ! app()->runningInConsole()) {
+                if ($model->isDirty('tenant_id') && (int) $model->tenant_id !== (int) app('currentTenant')->id) {
+                    $model->tenant_id = app('currentTenant')->id;
+                }
             }
         });
     }

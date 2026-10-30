@@ -33,13 +33,33 @@ class ContractController extends BaseController
         return $this->success(new ContractResource($contract->load('employee', 'position', 'department', 'manager')));
     }
 
-    public function destroy(EmployeeContract $contract): JsonResponse
+    public function deactivate(Request $request, EmployeeContract $contract): JsonResponse
     {
-        $this->authorize('delete', $contract);
+        $this->authorize('update', $contract);
 
-        $contract->update(['is_active' => false]);
-        $contract->delete();
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+            'end_date' => ['nullable', 'date'],
+        ]);
 
-        return $this->success(null, 'Contrato eliminado com sucesso.');
+        $endDate = $validated['end_date'] ?? now()->toDateString();
+        $reasonText = $validated['reason'];
+        $updatedNotes = trim(($contract->notes ? $contract->notes . "\n" : '') . '[Desativado em ' . now()->format('Y-m-d') . ']: ' . $reasonText);
+
+        $contract->update([
+            'is_active' => false,
+            'end_date' => $endDate,
+            'notes' => $updatedNotes,
+        ]);
+
+        if ($contract->employee) {
+            $contract->employee->update([
+                'status' => 'inactive',
+                'termination_at' => $endDate,
+                'termination_reason' => $reasonText,
+            ]);
+        }
+
+        return $this->success(new ContractResource($contract->fresh(['employee', 'position', 'department', 'manager'])), 'Contrato desativado com sucesso.');
     }
 }

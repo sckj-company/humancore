@@ -4,6 +4,7 @@ namespace App\Http\Requests\V1\Document;
 
 use App\Models\EmployeeDocument;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreEmployeeDocumentRequest extends FormRequest
 {
@@ -18,7 +19,7 @@ class StoreEmployeeDocumentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employee_id' => ['required', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
             'name' => ['required', 'string', 'max:255'],
             'document_type' => ['required', 'string', 'max:50'],
             'file' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,gif,webp,doc,docx,xls,xlsx,ppt,pptx,txt'],

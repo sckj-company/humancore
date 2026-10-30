@@ -17,9 +17,9 @@ class UpdateDepartmentRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:50'],
-            'branch_id' => ['nullable', 'integer', Rule::exists('branches', 'id')],
-            'parent_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
-            'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')],
+            'branch_id' => ['nullable', 'integer', Rule::exists('branches', 'id')->where('tenant_id', tenant_id())],
+            'parent_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('tenant_id', tenant_id())],
+            'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
             'cost_center' => ['nullable', 'string', 'max:50'],
             'description' => ['nullable', 'string'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],

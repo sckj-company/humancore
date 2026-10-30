@@ -5,8 +5,6 @@ import {
   LayoutDashboard,
   Users,
   Building2,
-  CalendarCheck,
-  CalendarDays,
   Wallet,
   FileText,
   UserPlus,
@@ -25,6 +23,7 @@ import {
   ShieldCheck,
   Mail,
   Globe2,
+  Shield,
 } from 'lucide-react'
 import { useUiStore } from '@/stores/ui-store'
 import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
@@ -44,6 +43,28 @@ interface NavSection {
   items: NavItem[]
 }
 
+// Menus exclusivos do super-admin (plataforma)
+const superAdminSections: NavSection[] = [
+  {
+    items: [
+      { titleKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    titleKey: 'nav.section_platform',
+    items: [
+      { titleKey: 'nav.tenants', href: '/admin/tenants', icon: Globe2 },
+      { titleKey: 'nav.audits', href: '/audits', icon: Activity },
+    ],
+  },
+]
+
+const superAdminFooterItems: NavItem[] = [
+  { titleKey: 'nav.settings', href: '/settings', icon: Settings },
+  { titleKey: 'nav.profile', href: '/profile', icon: User },
+]
+
+// Menus normais dos utilizadores de tenant
 const sections: NavSection[] = [
   {
     items: [
@@ -61,8 +82,6 @@ const sections: NavSection[] = [
   {
     titleKey: 'nav.section_time',
     items: [
-      { titleKey: 'nav.attendance', href: '/attendance', icon: CalendarCheck },
-      { titleKey: 'nav.leave', href: '/leave', icon: CalendarDays },
       { titleKey: 'nav.schedules', href: '/schedules', icon: Clock, roles: ['admin', 'hr-manager', 'manager'] },
     ],
   },
@@ -80,20 +99,14 @@ const sections: NavSection[] = [
     titleKey: 'nav.section_analytics',
     items: [
       { titleKey: 'nav.reports', href: '/reports', icon: BarChart3, roles: ['admin', 'hr-manager', 'manager'] },
-      { titleKey: 'nav.audits', href: '/audits', icon: Activity, roles: ['admin', 'super-admin', 'hr-manager'] },
-      { titleKey: 'nav.emailTemplates', href: '/email-templates', icon: Mail, roles: ['admin', 'super-admin'] },
-    ],
-  },
-  {
-    titleKey: 'nav.section_platform',
-    items: [
-      { titleKey: 'nav.tenants', href: '/admin/tenants', icon: Globe2, roles: ['super-admin'] },
+      { titleKey: 'nav.audits', href: '/audits', icon: Activity, roles: ['admin', 'hr-manager'] },
+      { titleKey: 'nav.emailTemplates', href: '/email-templates', icon: Mail, roles: ['admin'] },
     ],
   },
 ]
 
 const footerItems: NavItem[] = [
-  { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin', 'super-admin'] },
+  { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin'] },
   { titleKey: 'nav.help', href: '/help', icon: HelpCircle },
   { titleKey: 'nav.profile', href: '/profile', icon: User },
 ]
@@ -148,6 +161,11 @@ export function Sidebar() {
   const sidebarOpen = useUiStore((s) => s.sidebarOpen)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const user = useAuthStore((s) => s.user)
+  const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
+
+  // Super-admin usa menus de plataforma; utilizadores comuns usam menus de HR
+  const activeSections = isSuperAdmin ? superAdminSections : sections
+  const activeFooterItems = isSuperAdmin ? superAdminFooterItems : footerItems
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -178,8 +196,23 @@ export function Sidebar() {
 
         {/* Navigation & all items housed inside sidebar scroll */}
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-4 scrollbar-thin">
+          {/* Badge de super-admin */}
+          {isSuperAdmin && sidebarOpen && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+              <Shield className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                Super Admin
+              </span>
+            </div>
+          )}
+          {isSuperAdmin && !sidebarOpen && (
+            <div className="mb-4 flex justify-center">
+              <Shield className="h-4 w-4 text-primary" />
+            </div>
+          )}
+
           <nav className="space-y-5">
-            {sections.map((section, idx) => {
+            {activeSections.map((section, idx) => {
               const visibleItems = section.items.filter(
                 (item) => !item.roles || hasAnyRole(user, item.roles),
               )
@@ -208,7 +241,7 @@ export function Sidebar() {
 
           {/* Footer items housed inside the scroll */}
           <div className="space-y-1">
-            {footerItems
+            {activeFooterItems
               .filter((item) => !item.roles || hasAnyRole(user, item.roles))
               .map((item) => (
                 <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />

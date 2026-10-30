@@ -17,7 +17,7 @@ class UpdatePositionRequest extends FormRequest
         return [
             'title' => ['sometimes', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:50'],
-            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('tenant_id', tenant_id())],
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
             'salary_min' => ['nullable', 'numeric', 'min:0'],

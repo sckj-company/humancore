@@ -17,8 +17,17 @@ export interface Tenant {
   slug: string
   email?: string
   phone?: string
-  tax_id?: string
+  tax_id?: string          // NIF angolano (10 dígitos)
+  inss_number?: string     // Nº INSS
+  legal_entity_type?: string  // lda, sa, unipessoal, etc.
+  economic_sector?: string    // Sector de actividade
   logo_path?: string
+  address?: string
+  city?: string
+  province?: string        // Província angolana
+  country?: string
+  postal_code?: string
+  website?: string
   currency: string
   locale: string
   timezone: string

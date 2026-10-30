@@ -21,11 +21,18 @@ class AttendanceController extends BaseController
         }
 
         $today = $request->input('date', now()->toDateString());
+        if (Carbon::parse($today)->startOfDay()->isFuture()) {
+            return $this->error('Não é permitido registar presenças para datas futuras.', 422);
+        }
 
         $record = AttendanceRecord::where('employee_id', $employee->id)
             ->where('tenant_id', tenant_id() ?: $employee->tenant_id)
             ->whereDate('date', $today)
             ->first();
+
+        if ($record && $record->clock_in && $record->clock_out) {
+            return $this->error('A entrada e a saída de hoje já foram registadas para este funcionário.', 422);
+        }
 
         if (! $record) {
             $record = AttendanceRecord::create([
@@ -75,14 +82,29 @@ class AttendanceController extends BaseController
 
         $validated = $request->validate([
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
-            'date' => ['required', 'date'],
+            'date' => ['required', 'date', 'before_or_equal:today'],
             'clock_in' => ['nullable', 'string'],
             'clock_out' => ['nullable', 'string'],
             'status' => ['required', 'in:present,late,absent,half_day,excused'],
             'notes' => ['nullable', 'string', 'max:500'],
+        ], [
+            'date.before_or_equal' => 'Não é permitido registar presenças para datas futuras.',
         ]);
 
+        if (Carbon::parse($validated['date'])->startOfDay()->isFuture()) {
+            return $this->error('Não é permitido registar presenças para datas futuras.', 422);
+        }
+
         $employee = \App\Models\Employee::findOrFail($validated['employee_id']);
+
+        $existing = AttendanceRecord::where('employee_id', $employee->id)
+            ->whereDate('date', $validated['date'])
+            ->first();
+
+        if ($existing && $existing->clock_in && $existing->clock_out) {
+            return $this->error('A jornada deste dia já foi fechada e não permite novos registos de presença.', 422);
+        }
+
         $totalMinutes = 0;
 
         $inDateTime = null;

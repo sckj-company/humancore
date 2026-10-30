@@ -196,3 +196,22 @@ body[data-scroll-locked] {
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background-color: var(--sidebar-accent);
 }
+
+/* Ensure cursor pointer on all interactive elements */
+button,
+a,
+select,
+summary,
+[role="button"],
+[role="tab"],
+[type="button"],
+[type="submit"],
+[type="reset"] {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"],
+[disabled] {
+  cursor: not-allowed;
+}

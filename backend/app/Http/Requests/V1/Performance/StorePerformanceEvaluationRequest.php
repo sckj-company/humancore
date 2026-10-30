@@ -4,6 +4,7 @@ namespace App\Http\Requests\V1\Performance;
 
 use App\Models\PerformanceEvaluation;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePerformanceEvaluationRequest extends FormRequest
 {
@@ -15,7 +16,7 @@ class StorePerformanceEvaluationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employee_id' => ['required', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
             'period' => ['required', 'string', 'max:50'],
             'cycle' => ['nullable', 'in:monthly,quarterly,semi_annual,annual,probation'],
             'period_start' => ['nullable', 'date'],

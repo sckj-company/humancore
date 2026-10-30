@@ -62,6 +62,24 @@ function DashboardRouter() {
   )
 }
 
+function TenantRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  const isSuperAdmin = user?.roles?.includes('super-admin')
+  if (isSuperAdmin) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <>{children}</>
+}
+
+function SuperAdminRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  const isSuperAdmin = user?.roles?.includes('super-admin')
+  if (!isSuperAdmin) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <>{children}</>
+}
+
 export function AppRouter() {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -77,37 +95,42 @@ export function AppRouter() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard/*" element={<DashboardRouter />} />
 
-          <Route path="/employees" element={<EmployeesPage />} />
-          <Route path="/employees/new" element={<EmployeeCreatePage />} />
-          <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+          {/* Rotas restritas para contexto de Tenant (Super Admin não pode aceder) */}
+          <Route path="/employees" element={<TenantRoute><EmployeesPage /></TenantRoute>} />
+          <Route path="/employees/new" element={<TenantRoute><EmployeeCreatePage /></TenantRoute>} />
+          <Route path="/employees/:id" element={<TenantRoute><EmployeeDetailPage /></TenantRoute>} />
 
-          <Route path="/organization" element={<OrganizationLayout />}>
+          <Route path="/organization" element={<TenantRoute><OrganizationLayout /></TenantRoute>}>
             <Route index element={<DepartmentsPage />} />
             <Route path="positions" element={<PositionsPage />} />
             <Route path="branches" element={<BranchesPage />} />
           </Route>
 
-          <Route path="/attendance" element={<AttendancePage />} />
-          <Route path="/leave" element={<LeavePage />} />
-          <Route path="/schedules" element={<SchedulesPage />} />
-          <Route path="/payroll" element={<PayrollPeriodsPage />} />
-          <Route path="/payroll/:id" element={<PayrollPeriodDetailPage />} />
-          <Route path="/my-payslips" element={<PayslipsPage />} />
-          <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/attendance" element={<TenantRoute><AttendancePage /></TenantRoute>} />
+          <Route path="/leave" element={<TenantRoute><LeavePage /></TenantRoute>} />
+          <Route path="/schedules" element={<TenantRoute><SchedulesPage /></TenantRoute>} />
+          <Route path="/payroll" element={<TenantRoute><PayrollPeriodsPage /></TenantRoute>} />
+          <Route path="/payroll/:id" element={<TenantRoute><PayrollPeriodDetailPage /></TenantRoute>} />
+          <Route path="/my-payslips" element={<TenantRoute><PayslipsPage /></TenantRoute>} />
+          <Route path="/documents" element={<TenantRoute><DocumentsPage /></TenantRoute>} />
+          <Route path="/recruitment" element={<TenantRoute><RecruitmentPage /></TenantRoute>} />
+          <Route path="/recruitment/:id" element={<TenantRoute><RecruitmentDetailPage /></TenantRoute>} />
+          <Route path="/performance" element={<TenantRoute><PerformancePage /></TenantRoute>} />
+          <Route path="/training" element={<TenantRoute><OnboardingPage /></TenantRoute>} />
+          <Route path="/trainings" element={<TenantRoute><TrainingCatalogPage /></TenantRoute>} />
+          <Route path="/benefits" element={<TenantRoute><BenefitsPage /></TenantRoute>} />
+          <Route path="/deductions" element={<TenantRoute><DeductionsPage /></TenantRoute>} />
+          <Route path="/reports" element={<TenantRoute><ReportsPage /></TenantRoute>} />
+          <Route path="/settings" element={<TenantRoute><SettingsPage /></TenantRoute>} />
+          <Route path="/email-templates" element={<TenantRoute><EmailTemplatesPage /></TenantRoute>} />
+
+          {/* Rotas partilhadas */}
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/audits" element={<AuditPage />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/recruitment" element={<RecruitmentPage />} />
-          <Route path="/recruitment/:id" element={<RecruitmentDetailPage />} />
-          <Route path="/performance" element={<PerformancePage />} />
-          <Route path="/training" element={<OnboardingPage />} />
-          <Route path="/trainings" element={<TrainingCatalogPage />} />
-          <Route path="/benefits" element={<BenefitsPage />} />
-          <Route path="/deductions" element={<DeductionsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/email-templates" element={<EmailTemplatesPage />} />
-          <Route path="/admin/tenants" element={<SuperAdminPage />} />
+
+          {/* Rota exclusiva do Super Admin */}
+          <Route path="/admin/tenants" element={<SuperAdminRoute><SuperAdminPage /></SuperAdminRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

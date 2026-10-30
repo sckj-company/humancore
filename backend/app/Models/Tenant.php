@@ -18,11 +18,17 @@ class Tenant extends Model
         'slug',
         'email',
         'phone',
-        'tax_id',
+        'tax_id',           // NIF angolano (10 dígitos numéricos)
+        'inss_number',      // Nº INSS
+        'legal_entity_type',// lda, sa, unipessoal, em, cooperativa, epe, ong
+        'economic_sector',  // Sector de actividade económica
         'logo_path',
         'address',
         'city',
+        'province',         // Província angolana
         'country',
+        'postal_code',
+        'website',
         'currency',
         'locale',
         'timezone',

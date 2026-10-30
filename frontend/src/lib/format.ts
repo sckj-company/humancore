@@ -20,8 +20,13 @@ export function formatTime(
   locale = 'pt-PT',
 ): string {
   if (!date) return '—'
-  const d = new Date(date)
-  if (isNaN(d.getTime())) return '—'
+  const raw = String(date).trim()
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) {
+    return raw.slice(0, 5)
+  }
+  const norm = raw.includes(' ') && !raw.includes('T') ? raw.replace(' ', 'T') : raw
+  const d = new Date(norm)
+  if (isNaN(d.getTime())) return raw
   return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(d)
 }
 

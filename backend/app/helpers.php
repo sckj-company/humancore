@@ -6,7 +6,7 @@ use App\Services\Tenant\TenantManager;
 if (! function_exists('tenant_id')) {
     function tenant_id(): ?int
     {
-        return app(TenantManager::class)->id();
+        return app(TenantManager::class)->id() ?? (auth()->check() ? auth()->user()?->tenant_id : null);
     }
 }
 

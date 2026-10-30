@@ -25,8 +25,8 @@ class SuperAdminController extends BaseController
         $activeTenants = Tenant::query()->where('status', 'active')->count();
         $inactiveTenants = Tenant::query()->where('status', 'inactive')->count();
         $suspendedTenants = Tenant::query()->where('status', 'suspended')->count();
-        $totalEmployees = Employee::query()->count();
-        $activeEmployees = Employee::query()->where('status', 'active')->count();
+        $totalEmployees = Employee::withoutGlobalScopes()->count();
+        $activeEmployees = Employee::withoutGlobalScopes()->where('status', 'active')->count();
         $totalUsers = User::query()->count();
         $superAdmins = User::query()->whereHas('roles', fn ($q) => $q->where('name', 'super-admin'))->count();
 

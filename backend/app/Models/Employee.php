@@ -103,6 +103,11 @@ class Employee extends Model
             ->latestOfMany();
     }
 
+    public function latestContract()
+    {
+        return $this->hasOne(EmployeeContract::class)->latestOfMany();
+    }
+
     public function salaryComponents()
     {
         return $this->hasMany(EmployeeSalaryComponent::class);

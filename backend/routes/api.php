@@ -68,6 +68,7 @@ Route::prefix('v1')->group(function () {
 
         // Contratos
         Route::apiResource('contracts', ContractController::class);
+        Route::post('contracts/{contract}/deactivate', [ContractController::class, 'deactivate']);
 
         // Payroll
         Route::get('payroll/periods', [PayrollController::class, 'index']);

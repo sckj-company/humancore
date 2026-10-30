@@ -21,7 +21,7 @@ class UpdateBranchRequest extends FormRequest
             'city' => ['nullable', 'string', 'max:150'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
-            'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')],
+            'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
             'is_headquarter' => ['nullable', 'boolean'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ];

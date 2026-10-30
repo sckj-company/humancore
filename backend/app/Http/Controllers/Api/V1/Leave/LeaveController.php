@@ -101,7 +101,8 @@ class LeaveController extends BaseController
         $end = Carbon::parse($validated['end_date']);
         $totalDays = $start->diffInDays($end) + 1;
 
-        $status = $request->input('status', 'approved');
+        $isApprover = auth()->user()?->can('approve_leave');
+        $status = $request->input('status', $isApprover ? 'approved' : 'pending');
 
         $leave = LeaveRequest::create([
             'employee_id' => $employee->id,

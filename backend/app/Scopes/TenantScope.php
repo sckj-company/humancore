@@ -16,6 +16,10 @@ class TenantScope implements Scope
 
         if ($tenantId) {
             $builder->where($model->getTable().'.tenant_id', $tenantId);
+        } elseif (! app()->runningInConsole()) {
+            // Se uma requisição HTTP tentar consultar dados de tenant sem um tenant ativo no contexto,
+            // bloqueia completamente o retorno para evitar vazamento ou conflito entre empresas.
+            $builder->whereRaw('1 = 0');
         }
     }
 }

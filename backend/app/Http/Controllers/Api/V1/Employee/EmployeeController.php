@@ -167,7 +167,7 @@ class EmployeeController extends BaseController
     {
         $this->authorize('view', $employee);
 
-        return $this->success(new EmployeeResource($employee->load('department', 'position', 'manager', 'activeContract', 'activeSchedule.shift')));
+        return $this->success(new EmployeeResource($employee->load('department', 'position', 'manager', 'activeContract', 'latestContract', 'activeSchedule.shift')));
     }
 
     public function update(UpdateEmployeeRequest $request, Employee $employee): JsonResponse
@@ -227,11 +227,10 @@ class EmployeeController extends BaseController
         }
         $data['document_path'] = $documentPath;
 
-        if ($data['is_active'] ?? true) {
-            EmployeeContract::query()
-                ->where('employee_id', $employee->id)
-                ->update(['is_active' => false]);
-        }
+        EmployeeContract::query()
+            ->where('employee_id', $employee->id)
+            ->update(['is_active' => false]);
+        $data['is_active'] = true;
 
         $contract = EmployeeContract::query()->create($data);
 

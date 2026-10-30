@@ -18,7 +18,14 @@ class StoreEmployeeRequest extends FormRequest
             'first_name' => ['required', 'string', 'max:150'],
             'last_name' => ['required', 'string', 'max:150'],
             'employee_code' => ['nullable', 'string', 'max:50'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('employees', 'email')->whereNull('deleted_at')],
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('employees', 'email')
+                    ->where('tenant_id', tenant_id())
+                    ->whereNull('deleted_at'),
+            ],
             'phone' => ['nullable', 'string', 'max:50'],
             'alternative_phone' => ['nullable', 'string', 'max:50'],
             'birth_date' => ['nullable', 'date', 'before:today'],
@@ -39,10 +46,10 @@ class StoreEmployeeRequest extends FormRequest
             'status' => ['required', Rule::in(['active', 'inactive', 'suspended', 'terminated'])],
             'hired_at' => ['nullable', 'date'],
             'probation_end' => ['nullable', 'date', 'after_or_equal:hired_at'],
-            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
-            'position_id' => ['nullable', 'integer', Rule::exists('positions', 'id')],
-            'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')],
-            'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('tenant_id', tenant_id())],
+            'position_id' => ['nullable', 'integer', Rule::exists('positions', 'id')->where('tenant_id', tenant_id())],
+            'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
+            'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('tenant_id', tenant_id())],
 
             // Informações Contratuais (Aba Contrato)
             'contract_type' => ['nullable', Rule::in(['permanent', 'fixed_term', 'temporary', 'probation', 'internship', 'outsourced'])],

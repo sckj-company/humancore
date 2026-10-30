@@ -18,7 +18,15 @@ class UpdateEmployeeRequest extends FormRequest
             'first_name' => ['sometimes', 'string', 'max:150'],
             'last_name' => ['sometimes', 'string', 'max:150'],
             'employee_code' => ['sometimes', 'string', 'max:50'],
-            'email' => ['sometimes', 'email', 'max:255', Rule::unique('employees', 'email')->ignore($this->employee)->whereNull('deleted_at')],
+            'email' => [
+                'sometimes',
+                'email',
+                'max:255',
+                Rule::unique('employees', 'email')
+                    ->ignore($this->employee)
+                    ->where('tenant_id', tenant_id())
+                    ->whereNull('deleted_at'),
+            ],
             'phone' => ['nullable', 'string', 'max:50'],
             'alternative_phone' => ['nullable', 'string', 'max:50'],
             'birth_date' => ['nullable', 'date', 'before:today'],
@@ -39,9 +47,9 @@ class UpdateEmployeeRequest extends FormRequest
             'status' => ['sometimes', Rule::in(['active', 'inactive', 'suspended', 'terminated'])],
             'hired_at' => ['nullable', 'date'],
             'probation_end' => ['nullable', 'date', 'after_or_equal:hired_at'],
-            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
-            'position_id' => ['nullable', 'integer', Rule::exists('positions', 'id')],
-            'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('tenant_id', tenant_id())],
+            'position_id' => ['nullable', 'integer', Rule::exists('positions', 'id')->where('tenant_id', tenant_id())],
+            'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
         ];
     }
 }
