@@ -12,6 +12,7 @@
         "laravel/horizon": "^5.48",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
+        "phpoffice/phpspreadsheet": "^5.10",
         "predis/predis": "^3.6",
         "simplesoftwareio/simple-qrcode": "^4.2",
         "spatie/laravel-permission": "^8.3"

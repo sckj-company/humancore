@@ -66,6 +66,11 @@ Route::prefix('v1')->group(function () {
         Route::get('employees/{employee}/timeline', [EmployeeController::class, 'timeline']);
         Route::post('employees/{employee}/contracts', [EmployeeController::class, 'storeContract']);
 
+        // Importação de Funcionários via Excel
+        Route::post('imports/employees/preview', [\App\Http\Controllers\Api\V1\Import\EmployeeImportController::class, 'preview']);
+        Route::post('imports/employees/process', [\App\Http\Controllers\Api\V1\Import\EmployeeImportController::class, 'process']);
+        Route::get('imports/employees/template', [\App\Http\Controllers\Api\V1\Import\EmployeeImportController::class, 'downloadTemplate']);
+
         // Contratos
         Route::apiResource('contracts', ContractController::class);
         Route::post('contracts/{contract}/deactivate', [ContractController::class, 'deactivate']);
