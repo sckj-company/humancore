@@ -26,6 +26,8 @@ import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/s
 import type { EmployeeDocument, EmployeeSummary, Paginated } from '@/types'
 
 const DOC_TYPES: { value: string; label: string }[] = [
+  { value: 'id_card_front', label: 'BI / Passaporte (Frente)' },
+  { value: 'id_card_back', label: 'BI / Passaporte (Verso)' },
   { value: 'id', label: 'Documento de identidade' },
   { value: 'contract', label: 'Contrato de trabalho' },
   { value: 'certification', label: 'Certificado / formação' },

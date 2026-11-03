@@ -40,8 +40,9 @@ class ProcessAndUploadEmployeeDocumentJob implements ShouldQueue
         }
 
         try {
-            // 1. Download temporário seguro a partir da URL Jiandaoyun
+            // 1. Download temporário seguro a partir da URL Jiandaoyun com auto-retry
             $response = Http::timeout(60)
+                ->retry(3, 2000)
                 ->withHeaders([
                     'User-Agent' => 'HumaCore-Importer/1.0',
                 ])

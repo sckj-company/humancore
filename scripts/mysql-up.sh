@@ -3,8 +3,9 @@
 #
 # O mysqld do sistema corre sob AppArmor que so permite datadir em /tmp
 # ou /var/lib/mysql; sem sudo nao conseguimos usar um datadir persistente.
-# Assim, o datadir vive em /tmp/hrms-mysql e pode desaparecer a cada reboot.
-# Se o datadir nao existir, este script reinicializa e (re)seedeia a base.
+# Assim, o datadir vive em /tmp/hrms-mysql e desaparece a cada reboot.
+# Se o datadir nao existir, este script reinicializa e restaura o dump
+# persistente de backups/latest.sql.gz (ver scripts/mysql-backup.sh).
 #
 # Uso:  scripts/mysql-up.sh            # sobe e garante utilizador/base
 #       scripts/mysql-up.sh --seed     # alem disso, migrate:fresh --seed
@@ -65,9 +66,21 @@ GRANT ALL PRIVILEGES ON hrms.* TO 'hrms'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
 
-if [ "$NEEDS_SEED" -eq 1 ] && [ "${1:-}" = "--seed" ]; then
-  echo ">> Base recriada -> a repopular (migrate:fresh --seed)..."
-  (cd "$PROJECT_DIR/backend" && php artisan migrate:fresh --seed --force && php artisan db:seed --class=DemoSeeder --force)
+DUMP="$PROJECT_DIR/backups/latest.sql.gz"
+
+if [ "$NEEDS_SEED" -eq 1 ]; then
+  if [ -f "$DUMP" ] && gunzip -t "$DUMP" 2>/dev/null; then
+    echo ">> [AVISO] datadir vazio -> a restaurar dump persistente ($DUMP)..."
+    mysql --socket="$SOCKET" -uroot < <(gunzip -c "$DUMP")
+    echo ">> Restauracao concluida (base: hrms)."
+  elif [ "${1:-}" = "--seed" ]; then
+    echo ">> Sem dump valido -> a repopular de raiz (migrate:fresh --seed)..."
+    (cd "$PROJECT_DIR/backend" && php artisan migrate:fresh --seed --force && php artisan db:seed --class=DemoSeeder --force)
+  else
+    echo ">> [AVISO] datadir vazio e SEM dump em $DUMP."
+    echo ">>   Corre 'scripts/mysql-up.sh --seed' para recriar de raiz, ou"
+    echo ">>   restauro manual: 'scripts/mysql-backup.sh --restore'."
+  fi
 fi
 
 echo ">> Pronto. MySQL 3307 OK (base: hrms, user: hrms, socket: $SOCKET)"

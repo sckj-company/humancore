@@ -13,3 +13,6 @@ frontend/.env
 /public
 *.log
 .DS_Store
+
+# dumps persistentes da base (recovery apos reboot - nunca commitar)
+backups/

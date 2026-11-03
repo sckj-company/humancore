@@ -45,7 +45,7 @@ class CloudinaryUploadStatusCommand extends Command
             $this->line("  Progresso: [{$bar}] <fg=green;options=bold>{$percent}%</>");
             $this->newLine();
 
-            $isWorkerRunning = (int) shell_exec('pgrep -f "artisan queue:work" | wc -l') > 0;
+            $isWorkerRunning = (int) shell_exec('pgrep -f "^php.*artisan queue:work" | wc -l') > 0;
 
             $this->table(
                 ['Métrica', 'Valor'],

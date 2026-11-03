@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/shared/page-header'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { EmployeeImportModal } from '@/features/employees/components/employee-import-modal'
 import type { Paginated, EmployeeSummary } from '@/types'
 
 const statusColor: Record<string, string> = {
@@ -41,11 +42,14 @@ export function EmployeesPage() {
         title={t('employees.title')}
         description={`${data?.meta?.total ?? 0} ${t('common.active').toLowerCase()}`}
         actions={
-          <Button asChild>
-            <Link to="/employees/new">
-              <Plus className="mr-2 h-4 w-4" /> {t('employees.add')}
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <EmployeeImportModal onSuccess={() => refetch()} />
+            <Button asChild>
+              <Link to="/employees/new">
+                <Plus className="mr-2 h-4 w-4" /> {t('employees.add')}
+              </Link>
+            </Button>
+          </div>
         }
       />
 

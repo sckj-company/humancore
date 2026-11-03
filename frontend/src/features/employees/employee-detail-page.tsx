@@ -32,7 +32,26 @@ const maritalStatusLabels: Record<string, string> = { single: 'Solteiro(a)', mar
 const idDocumentTypeLabels: Record<string, string> = { national_id: 'Bilhete de Identidade (B.I.)', bi: 'Bilhete de Identidade (B.I.)', passport: 'Passaporte', driver_license: 'Carta de Condução', residence_permit: 'Cartão de Residência', other: 'Outro Documento' }
 const contractTypeLabels: Record<string, string> = { permanent: 'Efetivo / Tempo Indeterminado', fixed_term: 'A Termo Certo', part_time: 'Tempo Parcial', internship: 'Estágio Profissional', temporary: 'Trabalho Temporário', contractor: 'Prestador de Serviços' }
 const salaryFrequencyLabels: Record<string, string> = { monthly: 'Mensal', biweekly: 'Quinzenal', weekly: 'Semanal', hourly: 'Por Hora', yearly: 'Anual' }
-const docTypeLabels: Record<string, string> = { contract: 'Contrato de Trabalho', id_document: 'B.I. / Passaporte', certificate: 'Certificado / Habilitações', resume: 'Curriculum Vitae', medical: 'Atestado Médico', tax_form: 'Documento Fiscal', other: 'Outro Documento' }
+const docTypeLabels: Record<string, string> = {
+  id_card_front: 'BI / Passaporte (Frente)',
+  id_card_back: 'BI / Passaporte (Verso)',
+  id_document: 'B.I. / Passaporte',
+  contract: 'Contrato de Trabalho',
+  contract_doc: 'Contrato de Trabalho (Word)',
+  contract_pdf: 'Contrato de Trabalho Assinado (PDF)',
+  certificate: 'Certificado / Habilitações',
+  education_certificate: 'Certificado Escolar / Habilitações',
+  professional_cert: 'Certificado Profissional',
+  inefop_certificate: 'Certificado INEFOPE',
+  driving_license: 'Carta de Condução',
+  residence_certificate: 'Atestado de Residência',
+  criminal_record: 'Registo Criminal',
+  tax_id: 'Comprovativo de NIF',
+  tax_form: 'Documento Fiscal',
+  resume: 'Curriculum Vitae',
+  medical: 'Atestado Médico',
+  other: 'Outro Documento',
+}
 const attendanceStatusLabels: Record<string, string> = { present: 'Presente', absent: 'Falta', late: 'Atrasado', half_day: 'Meio Dia', holiday: 'Feriado', vacation: 'Férias', sick: 'Doença', justified: 'Justificado', excused: 'Justificado' }
 const attendanceStatusColors: Record<string, string> = { present: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', late: 'bg-amber-500/10 text-amber-600 border-amber-500/20', absent: 'bg-red-500/10 text-red-600 border-red-500/20', half_day: 'bg-blue-500/10 text-blue-600 border-blue-500/20', excused: 'bg-gray-500/10 text-gray-600 border-gray-500/20', justified: 'bg-gray-500/10 text-gray-600 border-gray-500/20', vacation: 'bg-sky-500/10 text-sky-600 border-sky-500/20', sick: 'bg-rose-500/10 text-rose-600 border-rose-500/20' }
 const leaveStatusLabels: Record<string, string> = { pending: 'Pendente', approved: 'Aprovado', rejected: 'Rejeitado', cancelled: 'Cancelado', draft: 'Rascunho' }
