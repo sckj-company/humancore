@@ -24,10 +24,17 @@ import {
   Mail,
   Globe2,
   Shield,
+  CalendarCheck,
+  Gift,
+  CircleDollarSign,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useUiStore } from '@/stores/ui-store'
 import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
+import { api } from '@/lib/api'
+import type { Paginated, Tenant } from '@/types'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Separator } from '@/components/ui/separator'
 
@@ -82,6 +89,7 @@ const sections: NavSection[] = [
   {
     titleKey: 'nav.section_time',
     items: [
+      { titleKey: 'nav.attendance', href: '/attendance', icon: CalendarCheck, roles: ['admin', 'hr-manager', 'manager'] },
       { titleKey: 'nav.schedules', href: '/schedules', icon: Clock, roles: ['admin', 'hr-manager', 'manager'] },
     ],
   },
@@ -89,10 +97,13 @@ const sections: NavSection[] = [
     titleKey: 'nav.section_management',
     items: [
       { titleKey: 'nav.payroll', href: '/payroll', icon: Wallet, roles: ['admin', 'hr-manager'] },
+      { titleKey: 'nav.salaryComponents', href: '/settings/payroll-components', icon: CircleDollarSign, roles: ['admin', 'hr-manager'] },
       { titleKey: 'nav.documents', href: '/documents', icon: FileText },
       { titleKey: 'nav.performance', href: '/performance', icon: TrendingUp, roles: ['admin', 'hr-manager', 'manager'] },
       { titleKey: 'nav.training', href: '/training', icon: GraduationCap, roles: ['admin', 'hr-manager', 'manager'] },
       { titleKey: 'nav.trainings', href: '/trainings', icon: GraduationCap, roles: ['admin', 'hr-manager'] },
+      { titleKey: 'nav.benefits', href: '/benefits', icon: Gift, roles: ['admin', 'hr-manager'] },
+      { titleKey: 'nav.deductions', href: '/deductions', icon: CircleDollarSign, roles: ['admin', 'hr-manager'] },
     ],
   },
   {
@@ -162,9 +173,16 @@ export function Sidebar() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const user = useAuthStore((s) => s.user)
   const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
+  const { data: tenantPage } = useQuery({
+    queryKey: ['superadmin', 'tenant-switcher'],
+    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
+    enabled: isSuperAdmin,
+  })
+  const selectedTenantId = localStorage.getItem('hrms_selected_tenant') ?? String(user?.tenant?.id ?? '')
 
-  // Super-admin usa menus de plataforma; utilizadores comuns usam menus de HR
-  const activeSections = isSuperAdmin ? superAdminSections : sections
+  const activeSections = isSuperAdmin
+    ? [superAdminSections[0], ...sections.slice(1), superAdminSections[1]]
+    : sections
   const activeFooterItems = isSuperAdmin ? superAdminFooterItems : footerItems
 
   return (
@@ -210,11 +228,36 @@ export function Sidebar() {
               <Shield className="h-4 w-4 text-primary" />
             </div>
           )}
+          {isSuperAdmin && sidebarOpen && (
+            <div className="mb-4 space-y-1.5">
+              <span className="px-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+                Empresa ativa
+              </span>
+              <Select
+                value={selectedTenantId}
+                onValueChange={(tenantId) => {
+                  localStorage.setItem('hrms_selected_tenant', tenantId)
+                  window.location.reload()
+                }}
+              >
+                <SelectTrigger className="w-full bg-sidebar-background">
+                  <SelectValue placeholder="Selecionar empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenantPage?.data.map((tenant) => (
+                    <SelectItem key={tenant.id} value={String(tenant.id)}>
+                      {tenant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <nav className="space-y-5">
             {activeSections.map((section, idx) => {
               const visibleItems = section.items.filter(
-                (item) => !item.roles || hasAnyRole(user, item.roles),
+                (item) => isSuperAdmin || !item.roles || hasAnyRole(user, item.roles),
               )
               if (visibleItems.length === 0) return null
 
@@ -242,7 +285,7 @@ export function Sidebar() {
           {/* Footer items housed inside the scroll */}
           <div className="space-y-1">
             {activeFooterItems
-              .filter((item) => !item.roles || hasAnyRole(user, item.roles))
+              .filter((item) => isSuperAdmin || !item.roles || hasAnyRole(user, item.roles))
               .map((item) => (
                 <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
               ))}

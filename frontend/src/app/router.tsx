@@ -24,6 +24,7 @@ const AttendancePage = lazy(() => import('@/features/attendance/attendance-page'
 const LeavePage = lazy(() => import('@/features/leave/leave-page').then((m) => ({ default: m.LeavePage })))
 const SchedulesPage = lazy(() => import('@/features/schedules/schedules-page').then((m) => ({ default: m.SchedulesPage })))
 const SettingsPage = lazy(() => import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })))
+const SalaryComponentRegulationsPage = lazy(() => import('@/features/settings/salary-component-regulations-page').then((m) => ({ default: m.SalaryComponentRegulationsPage })))
 const EmailTemplatesPage = lazy(() => import('@/features/settings/email-templates-page').then((m) => ({ default: m.EmailTemplatesPage })))
 const DocumentsPage = lazy(() => import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })))
 const NotificationsPage = lazy(() => import('@/features/notifications/notifications-page').then((m) => ({ default: m.NotificationsPage })))
@@ -65,8 +66,9 @@ function DashboardRouter() {
 function TenantRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
   const isSuperAdmin = user?.roles?.includes('super-admin')
-  if (isSuperAdmin) {
-    return <Navigate to="/dashboard" replace />
+  const hasTenantContext = localStorage.getItem('hrms_selected_tenant') || user?.tenant?.id
+  if (isSuperAdmin && !hasTenantContext) {
+    return <Navigate to="/admin/tenants" replace />
   }
   return <>{children}</>
 }
@@ -122,6 +124,7 @@ export function AppRouter() {
           <Route path="/deductions" element={<TenantRoute><DeductionsPage /></TenantRoute>} />
           <Route path="/reports" element={<TenantRoute><ReportsPage /></TenantRoute>} />
           <Route path="/settings" element={<TenantRoute><SettingsPage /></TenantRoute>} />
+          <Route path="/settings/payroll-components" element={<TenantRoute><SalaryComponentRegulationsPage /></TenantRoute>} />
           <Route path="/email-templates" element={<TenantRoute><EmailTemplatesPage /></TenantRoute>} />
 
           {/* Rotas partilhadas */}

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Contract\ContractController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Document\EmployeeDocumentController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
+use App\Http\Controllers\Api\V1\Import\EmployeeImportController;
 use App\Http\Controllers\Api\V1\Leave\LeaveController;
 use App\Http\Controllers\Api\V1\Notification\NotificationController;
 use App\Http\Controllers\Api\V1\Onboarding\OnboardingTaskController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Api\V1\Organization\PositionController;
 use App\Http\Controllers\Api\V1\Payroll\MyPayslipsController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollController;
 use App\Http\Controllers\Api\V1\Payroll\PayslipController;
+use App\Http\Controllers\Api\V1\Payroll\SalaryComponentRegulationController;
 use App\Http\Controllers\Api\V1\Performance\PerformanceEvaluationController;
 use App\Http\Controllers\Api\V1\Recruitment\CandidateController;
 use App\Http\Controllers\Api\V1\Recruitment\JobOpeningController;
@@ -67,9 +69,9 @@ Route::prefix('v1')->group(function () {
         Route::post('employees/{employee}/contracts', [EmployeeController::class, 'storeContract']);
 
         // Importação de Funcionários via Excel
-        Route::post('imports/employees/preview', [\App\Http\Controllers\Api\V1\Import\EmployeeImportController::class, 'preview']);
-        Route::post('imports/employees/process', [\App\Http\Controllers\Api\V1\Import\EmployeeImportController::class, 'process']);
-        Route::get('imports/employees/template', [\App\Http\Controllers\Api\V1\Import\EmployeeImportController::class, 'downloadTemplate']);
+        Route::post('imports/employees/preview', [EmployeeImportController::class, 'preview']);
+        Route::post('imports/employees/process', [EmployeeImportController::class, 'process']);
+        Route::get('imports/employees/template', [EmployeeImportController::class, 'downloadTemplate']);
 
         // Contratos
         Route::apiResource('contracts', ContractController::class);
@@ -83,6 +85,17 @@ Route::prefix('v1')->group(function () {
         Route::post('payroll/periods/{period}/approve', [PayrollController::class, 'approve']);
         Route::post('payroll/periods/{period}/close', [PayrollController::class, 'close']);
         Route::get('payroll/periods/{period}/records', [PayrollController::class, 'records']);
+        Route::get('payroll/salary-components', [SalaryComponentRegulationController::class, 'components']);
+        Route::post('payroll/salary-components', [SalaryComponentRegulationController::class, 'storeComponent']);
+        Route::post('payroll/salary-component-regulations/initialize-angola', [SalaryComponentRegulationController::class, 'initializeAngolaDefaults']);
+        Route::get('payroll/salary-component-regulations', [SalaryComponentRegulationController::class, 'index']);
+        Route::post('payroll/salary-component-regulations', [SalaryComponentRegulationController::class, 'store']);
+        Route::put('payroll/salary-component-regulations/{regulation}', [SalaryComponentRegulationController::class, 'update']);
+        Route::post('payroll/salary-component-regulations/{regulation}/validate', [SalaryComponentRegulationController::class, 'validateRegulation']);
+        Route::post('payroll/salary-component-regulations/{regulation}/activate', [SalaryComponentRegulationController::class, 'activate']);
+        Route::delete('payroll/salary-component-regulations/{regulation}', [SalaryComponentRegulationController::class, 'destroy']);
+        Route::post('payroll/salary-component-regulations/{regulation}/revoke', [SalaryComponentRegulationController::class, 'revoke']);
+        Route::get('payroll/salary-component-regulations/{regulation}/document', [SalaryComponentRegulationController::class, 'downloadDocument']);
         Route::get('payroll/records/{record}/payslip', [PayslipController::class, 'show']);
         Route::get('payroll/records/{record}/payslip.pdf', [PayslipController::class, 'download']);
         Route::get('payroll/my-payslips', [MyPayslipsController::class, 'index']);

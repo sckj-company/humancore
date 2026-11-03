@@ -79,6 +79,39 @@ class SuperAdminTest extends TestCase
             ->assertJsonPath('data.data.0.stats.employees', 3);
     }
 
+    public function test_super_admin_can_access_and_create_employees_in_selected_tenant(): void
+    {
+        $ownTenant = Tenant::factory()->create();
+        $selectedTenant = Tenant::factory()->create();
+        $user = User::factory()->create([
+            'tenant_id' => $ownTenant->id,
+            'is_active' => true,
+        ]);
+        $user->assignRole('super-admin');
+
+        Employee::factory()->create([
+            'tenant_id' => $selectedTenant->id,
+            'first_name' => 'Funcionário',
+            'last_name' => 'Selecionado',
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/employees', ['X-Tenant-ID' => (string) $selectedTenant->id])
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.full_name', 'Funcionário Selecionado');
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/employees', [
+                'first_name' => 'Novo',
+                'last_name' => 'Funcionário',
+                'email' => 'novo@empresa.test',
+                'status' => 'active',
+            ], ['X-Tenant-ID' => (string) $selectedTenant->id])
+            ->assertCreated()
+            ->assertJsonPath('data.tenant_id', $selectedTenant->id);
+    }
+
     public function test_super_admin_can_create_update_and_delete_tenant(): void
     {
         $user = User::factory()->create(['is_active' => true]);

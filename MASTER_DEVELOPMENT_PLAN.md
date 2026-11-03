@@ -1154,6 +1154,8 @@ Aceitação → Contratação → Onboarding
 
 ## 15. Payroll Engine
 
+> **Estado e evolução:** o estado “Done” na lista de módulos refere-se à implementação inicial do motor, workflow e recibos. Não representa validação jurídica/fiscal nem prontidão para processamento oficial. A evolução do cálculo automático, regras versionadas e homologação para Angola está detalhada em [Plano de Implementação do Processamento Salarial](docs/PLANO_IMPLEMENTACAO_PROCESSAMENTO_SALARIAL.md) e deve respeitar a [especificação funcional](docs/especificacao_processamento_salarial_angola.md).
+
 ### Arquitetura do motor salarial
 
 ```

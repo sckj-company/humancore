@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { Save, Loader2, Building2, Clock, Wallet, Palmtree, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -123,6 +124,16 @@ export function SettingsPage() {
                       onChange={(v) => update(`${s.group}.${s.key}`, v)}
                     />
                   ))}
+                {key === 'payroll' && (
+                  <div className="sm:col-span-2 border-t pt-4">
+                    <Button variant="outline" asChild>
+                      <Link to="/settings/payroll-components">
+                        <Wallet className="mr-2 h-4 w-4" />
+                        {t('salaryRegulations.open')}
+                      </Link>
+                    </Button>
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="justify-end border-t px-6 py-4">
                 <Button

@@ -118,6 +118,21 @@ class DocumentTest extends TestCase
             ->assertOk();
     }
 
+    public function test_cloudinary_pdf_download_uses_attachment_name_without_extension(): void
+    {
+        [$tenant, $employee, $user] = $this->setupEmployeeUser('manager');
+        $document = EmployeeDocument::factory()->forEmployee($employee)->create([
+            'tenant_id' => $tenant->id,
+            'file_path' => 'https://res.cloudinary.com/example/image/upload/v1234567890/humancore/tenants/1/documents/bi.pdf',
+            'original_name' => 'copiadebi.pdf',
+            'mime_type' => 'application/pdf',
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->get('/api/v1/documents/'.$document->id.'/download')
+            ->assertRedirect('https://res.cloudinary.com/example/image/upload/fl_attachment:copiadebi/v1234567890/humancore/tenants/1/documents/bi.pdf');
+    }
+
     public function test_employee_cannot_download_document_of_other_employee(): void
     {
         [$tenant, $employee, $user] = $this->setupEmployeeUser('employee');

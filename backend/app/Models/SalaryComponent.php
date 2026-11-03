@@ -52,6 +52,11 @@ class SalaryComponent extends Model
         return $this->hasMany(EmployeeSalaryComponent::class);
     }
 
+    public function regulations()
+    {
+        return $this->hasMany(SalaryComponentRegulation::class);
+    }
+
     public function scopeEarning()
     {
         return $this->where('type', 'earning');

@@ -17,10 +17,11 @@ class SetTenantContext
         $user = $request->user();
 
         if ($user) {
-            $tenantId = $user->tenant_id;
-            if (! $tenantId && ($user->hasRole('super-admin') || (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()))) {
-                $tenantId = $request->header('X-Tenant-ID') ?: $request->query('tenant_id');
-            }
+            $isSuperAdmin = $user->hasRole('super-admin') || (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin());
+            $requestedTenantId = $request->header('X-Tenant-ID') ?: $request->query('tenant_id');
+            $tenantId = $isSuperAdmin
+                ? ($requestedTenantId ?: $user->tenant_id)
+                : $user->tenant_id;
 
             if ($tenantId) {
                 $tenant = ($tenantId === $user->tenant_id && $user->tenant)

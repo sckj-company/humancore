@@ -12,6 +12,11 @@ class Audit extends Model
 
     public const UPDATED_AT = null;
 
+    public function tenantIsOptional(): bool
+    {
+        return true;
+    }
+
     protected $fillable = [
         'user_id',
         'tenant_id',

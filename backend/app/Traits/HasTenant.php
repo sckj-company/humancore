@@ -15,7 +15,7 @@ trait HasTenant
             if (empty($model->tenant_id)) {
                 if (app()->bound('currentTenant') && app('currentTenant')?->id) {
                     $model->tenant_id = app('currentTenant')->id;
-                } elseif (! app()->runningInConsole()) {
+                } elseif (! app()->runningInConsole() && ! (method_exists($model, 'tenantIsOptional') && $model->tenantIsOptional())) {
                     throw new \RuntimeException(
                         'Segurança Multitenant: Não é possível registar ['.class_basename($model).'] sem um tenant ativo.'
                     );

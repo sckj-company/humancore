@@ -6,7 +6,6 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenant\TenantManager;
 use Database\Seeders\PermissionSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -46,6 +45,31 @@ class AuthTest extends TestCase
             ->assertJsonStructure([
                 'data' => ['access_token', 'token_type', 'user' => ['id', 'email', 'roles']],
             ]);
+    }
+
+    public function test_super_admin_without_tenant_can_login_and_create_platform_audit(): void
+    {
+        $user = User::factory()->create([
+            'tenant_id' => null,
+            'email' => 'superadmin@test.com',
+            'password' => Hash::make('password'),
+            'email_verified_at' => now(),
+            'is_active' => true,
+        ]);
+        $user->assignRole('super-admin');
+
+        app(TenantManager::class)->clear();
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'superadmin@test.com',
+            'password' => 'password',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('audits', [
+            'user_id' => $user->id,
+            'tenant_id' => null,
+            'event' => 'login',
+        ]);
     }
 
     public function test_login_with_wrong_credentials_fails(): void

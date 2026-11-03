@@ -214,8 +214,8 @@ export function EmployeeDetailPage() {
       toast.success(`Download concluído!`, { id: tid })
     } catch {
       if (url.includes('cloudinary.com') && url.includes('/upload/')) {
-        const cn = encodeURIComponent(name.replace(/[/\\?%*:|"<>]/g, '_'))
-        const au = url.replace(/\/upload\/(?:v\d+\/)?/, `/upload/fl_attachment:${cn}/`)
+        const cn = name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_') || 'download'
+        const au = url.replace(/\/upload\/(v\d+\/)?/, (_match, version = '') => `/upload/fl_attachment:${cn}/${version}`)
         const a = document.createElement('a'); a.href = au; a.download = name; a.target = '_blank'; document.body.appendChild(a); a.click(); document.body.removeChild(a)
         toast.success(`Download iniciado!`, { id: tid })
       } else { window.open(url, '_blank'); toast.dismiss(tid) }

@@ -5,9 +5,13 @@ namespace App\Http\Controllers\Api\V1\Document;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Requests\V1\Document\StoreEmployeeDocumentRequest;
 use App\Http\Resources\V1\EmployeeDocumentResource;
+use App\Models\Employee;
 use App\Models\EmployeeDocument;
+use App\Services\CloudinaryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -38,11 +42,11 @@ class EmployeeDocumentController extends BaseController
         return $this->paginated(EmployeeDocumentResource::collection($documents));
     }
 
-    public function store(StoreEmployeeDocumentRequest $request, \App\Services\CloudinaryService $cloudinary): JsonResponse
+    public function store(StoreEmployeeDocumentRequest $request, CloudinaryService $cloudinary): JsonResponse
     {
         $validated = $request->validated();
 
-        $employee = \App\Models\Employee::findOrFail($validated['employee_id']);
+        $employee = Employee::findOrFail($validated['employee_id']);
         $tenantId = tenant_id() ?? $employee->tenant_id;
 
         $file = $request->file('file');
@@ -72,7 +76,7 @@ class EmployeeDocumentController extends BaseController
         );
     }
 
-    public function download(EmployeeDocument $document): StreamedResponse|JsonResponse|\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
+    public function download(EmployeeDocument $document): StreamedResponse|JsonResponse|Response|RedirectResponse
     {
         $this->authorize('view', $document);
 
@@ -81,8 +85,9 @@ class EmployeeDocumentController extends BaseController
         if (str_starts_with($document->file_path ?? '', 'http://') || str_starts_with($document->file_path ?? '', 'https://')) {
             // Use Cloudinary fl_attachment flag so Cloudinary sends Content-Disposition: attachment
             if (str_contains($document->file_path, 'cloudinary.com') && str_contains($document->file_path, '/upload/')) {
-                $cleanName = rawurlencode(preg_replace('/[^\w\.\-\s]/u', '_', $fileName));
-                $attachmentUrl = preg_replace('#/upload/(?:v\d+/)?#', '/upload/fl_attachment:' . $cleanName . '/', $document->file_path, 1);
+                $cleanName = pathinfo($fileName, PATHINFO_FILENAME);
+                $cleanName = preg_replace('/[^A-Za-z0-9_-]/', '_', $cleanName) ?: 'download';
+                $attachmentUrl = preg_replace('#/upload/(v\d+/)?#', '/upload/fl_attachment:'.$cleanName.'/$1', $document->file_path, 1);
                 if ($attachmentUrl) {
                     return redirect()->away($attachmentUrl);
                 }
@@ -93,7 +98,7 @@ class EmployeeDocumentController extends BaseController
                 if ($contents !== false) {
                     return response($contents, 200, [
                         'Content-Type' => $document->mime_type ?: 'application/octet-stream',
-                        'Content-Disposition' => 'attachment; filename="' . addslashes($fileName) . '"',
+                        'Content-Disposition' => 'attachment; filename="'.addslashes($fileName).'"',
                     ]);
                 }
             } catch (\Throwable) {
@@ -118,7 +123,7 @@ class EmployeeDocumentController extends BaseController
         return $this->error('Ficheiro não encontrado.', 404);
     }
 
-    public function destroy(EmployeeDocument $document, \App\Services\CloudinaryService $cloudinary): JsonResponse
+    public function destroy(EmployeeDocument $document, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('delete', $document);
 

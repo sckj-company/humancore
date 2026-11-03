@@ -257,6 +257,38 @@ export interface PayrollRecord {
   employee?: EmployeeSummary
 }
 
+export type SalaryComponentRegulationStatus = 'draft' | 'validated' | 'active' | 'revoked'
+export type SalaryIncidence = boolean | null
+
+export interface SalaryComponentSummary {
+  id: number
+  name: string
+  code: string
+  type: string
+}
+
+export interface SalaryComponentRegulation {
+  id: number
+  salary_component_id: number
+  country_code: string
+  regime_code: string
+  version: number
+  effective_from: string
+  effective_to: string | null
+  employee_inss_applicable: SalaryIncidence
+  employer_inss_applicable: SalaryIncidence
+  irt_applicable: SalaryIncidence
+  status: SalaryComponentRegulationStatus
+  legal_source: string | null
+  legal_reference: string | null
+  legal_document_name?: string | null
+  has_legal_document?: boolean
+  validated_at: string | null
+  revocation_reason?: string | null
+  validated_by?: { id: number; name: string } | null
+  component?: SalaryComponentSummary | null
+}
+
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'vacation' | 'sick' | 'justified'
 
 export interface AttendanceRecord {
