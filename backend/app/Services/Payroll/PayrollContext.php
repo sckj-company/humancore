@@ -4,6 +4,8 @@ namespace App\Services\Payroll;
 
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\PayrollInssRule;
+use App\Models\PayrollIrtTable;
 use App\Models\PayrollPeriod;
 use App\Models\Tenant;
 use Illuminate\Support\Collection;
@@ -20,6 +22,10 @@ class PayrollContext
 
     public Collection $salaryComponents;
 
+    public ?PayrollInssRule $inssRule = null;
+
+    public ?PayrollIrtTable $irtTable = null;
+
     public float $workDays = 0;
 
     public float $absentDays = 0;
@@ -32,9 +38,15 @@ class PayrollContext
 
     public function __construct(
         public Employee $employee,
-        public EmployeeContract $contract,
+        public ?EmployeeContract $contract,
         public PayrollPeriod $period,
     ) {
+        $this->attendance = collect();
+        $this->overtime = collect();
+        $this->absences = collect();
+        $this->leaves = collect();
+        $this->salaryComponents = collect();
+
         $this->settings = $period->tenant
             ? $this->collectSettings($period->tenant)
             : [];

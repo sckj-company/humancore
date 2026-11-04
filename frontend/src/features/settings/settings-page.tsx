@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
-import { Save, Loader2, Building2, Clock, Wallet, Palmtree, Mail } from 'lucide-react'
+import {
+  Save,
+  Loader2,
+  Building2,
+  Clock,
+  Wallet,
+  Palmtree,
+  Mail,
+  Scale,
+  ShieldAlert,
+  ListChecks,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
@@ -13,26 +23,128 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { PageHeader, LoadingState, ErrorState } from '@/components/shared/page-header'
-import type { SettingGroups, SettingItem } from '@/types'
+import { SalaryComponentRegulationsPage } from '@/features/settings/salary-component-regulations-page'
+import { PayrollTaxRulesPage } from '@/features/settings/payroll-tax-rules-page'
+import type { Paginated, SettingGroups, SettingItem, Tenant } from '@/types'
 
 type ScalarValue = string | number | boolean
 
-const GROUP_META: { key: string; icon: typeof Building2; title: string }[] = [
+const SETTING_GROUP_META: { key: string; icon: typeof Building2; title: string }[] = [
   { key: 'company', icon: Building2, title: 'Empresa' },
   { key: 'hr', icon: Clock, title: 'Recursos Humanos' },
   { key: 'payroll', icon: Wallet, title: 'Folha de Pagamento' },
   { key: 'leave', icon: Palmtree, title: 'Férias e Ausências' },
   { key: 'communication', icon: Mail, title: 'Comunicação' },
 ]
-const GROUP_ORDER = GROUP_META.map((g) => g.key)
+const GROUP_ORDER = SETTING_GROUP_META.map((g) => g.key)
 
+// ─── Super-Admin Tenant Banner ─────────────────────────────────────────────────
+function SuperAdminTenantBanner({
+  selectedTenantId,
+  onChange,
+}: {
+  selectedTenantId: string
+  onChange: (id: string) => void
+}) {
+  const qc = useQueryClient()
+  const { data: tenantPage } = useQuery({
+    queryKey: ['superadmin', 'tenant-list-settings'],
+    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
+  })
+
+  const selectedTenant = tenantPage?.data?.find((t) => String(t.id) === selectedTenantId)
+
+  return (
+    <Card className="border-amber-500/40 bg-amber-500/5 shadow-xs">
+      <CardContent className="p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
+              <ShieldAlert className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Modo Super Administrador
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Está a gerir configurações de{' '}
+                <span className="font-medium text-foreground">
+                  {selectedTenant?.name ?? 'empresa não selecionada'}
+                </span>
+                . As alterações afetam apenas este tenant.
+              </p>
+            </div>
+          </div>
+          <div className="w-full sm:w-72 shrink-0">
+            <Select
+              value={selectedTenantId}
+              onValueChange={(id) => {
+                onChange(id)
+                localStorage.setItem('hrms_selected_tenant', id)
+                qc.invalidateQueries({ queryKey: ['settings'] })
+                qc.invalidateQueries({ queryKey: ['payroll'] })
+                qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+                qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+              }}
+            >
+              <SelectTrigger className="w-full bg-background border-amber-300/50">
+                <SelectValue placeholder="Selecione uma empresa…" />
+              </SelectTrigger>
+              <SelectContent>
+                {tenantPage?.data?.map((tenant) => (
+                  <SelectItem key={tenant.id} value={String(tenant.id)}>
+                    <span className="flex items-center gap-2">
+                      <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {tenant.name}
+                      {tenant.status !== 'active' && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 ml-1">
+                          {tenant.status}
+                        </Badge>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Settings Page ─────────────────────────────────────────────────────────────
 export function SettingsPage() {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
+  const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
   const isAdmin = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
   const queryClient = useQueryClient()
 
+  // Shared super-admin tenant selection (synced with localStorage + api header)
+  const [selectedTenantId, setSelectedTenantId] = useState<string>(() => {
+    return localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
+  })
+
+  // If super-admin has no tenant selected yet, pick the first active one
+  const { data: tenantPage } = useQuery({
+    queryKey: ['superadmin', 'tenant-list-settings'],
+    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
+    enabled: isSuperAdmin,
+  })
+
+  useEffect(() => {
+    if (isSuperAdmin && !selectedTenantId && tenantPage?.data?.length) {
+      const firstId = String(tenantPage.data[0].id)
+      setSelectedTenantId(firstId)
+      localStorage.setItem('hrms_selected_tenant', firstId)
+    }
+  }, [isSuperAdmin, selectedTenantId, tenantPage])
+
+  // General settings state
   const [edits, setEdits] = useState<Record<string, ScalarValue | string>>({})
   const [dirtyGroups, setDirtyGroups] = useState<Set<string>>(new Set())
 
@@ -80,82 +192,131 @@ export function SettingsPage() {
     return <ErrorState message="Não tem permissão para ver as configurações." onRetry={() => {}} />
   }
 
-  if (isLoading) return <LoadingState />
-  if (isError) return <ErrorState message="Não foi possível carregar as configurações." onRetry={refetch} />
-
   const update = (field: string, value: ScalarValue | string) => {
     setEdits((prev) => ({ ...prev, [field]: value }))
     const groupKey = field.split('.')[0]
     setDirtyGroups((prev) => new Set(prev).add(groupKey))
   }
 
+  const handleTenantChange = (id: string) => {
+    setSelectedTenantId(id)
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader title={t('settings.title')} description="Configure a empresa, os horários e as regras do sistema." />
-      <Tabs defaultValue={groups[0]?.key}>
-        <TabsList className="flex-wrap">
-          {groups.map(({ key }) => {
-            const Icon = GROUP_META.find((g) => g.key === key)?.icon ?? Building2
-            const dirty = dirtyGroups.has(key)
-            return (
-              <TabsTrigger key={key} value={key} className="gap-2">
-                <Icon className="h-4 w-4" />
-                {GROUP_META.find((g) => g.key === key)?.title ?? key}
-                {dirty && <span className="ml-1 h-2 w-2 rounded-full bg-primary" />}
-              </TabsTrigger>
-            )
-          })}
+      <PageHeader
+        title={t('settings.title', { defaultValue: 'Configurações' })}
+        description="Configure a empresa, os horários e as regras do sistema."
+      />
+
+      {/* Super-Admin Banner */}
+      {isSuperAdmin && (
+        <SuperAdminTenantBanner
+          selectedTenantId={selectedTenantId}
+          onChange={handleTenantChange}
+        />
+      )}
+
+      {/* Master Tabs */}
+      <Tabs defaultValue="general">
+        <TabsList className="flex-wrap h-auto gap-1">
+          <TabsTrigger value="general" className="gap-2">
+            <Building2 className="h-4 w-4" />
+            Geral
+          </TabsTrigger>
+          <TabsTrigger value="salary-components" className="gap-2">
+            <ListChecks className="h-4 w-4" />
+            Componentes Salariais
+          </TabsTrigger>
+          <TabsTrigger value="tax-rules" className="gap-2">
+            <Scale className="h-4 w-4" />
+            Regras Fiscais &amp; INSS
+          </TabsTrigger>
         </TabsList>
-        {groups.map(({ key, items }) => (
-          <TabsContent key={key} value={key} className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>{GROUP_META.find((g) => g.key === key)?.title ?? key}</CardTitle>
-                <CardDescription>Atualize as definições deste módulo.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-6 sm:grid-cols-2">
-                {items
-                  .filter((s) => isEditable(s))
-                  .map((s) => (
-                    <SettingField
-                      key={s.key}
-                      setting={s}
-                      value={edits[`${s.group}.${s.key}`]}
-                      onChange={(v) => update(`${s.group}.${s.key}`, v)}
-                    />
-                  ))}
-                {key === 'payroll' && (
-                  <div className="sm:col-span-2 border-t pt-4">
-                    <Button variant="outline" asChild>
-                      <Link to="/settings/payroll-components">
-                        <Wallet className="mr-2 h-4 w-4" />
-                        {t('salaryRegulations.open')}
-                      </Link>
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter className="justify-end border-t px-6 py-4">
-                <Button
-                  onClick={() => save.mutate(key)}
-                  disabled={save.isPending || !dirtyGroups.has(key)}
-                >
-                  {save.isPending && save.variables === key ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                  Guardar
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-        ))}
+
+        {/* ── Tab: Geral ── */}
+        <TabsContent value="general" className="mt-6">
+          {isLoading && <LoadingState />}
+          {isError && <ErrorState message="Não foi possível carregar as configurações." onRetry={refetch} />}
+          {!isLoading && !isError && (
+            <Tabs defaultValue={groups[0]?.key} orientation="vertical" className="flex flex-col gap-6">
+              <TabsList className="flex-wrap h-auto justify-start gap-1 bg-transparent p-0">
+                {groups.map(({ key }) => {
+                  const Icon = SETTING_GROUP_META.find((g) => g.key === key)?.icon ?? Building2
+                  const dirty = dirtyGroups.has(key)
+                  return (
+                    <TabsTrigger
+                      key={key}
+                      value={key}
+                      className="gap-2 data-[state=active]:bg-muted data-[state=active]:shadow-none border border-transparent data-[state=active]:border-border"
+                    >
+                      <Icon className="h-4 w-4" />
+                      {SETTING_GROUP_META.find((g) => g.key === key)?.title ?? key}
+                      {dirty && <span className="ml-1 h-2 w-2 rounded-full bg-primary" />}
+                    </TabsTrigger>
+                  )
+                })}
+              </TabsList>
+              {groups.map(({ key, items }) => (
+                <TabsContent key={key} value={key}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{SETTING_GROUP_META.find((g) => g.key === key)?.title ?? key}</CardTitle>
+                      <CardDescription>Atualize as definições deste módulo.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-6 sm:grid-cols-2">
+                      {items
+                        .filter((s) => isEditable(s))
+                        .map((s) => (
+                          <SettingField
+                            key={s.key}
+                            setting={s}
+                            value={edits[`${s.group}.${s.key}`]}
+                            onChange={(v) => update(`${s.group}.${s.key}`, v)}
+                          />
+                        ))}
+                    </CardContent>
+                    <CardFooter className="justify-end border-t px-6 py-4">
+                      <Button
+                        onClick={() => save.mutate(key)}
+                        disabled={save.isPending || !dirtyGroups.has(key)}
+                      >
+                        {save.isPending && save.variables === key ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Guardar
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
+        </TabsContent>
+
+        {/* ── Tab: Componentes Salariais ── */}
+        <TabsContent value="salary-components" className="mt-6">
+          <SalaryComponentRegulationsPage
+            embeddedTenantId={selectedTenantId}
+            onTenantChange={handleTenantChange}
+          />
+        </TabsContent>
+
+        {/* ── Tab: Regras Fiscais & INSS ── */}
+        <TabsContent value="tax-rules" className="mt-6">
+          <PayrollTaxRulesPage
+            embeddedTenantId={selectedTenantId}
+            onTenantChange={handleTenantChange}
+          />
+        </TabsContent>
       </Tabs>
     </div>
   )
 }
 
+// ─── Helper components ─────────────────────────────────────────────────────────
 const BOOLEAN_KEYS = new Set(['enabled', 'required', 'requires_approval', 'allow_negative_balance', 'overtime_enabled'])
 const JSON_KEYS = new Set(['brackets', 'branding', 'workweek'])
 

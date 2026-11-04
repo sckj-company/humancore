@@ -15,11 +15,27 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SalaryComponentRegulationController extends BaseController
 {
-    public function components(): JsonResponse
+    protected function resolveTenantId(Request $request): ?int
+    {
+        $explicit = (int) ($request->header('X-Tenant-ID') ?: $request->input('tenant_id') ?: $request->query('tenant_id'));
+        if ($explicit) {
+            return $explicit;
+        }
+
+        $id = tenant_id();
+        if (! $id) {
+            $id = (int) (\App\Models\Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: \App\Models\Tenant::query()->orderBy('id')->value('id'));
+        }
+        return $id ?: null;
+    }
+
+    public function components(Request $request): JsonResponse
     {
         $this->authorize('viewAny', SalaryComponentRegulation::class);
+        $tenantId = $this->resolveTenantId($request);
 
         return $this->success(SalaryComponent::query()
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
             ->select(['id', 'name', 'code', 'type'])
             ->orderBy('name')
             ->get());
@@ -28,6 +44,7 @@ class SalaryComponentRegulationController extends BaseController
     public function storeComponent(Request $request): JsonResponse
     {
         $this->authorize('create', SalaryComponentRegulation::class);
+        $tenantId = $this->resolveTenantId($request);
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -36,7 +53,7 @@ class SalaryComponentRegulationController extends BaseController
                 'string',
                 'max:50',
                 'regex:/^[a-z][a-z0-9_]*$/',
-                Rule::unique('salary_components', 'code')->where('tenant_id', tenant_id()),
+                Rule::unique('salary_components', 'code')->where('tenant_id', $tenantId),
             ],
             'type' => ['required', Rule::in(['earning', 'deduction', 'benefit', 'tax', 'contribution'])],
             'calculation_type' => ['required', Rule::in(['fixed', 'percentage', 'formula', 'hours'])],
@@ -45,7 +62,7 @@ class SalaryComponentRegulationController extends BaseController
 
         $component = SalaryComponent::query()->create([
             ...$data,
-            'tenant_id' => tenant_id(),
+            'tenant_id' => $tenantId,
             'default_value' => 0,
             'is_mandatory' => false,
             'is_taxable' => false,
@@ -54,9 +71,10 @@ class SalaryComponentRegulationController extends BaseController
         return $this->success($component, 'Componente salarial criado sem regra de incidência.', 201);
     }
 
-    public function initializeAngolaDefaults(): JsonResponse
+    public function initializeAngolaDefaults(Request $request): JsonResponse
     {
         $this->authorize('create', SalaryComponentRegulation::class);
+        $tenantId = $this->resolveTenantId($request);
 
         $definitions = [
             ['code' => 'base_salary', 'name' => 'Salário Base', 'type' => 'earning', 'calculation_type' => 'fixed', 'priority' => 10],
@@ -75,7 +93,7 @@ class SalaryComponentRegulationController extends BaseController
         $componentsCreated = 0;
         foreach ($definitions as $definition) {
             $component = SalaryComponent::query()->firstOrCreate(
-                ['tenant_id' => tenant_id(), 'code' => $definition['code']],
+                ['tenant_id' => $tenantId, 'code' => $definition['code']],
                 [
                     ...$definition,
                     'default_value' => 0,
@@ -87,7 +105,10 @@ class SalaryComponentRegulationController extends BaseController
         }
 
         $regulationsCreated = 0;
-        $components = SalaryComponent::query()->orderBy('id')->get();
+        $components = SalaryComponent::query()
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
+            ->orderBy('id')
+            ->get();
         foreach ($components as $component) {
             $hasAngolaStandardRule = $component->regulations()
                 ->where('country_code', 'AO')
@@ -100,7 +121,7 @@ class SalaryComponentRegulationController extends BaseController
 
             $isBaseSalary = $component->code === 'base_salary';
             SalaryComponentRegulation::query()->create([
-                'tenant_id' => tenant_id(),
+                'tenant_id' => $tenantId,
                 'salary_component_id' => $component->id,
                 'country_code' => 'AO',
                 'regime_code' => 'standard',
@@ -120,16 +141,19 @@ class SalaryComponentRegulationController extends BaseController
         ], 'Componentes e rascunhos de Angola inicializados. Revise as incidências antes de validar.');
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', SalaryComponentRegulation::class);
+        $tenantId = $this->resolveTenantId($request);
 
         $components = SalaryComponent::query()
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
             ->select(['id', 'name', 'code', 'type'])
             ->orderBy('name')
             ->get();
 
         $regulations = SalaryComponentRegulation::query()
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
             ->with(['component:id,name,code,type', 'validatedBy:id,name'])
             ->orderBy('salary_component_id')
             ->orderByDesc('version')
@@ -144,13 +168,14 @@ class SalaryComponentRegulationController extends BaseController
     public function store(Request $request): JsonResponse
     {
         $this->authorize('create', SalaryComponentRegulation::class);
+        $tenantId = $this->resolveTenantId($request);
         $request->merge(['country_code' => strtoupper((string) $request->input('country_code', 'AO'))]);
 
         $data = $request->validate([
             'salary_component_id' => [
                 'required',
                 'integer',
-                Rule::exists('salary_components', 'id')->where('tenant_id', tenant_id()),
+                Rule::exists('salary_components', 'id')->where('tenant_id', $tenantId),
             ],
             'country_code' => ['required', 'string', 'size:2', 'regex:/^[A-Z]{2}$/'],
             'regime_code' => ['required', 'string', 'max:50'],
@@ -180,7 +205,8 @@ class SalaryComponentRegulationController extends BaseController
         }
 
         $component = SalaryComponent::query()->findOrFail($data['salary_component_id']);
-        $data['tenant_id'] = tenant_id();
+        $tenantId = $this->resolveTenantId($request);
+        $data['tenant_id'] = $tenantId;
         $data['status'] = 'draft';
         $data['version'] = ((int) $component->regulations()
             ->where('country_code', $data['country_code'])
@@ -189,7 +215,7 @@ class SalaryComponentRegulationController extends BaseController
 
         if ($legalDocument) {
             $data['legal_document_path'] = $legalDocument->store(
-                'payroll-regulations/'.tenant_id().'/'.$component->id,
+                'payroll-regulations/'.$tenantId.'/'.$component->id,
                 'local',
             );
         }

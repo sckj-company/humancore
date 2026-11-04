@@ -21,6 +21,8 @@ use App\Http\Controllers\Api\V1\Organization\DepartmentController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
 use App\Http\Controllers\Api\V1\Payroll\MyPayslipsController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollController;
+use App\Http\Controllers\Api\V1\Payroll\PayrollInssRuleController;
+use App\Http\Controllers\Api\V1\Payroll\PayrollIrtTableController;
 use App\Http\Controllers\Api\V1\Payroll\PayslipController;
 use App\Http\Controllers\Api\V1\Payroll\SalaryComponentRegulationController;
 use App\Http\Controllers\Api\V1\Performance\PerformanceEvaluationController;
@@ -96,6 +98,27 @@ Route::prefix('v1')->group(function () {
         Route::delete('payroll/salary-component-regulations/{regulation}', [SalaryComponentRegulationController::class, 'destroy']);
         Route::post('payroll/salary-component-regulations/{regulation}/revoke', [SalaryComponentRegulationController::class, 'revoke']);
         Route::get('payroll/salary-component-regulations/{regulation}/document', [SalaryComponentRegulationController::class, 'downloadDocument']);
+
+        // Regras INSS versionadas
+        Route::get('payroll/inss-rules', [PayrollInssRuleController::class, 'index']);
+        Route::post('payroll/inss-rules', [PayrollInssRuleController::class, 'store']);
+        Route::get('payroll/inss-rules/{rule}', [PayrollInssRuleController::class, 'show']);
+        Route::put('payroll/inss-rules/{rule}', [PayrollInssRuleController::class, 'update']);
+        Route::post('payroll/inss-rules/{rule}/validate', [PayrollInssRuleController::class, 'validateRule']);
+        Route::post('payroll/inss-rules/{rule}/activate', [PayrollInssRuleController::class, 'activate']);
+        Route::post('payroll/inss-rules/{rule}/revoke', [PayrollInssRuleController::class, 'revoke']);
+        Route::delete('payroll/inss-rules/{rule}', [PayrollInssRuleController::class, 'destroy']);
+
+        // Tabelas IRT versionadas
+        Route::get('payroll/irt-tables', [PayrollIrtTableController::class, 'index']);
+        Route::post('payroll/irt-tables', [PayrollIrtTableController::class, 'store']);
+        Route::get('payroll/irt-tables/{irtTable}', [PayrollIrtTableController::class, 'show']);
+        Route::put('payroll/irt-tables/{irtTable}', [PayrollIrtTableController::class, 'update']);
+        Route::post('payroll/irt-tables/{irtTable}/validate', [PayrollIrtTableController::class, 'validateTable']);
+        Route::post('payroll/irt-tables/{irtTable}/activate', [PayrollIrtTableController::class, 'activate']);
+        Route::post('payroll/irt-tables/{irtTable}/revoke', [PayrollIrtTableController::class, 'revoke']);
+        Route::delete('payroll/irt-tables/{irtTable}', [PayrollIrtTableController::class, 'destroy']);
+
         Route::get('payroll/records/{record}/payslip', [PayslipController::class, 'show']);
         Route::get('payroll/records/{record}/payslip.pdf', [PayslipController::class, 'download']);
         Route::get('payroll/my-payslips', [MyPayslipsController::class, 'index']);

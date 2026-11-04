@@ -25,6 +25,7 @@ const LeavePage = lazy(() => import('@/features/leave/leave-page').then((m) => (
 const SchedulesPage = lazy(() => import('@/features/schedules/schedules-page').then((m) => ({ default: m.SchedulesPage })))
 const SettingsPage = lazy(() => import('@/features/settings/settings-page').then((m) => ({ default: m.SettingsPage })))
 const SalaryComponentRegulationsPage = lazy(() => import('@/features/settings/salary-component-regulations-page').then((m) => ({ default: m.SalaryComponentRegulationsPage })))
+const PayrollTaxRulesPage = lazy(() => import('@/features/settings/payroll-tax-rules-page').then((m) => ({ default: m.PayrollTaxRulesPage })))
 const EmailTemplatesPage = lazy(() => import('@/features/settings/email-templates-page').then((m) => ({ default: m.EmailTemplatesPage })))
 const DocumentsPage = lazy(() => import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })))
 const NotificationsPage = lazy(() => import('@/features/notifications/notifications-page').then((m) => ({ default: m.NotificationsPage })))
@@ -123,8 +124,9 @@ export function AppRouter() {
           <Route path="/benefits" element={<TenantRoute><BenefitsPage /></TenantRoute>} />
           <Route path="/deductions" element={<TenantRoute><DeductionsPage /></TenantRoute>} />
           <Route path="/reports" element={<TenantRoute><ReportsPage /></TenantRoute>} />
-          <Route path="/settings" element={<TenantRoute><SettingsPage /></TenantRoute>} />
-          <Route path="/settings/payroll-components" element={<TenantRoute><SalaryComponentRegulationsPage /></TenantRoute>} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/payroll-components" element={<SalaryComponentRegulationsPage />} />
+          <Route path="/settings/payroll-tax-rules" element={<PayrollTaxRulesPage />} />
           <Route path="/email-templates" element={<TenantRoute><EmailTemplatesPage /></TenantRoute>} />
 
           {/* Rotas partilhadas */}

@@ -18,9 +18,9 @@ class SetTenantContext
 
         if ($user) {
             $isSuperAdmin = $user->hasRole('super-admin') || (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin());
-            $requestedTenantId = $request->header('X-Tenant-ID') ?: $request->query('tenant_id');
+            $requestedTenantId = $request->header('X-Tenant-ID') ?: ($request->query('tenant_id') ?: $request->input('tenant_id'));
             $tenantId = $isSuperAdmin
-                ? ($requestedTenantId ?: $user->tenant_id)
+                ? ($requestedTenantId ?: ($user->tenant_id ?: (Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id'))))
                 : $user->tenant_id;
 
             if ($tenantId) {

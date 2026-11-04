@@ -1,13 +1,29 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Ban, Check, CircleAlert, Download, FileCheck2, ListPlus, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Ban,
+  Check,
+  CheckCircle2,
+  CircleAlert,
+  Download,
+  FileCheck2,
+  ListPlus,
+  Pencil,
+  Plus,
+  Save,
+  Shield,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
-import { useAuthStore, hasPermission } from '@/stores/auth-store'
+import { useAuthStore, hasPermission, hasAnyRole } from '@/stores/auth-store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { DataTable, type DataTableAction } from '@/components/data/data-table'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -15,10 +31,12 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, ErrorState, LoadingState } from '@/components/shared/page-header'
 import type {
+  Paginated,
   SalaryComponentRegulation,
   SalaryComponentRegulationStatus,
   SalaryComponentSummary,
   SalaryIncidence,
+  Tenant,
 } from '@/types'
 
 interface RegulationIndex {
@@ -92,15 +110,54 @@ function statusVariant(status: SalaryComponentRegulationStatus | 'unconfigured')
   return 'secondary'
 }
 
-export function SalaryComponentRegulationsPage() {
+export interface SalaryComponentRegulationsPageProps {
+  embeddedTenantId?: string
+  onTenantChange?: (tenantId: string) => void
+  isEmbedded?: boolean
+}
+
+export function SalaryComponentRegulationsPage({
+  embeddedTenantId,
+  onTenantChange,
+  isEmbedded,
+}: SalaryComponentRegulationsPageProps = {}) {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.user)
-  const canView = hasPermission(user, 'view_any_salary-component')
-  const canCreate = hasPermission(user, 'create_salary-component')
-  const canUpdate = hasPermission(user, 'update_salary-component')
-  const canConfigure = hasPermission(user, 'configure_salary-component')
-  const canDeleteDraft = hasPermission(user, 'delete_salary-component') || canConfigure
+  const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
+  const canView = isSuperAdmin || hasPermission(user, 'view_any_salary-component') || hasAnyRole(user, ['admin', 'hr-manager'])
+  const canCreate = isSuperAdmin || hasPermission(user, 'create_salary-component') || hasAnyRole(user, ['admin', 'hr-manager'])
+  const canUpdate = isSuperAdmin || hasPermission(user, 'update_salary-component') || hasAnyRole(user, ['admin', 'hr-manager'])
+  const canConfigure = isSuperAdmin || hasPermission(user, 'configure_salary-component') || hasAnyRole(user, ['admin', 'hr-manager'])
+  const canDeleteDraft = canConfigure || hasPermission(user, 'delete_salary-component')
   const queryClient = useQueryClient()
+
+  const [selectedTenantId, setSelectedTenantId] = useState<string>(
+    () => embeddedTenantId || localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
+  )
+
+  const effectiveTenantId = embeddedTenantId || selectedTenantId
+
+  const { data: tenantPage } = useQuery({
+    queryKey: ['superadmin', 'tenant-list-components'],
+    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
+    enabled: isSuperAdmin && !embeddedTenantId,
+  })
+
+  useEffect(() => {
+    if (embeddedTenantId && embeddedTenantId !== selectedTenantId) {
+      setSelectedTenantId(embeddedTenantId)
+    }
+  }, [embeddedTenantId, selectedTenantId])
+
+  useEffect(() => {
+    if (isSuperAdmin && !effectiveTenantId && tenantPage?.data?.length) {
+      const firstId = String(tenantPage.data[0].id)
+      setSelectedTenantId(firstId)
+      localStorage.setItem('hrms_selected_tenant', firstId)
+      onTenantChange?.(firstId)
+    }
+  }, [isSuperAdmin, effectiveTenantId, tenantPage, onTenantChange])
+
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedComponent, setSelectedComponent] = useState<SalaryComponentSummary | null>(null)
   const [editingRegulation, setEditingRegulation] = useState<SalaryComponentRegulation | null>(null)
@@ -110,8 +167,11 @@ export function SalaryComponentRegulationsPage() {
   const [componentForm, setComponentForm] = useState<SalaryComponentForm>(emptyComponentForm)
 
   const query = useQuery({
-    queryKey: ['payroll', 'salary-component-regulations'],
-    queryFn: () => api.get<RegulationIndex>('payroll/salary-component-regulations'),
+    queryKey: ['payroll', 'salary-component-regulations', effectiveTenantId],
+    queryFn: () => api.get<RegulationIndex>(
+      'payroll/salary-component-regulations',
+      effectiveTenantId ? { tenant_id: effectiveTenantId } : undefined
+    ),
     enabled: canView,
   })
 
@@ -144,6 +204,7 @@ export function SalaryComponentRegulationsPage() {
 
       const formData = new FormData()
       Object.entries(payload).forEach(([key, value]) => formData.append(key, value))
+      if (effectiveTenantId) formData.append('tenant_id', effectiveTenantId)
       if (legalDocument) formData.append('legal_document', legalDocument)
 
       if (editingRegulation) {
@@ -168,6 +229,7 @@ export function SalaryComponentRegulationsPage() {
   const initializeAngola = useMutation({
     mutationFn: () => api.post<{ components_created: number; draft_regulations_created: number }>(
       'payroll/salary-component-regulations/initialize-angola',
+      effectiveTenantId ? { tenant_id: effectiveTenantId } : {},
     ),
     onSuccess: (result) => {
       toast.success(t('salaryRegulations.initialized', result))
@@ -177,7 +239,10 @@ export function SalaryComponentRegulationsPage() {
   })
 
   const createComponent = useMutation({
-    mutationFn: () => api.post<SalaryComponentSummary>('payroll/salary-components', componentForm),
+    mutationFn: () => api.post<SalaryComponentSummary>('payroll/salary-components', {
+      ...componentForm,
+      ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
+    }),
     onSuccess: () => {
       toast.success(t('salaryRegulations.componentCreated'))
       setComponentDialogOpen(false)
@@ -330,29 +395,91 @@ export function SalaryComponentRegulationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow={t('settings.title')}
-        title={t('salaryRegulations.title')}
-        description={t('salaryRegulations.description')}
-        actions={(
-          <div className="flex flex-wrap gap-2">
-            {canCreate && (
-              <Button variant="outline" onClick={() => initializeAngola.mutate()} disabled={initializeAngola.isPending}>
-                <ListPlus className="mr-2 h-4 w-4" />{t('salaryRegulations.initializeAngola')}
+      {!embeddedTenantId && (
+        <PageHeader
+          eyebrow={t('settings.title')}
+          title={t('salaryRegulations.title')}
+          description={t('salaryRegulations.description')}
+          actions={(
+            <div className="flex flex-wrap gap-2">
+              {canCreate && (
+                <Button variant="outline" onClick={() => initializeAngola.mutate()} disabled={initializeAngola.isPending}>
+                  <ListPlus className="mr-2 h-4 w-4" />{t('salaryRegulations.initializeAngola')}
+                </Button>
+              )}
+              {canCreate && (
+                <Button variant="outline" onClick={() => setComponentDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />{t('salaryRegulations.addComponent')}
+                </Button>
+              )}
+              <Button variant="outline" asChild>
+                <Link to="/settings"><ArrowLeft className="mr-2 h-4 w-4" />{t('common.back')}</Link>
               </Button>
-            )}
-            {canCreate && (
-              <Button variant="outline" onClick={() => setComponentDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />{t('salaryRegulations.addComponent')}
-              </Button>
-            )}
-            <Button variant="outline" asChild>
-              <Link to="/settings"><ArrowLeft className="mr-2 h-4 w-4" />{t('common.back')}</Link>
-            </Button>
-          </div>
-        )}
-      />
+            </div>
+          )}
+        />
+      )}
 
+      {embeddedTenantId && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">{t('salaryRegulations.title')}</h2>
+            <p className="text-xs text-muted-foreground">{t('salaryRegulations.description')}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {canCreate && (
+              <Button size="sm" variant="outline" onClick={() => initializeAngola.mutate()} disabled={initializeAngola.isPending}>
+                <ListPlus className="mr-1.5 h-3.5 w-3.5" />{t('salaryRegulations.initializeAngola')}
+              </Button>
+            )}
+            {canCreate && (
+              <Button size="sm" onClick={() => setComponentDialogOpen(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />{t('salaryRegulations.addComponent')}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isSuperAdmin && !embeddedTenantId && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                <Shield className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Modo Super Administrador</p>
+                <p className="text-xs text-muted-foreground">
+                  Selecione a empresa para gerir as componentes salariais e regras de incidência.
+                </p>
+              </div>
+            </div>
+            <div className="w-full sm:w-64">
+              <Select
+                value={selectedTenantId}
+                onValueChange={(tenantId) => {
+                  setSelectedTenantId(tenantId)
+                  localStorage.setItem('hrms_selected_tenant', tenantId)
+                  onTenantChange?.(tenantId)
+                  queryClient.invalidateQueries({ queryKey: ['payroll', 'salary-component-regulations'] })
+                }}
+              >
+                <SelectTrigger className="w-full bg-background">
+                  <SelectValue placeholder="Selecione uma empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenantPage?.data.map((tenant) => (
+                    <SelectItem key={tenant.id} value={String(tenant.id)}>
+                      {tenant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <SalaryComponentDialog
         open={componentDialogOpen}
@@ -373,7 +500,6 @@ export function SalaryComponentRegulationsPage() {
         rowKey={(row) => row.id}
         emptyTitle={t('salaryRegulations.empty')}
         emptyDescription={t('salaryRegulations.emptyDescription')}
-        actions={actions.length > 0 ? actions : undefined}
         columns={[
           {
             id: 'component',
@@ -454,6 +580,144 @@ export function SalaryComponentRegulationsPage() {
                 <p className="truncate text-xs text-muted-foreground">{row.regulation.legal_reference || ''}</p>
               </div>
             ) : '—',
+          },
+          {
+            id: 'actions',
+            header: 'Ações',
+            align: 'right',
+            cell: (row) => {
+              if (!canConfigure && !canCreate) return null
+
+              if (!row.regulation) {
+                return (
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs font-medium"
+                    onClick={() => openNew(row.component)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Configurar Regra
+                  </Button>
+                )
+              }
+
+              const status = row.regulation.status
+              return (
+                <div className="flex items-center justify-end gap-1.5">
+                  {status === 'draft' && (
+                    <>
+                      {canUpdate && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => openDraft(row)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Editar
+                        </Button>
+                      )}
+                      {canConfigure && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 text-xs text-blue-600 hover:bg-blue-50 border-blue-200"
+                          onClick={() => action.mutate({ id: row.regulation!.id, operation: 'validate' })}
+                          disabled={action.isPending}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Validar
+                        </Button>
+                      )}
+                      {canDeleteDraft && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            if (window.confirm(t('salaryRegulations.deleteDraftConfirm'))) {
+                              removeDraft.mutate(row.regulation!.id)
+                            }
+                          }}
+                          title="Eliminar rascunho"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </>
+                  )}
+
+                  {status === 'validated' && canConfigure && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1 text-xs text-emerald-600 hover:bg-emerald-50 border-emerald-200"
+                        onClick={() => action.mutate({ id: row.regulation!.id, operation: 'activate' })}
+                        disabled={action.isPending}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Ativar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 gap-1 text-xs text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          const reason = window.prompt(t('salaryRegulations.revokeReason'))
+                          if (reason?.trim()) revokeRule.mutate({ id: row.regulation!.id, reason: reason.trim() })
+                        }}
+                      >
+                        <Ban className="h-3.5 w-3.5" />
+                        Revogar
+                      </Button>
+                    </>
+                  )}
+
+                  {status === 'active' && (
+                    <>
+                      {canCreate && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => openNew(row.component)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Nova Versão
+                        </Button>
+                      )}
+                      {canConfigure && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 gap-1 text-xs text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            const reason = window.prompt(t('salaryRegulations.revokeReason'))
+                            if (reason?.trim()) revokeRule.mutate({ id: row.regulation!.id, reason: reason.trim() })
+                          }}
+                        >
+                          <Ban className="h-3.5 w-3.5" />
+                          Revogar
+                        </Button>
+                      )}
+                    </>
+                  )}
+
+                  {status === 'revoked' && canCreate && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1 text-xs"
+                      onClick={() => openNew(row.component)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Nova Versão
+                    </Button>
+                  )}
+                </div>
+              )
+            },
           },
         ]}
       />

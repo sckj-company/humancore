@@ -24,7 +24,11 @@ class PayrollPeriod extends Model
         'status',
         'processed_by',
         'processed_at',
+        'approved_by',
+        'approved_at',
         'closed_at',
+        'rejection_reason',
+        'totals_snapshot',
         'notes',
     ];
 
@@ -35,7 +39,9 @@ class PayrollPeriod extends Model
             'period_end' => 'date',
             'payment_date' => 'date',
             'processed_at' => 'datetime',
+            'approved_at' => 'datetime',
             'closed_at' => 'datetime',
+            'totals_snapshot' => 'array',
         ];
     }
 
@@ -47,6 +53,11 @@ class PayrollPeriod extends Model
     public function processedBy()
     {
         return $this->belongsTo(User::class, 'processed_by');
+    }
+
+    public function approvedBy()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     public function records()

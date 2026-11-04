@@ -38,30 +38,32 @@ class IRTRule extends AbstractPayrollRule
     public function calculate(PayrollContext $context): float
     {
         $taxable = $this->taxableBase($context);
-        $brackets = $this->setting($context, 'payroll.irt.brackets', $this->defaultBrackets());
+        if ($taxable <= 0) {
+            return 0.0;
+        }
+
+        $brackets = $context->irtTable?->brackets ?? $this->setting($context, 'payroll.irt.brackets', $this->defaultBrackets());
 
         $tax = 0.0;
-        $remaining = $taxable;
-        $previousMax = 0;
-
         foreach ($brackets as $bracket) {
-            $min = (float) ($bracket['min'] ?? 0);
+            $min = (float) ($bracket['lower_bound'] ?? $bracket['min'] ?? 0);
+            $max = array_key_exists('upper_bound', $bracket)
+                ? ($bracket['upper_bound'] !== null ? (float) $bracket['upper_bound'] : null)
+                : (array_key_exists('max', $bracket) && $bracket['max'] !== null ? (float) $bracket['max'] : null);
             $rate = (float) ($bracket['rate'] ?? 0);
+            $fixed = (float) ($bracket['fixed_amount'] ?? $bracket['fixed'] ?? 0);
 
-            $span = $bracket['max'] ?? null;
-
-            if ($span === null) {
-                $tax += max(0, $remaining - $min) * ($rate / 100);
-                $remaining = 0;
-                break;
+            if ($max !== null) {
+                if ($taxable >= $min && $taxable <= $max) {
+                    $tax = $fixed + (($taxable - $min) * ($rate / 100));
+                    return -1 * round($tax, 2);
+                }
+            } else {
+                if ($taxable >= $min) {
+                    $tax = $fixed + (($taxable - $min) * ($rate / 100));
+                    return -1 * round($tax, 2);
+                }
             }
-
-            if ($taxable > $min) {
-                $portion = min($taxable, $span) - $min;
-                $tax += $portion * ($rate / 100);
-                $remaining = $taxable - $span;
-            }
-            $previousMax = $span;
         }
 
         return -1 * round($tax, 2);
@@ -78,11 +80,11 @@ class IRTRule extends AbstractPayrollRule
     protected function defaultBrackets(): array
     {
         return [
-            ['min' => 0, 'max' => 100000, 'rate' => 0],
-            ['min' => 100000, 'max' => 200000, 'rate' => 7],
-            ['min' => 200000, 'max' => 500000, 'rate' => 11],
-            ['min' => 500000, 'max' => 1000000, 'rate' => 15],
-            ['min' => 1000000, 'rate' => 19],
+            ['lower_bound' => 0, 'upper_bound' => 100000, 'rate' => 0, 'fixed_amount' => 0],
+            ['lower_bound' => 100000, 'upper_bound' => 200000, 'rate' => 7, 'fixed_amount' => 0],
+            ['lower_bound' => 200000, 'upper_bound' => 500000, 'rate' => 11, 'fixed_amount' => 7000],
+            ['lower_bound' => 500000, 'upper_bound' => 1000000, 'rate' => 15, 'fixed_amount' => 40000],
+            ['lower_bound' => 1000000, 'upper_bound' => null, 'rate' => 19, 'fixed_amount' => 115000],
         ];
     }
 }

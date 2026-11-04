@@ -68,8 +68,24 @@ class PayrollController extends BaseController
     {
         $this->authorize('approve', $period);
 
+        $totals = [
+            'total_gross' => (float) $period->records()->sum('gross_salary'),
+            'total_net' => (float) $period->records()->sum('net_salary'),
+            'total_inss_employee' => (float) $period->records()->sum('total_deductions'),
+            'total_employer_inss' => (float) $period->records()->sum('employer_inss'),
+            'total_irt' => (float) $period->records()->sum('total_taxes'),
+            'total_employer_cost' => (float) $period->records()->sum('employer_cost'),
+            'records_count' => $period->records()->count(),
+            'approved_at' => now()->toIso8601String(),
+        ];
+
         $period->records()->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => auth()->id()]);
-        $period->update(['status' => 'completed']);
+        $period->update([
+            'status' => 'completed',
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+            'totals_snapshot' => $totals,
+        ]);
 
         return $this->success(null, 'Folha aprovada com sucesso.');
     }
@@ -87,7 +103,7 @@ class PayrollController extends BaseController
     {
         $this->authorize('viewAny', PayrollRecord::class);
 
-        $records = $period->records()->with('employee')->get();
+        $records = $period->records()->with(['employee', 'contract', 'items'])->get();
 
         return $this->success(PayrollRecordResource::collection($records));
     }

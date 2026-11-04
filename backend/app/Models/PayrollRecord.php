@@ -22,6 +22,12 @@ class PayrollRecord extends Model
         'total_deductions',
         'total_taxes',
         'net_salary',
+        'inss_base',
+        'employer_inss_base',
+        'employer_inss',
+        'irt_taxable_base',
+        'employer_cost',
+        'currency',
         'work_days',
         'absent_days',
         'overtime_hours',
@@ -31,6 +37,9 @@ class PayrollRecord extends Model
         'approved_at',
         'paid_at',
         'details',
+        'snapshot',
+        'engine_version',
+        'validation_errors',
     ];
 
     protected function casts(): array
@@ -42,9 +51,16 @@ class PayrollRecord extends Model
             'total_deductions' => 'decimal:2',
             'total_taxes' => 'decimal:2',
             'net_salary' => 'decimal:2',
+            'inss_base' => 'decimal:2',
+            'employer_inss_base' => 'decimal:2',
+            'employer_inss' => 'decimal:2',
+            'irt_taxable_base' => 'decimal:2',
+            'employer_cost' => 'decimal:2',
             'overtime_hours' => 'decimal:2',
             'overtime_amount' => 'decimal:2',
             'details' => 'array',
+            'snapshot' => 'array',
+            'validation_errors' => 'array',
             'approved_at' => 'datetime',
             'paid_at' => 'datetime',
         ];
@@ -73,5 +89,10 @@ class PayrollRecord extends Model
     public function approvedBy()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function items(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PayrollRecordItem::class);
     }
 }

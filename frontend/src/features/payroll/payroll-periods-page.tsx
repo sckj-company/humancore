@@ -28,11 +28,27 @@ import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/s
 import type { PayrollPeriod, Paginated } from '@/types'
 
 const statusStyle: Record<string, string> = {
-  open: 'bg-info/10 text-info',
-  processing: 'bg-warning/10 text-warning',
-  completed: 'bg-success/10 text-success',
-  closed: 'bg-muted text-muted-foreground',
-  cancelled: 'bg-destructive/10 text-destructive',
+  open:             'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  processing:       'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  completed:        'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+  failed:           'bg-red-500/10 text-red-600 border-red-500/20',
+  pending_approval: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  approved:         'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  paid:             'bg-green-500/10 text-green-600 border-green-500/20',
+  closed:           'bg-muted text-muted-foreground border-border',
+  cancelled:        'bg-red-500/10 text-red-600 border-red-500/20',
+}
+
+const statusLabel: Record<string, string> = {
+  open:             'Aberto',
+  processing:       'A Processar',
+  completed:        'Calculado',
+  failed:           'Com Erros',
+  pending_approval: 'Pend. Aprovação',
+  approved:         'Aprovado',
+  paid:             'Pago',
+  closed:           'Fechado',
+  cancelled:        'Cancelado',
 }
 
 const schema = z.object({
@@ -133,8 +149,8 @@ export function PayrollPeriodsPage() {
                         {formatDate(p.period_start, i18n.language)} – {formatDate(p.period_end, i18n.language)}
                       </td>
                       <td className="px-6 py-3 text-right">
-                        <Badge className={statusStyle[p.status]} variant="secondary">
-                          {p.status}
+                        <Badge className={statusStyle[p.status]} variant="outline">
+                          {statusLabel[p.status] ?? p.status}
                         </Badge>
                       </td>
                       <td className="px-6 py-3 text-right text-muted-foreground">{p.employee_count ?? 0}</td>

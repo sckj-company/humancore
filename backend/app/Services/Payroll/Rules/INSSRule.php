@@ -38,7 +38,7 @@ class INSSRule extends AbstractPayrollRule
     public function calculate(PayrollContext $context): float
     {
         $base = $this->calculateTaxableBase($context);
-        $rate = (float) $this->setting($context, 'payroll.inss.employee_rate', 3.0);
+        $rate = (float) ($context->inssRule?->employee_rate ?? $this->setting($context, 'payroll.inss.employee_rate', 3.0));
 
         return -1 * round($base * ($rate / 100), 2);
     }

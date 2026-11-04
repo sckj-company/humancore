@@ -1,0 +1,905 @@
+import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import {
+  ArrowLeft,
+  ChevronRight,
+  ShieldCheck,
+  Percent,
+  CheckCircle2,
+  Ban,
+  Plus,
+  Loader2,
+  Building2,
+  Calendar,
+  Layers,
+  Trash2,
+  Scale,
+  FileCheck2,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { api, getApiErrorMessage } from '@/lib/api'
+import { useAuthStore, hasPermission, hasAnyRole } from '@/stores/auth-store'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { LoadingState, ErrorState } from '@/components/shared/page-header'
+import type { PayrollInssRule, PayrollIrtTable, PayrollIrtBracket } from '@/types'
+
+const statusLabels: Record<string, string> = {
+  draft: 'Rascunho',
+  validated: 'Validado',
+  active: 'Ativo',
+  revoked: 'Revogado',
+}
+
+const statusColors: Record<string, string> = {
+  draft: 'bg-muted text-muted-foreground border-border',
+  validated: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  active: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  revoked: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
+}
+
+export interface PayrollTaxRulesPageProps {
+  embeddedTenantId?: string
+  onTenantChange?: (tenantId: string) => void
+  isEmbedded?: boolean
+}
+
+export function PayrollTaxRulesPage({
+  embeddedTenantId,
+  onTenantChange,
+  isEmbedded,
+}: PayrollTaxRulesPageProps = {}) {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language || 'pt-PT'
+  const user = useAuthStore((s) => s.user)
+  const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
+  const canConfigure = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'process_payroll')
+  const qc = useQueryClient()
+
+  const [selectedTenantId, setSelectedTenantId] = useState<string>(
+    () => embeddedTenantId || localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
+  )
+
+  const effectiveTenantId = embeddedTenantId || selectedTenantId
+
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') || 'inss'
+
+  // Modais INSS
+  const [isInssCreateOpen, setIsInssCreateOpen] = useState(false)
+  const [inssForm, setInssForm] = useState({
+    country_code: 'AO',
+    regime_code: 'standard',
+    employee_rate: '3.00',
+    employer_rate: '8.00',
+    max_base: '',
+    effective_from: new Date().toISOString().slice(0, 10),
+    effective_to: '',
+    legal_source: '',
+    legal_reference: '',
+  })
+
+  // Modais IRT
+  const [isIrtCreateOpen, setIsIrtCreateOpen] = useState(false)
+  const [irtForm, setIrtForm] = useState<{
+    country_code: string
+    regime_code: string
+    effective_from: string
+    effective_to: string
+    legal_source: string
+    legal_reference: string
+    brackets: PayrollIrtBracket[]
+  }>({
+    country_code: 'AO',
+    regime_code: 'standard',
+    effective_from: new Date().toISOString().slice(0, 10),
+    effective_to: '',
+    legal_source: '',
+    legal_reference: '',
+    brackets: [
+      { lower_bound: 0, upper_bound: 100000, rate: 0, fixed_amount: 0 },
+      { lower_bound: 100000, upper_bound: 200000, rate: 7, fixed_amount: 0 },
+      { lower_bound: 200000, upper_bound: 500000, rate: 11, fixed_amount: 7000 },
+      { lower_bound: 500000, upper_bound: 1000000, rate: 15, fixed_amount: 40000 },
+      { lower_bound: 1000000, upper_bound: null, rate: 19, fixed_amount: 115000 },
+    ],
+  })
+
+  // Modal de Revogação
+  const [revokeTarget, setRevokeTarget] = useState<{ type: 'inss' | 'irt'; id: number } | null>(null)
+  const [revokeReason, setRevokeReason] = useState('')
+
+  // Queries
+  const {
+    data: inssRules,
+    isLoading: inssLoading,
+    isError: inssError,
+    refetch: refetchInss,
+  } = useQuery<PayrollInssRule[]>({
+    queryKey: ['payroll-inss-rules', effectiveTenantId],
+    queryFn: () => api.get<PayrollInssRule[]>(
+      'payroll/inss-rules',
+      effectiveTenantId ? { tenant_id: effectiveTenantId } : undefined
+    ),
+  })
+
+  const {
+    data: irtTables,
+    isLoading: irtLoading,
+    isError: irtError,
+    refetch: refetchIrt,
+  } = useQuery<PayrollIrtTable[]>({
+    queryKey: ['payroll-irt-tables', effectiveTenantId],
+    queryFn: () => api.get<PayrollIrtTable[]>(
+      'payroll/irt-tables',
+      effectiveTenantId ? { tenant_id: effectiveTenantId } : undefined
+    ),
+  })
+
+  // Mutations INSS
+  const createInssMutation = useMutation({
+    mutationFn: (data: any) => api.post('payroll/inss-rules', {
+      ...data,
+      ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
+    }),
+    onSuccess: () => {
+      toast.success('Regra INSS criada como rascunho.')
+      setIsInssCreateOpen(false)
+      qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar regra INSS.')),
+  })
+
+  const validateInssMutation = useMutation({
+    mutationFn: (id: number) => api.post(`payroll/inss-rules/${id}/validate`),
+    onSuccess: () => {
+      toast.success('Regra INSS validada com sucesso.')
+      qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao validar regra INSS.')),
+  })
+
+  const activateInssMutation = useMutation({
+    mutationFn: (id: number) => api.post(`payroll/inss-rules/${id}/activate`),
+    onSuccess: () => {
+      toast.success('Regra INSS ativada com sucesso.')
+      qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao ativar regra INSS.')),
+  })
+
+  // Mutations IRT
+  const createIrtMutation = useMutation({
+    mutationFn: (data: any) => api.post('payroll/irt-tables', {
+      ...data,
+      ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
+    }),
+    onSuccess: () => {
+      toast.success('Tabela IRT criada como rascunho.')
+      setIsIrtCreateOpen(false)
+      qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar tabela IRT.')),
+  })
+
+  const validateIrtMutation = useMutation({
+    mutationFn: (id: number) => api.post(`payroll/irt-tables/${id}/validate`),
+    onSuccess: () => {
+      toast.success('Tabela IRT validada com sucesso.')
+      qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao validar tabela IRT.')),
+  })
+
+  const activateIrtMutation = useMutation({
+    mutationFn: (id: number) => api.post(`payroll/irt-tables/${id}/activate`),
+    onSuccess: () => {
+      toast.success('Tabela IRT ativada com sucesso.')
+      qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao ativar tabela IRT.')),
+  })
+
+  // Mutation Revogação Comum
+  const revokeMutation = useMutation({
+    mutationFn: () => {
+      if (!revokeTarget) throw new Error('Alvo inválido.')
+      const path = revokeTarget.type === 'inss' ? `payroll/inss-rules` : `payroll/irt-tables`
+      return api.post(`${path}/${revokeTarget.id}/revoke`, {
+        reason: revokeReason,
+        ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
+      })
+    },
+    onSuccess: () => {
+      toast.success('Regra revogada com sucesso; o histórico foi preservado.')
+      setRevokeTarget(null)
+      setRevokeReason('')
+      qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+      qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao revogar.')),
+  })
+
+  const formatDate = (d?: string | null) => {
+    if (!d) return '—'
+    try {
+      return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(d))
+    } catch {
+      return d
+    }
+  }
+
+  const activeInss = inssRules?.find((r) => r.status === 'active')
+  const activeIrt = irtTables?.find((r) => r.status === 'active')
+
+  return (
+    <div className="space-y-6">
+      {/* Breadcrumb - Padrão EmployeeDetailPage */}
+      {!embeddedTenantId && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Button variant="ghost" size="icon-sm" asChild>
+              <Link to="/settings">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Link to="/settings" className="hover:text-foreground transition-colors">
+              {t('settings.title', { defaultValue: 'Configurações' })}
+            </Link>
+            <ChevronRight className="h-3.5 w-3.5" />
+            <span className="text-foreground font-semibold">Regras Fiscais & Previdenciárias</span>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/settings">
+              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+              Voltar
+            </Link>
+          </Button>
+        </div>
+      )}
+
+      {/* Hero Header Card - Padrão EmployeeDetailPage */}
+      <Card className="border-border/80 shadow-xs bg-card">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex flex-col sm:flex-row items-center sm:items-center gap-5 text-center sm:text-left">
+              <div className="relative shrink-0">
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-xs">
+                  <Scale className="h-10 w-10 text-primary" />
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">Regras Oficiais & Tabelas de Imposto</h1>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    Angola (AO)
+                  </Badge>
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                    Regime Geral
+                  </Badge>
+                </div>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Configuração auditável e versionada de taxas da Segurança Social (INSS) e escalões progressivos de IRT.
+                </p>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-3 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1">
+                    <ShieldCheck className="h-3 w-3 text-primary" />
+                    Validação jurídica obrigatória antes da ativação
+                  </span>
+                  <Link
+                    to="/settings/payroll-components"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-primary hover:bg-primary/10 transition-colors font-medium"
+                  >
+                    <FileCheck2 className="h-3 w-3" />
+                    Gerir Incidências de Componentes
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {canConfigure && (
+              <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 shrink-0">
+                {activeTab === 'inss' ? (
+                  <Button size="sm" className="gap-1.5" onClick={() => setIsInssCreateOpen(true)}>
+                    <Plus className="h-4 w-4" /> Nova Versão INSS
+                  </Button>
+                ) : (
+                  <Button size="sm" className="gap-1.5" onClick={() => setIsIrtCreateOpen(true)}>
+                    <Plus className="h-4 w-4" /> Nova Tabela IRT
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPI Bar - Padrão EmployeeDetailPage */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="p-4 flex items-center gap-3">
+          <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+            <Percent className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground font-medium">INSS Trabalhador (Ativo)</p>
+            <p className="text-sm font-semibold truncate text-foreground">
+              {activeInss ? `${activeInss.employee_rate}%` : 'Não Configurado'}
+            </p>
+          </div>
+        </Card>
+
+        <Card className="p-4 flex items-center gap-3">
+          <div className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-600">
+            <Building2 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground font-medium">INSS Patronal (Ativo)</p>
+            <p className="text-sm font-semibold truncate text-foreground">
+              {activeInss ? `${activeInss.employer_rate}%` : 'Não Configurado'}
+            </p>
+          </div>
+        </Card>
+
+        <Card className="p-4 flex items-center gap-3">
+          <div className="rounded-lg bg-blue-500/10 p-2.5 text-blue-600">
+            <Layers className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground font-medium">Tabela IRT Ativa</p>
+            <p className="text-sm font-semibold truncate text-foreground">
+              {activeIrt ? `Versão ${activeIrt.version} (${activeIrt.brackets?.length ?? 0} escalões)` : 'Não Configurada'}
+            </p>
+          </div>
+        </Card>
+
+        <Card className="p-4 flex items-center gap-3">
+          <div className="rounded-lg bg-amber-500/10 p-2.5 text-amber-600">
+            <Calendar className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground font-medium">Vigência Ativa</p>
+            <p className="text-sm font-semibold truncate text-foreground">
+              {activeInss ? `Desde ${formatDate(activeInss.effective_from)}` : '—'}
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Tabs - Padrão EmployeeDetailPage */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => setSearchParams({ tab }, { replace: true })}
+        className="w-full"
+      >
+        <TabsList className="w-full flex-wrap justify-start h-auto gap-1 p-1.5 bg-muted/60 border border-border/60 rounded-lg">
+          <TabsTrigger value="inss" className="gap-1.5 px-3 py-1.5 text-xs">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Regras de Segurança Social (INSS)
+            {(inssRules ?? []).length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1 font-semibold">
+                {inssRules!.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="irt" className="gap-1.5 px-3 py-1.5 text-xs">
+            <Layers className="h-3.5 w-3.5" />
+            Tabelas de IRT (Escalões Progressivos)
+            {(irtTables ?? []).length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1 font-semibold">
+                {irtTables!.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab Content: INSS */}
+        <TabsContent value="inss" className="mt-6 space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  Histórico de Taxas da Segurança Social (INSS)
+                </CardTitle>
+                <CardDescription>
+                  Taxas contributivas aplicáveis ao trabalhador e à entidade empregadora
+                </CardDescription>
+              </div>
+              {canConfigure && (
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setIsInssCreateOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Nova Versão
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {inssLoading && <LoadingState />}
+              {inssError && <ErrorState message="Erro ao carregar regras INSS." onRetry={refetchInss} />}
+              {inssRules && inssRules.length === 0 && (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhuma regra INSS cadastrada. Crie uma nova versão para começar.
+                </div>
+              )}
+              {inssRules && inssRules.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Versão</th>
+                        <th className="px-4 py-3 font-medium">Regime</th>
+                        <th className="px-4 py-3 font-medium">Taxa Trabalhador</th>
+                        <th className="px-4 py-3 font-medium">Taxa Patronal</th>
+                        <th className="px-4 py-3 font-medium">Vigência</th>
+                        <th className="px-4 py-3 font-medium">Estado</th>
+                        <th className="px-4 py-3 font-medium">Validação</th>
+                        <th className="px-4 py-3 text-right font-medium">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border text-sm">
+                      {inssRules.map((rule) => (
+                        <tr key={rule.id} className="transition-colors hover:bg-muted/30">
+                          <td className="px-4 py-3 font-semibold">v{rule.version}</td>
+                          <td className="px-4 py-3 text-muted-foreground capitalize">{rule.regime_code}</td>
+                          <td className="px-4 py-3 font-mono text-primary font-medium">{rule.employee_rate}%</td>
+                          <td className="px-4 py-3 font-mono text-emerald-600 font-medium">{rule.employer_rate}%</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">
+                            {formatDate(rule.effective_from)} {rule.effective_to ? `até ${formatDate(rule.effective_to)}` : '(vigente)'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className={`font-medium ${statusColors[rule.status] ?? ''}`}>
+                              {statusLabels[rule.status] ?? rule.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">
+                            {rule.validated_by ? (
+                              <span>
+                                {rule.validated_by.name} ({formatDate(rule.validated_at)})
+                              </span>
+                            ) : (
+                              'Pendente'
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {rule.status === 'draft' && canConfigure && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs gap-1 text-blue-600 hover:bg-blue-50"
+                                  onClick={() => validateInssMutation.mutate(rule.id)}
+                                  disabled={validateInssMutation.isPending}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Validar
+                                </Button>
+                              )}
+                              {rule.status === 'validated' && canConfigure && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs gap-1 text-emerald-600 hover:bg-emerald-50"
+                                  onClick={() => activateInssMutation.mutate(rule.id)}
+                                  disabled={activateInssMutation.isPending}
+                                >
+                                  <ShieldCheck className="h-3.5 w-3.5" /> Ativar
+                                </Button>
+                              )}
+                              {(rule.status === 'active' || rule.status === 'validated') && canConfigure && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-xs gap-1 text-destructive hover:bg-destructive/10"
+                                  onClick={() => setRevokeTarget({ type: 'inss', id: rule.id })}
+                                >
+                                  <Ban className="h-3.5 w-3.5" /> Revogar
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab Content: IRT */}
+        <TabsContent value="irt" className="mt-6 space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-primary" />
+                  Histórico de Tabelas de IRT (Imposto sobre Rendimento do Trabalho)
+                </CardTitle>
+                <CardDescription>
+                  Escalões progressivos, limites inferior/superior, parcelas fixas e taxas oficiais
+                </CardDescription>
+              </div>
+              {canConfigure && (
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setIsIrtCreateOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Nova Tabela IRT
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {irtLoading && <LoadingState />}
+              {irtError && <ErrorState message="Erro ao carregar tabelas IRT." onRetry={refetchIrt} />}
+              {irtTables && irtTables.length === 0 && (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhuma tabela IRT cadastrada. Crie uma nova versão para começar.
+                </div>
+              )}
+              {irtTables && irtTables.length > 0 && (
+                <div className="space-y-6">
+                  {irtTables.map((table) => (
+                    <div key={table.id} className="rounded-xl border border-border p-5 space-y-4 bg-muted/10">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-base text-foreground">Tabela IRT v{table.version}</span>
+                          <Badge variant="outline" className={`font-medium ${statusColors[table.status] ?? ''}`}>
+                            {statusLabels[table.status] ?? table.status}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Vigência: {formatDate(table.effective_from)} {table.effective_to ? `até ${formatDate(table.effective_to)}` : '(vigente)'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {table.status === 'draft' && canConfigure && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs gap-1 text-blue-600 hover:bg-blue-50"
+                              onClick={() => validateIrtMutation.mutate(table.id)}
+                              disabled={validateIrtMutation.isPending}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Validar
+                            </Button>
+                          )}
+                          {table.status === 'validated' && canConfigure && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs gap-1 text-emerald-600 hover:bg-emerald-50"
+                              onClick={() => activateIrtMutation.mutate(table.id)}
+                              disabled={activateIrtMutation.isPending}
+                            >
+                              <ShieldCheck className="h-3.5 w-3.5" /> Ativar
+                            </Button>
+                          )}
+                          {(table.status === 'active' || table.status === 'validated') && canConfigure && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-xs gap-1 text-destructive hover:bg-destructive/10"
+                              onClick={() => setRevokeTarget({ type: 'irt', id: table.id })}
+                            >
+                              <Ban className="h-3.5 w-3.5" /> Revogar
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {table.legal_reference && (
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-semibold text-foreground">Base legal:</span> {table.legal_reference}
+                        </p>
+                      )}
+
+                      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                        <table className="w-full text-xs">
+                          <thead className="border-b border-border bg-muted/40 uppercase text-muted-foreground">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Escalão</th>
+                              <th className="px-3 py-2 text-right">Limite Inferior</th>
+                              <th className="px-3 py-2 text-right">Limite Superior</th>
+                              <th className="px-3 py-2 text-right">Taxa (%)</th>
+                              <th className="px-3 py-2 text-right">Parcela Fixa (Kz)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {table.brackets?.map((b, idx) => (
+                              <tr key={idx} className="hover:bg-muted/30">
+                                <td className="px-3 py-2 font-medium">Escalão {idx + 1}</td>
+                                <td className="px-3 py-2 text-right font-mono">{b.lower_bound.toLocaleString()} Kz</td>
+                                <td className="px-3 py-2 text-right font-mono">
+                                  {b.upper_bound !== null ? `${b.upper_bound.toLocaleString()} Kz` : 'Infinito'}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono font-semibold text-primary">{b.rate}%</td>
+                                <td className="px-3 py-2 text-right font-mono">{b.fixed_amount.toLocaleString()} Kz</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Modal Criar Regra INSS */}
+      <Dialog open={isInssCreateOpen} onOpenChange={setIsInssCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova Versão de Regra INSS</DialogTitle>
+            <DialogDescription>
+              Crie uma versão de taxa contributiva com período de vigência. Entrará inicialmente como rascunho.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Taxa Trabalhador (%)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={inssForm.employee_rate}
+                  onChange={(e) => setInssForm({ ...inssForm, employee_rate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Taxa Patronal (%)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={inssForm.employer_rate}
+                  onChange={(e) => setInssForm({ ...inssForm, employer_rate: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Início de Vigência</Label>
+                <Input
+                  type="date"
+                  value={inssForm.effective_from}
+                  onChange={(e) => setInssForm({ ...inssForm, effective_from: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fim de Vigência (opcional)</Label>
+                <Input
+                  type="date"
+                  value={inssForm.effective_to}
+                  onChange={(e) => setInssForm({ ...inssForm, effective_to: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Referência Legal / Diploma</Label>
+              <Input
+                placeholder="Ex: Decreto Presidencial n.º 227/18"
+                value={inssForm.legal_reference}
+                onChange={(e) => setInssForm({ ...inssForm, legal_reference: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsInssCreateOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={createInssMutation.isPending}
+              onClick={() => {
+                createInssMutation.mutate({
+                  country_code: inssForm.country_code,
+                  regime_code: inssForm.regime_code,
+                  employee_rate: parseFloat(inssForm.employee_rate),
+                  employer_rate: parseFloat(inssForm.employer_rate),
+                  effective_from: inssForm.effective_from,
+                  effective_to: inssForm.effective_to || undefined,
+                  legal_reference: inssForm.legal_reference || undefined,
+                })
+              }}
+            >
+              {createInssMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Criar Rascunho
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Criar Tabela IRT */}
+      <Dialog open={isIrtCreateOpen} onOpenChange={setIsIrtCreateOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nova Tabela de IRT</DialogTitle>
+            <DialogDescription>
+              Configure os escalões de IRT, parcelas fixas e início de vigência.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Início de Vigência</Label>
+                <Input
+                  type="date"
+                  value={irtForm.effective_from}
+                  onChange={(e) => setIrtForm({ ...irtForm, effective_from: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Referência Legal</Label>
+                <Input
+                  placeholder="Ex: Lei n.º 28/20 - Código do IRT"
+                  value={irtForm.legal_reference}
+                  onChange={(e) => setIrtForm({ ...irtForm, legal_reference: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="font-semibold">Escalões da Tabela</Label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => {
+                    const last = irtForm.brackets[irtForm.brackets.length - 1]
+                    const nextMin = last ? (last.upper_bound ?? last.lower_bound + 100000) : 0
+                    setIrtForm({
+                      ...irtForm,
+                      brackets: [
+                        ...irtForm.brackets,
+                        { lower_bound: nextMin, upper_bound: null, rate: 0, fixed_amount: 0 },
+                      ],
+                    })
+                  }}
+                >
+                  <Plus className="h-3 w-3" /> Adicionar Escalão
+                </Button>
+              </div>
+
+              <div className="space-y-2 border border-border rounded-lg p-3 bg-muted/20">
+                {irtForm.brackets.map((b, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-xs">
+                    <span className="w-16 font-semibold shrink-0">Escalão {idx + 1}</span>
+                    <Input
+                      type="number"
+                      placeholder="Min"
+                      className="h-8 text-xs font-mono"
+                      value={b.lower_bound}
+                      onChange={(e) => {
+                        const updated = [...irtForm.brackets]
+                        updated[idx].lower_bound = parseFloat(e.target.value) || 0
+                        setIrtForm({ ...irtForm, brackets: updated })
+                      }}
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Max (vazio = inf)"
+                      className="h-8 text-xs font-mono"
+                      value={b.upper_bound ?? ''}
+                      onChange={(e) => {
+                        const updated = [...irtForm.brackets]
+                        updated[idx].upper_bound = e.target.value ? parseFloat(e.target.value) : null
+                        setIrtForm({ ...irtForm, brackets: updated })
+                      }}
+                    />
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Input
+                        type="number"
+                        placeholder="Taxa %"
+                        className="h-8 w-20 text-xs font-mono"
+                        value={b.rate}
+                        onChange={(e) => {
+                          const updated = [...irtForm.brackets]
+                          updated[idx].rate = parseFloat(e.target.value) || 0
+                          setIrtForm({ ...irtForm, brackets: updated })
+                        }}
+                      />
+                      <span>%</span>
+                    </div>
+                    <Input
+                      type="number"
+                      placeholder="Fixa"
+                      className="h-8 w-28 text-xs font-mono"
+                      value={b.fixed_amount}
+                      onChange={(e) => {
+                        const updated = [...irtForm.brackets]
+                        updated[idx].fixed_amount = parseFloat(e.target.value) || 0
+                        setIrtForm({ ...irtForm, brackets: updated })
+                      }}
+                    />
+                    {irtForm.brackets.length > 1 && (
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive shrink-0"
+                        onClick={() => {
+                          setIrtForm({
+                            ...irtForm,
+                            brackets: irtForm.brackets.filter((_, i) => i !== idx),
+                          })
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsIrtCreateOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={createIrtMutation.isPending}
+              onClick={() => {
+                createIrtMutation.mutate({
+                  country_code: irtForm.country_code,
+                  regime_code: irtForm.regime_code,
+                  effective_from: irtForm.effective_from,
+                  effective_to: irtForm.effective_to || undefined,
+                  legal_reference: irtForm.legal_reference || undefined,
+                  brackets: irtForm.brackets,
+                })
+              }}
+            >
+              {createIrtMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Criar Tabela IRT
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Revogação */}
+      <Dialog open={!!revokeTarget} onOpenChange={(open) => !open && setRevokeTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Revogação</DialogTitle>
+            <DialogDescription>
+              A revogação encerra a vigência da regra, preservando todo o histórico para auditoria.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label>Motivo da Revogação (Obrigatório)</Label>
+            <Input
+              placeholder="Ex: Publicação de nova taxa oficial pelo Decreto..."
+              value={revokeReason}
+              onChange={(e) => setRevokeReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevokeTarget(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!revokeReason.trim() || revokeMutation.isPending}
+              onClick={() => revokeMutation.mutate()}
+            >
+              {revokeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Revogar Regra
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+

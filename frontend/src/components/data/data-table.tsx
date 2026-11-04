@@ -388,12 +388,13 @@ export function DataTable<T>({
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5 font-medium border-border/80 hover:bg-muted text-foreground"
                                 aria-label="Ações"
                               >
-                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="text-xs">Ações</span>
+                                <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">

@@ -201,7 +201,17 @@ export interface Paginated<T> {
   }
 }
 
-export type PayrollPeriodStatus = 'open' | 'processing' | 'completed' | 'closed' | 'cancelled'
+export type PayrollPeriodStatus = 'open' | 'processing' | 'completed' | 'failed' | 'pending_approval' | 'approved' | 'paid' | 'closed' | 'cancelled'
+
+export interface PayrollPeriodTotalsSnapshot {
+  total_gross?: number
+  total_net?: number
+  total_employer_cost?: number
+  total_inss_employee?: number
+  total_inss_employer?: number
+  total_irt?: number
+  record_count?: number
+}
 
 export interface PayrollPeriod {
   id: number
@@ -214,6 +224,10 @@ export interface PayrollPeriod {
   status: PayrollPeriodStatus
   processed_at?: string
   closed_at?: string
+  approved_by?: number | null
+  approved_at?: string | null
+  rejection_reason?: string | null
+  totals_snapshot?: PayrollPeriodTotalsSnapshot | null
   employee_count?: number
   total_gross?: number
   total_net?: number
@@ -230,6 +244,18 @@ export interface PayrollBreakdownItem {
   amount: number
 }
 
+export interface PayrollRecordItem {
+  id: number
+  category: 'earning' | 'deduction' | 'tax' | 'employer_contribution' | 'employer_cost'
+  code: string
+  name: string
+  base_amount?: number | null
+  quantity?: number | null
+  rate?: number | null
+  amount: number
+  notes?: string | null
+}
+
 export interface PayrollRecord {
   id: number
   employee_id: number
@@ -244,6 +270,16 @@ export interface PayrollRecord {
   absent_days: number
   overtime_hours: number
   overtime_amount: number
+  // Phase 2 fields
+  inss_base?: number | null
+  employer_inss_base?: number | null
+  employer_inss?: number | null
+  irt_taxable_base?: number | null
+  employer_cost?: number | null
+  currency?: string | null
+  engine_version?: string | null
+  validation_errors?: Array<{ code: string; message: string; severity: string }> | null
+  snapshot?: Record<string, unknown> | null
   status: PayrollRecordStatus
   approved_at?: string
   paid_at?: string
@@ -254,7 +290,9 @@ export interface PayrollRecord {
     late_minutes?: number
     overtime_hours?: number
   }
+  items?: PayrollRecordItem[]
   employee?: EmployeeSummary
+  contract?: { id: number; base_salary: number; contract_type: string }
 }
 
 export type SalaryComponentRegulationStatus = 'draft' | 'validated' | 'active' | 'revoked'
@@ -287,6 +325,59 @@ export interface SalaryComponentRegulation {
   revocation_reason?: string | null
   validated_by?: { id: number; name: string } | null
   component?: SalaryComponentSummary | null
+}
+
+export interface PayrollInssRule {
+  id: number
+  country_code: string
+  regime_code: string
+  version: number
+  employee_rate: number
+  employer_rate: number
+  max_base: number | null
+  effective_from: string
+  effective_to: string | null
+  status: SalaryComponentRegulationStatus
+  legal_source: string | null
+  legal_reference: string | null
+  legal_document_name?: string | null
+  has_legal_document?: boolean
+  validated_at: string | null
+  revoked_at?: string | null
+  revocation_reason?: string | null
+  validated_by?: { id: number; name: string } | null
+  revoked_by?: { id: number; name: string } | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PayrollIrtBracket {
+  lower_bound: number
+  upper_bound: number | null
+  rate: number
+  fixed_amount: number
+}
+
+export interface PayrollIrtTable {
+  id: number
+  country_code: string
+  regime_code: string
+  version: number
+  effective_from: string
+  effective_to: string | null
+  brackets: PayrollIrtBracket[]
+  status: SalaryComponentRegulationStatus
+  legal_source: string | null
+  legal_reference: string | null
+  legal_document_name?: string | null
+  has_legal_document?: boolean
+  validated_at: string | null
+  revoked_at?: string | null
+  revocation_reason?: string | null
+  validated_by?: { id: number; name: string } | null
+  revoked_by?: { id: number; name: string } | null
+  created_at?: string
+  updated_at?: string
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'vacation' | 'sick' | 'justified'
