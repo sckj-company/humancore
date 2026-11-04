@@ -29,68 +29,79 @@ class PayrollValidationService
         $errors = [];
         $warnings = [];
 
-        $periodDate = new DateTimeImmutable($period->period_end->toDateString());
+        $periodStart = new DateTimeImmutable($period->period_start->toDateString());
+        $periodEnd = new DateTimeImmutable($period->period_end->toDateString());
 
-        // 1. Verificar regra INSS ativa para a vigência do período
+        // 1. Regra INSS deve cobrir todo o período (regras anuais valem para todos os períodos do ano)
         $hasInss = PayrollInssRule::query()
             ->where('tenant_id', $period->tenant_id)
-            ->effectiveFor($periodDate, 'AO', 'standard')
+            ->effectiveForPeriod($periodStart, $periodEnd, 'AO', 'standard')
             ->exists();
 
         if (! $hasInss) {
             $errors[] = [
                 'code' => 'MISSING_INSS_RULE',
-                'message' => 'Não existe regra de Segurança Social (INSS) ativa para o período de vigência.',
+                'message' => 'Não existe regra de Segurança Social (INSS) ativa que cubra todo o período. Defina a regra uma única vez para o ano (ou para a vigência que abrange o período).',
             ];
         }
 
-        // 2. Verificar tabela IRT ativa para a vigência do período
+        // 2. Tabela IRT deve cobrir todo o período (tabelas anuais valem para todos os períodos do ano)
         $hasIrt = PayrollIrtTable::query()
             ->where('tenant_id', $period->tenant_id)
-            ->effectiveFor($periodDate, 'AO', 'standard')
+            ->effectiveForPeriod($periodStart, $periodEnd, 'AO', 'standard')
             ->exists();
 
         if (! $hasIrt) {
             $errors[] = [
                 'code' => 'MISSING_IRT_TABLE',
-                'message' => 'Não existe tabela de IRT ativa para o período de vigência.',
+                'message' => 'Não existe tabela de IRT ativa que cubra todo o período. Defina a tabela uma única vez para o ano (ou para a vigência que abrange o período).',
             ];
         }
 
-        // 3. Verificar existência de registos salariais processados
+        // 3. Verificar existência de registos salariais processados (aviso, não bloqueia)
         $records = $period->records()->with('employee')->get();
         if ($records->isEmpty()) {
-            $errors[] = [
+            $warnings[] = [
                 'code' => 'NO_RECORDS',
                 'message' => 'O período ainda não foi processado. Processe a folha antes de submeter.',
             ];
         }
 
-        // 4. Validar contratos vigentes para funcionários ativos
+        // 4. Contratos: contrato expirado → aviso (não bloqueia); sem contrato → erro bloqueante
         $activeEmployees = Employee::query()
             ->where('tenant_id', $period->tenant_id)
             ->where('status', 'active')
             ->get();
 
         foreach ($activeEmployees as $emp) {
-            $hasContract = EmployeeContract::query()
+            $hasContract = $this->hasContractCoveringPeriod($emp, $period);
+
+            if ($hasContract) {
+                continue;
+            }
+
+            $hasExpiredContract = EmployeeContract::query()
                 ->where('employee_id', $emp->id)
-                ->where('start_date', '<=', $period->period_start)
-                ->where(function ($q) use ($period): void {
-                    $q->whereNull('end_date')
-                        ->orWhere('end_date', '>=', $period->period_end);
-                })
-                ->where('is_active', true)
+                ->expired()
                 ->exists();
 
-            if (! $hasContract) {
-                $errors[] = [
+            if ($hasExpiredContract) {
+                $warnings[] = [
                     'employee_id' => $emp->id,
                     'employee_name' => $emp->full_name,
-                    'code' => 'MISSING_CONTRACT',
-                    'message' => "Funcionário {$emp->full_name} ({$emp->employee_code}) está ativo mas sem contrato vigente no período.",
+                    'code' => 'EXPIRED_CONTRACT',
+                    'message' => "Funcionário {$emp->full_name} ({$emp->employee_code}) tem contrato expirado (data de fim anterior a hoje) e foi excluído do processamento.",
                 ];
+
+                continue;
             }
+
+            $errors[] = [
+                'employee_id' => $emp->id,
+                'employee_name' => $emp->full_name,
+                'code' => 'MISSING_CONTRACT',
+                'message' => "Funcionário {$emp->full_name} ({$emp->employee_code}) está ativo mas sem contrato vigente no período.",
+            ];
         }
 
         // 5. Validar integridade matemática e erros bloqueantes por registo
@@ -151,12 +162,12 @@ class PayrollValidationService
         $unregulatedComponents = SalaryComponent::query()
             ->where('tenant_id', $period->tenant_id)
             ->where('is_active', true)
-            ->whereDoesntHave('regulations', function ($q) use ($periodDate): void {
+            ->whereDoesntHave('regulations', function ($q) use ($periodStart, $periodEnd): void {
                 $q->whereIn('status', ['validated', 'active'])
-                    ->whereDate('effective_from', '<=', $periodDate)
-                    ->where(function ($sq) use ($periodDate): void {
+                    ->whereDate('effective_from', '<=', $periodStart)
+                    ->where(function ($sq) use ($periodEnd): void {
                         $sq->whereNull('effective_to')
-                            ->orWhereDate('effective_to', '>=', $periodDate);
+                            ->orWhereDate('effective_to', '>=', $periodEnd);
                     });
             })
             ->get();
@@ -175,5 +186,32 @@ class PayrollValidationService
             'errors' => $errors,
             'warnings' => $warnings,
         ];
+    }
+
+    protected function hasContractCoveringPeriod(Employee $employee, PayrollPeriod $period): bool
+    {
+        $covering = EmployeeContract::query()
+            ->where('employee_id', $employee->id)
+            ->where('start_date', '<=', $period->period_start)
+            ->where(function ($q) use ($period): void {
+                $q->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $period->period_end);
+            })
+            // Contratos ativos, ou desativados automaticamente por expiração mas que cobrem o período (histórico)
+            ->where(function ($q): void {
+                $q->where('is_active', true)
+                    ->orWhereNotNull('end_date');
+            })
+            ->exists();
+
+        if ($covering) {
+            return true;
+        }
+
+        // Fallback alinhado com o motor: contrato ativo não expirado
+        $active = $employee->activeContract()->first();
+
+        return $active !== null
+            && ($active->end_date === null || ! $active->end_date->lt(today()));
     }
 }

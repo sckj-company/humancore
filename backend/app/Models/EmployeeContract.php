@@ -80,4 +80,23 @@ class EmployeeContract extends Model
     {
         return $query->where('is_active', true);
     }
+
+    public function scopeExpired(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('end_date')
+            ->whereDate('end_date', '<', today());
+    }
+
+    /**
+     * Desativa contratos com data de fim anterior à data atual.
+     * Não altera o estado do funcionário.
+     */
+    public static function deactivateExpired(): int
+    {
+        return static::query()
+            ->active()
+            ->expired()
+            ->update(['is_active' => false]);
+    }
 }

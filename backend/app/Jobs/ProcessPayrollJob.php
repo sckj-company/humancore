@@ -21,7 +21,13 @@ class ProcessPayrollJob implements ShouldQueue
 
     public int $timeout = 3600;
 
-    public function __construct(public int $periodId) {}
+    /**
+     * @param  array<int>|null  $employeeIds
+     */
+    public function __construct(
+        public int $periodId,
+        public ?array $employeeIds = null,
+    ) {}
 
     public function handle(PayrollEngineService $engine): void
     {
@@ -40,8 +46,8 @@ class ProcessPayrollJob implements ShouldQueue
                 return;
             }
 
-            $count = $engine->processPeriod($period);
-            Log::info("Payroll processed period {$period->id}: {$count} employees");
+            $result = $engine->processPeriod($period, $this->employeeIds);
+            Log::info("Payroll processed period {$period->id}: {$result['processed']}/{$result['total']} employees");
         });
     }
 }

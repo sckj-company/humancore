@@ -50,6 +50,9 @@ class PayrollPeriod extends Model
         'rejection_reason',
         'totals_snapshot',
         'notes',
+        'progress_total',
+        'progress_done',
+        'progress_message',
     ];
 
     protected function casts(): array
@@ -62,6 +65,8 @@ class PayrollPeriod extends Model
             'approved_at' => 'datetime',
             'closed_at' => 'datetime',
             'totals_snapshot' => 'array',
+            'progress_total' => 'integer',
+            'progress_done' => 'integer',
         ];
     }
 

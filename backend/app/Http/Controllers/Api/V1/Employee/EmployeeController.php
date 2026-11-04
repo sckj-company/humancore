@@ -12,6 +12,7 @@ use App\Http\Resources\V1\EmployeeResource;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
 use App\Models\EmployeeDocument;
+use App\Services\CloudinaryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,7 @@ class EmployeeController extends BaseController
         $this->authorize('viewAny', Employee::class);
 
         $employees = Employee::query()
-            ->with(['department', 'position', 'activeContract'])
+            ->with(['department', 'position', 'activeContract', 'latestContract'])
             ->when($request->filled('search'), fn ($q) => $q->search($request->string('search')))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
             ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
@@ -62,7 +63,7 @@ class EmployeeController extends BaseController
 
             if ($request->hasFile('photo')) {
                 $photoFile = $request->file('photo');
-                $cldPhoto = app(\App\Services\CloudinaryService::class)->upload(
+                $cldPhoto = app(CloudinaryService::class)->upload(
                     $photoFile,
                     'humancore/tenants/'.($employeeData['tenant_id'] ?? tenant_id()).'/photos',
                     'image'
@@ -84,7 +85,7 @@ class EmployeeController extends BaseController
                 $contractFile = null;
                 if ($request->hasFile('contract_file')) {
                     $contractFile = $request->file('contract_file');
-                    $cldContract = app(\App\Services\CloudinaryService::class)->upload(
+                    $cldContract = app(CloudinaryService::class)->upload(
                         $contractFile,
                         'humancore/tenants/'.$employee->tenant_id.'/contracts',
                         'auto'
@@ -131,7 +132,7 @@ class EmployeeController extends BaseController
                 $files = $request->file('documents');
                 $docNames = $request->input('document_names', []);
                 $docTypes = $request->input('document_types', []);
-                $cld = app(\App\Services\CloudinaryService::class);
+                $cld = app(CloudinaryService::class);
 
                 foreach ($files as $idx => $docFile) {
                     $folder = 'humancore/tenants/'.$employee->tenant_id.'/documents';
@@ -178,7 +179,7 @@ class EmployeeController extends BaseController
 
         if ($request->hasFile('photo')) {
             $tenantId = tenant_id() ?? $employee->tenant_id;
-            $cld = app(\App\Services\CloudinaryService::class)->upload(
+            $cld = app(CloudinaryService::class)->upload(
                 $request->file('photo'),
                 'humancore/tenants/'.$tenantId.'/photos',
                 'image'
@@ -218,7 +219,7 @@ class EmployeeController extends BaseController
 
         $documentPath = null;
         if ($request->hasFile('document')) {
-            $cld = app(\App\Services\CloudinaryService::class)->upload(
+            $cld = app(CloudinaryService::class)->upload(
                 $request->file('document'),
                 'humancore/tenants/'.$employee->tenant_id.'/contracts',
                 'auto'

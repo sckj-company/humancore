@@ -6,13 +6,15 @@ use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Requests\V1\Payroll\StorePeriodRequest;
 use App\Http\Resources\V1\PayrollPeriodResource;
 use App\Http\Resources\V1\PayrollRecordResource;
-use App\Jobs\ProcessPayrollJob;
+use App\Models\Employee;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
+use App\Services\Payroll\PayrollEngineService;
 use App\Services\Payroll\PayrollValidationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 
 class PayrollController extends BaseController
@@ -51,7 +53,7 @@ class PayrollController extends BaseController
         return $this->success(new PayrollPeriodResource($period));
     }
 
-    public function process(PayrollPeriod $period): JsonResponse
+    public function process(Request $request, PayrollPeriod $period, PayrollEngineService $engine): JsonResponse
     {
         $this->authorize('process', $period);
 
@@ -59,20 +61,94 @@ class PayrollController extends BaseController
             return $this->error('Não é possível processar um período fechado.', 422);
         }
 
-        // Actualiza para processing ANTES de despachar o job para não
-        // sobrescrever o estado final (completed/pending_validation/failed)
-        // quando a queue é síncrona.
-        $period->update(['status' => 'processing']);
-        $period->recordEvent('simulated', auth()->id(), 'Processamento/Simulação iniciado em background.');
+        $data = $request->validate([
+            'employee_ids' => ['sometimes', 'array'],
+            'employee_ids.*' => ['integer', 'exists:employees,id'],
+        ]);
 
-        ProcessPayrollJob::dispatch($period->id);
+        $employeeIds = $data['employee_ids'] ?? null;
+        if (is_array($employeeIds) && $employeeIds === []) {
+            return $this->error('Seleccione pelo menos um funcionário para processar.', 422);
+        }
 
-        return $this->success(null, 'Processamento iniciado em background.');
+        // Processamento síncrono com lock — o utilizador vê o progresso via polling
+        // do endpoint /progress enquanto o pedido está em curso.
+        try {
+            $result = Cache::lock("payroll:period:{$period->id}", 3600)->block(5, function () use ($period, $employeeIds, $engine): array {
+                $period->refresh();
+                $processed = $engine->processPeriod($period, $employeeIds);
+                $period->refresh();
+
+                return [
+                    'status' => $period->status,
+                    'processed' => $processed['processed'],
+                    'total' => $processed['total'],
+                    'progress_total' => $period->progress_total,
+                    'progress_done' => $period->progress_done,
+                    'progress_message' => $period->progress_message,
+                ];
+            });
+        } catch (\Throwable $e) {
+            return $this->error('Não foi possível processar o período: '.$e->getMessage(), 422);
+        }
+
+        $period->recordEvent('processed', auth()->id(), 'Processamento salarial executado.', [
+            'employee_ids' => $employeeIds,
+            'result' => $result,
+        ]);
+
+        return $this->success($result, 'Processamento concluído.');
     }
 
-    public function simulate(PayrollPeriod $period): JsonResponse
+    public function progress(PayrollPeriod $period): JsonResponse
     {
-        return $this->process($period);
+        $this->authorize('view', $period);
+
+        return $this->success([
+            'id' => $period->id,
+            'status' => $period->status,
+            'progress_total' => $period->progress_total,
+            'progress_done' => $period->progress_done,
+            'progress_message' => $period->progress_message,
+            'records_count' => $period->records()->count(),
+            'processed_at' => $period->processed_at,
+        ]);
+    }
+
+    public function processableEmployees(PayrollPeriod $period): JsonResponse
+    {
+        $this->authorize('process', $period);
+
+        $employees = Employee::query()
+            ->where('tenant_id', $period->tenant_id)
+            ->where('status', 'active')
+            ->with('activeContract')
+            ->orderBy('first_name')
+            ->get()
+            ->map(function (Employee $employee) {
+                $contract = $employee->activeContract;
+                $isExpired = $contract?->end_date !== null
+                    && $contract->end_date->lt(today());
+
+                return [
+                    'id' => $employee->id,
+                    'employee_code' => $employee->employee_code,
+                    'full_name' => $employee->full_name,
+                    'position' => $employee->position?->title,
+                    'base_salary' => $contract?->base_salary,
+                    'contract_end_date' => $contract?->end_date?->format('Y-m-d'),
+                    'is_contract_expired' => $isExpired,
+                    'eligible' => ! $isExpired,
+                ];
+            })
+            ->values();
+
+        return $this->success($employees);
+    }
+
+    public function simulate(Request $request, PayrollPeriod $period, PayrollEngineService $engine): JsonResponse
+    {
+        return $this->process($request, $period, $engine);
     }
 
     public function validations(PayrollPeriod $period, PayrollValidationService $validator): JsonResponse

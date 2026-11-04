@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/shared/page-header'
+import { ProcessPeriodDialog } from '@/features/payroll/process-period-dialog'
 import type { PayrollPeriod, Paginated } from '@/types'
 
 const statusStyle: Record<string, string> = {
@@ -71,6 +72,7 @@ export function PayrollPeriodsPage() {
   const user = useAuthStore((s) => s.user)
   const [createOpen, setCreateOpen] = useState(false)
   const [reopenId, setReopenId] = useState<number | null>(null)
+  const [processId, setProcessId] = useState<number | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['payroll-periods'],
@@ -78,15 +80,6 @@ export function PayrollPeriodsPage() {
   })
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['payroll-periods'] })
-
-  const processMutation = useMutation({
-    mutationFn: (id: number) => api.post(`payroll/periods/${id}/process`),
-    onSuccess: () => {
-      toast.success('Processamento iniciado')
-      invalidate()
-    },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao processar')),
-  })
 
   const approveMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/periods/${id}/approve`),
@@ -195,15 +188,19 @@ export function PayrollPeriodsPage() {
                       </td>
                       <td className="px-6 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {p.status === 'open' && hasPermission(user, 'process_payroll') && (
+                          {(p.status === 'open' ||
+                            p.status === 'failed' ||
+                            p.status === 'processing' ||
+                            p.status === 'completed' ||
+                            p.status === 'pending_validation') &&
+                            hasPermission(user, 'process_payroll') && (
                             <Button
                               variant="ghost"
                               size="icon-sm"
                               title="Processar"
-                              onClick={() => processMutation.mutate(p.id)}
-                              disabled={processMutation.isPending}
+                              onClick={() => setProcessId(p.id)}
                             >
-                              {processMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                              <Play className="h-4 w-4" />
                             </Button>
                           )}
                           {(p.status === 'completed' || p.status === 'pending_validation') &&
@@ -277,6 +274,13 @@ export function PayrollPeriodsPage() {
           </CardContent>
         </Card>
       )}
+
+      <ProcessPeriodDialog
+        periodId={processId ?? 0}
+        open={processId != null}
+        onOpenChange={(open) => { if (!open) setProcessId(null) }}
+        onFinished={() => invalidate()}
+      />
 
       <ReopenPeriodDialog
         periodId={reopenId}

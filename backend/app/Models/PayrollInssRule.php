@@ -69,6 +69,30 @@ class PayrollInssRule extends Model
             ->whereNotNull('validated_by');
     }
 
+    /**
+     * Regra válida para todo o período (start..end).
+     * Permite regras definidas uma única vez para o ano/todo o período.
+     */
+    public function scopeEffectiveForPeriod(
+        Builder $query,
+        DateTimeInterface $start,
+        DateTimeInterface $end,
+        string $countryCode = 'AO',
+        string $regimeCode = 'standard'
+    ): Builder {
+        return $query
+            ->where('status', 'active')
+            ->where('country_code', strtoupper($countryCode))
+            ->where('regime_code', $regimeCode)
+            ->whereDate('effective_from', '<=', $start)
+            ->where(function (Builder $query) use ($end): void {
+                $query->whereNull('effective_to')
+                    ->orWhereDate('effective_to', '>=', $end);
+            })
+            ->whereNotNull('validated_at')
+            ->whereNotNull('validated_by');
+    }
+
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
@@ -84,4 +108,3 @@ class PayrollInssRule extends Model
         return $this->belongsTo(User::class, 'revoked_by');
     }
 }
-

@@ -84,6 +84,8 @@ Route::prefix('v1')->group(function () {
         Route::post('payroll/periods', [PayrollController::class, 'store']);
         Route::get('payroll/periods/{period}', [PayrollController::class, 'show']);
         Route::post('payroll/periods/{period}/process', [PayrollController::class, 'process']);
+        Route::get('payroll/periods/{period}/progress', [PayrollController::class, 'progress']);
+        Route::get('payroll/periods/{period}/processable-employees', [PayrollController::class, 'processableEmployees']);
         Route::post('payroll/periods/{period}/simulate', [PayrollController::class, 'simulate']);
         Route::get('payroll/periods/{period}/validations', [PayrollController::class, 'validations']);
         Route::post('payroll/periods/{period}/submit', [PayrollController::class, 'submit']);

@@ -63,15 +63,18 @@ class PayrollEngineService
      */
     public function calculateForEmployee(PayrollPeriod $period, Employee $employee): PayrollRecord
     {
-        $contract = EmployeeContract::query()
-            ->where('employee_id', $employee->id)
-            ->where('start_date', '<=', $period->period_start)
-            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $period->period_end))
-            ->where('is_active', true)
-            ->orderByDesc('start_date')
-            ->first() ?? $employee->activeContract()->first();
+        $contract = $this->resolveContract($period, $employee);
 
         if (! $contract) {
+            $hasExpired = EmployeeContract::query()
+                ->where('employee_id', $employee->id)
+                ->expired()
+                ->exists();
+
+            if ($hasExpired) {
+                throw new \RuntimeException("Funcionário {$employee->full_name} tem contrato expirado e foi excluído do processamento.");
+            }
+
             throw new \RuntimeException("Funcionário {$employee->full_name} sem contrato ativo.");
         }
 
@@ -233,96 +236,212 @@ class PayrollEngineService
         });
     }
 
-    public function processPeriod(PayrollPeriod $period): int
+    /**
+     * @param  array<int>|null  $employeeIds  IDs seleccionados; null = todos os activos
+     * @return array{processed: int, total: int}
+     */
+    public function processPeriod(PayrollPeriod $period, ?array $employeeIds = null): array
     {
         if ($period->isClosed()) {
             throw new \RuntimeException('Não é possível processar um período fechado.');
         }
 
-        $period->update(['status' => 'processing', 'processed_at' => now(), 'processed_by' => auth()->id()]);
+        $period->update([
+            'status' => 'processing',
+            'processed_at' => now(),
+            'processed_by' => auth()->id(),
+        ]);
+
+        // Desativa contratos expirados antes do processamento (não altera o estado do funcionário)
+        EmployeeContract::deactivateExpired();
+
+        $baseQuery = Employee::query()->where('status', 'active');
+        if ($employeeIds !== null) {
+            $baseQuery->whereIn('id', array_values(array_unique(array_map('intval', $employeeIds))));
+        }
+
+        $total = (clone $baseQuery)->count();
+        $period->update([
+            'progress_total' => $total,
+            'progress_done' => 0,
+            'progress_message' => 'A preparar processamento…',
+        ]);
 
         $count = 0;
+        $done = 0;
         $hasBlockingErrors = false;
         $hasWarnings = false;
 
-        Employee::query()
-            ->where('status', 'active')
-            ->chunkById(50, function ($employees) use ($period, &$count, &$hasBlockingErrors, &$hasWarnings) {
-                foreach ($employees as $employee) {
-                    try {
-                        $record = $this->calculateForEmployee($period, $employee);
-                        if (! empty($record->validation_errors)) {
-                            foreach ($record->validation_errors as $err) {
-                                if (! empty($err['is_blocking'])) {
-                                    $hasBlockingErrors = true;
-                                } else {
-                                    $hasWarnings = true;
-                                }
-                            }
-                        }
-                        $count++;
-                    } catch (\Throwable $e) {
-                        logger()->error('Payroll calc error', [
+        $baseQuery->chunkById(50, function ($employees) use (
+            $period,
+            &$count,
+            &$done,
+            &$hasBlockingErrors,
+            &$hasWarnings
+        ) {
+            foreach ($employees as $employee) {
+                $period->update([
+                    'progress_done' => $done,
+                    'progress_message' => "A processar {$employee->full_name}…",
+                ]);
+
+                $contract = $this->resolveContract($period, $employee);
+
+                if (! $contract) {
+                    $hasExpired = EmployeeContract::query()
+                        ->where('employee_id', $employee->id)
+                        ->expired()
+                        ->exists();
+
+                    if ($hasExpired) {
+                        // Contrato expirado: alerta (não bloqueia) e exclui do processamento
+                        $hasWarnings = true;
+                        logger()->info('Payroll: employee skipped due to expired contract', [
                             'employee_id' => $employee->id,
                             'period_id' => $period->id,
-                            'error' => $e->getMessage(),
                         ]);
+                        $done++;
 
-                        $blockingError = [
-                            'employee_id' => $employee->id,
-                            'code' => 'CALC_ERROR',
-                            'message' => $e->getMessage(),
-                            'is_blocking' => true,
-                            'severity' => 'error',
-                        ];
-
-                        $hasBlockingErrors = true;
-
-                        PayrollRecord::updateOrCreate(
-                            [
-                                'payroll_period_id' => $period->id,
-                                'employee_id' => $employee->id,
-                            ],
-                            [
-                                'tenant_id' => $period->tenant_id,
-                                'contract_id' => $employee->activeContract()->first()?->id,
-                                'base_salary' => 0,
-                                'gross_salary' => 0,
-                                'total_earnings' => 0,
-                                'total_deductions' => 0,
-                                'total_taxes' => 0,
-                                'net_salary' => 0,
-                                'currency' => $period->tenant?->currency ?? 'AOA',
-                                'status' => 'draft',
-                                'validation_errors' => [$blockingError],
-                            ]
-                        );
+                        continue;
                     }
+
+                    $hasBlockingErrors = true;
+                    PayrollRecord::updateOrCreate(
+                        [
+                            'payroll_period_id' => $period->id,
+                            'employee_id' => $employee->id,
+                        ],
+                        [
+                            'tenant_id' => $period->tenant_id,
+                            'contract_id' => null,
+                            'base_salary' => 0,
+                            'gross_salary' => 0,
+                            'total_earnings' => 0,
+                            'total_deductions' => 0,
+                            'total_taxes' => 0,
+                            'net_salary' => 0,
+                            'currency' => $period->tenant?->currency ?? 'AOA',
+                            'status' => 'draft',
+                            'validation_errors' => [[
+                                'employee_id' => $employee->id,
+                                'code' => 'MISSING_CONTRACT',
+                                'message' => "Funcionário {$employee->full_name} sem contrato ativo.",
+                                'is_blocking' => true,
+                                'severity' => 'error',
+                            ]],
+                        ]
+                    );
+                    $done++;
+
+                    continue;
                 }
-            });
+
+                try {
+                    $record = $this->calculateForEmployee($period, $employee);
+                    if (! empty($record->validation_errors)) {
+                        foreach ($record->validation_errors as $err) {
+                            if (! empty($err['is_blocking'])) {
+                                $hasBlockingErrors = true;
+                            } else {
+                                $hasWarnings = true;
+                            }
+                        }
+                    }
+                    $count++;
+                } catch (\Throwable $e) {
+                    logger()->error('Payroll calc error', [
+                        'employee_id' => $employee->id,
+                        'period_id' => $period->id,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    $blockingError = [
+                        'employee_id' => $employee->id,
+                        'code' => 'CALC_ERROR',
+                        'message' => $e->getMessage(),
+                        'is_blocking' => true,
+                        'severity' => 'error',
+                    ];
+
+                    $hasBlockingErrors = true;
+
+                    PayrollRecord::updateOrCreate(
+                        [
+                            'payroll_period_id' => $period->id,
+                            'employee_id' => $employee->id,
+                        ],
+                        [
+                            'tenant_id' => $period->tenant_id,
+                            'contract_id' => $contract->id,
+                            'base_salary' => 0,
+                            'gross_salary' => 0,
+                            'total_earnings' => 0,
+                            'total_deductions' => 0,
+                            'total_taxes' => 0,
+                            'net_salary' => 0,
+                            'currency' => $period->tenant?->currency ?? 'AOA',
+                            'status' => 'draft',
+                            'validation_errors' => [$blockingError],
+                        ]
+                    );
+                }
+
+                $done++;
+                $period->update([
+                    'progress_done' => $done,
+                    'progress_message' => "Concluído {$employee->full_name} ({$done}/{$period->progress_total})",
+                ]);
+            }
+        });
 
         if ($hasBlockingErrors) {
-            $period->update(['status' => 'failed']);
+            $period->update(['status' => 'failed', 'progress_message' => 'Processamento concluído com erros.']);
         } elseif ($hasWarnings) {
-            $period->update(['status' => 'pending_validation']);
+            $period->update(['status' => 'pending_validation', 'progress_message' => 'Processamento concluído com avisos.']);
         } else {
-            $period->update(['status' => 'completed']);
+            $period->update(['status' => 'completed', 'progress_message' => 'Processamento concluído com sucesso.']);
         }
 
-        return $count;
+        return ['processed' => $count, 'total' => $total];
+    }
+
+    protected function resolveContract(PayrollPeriod $period, Employee $employee): ?EmployeeContract
+    {
+        $covering = EmployeeContract::query()
+            ->where('employee_id', $employee->id)
+            ->where('start_date', '<=', $period->period_start)
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $period->period_end))
+            // Contrato ativo, ou desativado por expiração mas que ainda cobre o período (reprocessamento histórico)
+            ->where(fn ($q) => $q->where('is_active', true)->orWhereNotNull('end_date'))
+            ->orderByDesc('start_date')
+            ->first();
+
+        if ($covering) {
+            return $covering;
+        }
+
+        // Fallback: contrato ativo não expirado (contratos que iniciaram a meio do período)
+        $active = $employee->activeContract()->first();
+
+        if ($active && ($active->end_date === null || ! $active->end_date->lt(today()))) {
+            return $active;
+        }
+
+        return null;
     }
 
     protected function buildContext(Employee $employee, EmployeeContract $contract, PayrollPeriod $period): PayrollContext
     {
         $context = new PayrollContext($employee, $contract, $period);
 
-        $periodDate = new DateTimeImmutable($period->period_end->toDateString());
+        $periodStart = new DateTimeImmutable($period->period_start->toDateString());
+        $periodEnd = new DateTimeImmutable($period->period_end->toDateString());
         $context->inssRule = PayrollInssRule::query()
-            ->effectiveFor($periodDate, 'AO', 'standard')
+            ->effectiveForPeriod($periodStart, $periodEnd, 'AO', 'standard')
             ->first();
 
         $context->irtTable = PayrollIrtTable::query()
-            ->effectiveFor($periodDate, 'AO', 'standard')
+            ->effectiveForPeriod($periodStart, $periodEnd, 'AO', 'standard')
             ->first();
 
         $attendance = AttendanceRecord::query()

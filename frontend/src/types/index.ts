@@ -52,7 +52,14 @@ export interface EmployeeSummary {
   postal_code?: string
   status: EmployeeStatus
   hired_at?: string
-  active_contract?: { id: number; base_salary: number; contract_type: ContractType }
+  active_contract?: {
+    id?: number
+    base_salary: number
+    contract_type: ContractType
+    end_date?: string | null
+    is_active?: boolean
+  }
+  is_contract_expired?: boolean
 }
 
 export type EmployeeStatus = 'active' | 'inactive' | 'suspended' | 'terminated'
@@ -230,6 +237,7 @@ export interface PayrollValidationReport {
 
 export type PayrollPeriodEventType =
   | 'simulated'
+  | 'processed'
   | 'validated'
   | 'submitted'
   | 'approved'
@@ -246,6 +254,27 @@ export interface PayrollPeriodEvent {
   notes?: string | null
   metadata?: Record<string, unknown> | null
   created_at: string
+}
+
+export interface PayrollPeriodProgress {
+  id: number
+  status: PayrollPeriodStatus
+  progress_total?: number | null
+  progress_done?: number | null
+  progress_message?: string | null
+  records_count?: number
+  processed_at?: string | null
+}
+
+export interface ProcessableEmployee {
+  id: number
+  employee_code: string
+  full_name: string
+  position?: string | null
+  base_salary?: number | string | null
+  contract_end_date?: string | null
+  is_contract_expired: boolean
+  eligible: boolean
 }
 
 export interface PayrollPeriodTotalsSnapshot {
@@ -273,6 +302,9 @@ export interface PayrollPeriod {
   approved_at?: string | null
   rejection_reason?: string | null
   totals_snapshot?: PayrollPeriodTotalsSnapshot | null
+  progress_total?: number | null
+  progress_done?: number | null
+  progress_message?: string | null
   employee_count?: number
   total_gross?: number
   total_net?: number

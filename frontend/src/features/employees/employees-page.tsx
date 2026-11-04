@@ -19,6 +19,28 @@ const statusColor: Record<string, string> = {
   inactive: 'bg-muted text-muted-foreground',
   suspended: 'bg-warning/10 text-warning',
   terminated: 'bg-destructive/10 text-destructive',
+  expired_contract: 'bg-warning/10 text-warning',
+}
+
+const statusLabels: Record<string, string> = {
+  active: 'Ativo',
+  inactive: 'Inativo',
+  suspended: 'Suspenso',
+  terminated: 'Desligado',
+  expired_contract: 'Contrato Expirado',
+}
+
+function getDisplayStatus(e: EmployeeSummary): { key: string; label: string } {
+  const contractEnded =
+    e.status === 'active' &&
+    !!e.active_contract?.end_date &&
+    e.active_contract.end_date < new Date().toISOString().slice(0, 10)
+
+  if (e.is_contract_expired || contractEnded) {
+    return { key: 'expired_contract', label: statusLabels.expired_contract }
+  }
+
+  return { key: e.status, label: statusLabels[e.status] ?? e.status }
 }
 
 export function EmployeesPage() {
@@ -73,8 +95,8 @@ export function EmployeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('common.all')}</SelectItem>
-                  <SelectItem value="active">{t('common.active')}</SelectItem>
-                  <SelectItem value="inactive">{t('common.inactive')}</SelectItem>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="inactive">Inativo</SelectItem>
                   <SelectItem value="terminated">Desligado</SelectItem>
                   <SelectItem value="suspended">Suspenso</SelectItem>
                 </SelectContent>
@@ -119,7 +141,10 @@ export function EmployeesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border text-sm">
-                  {data.data.map((e) => (
+                  {data.data.map((e) => {
+                    const displayStatus = getDisplayStatus(e)
+
+                    return (
                     <tr key={e.id} className="transition-colors hover:bg-muted/30">
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-3">
@@ -138,8 +163,8 @@ export function EmployeesPage() {
                       <td className="px-6 py-3 text-muted-foreground">{e.position ?? '—'}</td>
                       <td className="px-6 py-3 text-muted-foreground">{e.department ?? '—'}</td>
                       <td className="px-6 py-3">
-                        <Badge className={statusColor[e.status] ?? 'bg-muted text-foreground'} variant="secondary">
-                          {e.status}
+                        <Badge className={statusColor[displayStatus.key] ?? 'bg-muted text-foreground'} variant="secondary">
+                          {displayStatus.label}
                         </Badge>
                       </td>
                       <td className="px-6 py-3 text-muted-foreground">
@@ -158,7 +183,8 @@ export function EmployeesPage() {
                         </Button>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

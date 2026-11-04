@@ -23,7 +23,26 @@ class EmployeeListResource extends JsonResource
             'active_contract' => $this->whenLoaded('activeContract', fn () => $this->activeContract ? [
                 'base_salary' => $this->activeContract->base_salary,
                 'contract_type' => $this->activeContract->contract_type,
+                'end_date' => $this->activeContract->end_date?->format('Y-m-d'),
+                'is_active' => $this->activeContract->is_active,
             ] : null),
+            'is_contract_expired' => $this->when(
+                $this->relationLoaded('activeContract') || $this->relationLoaded('latestContract'),
+                fn () => $this->isContractExpired(),
+            ),
         ];
+    }
+
+    protected function isContractExpired(): bool
+    {
+        if ($this->status !== 'active') {
+            return false;
+        }
+
+        $contract = $this->activeContract ?? $this->latestContract;
+
+        return $contract !== null
+            && $contract->end_date !== null
+            && $contract->end_date->lt(today());
     }
 }

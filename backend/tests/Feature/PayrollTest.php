@@ -40,6 +40,8 @@ class PayrollTest extends TestCase
             'employee_id' => $employee->id,
             'base_salary' => 700000,
             'salary_frequency' => 'monthly',
+            'start_date' => '2025-01-01',
+            'end_date' => null,
             'is_active' => true,
         ]);
 
@@ -103,9 +105,9 @@ class PayrollTest extends TestCase
         ]);
 
         $engine = app(PayrollEngineService::class);
-        $count = $engine->processPeriod($period);
+        $result = $engine->processPeriod($period);
 
-        $this->assertSame(1, $count);
+        $this->assertSame(1, $result['processed']);
         $this->assertSame('completed', $period->fresh()->status);
         $this->assertDatabaseHas('payroll_records', [
             'payroll_period_id' => $period->id,
@@ -255,10 +257,11 @@ class PayrollTest extends TestCase
         ]);
 
         $engine = app(PayrollEngineService::class);
-        $count = $engine->processPeriod($period);
+        $result = $engine->processPeriod($period);
 
         // Apenas o funcionário válido conta como processado com sucesso
-        $this->assertSame(1, $count);
+        $this->assertSame(1, $result['processed']);
+        $this->assertSame(2, $result['total']);
 
         // Período deve ter status 'failed' devido ao erro impeditivo do funcionário sem contrato
         $this->assertSame('failed', $period->fresh()->status);
@@ -280,7 +283,7 @@ class PayrollTest extends TestCase
         $this->assertIsArray($failedRecord->validation_errors);
         $this->assertNotEmpty($failedRecord->validation_errors);
         $this->assertTrue($failedRecord->validation_errors[0]['is_blocking']);
-        $this->assertSame('CALC_ERROR', $failedRecord->validation_errors[0]['code']);
+        $this->assertSame('MISSING_CONTRACT', $failedRecord->validation_errors[0]['code']);
         $this->assertStringContainsString('sem contrato ativo', $failedRecord->validation_errors[0]['message']);
     }
 

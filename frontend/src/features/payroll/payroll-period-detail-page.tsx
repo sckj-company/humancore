@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
+import { ProcessPeriodDialog } from '@/features/payroll/process-period-dialog'
 import type {
   PayrollPeriod,
   PayrollPeriodEvent,
@@ -68,6 +69,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 
 const eventLabel: Record<string, string> = {
   simulated:   'Simulado',
+  processed:   'Processado',
   validated:   'Validado',
   submitted:   'Submetido',
   approved:    'Aprovado',
@@ -79,6 +81,7 @@ const eventLabel: Record<string, string> = {
 
 const eventColor: Record<string, string> = {
   simulated: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  processed: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
   validated: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
   submitted: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
   approved:  'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
@@ -114,11 +117,13 @@ export function PayrollPeriodDetailPage() {
   const [reopenOpen, setReopenOpen] = useState(false)
   const [reopenReason, setReopenReason] = useState('')
   const [warningsAck, setWarningsAck] = useState(false)
+  const [processOpen, setProcessOpen] = useState(false)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['payroll-period', id],
     queryFn: () => api.get<PayrollPeriod>(`payroll/periods/${id}`),
     enabled: !!id,
+    refetchInterval: (query) => (query.state.data?.status === 'processing' ? 800 : false),
   })
 
   const statusNow = data?.status
@@ -141,11 +146,7 @@ export function PayrollPeriodDetailPage() {
     qc.invalidateQueries({ queryKey: ['payroll-period-validations', id] })
   }
 
-  const processMutation = useMutation({
-    mutationFn: () => api.post(`payroll/periods/${id}/process`),
-    onSuccess: () => { toast.success('Processamento iniciado'); invalidate() },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao processar')),
-  })
+  const openProcess = () => setProcessOpen(true)
 
   const submitMutation = useMutation({
     mutationFn: () => api.post(`payroll/periods/${id}/submit`),
@@ -323,17 +324,27 @@ export function PayrollPeriodDetailPage() {
             </div>
             {/* Contextual Actions */}
             <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-              {(data.status === 'open' || data.status === 'failed') && hasPermission(user, 'process_payroll') && (
-                <Button
-                  size="sm"
-                  onClick={() => processMutation.mutate()}
-                  disabled={processMutation.isPending}
-                >
-                  {processMutation.isPending
-                    ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    : <Play className="mr-1.5 h-3.5 w-3.5" />}
+              {(data.status === 'open' ||
+                data.status === 'failed' ||
+                data.status === 'processing' ||
+                data.status === 'completed' ||
+                data.status === 'pending_validation') &&
+                hasPermission(user, 'process_payroll') && (
+                <Button size="sm" onClick={openProcess}>
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
                   Processar
                 </Button>
+              )}
+              {data.status === 'processing' && (
+                <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 text-xs text-amber-700">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {data.progress_message ?? 'A processar…'}
+                  {data.progress_total != null && (
+                    <span className="font-mono">
+                      ({data.progress_done ?? 0}/{data.progress_total})
+                    </span>
+                  )}
+                </div>
               )}
               {(data.status === 'completed' || data.status === 'pending_validation') && hasPermission(user, 'process_payroll') && (
                 <Button
@@ -508,6 +519,14 @@ export function PayrollPeriodDetailPage() {
           <HistoryTab events={events} locale={locale} />
         </TabsContent>
       </Tabs>
+
+      {/* ── Dialog: Processamento ── */}
+      <ProcessPeriodDialog
+        periodId={Number(id)}
+        open={processOpen}
+        onOpenChange={setProcessOpen}
+        onFinished={() => invalidate()}
+      />
 
       {/* ── Dialog: Aprovação ── */}
       <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
