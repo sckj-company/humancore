@@ -195,6 +195,7 @@ class SalaryComponentRegulationController extends BaseController
             ->where('salary_component_id', $data['salary_component_id'])
             ->where('country_code', $data['country_code'])
             ->where('regime_code', $data['regime_code'])
+            ->where('status', '!=', 'revoked')
             ->whereDate('effective_from', $data['effective_from'])
             ->exists();
 
@@ -256,6 +257,7 @@ class SalaryComponentRegulationController extends BaseController
                 ->where('salary_component_id', $regulation->salary_component_id)
                 ->where('country_code', $regulation->country_code)
                 ->where('regime_code', $regulation->regime_code)
+                ->where('status', '!=', 'revoked')
                 ->whereDate('effective_from', $data['effective_from'])
                 ->exists();
 
@@ -350,8 +352,8 @@ class SalaryComponentRegulationController extends BaseController
     {
         $this->authorize('delete', $regulation);
 
-        if ($regulation->status !== 'draft') {
-            return $this->error('Só rascunhos podem ser eliminados. Regras validadas ou activas devem ser revogadas.', 422);
+        if (! in_array($regulation->status, ['draft', 'revoked'], true)) {
+            return $this->error('Apenas rascunhos ou regras revogadas podem ser eliminadas.', 422);
         }
 
         $documentPath = $regulation->legal_document_path;
@@ -361,7 +363,7 @@ class SalaryComponentRegulationController extends BaseController
             Storage::disk('local')->delete($documentPath);
         }
 
-        return $this->success(null, 'Rascunho eliminado.');
+        return $this->success(null, 'Regra eliminada com sucesso.');
     }
 
     public function revoke(Request $request, SalaryComponentRegulation $regulation): JsonResponse
@@ -376,8 +378,22 @@ class SalaryComponentRegulationController extends BaseController
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 
+        $effectiveFromStr = $regulation->effective_from instanceof \DateTimeInterface
+            ? $regulation->effective_from->format('Y-m-d')
+            : (string) $regulation->effective_from;
+
+        $effectiveToStr = $regulation->effective_to instanceof \DateTimeInterface
+            ? $regulation->effective_to->format('Y-m-d')
+            : ($regulation->effective_to ? (string) $regulation->effective_to : null);
+
+        $today = now()->toDateString();
+        if (! $effectiveToStr || $effectiveToStr > $today) {
+            $effectiveToStr = $today >= $effectiveFromStr ? $today : $effectiveFromStr;
+        }
+
         $regulation->update([
             'status' => 'revoked',
+            'effective_to' => $effectiveToStr,
             'revoked_at' => now(),
             'revoked_by' => $request->user()->id,
             'revocation_reason' => $data['reason'],
@@ -385,7 +401,7 @@ class SalaryComponentRegulationController extends BaseController
 
         return $this->success(
             new SalaryComponentRegulationResource($regulation->fresh()->load('component:id,name,code,type', 'validatedBy:id,name', 'revokedBy:id,name')),
-            'Regra revogada; o histórico foi preservado.',
+            'Regra revogada e vigência encerrada.',
         );
     }
 

@@ -69,6 +69,7 @@ class PayrollIrtTableController extends BaseController
             ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
             ->where('country_code', $data['country_code'])
             ->where('regime_code', $data['regime_code'])
+            ->where('status', '!=', 'revoked')
             ->whereDate('effective_from', $data['effective_from'])
             ->exists();
 
@@ -138,6 +139,7 @@ class PayrollIrtTableController extends BaseController
                 ->whereKeyNot($irtTable->id)
                 ->where('country_code', $irtTable->country_code)
                 ->where('regime_code', $irtTable->regime_code)
+                ->where('status', '!=', 'revoked')
                 ->whereDate('effective_from', $data['effective_from'])
                 ->exists();
 
@@ -236,8 +238,22 @@ class PayrollIrtTableController extends BaseController
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 
+        $effectiveFromStr = $irtTable->effective_from instanceof \DateTimeInterface
+            ? $irtTable->effective_from->format('Y-m-d')
+            : (string) $irtTable->effective_from;
+
+        $effectiveToStr = $irtTable->effective_to instanceof \DateTimeInterface
+            ? $irtTable->effective_to->format('Y-m-d')
+            : ($irtTable->effective_to ? (string) $irtTable->effective_to : null);
+
+        $today = now()->toDateString();
+        if (! $effectiveToStr || $effectiveToStr > $today) {
+            $effectiveToStr = $today >= $effectiveFromStr ? $today : $effectiveFromStr;
+        }
+
         $irtTable->update([
             'status' => 'revoked',
+            'effective_to' => $effectiveToStr,
             'revoked_at' => now(),
             'revoked_by' => $request->user()->id,
             'revocation_reason' => $data['reason'],
@@ -245,7 +261,7 @@ class PayrollIrtTableController extends BaseController
 
         return $this->success(
             new PayrollIrtTableResource($irtTable->fresh()->load(['validatedBy:id,name', 'revokedBy:id,name'])),
-            'Tabela IRT revogada; o histórico foi preservado.'
+            'Tabela IRT revogada e vigência encerrada.'
         );
     }
 
@@ -253,8 +269,8 @@ class PayrollIrtTableController extends BaseController
     {
         $this->authorize('delete', $irtTable);
 
-        if ($irtTable->status !== 'draft') {
-            return $this->error('Só rascunhos podem ser eliminados.', 422);
+        if (! in_array($irtTable->status, ['draft', 'revoked'], true)) {
+            return $this->error('Apenas rascunhos ou tabelas revogadas podem ser eliminadas.', 422);
         }
 
         $documentPath = $irtTable->legal_document_path;
@@ -264,7 +280,7 @@ class PayrollIrtTableController extends BaseController
             Storage::disk('local')->delete($documentPath);
         }
 
-        return $this->success(null, 'Rascunho eliminado.');
+        return $this->success(null, 'Tabela eliminada com sucesso.');
     }
 }
 

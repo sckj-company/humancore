@@ -68,6 +68,7 @@ class PayrollInssRuleController extends BaseController
             ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
             ->where('country_code', $data['country_code'])
             ->where('regime_code', $data['regime_code'])
+            ->where('status', '!=', 'revoked')
             ->whereDate('effective_from', $data['effective_from'])
             ->exists();
 
@@ -135,6 +136,7 @@ class PayrollInssRuleController extends BaseController
                 ->whereKeyNot($rule->id)
                 ->where('country_code', $rule->country_code)
                 ->where('regime_code', $rule->regime_code)
+                ->where('status', '!=', 'revoked')
                 ->whereDate('effective_from', $data['effective_from'])
                 ->exists();
 
@@ -233,8 +235,22 @@ class PayrollInssRuleController extends BaseController
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 
+        $effectiveFromStr = $rule->effective_from instanceof \DateTimeInterface
+            ? $rule->effective_from->format('Y-m-d')
+            : (string) $rule->effective_from;
+
+        $effectiveToStr = $rule->effective_to instanceof \DateTimeInterface
+            ? $rule->effective_to->format('Y-m-d')
+            : ($rule->effective_to ? (string) $rule->effective_to : null);
+
+        $today = now()->toDateString();
+        if (! $effectiveToStr || $effectiveToStr > $today) {
+            $effectiveToStr = $today >= $effectiveFromStr ? $today : $effectiveFromStr;
+        }
+
         $rule->update([
             'status' => 'revoked',
+            'effective_to' => $effectiveToStr,
             'revoked_at' => now(),
             'revoked_by' => $request->user()->id,
             'revocation_reason' => $data['reason'],
@@ -242,7 +258,7 @@ class PayrollInssRuleController extends BaseController
 
         return $this->success(
             new PayrollInssRuleResource($rule->fresh()->load(['validatedBy:id,name', 'revokedBy:id,name'])),
-            'Regra INSS revogada; o histórico foi preservado.'
+            'Regra INSS revogada e vigência encerrada.'
         );
     }
 
@@ -250,8 +266,8 @@ class PayrollInssRuleController extends BaseController
     {
         $this->authorize('delete', $rule);
 
-        if ($rule->status !== 'draft') {
-            return $this->error('Só rascunhos podem ser eliminados.', 422);
+        if (! in_array($rule->status, ['draft', 'revoked'], true)) {
+            return $this->error('Apenas rascunhos ou regras revogadas podem ser eliminadas.', 422);
         }
 
         $documentPath = $rule->legal_document_path;
@@ -261,7 +277,7 @@ class PayrollInssRuleController extends BaseController
             Storage::disk('local')->delete($documentPath);
         }
 
-        return $this->success(null, 'Rascunho eliminado.');
+        return $this->success(null, 'Regra eliminada com sucesso.');
     }
 }
 

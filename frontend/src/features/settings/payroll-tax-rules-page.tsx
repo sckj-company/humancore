@@ -18,6 +18,7 @@ import {
   Scale,
   FileCheck2,
   Info,
+  Eye,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -123,6 +124,7 @@ export function PayrollTaxRulesPage({
   // Modal de Revogação
   const [revokeTarget, setRevokeTarget] = useState<{ type: 'inss' | 'irt'; id: number } | null>(null)
   const [revokeReason, setRevokeReason] = useState('')
+  const [showRevoked, setShowRevoked] = useState(false)
 
   // Queries
   const {
@@ -235,6 +237,20 @@ export function PayrollTaxRulesPage({
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao revogar.')),
   })
 
+  // Mutation Eliminar Definitivamente (rascunhos ou revogados)
+  const deleteMutation = useMutation({
+    mutationFn: ({ type, id }: { type: 'inss' | 'irt'; id: number }) => {
+      const path = type === 'inss' ? 'payroll/inss-rules' : 'payroll/irt-tables'
+      return api.delete(`${path}/${id}${effectiveTenantId ? `?tenant_id=${effectiveTenantId}` : ''}`)
+    },
+    onSuccess: () => {
+      toast.success('Registo eliminado com sucesso.')
+      qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+      qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao eliminar.')),
+  })
+
   const formatDate = (d?: string | null) => {
     if (!d) return '—'
     try {
@@ -246,6 +262,10 @@ export function PayrollTaxRulesPage({
 
   const activeInss = inssRules?.find((r) => r.status === 'active')
   const activeIrt = irtTables?.find((r) => r.status === 'active')
+  const inssRevokedCount = inssRules?.filter((r) => r.status === 'revoked').length ?? 0
+  const irtRevokedCount = irtTables?.filter((t) => t.status === 'revoked').length ?? 0
+  const displayedInssRules = inssRules?.filter((r) => showRevoked || r.status !== 'revoked') ?? []
+  const displayedIrtTables = irtTables?.filter((t) => showRevoked || t.status !== 'revoked') ?? []
 
   return (
     <div className="space-y-6">
@@ -420,21 +440,36 @@ export function PayrollTaxRulesPage({
                   Taxas contributivas aplicáveis ao trabalhador e à entidade empregadora
                 </CardDescription>
               </div>
-              {canConfigure && (
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setIsInssCreateOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Nova Versão
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {inssRevokedCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant={showRevoked ? 'secondary' : 'outline'}
+                    className="gap-1.5 text-xs"
+                    onClick={() => setShowRevoked(!showRevoked)}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    {showRevoked ? 'Ocultar Revogadas' : `Ver Revogadas (${inssRevokedCount})`}
+                  </Button>
+                )}
+                {canConfigure && (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setIsInssCreateOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Nova Versão
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {inssLoading && <LoadingState />}
               {inssError && <ErrorState message="Erro ao carregar regras INSS." onRetry={refetchInss} />}
-              {inssRules && inssRules.length === 0 && (
+              {displayedInssRules.length === 0 && (
                 <div className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhuma regra INSS cadastrada. Crie uma nova versão para começar.
+                  {inssRules && inssRules.length > 0 && !showRevoked
+                    ? 'Todas as regras existentes estão revogadas. Clique em "Ver Revogadas" ou crie uma nova versão.'
+                    : 'Nenhuma regra INSS cadastrada. Crie uma nova versão para começar.'}
                 </div>
               )}
-              {inssRules && inssRules.length > 0 && (
+              {displayedInssRules.length > 0 && (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
@@ -450,14 +485,19 @@ export function PayrollTaxRulesPage({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border text-sm">
-                      {inssRules.map((rule) => (
+                      {displayedInssRules.map((rule) => (
                         <tr key={rule.id} className="transition-colors hover:bg-muted/30">
                           <td className="px-4 py-3 font-semibold">v{rule.version}</td>
                           <td className="px-4 py-3 text-muted-foreground capitalize">{rule.regime_code}</td>
                           <td className="px-4 py-3 font-mono text-primary font-medium">{rule.employee_rate}%</td>
                           <td className="px-4 py-3 font-mono text-emerald-600 font-medium">{rule.employer_rate}%</td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {formatDate(rule.effective_from)} {rule.effective_to ? `até ${formatDate(rule.effective_to)}` : '(vigente)'}
+                            {formatDate(rule.effective_from)}{' '}
+                            {rule.status === 'revoked'
+                              ? '(Revogada)'
+                              : rule.effective_to
+                              ? `até ${formatDate(rule.effective_to)}`
+                              : '(vigente)'}
                           </td>
                           <td className="px-4 py-3">
                             <Badge variant="outline" className={`font-medium ${statusColors[rule.status] ?? ''}`}>
@@ -507,6 +547,22 @@ export function PayrollTaxRulesPage({
                                   <Ban className="h-3.5 w-3.5" /> Revogar
                                 </Button>
                               )}
+                              {rule.status === 'revoked' && canConfigure && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-xs gap-1 text-destructive hover:bg-destructive/10"
+                                  title="Eliminar definitivamente registo revogado"
+                                  onClick={() => {
+                                    if (confirm('Deseja eliminar definitivamente esta regra revogada?')) {
+                                      deleteMutation.mutate({ type: 'inss', id: rule.id })
+                                    }
+                                  }}
+                                  disabled={deleteMutation.isPending}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -532,23 +588,38 @@ export function PayrollTaxRulesPage({
                   Escalões progressivos, limites inferior/superior, parcelas fixas e taxas oficiais
                 </CardDescription>
               </div>
-              {canConfigure && (
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setIsIrtCreateOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Nova Tabela IRT
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {irtRevokedCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant={showRevoked ? 'secondary' : 'outline'}
+                    className="gap-1.5 text-xs"
+                    onClick={() => setShowRevoked(!showRevoked)}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    {showRevoked ? 'Ocultar Revogadas' : `Ver Revogadas (${irtRevokedCount})`}
+                  </Button>
+                )}
+                {canConfigure && (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setIsIrtCreateOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Nova Tabela IRT
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {irtLoading && <LoadingState />}
               {irtError && <ErrorState message="Erro ao carregar tabelas IRT." onRetry={refetchIrt} />}
-              {irtTables && irtTables.length === 0 && (
+              {displayedIrtTables.length === 0 && (
                 <div className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhuma tabela IRT cadastrada. Crie uma nova versão para começar.
+                  {irtTables && irtTables.length > 0 && !showRevoked
+                    ? 'Todas as tabelas existentes estão revogadas. Clique em "Ver Revogadas" ou crie uma nova versão.'
+                    : 'Nenhuma tabela IRT cadastrada. Crie uma nova versão para começar.'}
                 </div>
               )}
-              {irtTables && irtTables.length > 0 && (
+              {displayedIrtTables.length > 0 && (
                 <div className="space-y-6">
-                  {irtTables.map((table) => (
+                  {displayedIrtTables.map((table) => (
                     <div key={table.id} className="rounded-xl border border-border p-5 space-y-4 bg-muted/10">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -557,7 +628,12 @@ export function PayrollTaxRulesPage({
                             {statusLabels[table.status] ?? table.status}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            Vigência: {formatDate(table.effective_from)} {table.effective_to ? `até ${formatDate(table.effective_to)}` : '(vigente)'}
+                            Vigência: {formatDate(table.effective_from)}{' '}
+                            {table.status === 'revoked'
+                              ? '(Revogada)'
+                              : table.effective_to
+                              ? `até ${formatDate(table.effective_to)}`
+                              : '(vigente)'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -591,6 +667,22 @@ export function PayrollTaxRulesPage({
                               onClick={() => setRevokeTarget({ type: 'irt', id: table.id })}
                             >
                               <Ban className="h-3.5 w-3.5" /> Revogar
+                            </Button>
+                          )}
+                          {table.status === 'revoked' && canConfigure && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-xs gap-1 text-destructive hover:bg-destructive/10"
+                              title="Eliminar definitivamente tabela revogada"
+                              onClick={() => {
+                                if (confirm('Deseja eliminar definitivamente esta tabela revogada?')) {
+                                  deleteMutation.mutate({ type: 'irt', id: table.id })
+                                }
+                              }}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Eliminar
                             </Button>
                           )}
                         </div>

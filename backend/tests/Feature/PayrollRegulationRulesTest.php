@@ -87,12 +87,30 @@ class PayrollRegulationRulesTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'active');
 
-        // 5. Revogar com motivo
-        $this->postJson("/api/v1/payroll/inss-rules/{$ruleId}/revoke", [
+        // 5. Revogar com motivo (encerra a vigência)
+        $revokeResp = $this->postJson("/api/v1/payroll/inss-rules/{$ruleId}/revoke", [
             'reason' => 'Substituída por nova regulamentação oficial',
         ])->assertOk()
             ->assertJsonPath('data.status', 'revoked')
             ->assertJsonPath('data.revocation_reason', 'Substituída por nova regulamentação oficial');
+
+        $this->assertNotNull($revokeResp->json('data.effective_to'));
+
+        // 6. Criar nova regra com a mesma data inicial é agora permitido porque a anterior foi revogada
+        $this->postJson('/api/v1/payroll/inss-rules', [
+            'country_code' => 'AO',
+            'regime_code' => 'standard',
+            'employee_rate' => 3.0,
+            'employer_rate' => 8.0,
+            'effective_from' => '2026-01-01',
+            'legal_reference' => 'Nova regra substituta',
+        ])->assertStatus(201);
+
+        // 7. Regra revogada pode ser eliminada definitivamente
+        $this->deleteJson("/api/v1/payroll/inss-rules/{$ruleId}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('payroll_inss_rules', ['id' => $ruleId]);
     }
 
     public function test_prevent_overlapping_active_inss_rules(): void
