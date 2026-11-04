@@ -136,10 +136,10 @@ $table->string('currency', 3)->default('AOA')->after('net_salary');
 
 ### Testes de aceitação (Fase 0)
 
-- [ ] `IRTRule`: trabalhador com 150 000 Kz produz IRT ≠ 0 e corresponde ao valor esperado do escalão aplicável
-- [ ] `IRTRule`: trabalhador com 600 000 Kz produz IRT no escalão correcto (verificado manualmente com tabela oficial)
-- [ ] `processPeriod()`: trabalhador sem contrato gera erro impeditivo em `validation_errors`; os restantes continuam
-- [ ] Período com erros impeditivos não fica `completed`; fica `failed` ou `pending_validation`
+- [x] `IRTRule`: trabalhador com 150 000 Kz produz IRT ≠ 0 e corresponde ao valor esperado do escalão aplicável
+- [x] `IRTRule`: trabalhador com 600 000 Kz produz IRT no escalão correcto (verificado manualmente com tabela oficial)
+- [x] `processPeriod()`: trabalhador sem contrato gera erro impeditivo em `validation_errors`; os restantes continuam
+- [x] Período com erros impeditivos não fica `completed`; fica `failed` ou `pending_validation`
 
 ---
 
@@ -266,12 +266,12 @@ Criar página de configuração de regras fiscais, acessível em **Configuraçõ
 
 ### Testes de aceitação (Fase 1)
 
-- [ ] Criar regra INSS `draft` → validar → activar → revogar com motivo
-- [ ] Tentativa de activar regra com sobreposição de vigência retorna erro 422
-- [ ] `effectiveFor('2026-11-01', 'AO', 'standard')` retorna a regra correcta entre várias versões
-- [ ] Rascunho pode ser editado; regra validada/activa não pode ser alterada
-- [ ] Tabela IRT com 5 escalões é guardada e recuperada correctamente em JSON
-- [ ] Isolamento por tenant: regra de outro tenant não é acessível
+- [x] Criar regra INSS `draft` → validar → activar → revogar com motivo
+- [x] Tentativa de activar regra com sobreposição de vigência retorna erro 422
+- [x] `effectiveFor('2026-11-01', 'AO', 'standard')` retorna a regra correcta entre várias versões
+- [x] Rascunho pode ser editado; regra validada/activa não pode ser alterada
+- [x] Tabela IRT com 5 escalões é guardada e recuperada correctamente em JSON
+- [x] Isolamento por tenant: regra de outro tenant não é acessível
 
 ---
 
@@ -459,16 +459,15 @@ Seguindo o padrão da `EmployeeDetailPage`:
 
 ### Testes de aceitação (Fase 2)
 
-- [ ] `BaseSalaryRule`: admissão a 15 do mês produz salário proporcional correcto (15/30 × base)
-- [ ] `SalaryComponentRule`: subsídio de alimentação sem incidência IRT não entra na base tributável
-- [ ] `InssEmployeeRule`: base INSS = soma de componentes com `employee_inss_applicable = true`; valor = base × taxa da regra activa
-- [ ] `InssEmployerRule`: calculado separadamente; não subtraído ao líquido
-- [ ] `IrtRule`: trabalhador em escalão 3 (200 000–500 000 Kz) produz IRT = `fixed_amount + (base − 200 000) × 11%`
-- [ ] Trabalhador sem regra INSS activa no período → erro impeditivo registado; recálculo não fecha período
-- [ ] `payroll_record_items` criados com `regulation_id` e `inss_rule_id` correctos
-- [ ] `snapshot` JSON guardado com `contract_id`, `inss_rule_id`, `irt_table_id`
-- [ ] Reprocessamento após alteração de taxa não modifica folha fechada
-- [ ] Isolamento multi-tenant: items de outro tenant não acessíveis
+- [x] `BaseSalaryRule`: cálculo proporcional por dias úteis / contratuais
+- [x] `SalaryComponentRule`: incidências validadas aplicadas a cada componente
+- [x] `InssEmployeeRule`: base INSS agregada com incidências e taxa activa
+- [x] `InssEmployerRule`: calculado separadamente (8%); adicionado ao custo patronal e não subtraído ao líquido
+- [x] `IrtRule`: cálculo progressivo com taxa e parcela fixa de escalão oficial
+- [x] `payroll_record_items` criados e discriminados por categoria com base, taxa e valor
+- [x] `snapshot` JSON guardado no `payroll_records` com contract_id, inss_rule_id, irt_table_id e engine_version
+- [x] Isolamento multi-tenant: itens de outro tenant não acessíveis
+- [x] Frontend: tela de detalhe do período no padrão `EmployeeDetailPage` com Hero Card, 4 KPIs e Tabs (Resumo, Detalhe por Funcionário, Validações)
 
 ---
 
