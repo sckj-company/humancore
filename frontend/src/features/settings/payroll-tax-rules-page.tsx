@@ -17,6 +17,7 @@ import {
   Trash2,
   Scale,
   FileCheck2,
+  Info,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -722,26 +723,43 @@ export function PayrollTaxRulesPage({
 
       {/* Modal Criar Tabela IRT */}
       <Dialog open={isIrtCreateOpen} onOpenChange={setIsIrtCreateOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl xl:max-w-5xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nova Tabela de IRT</DialogTitle>
+            <DialogTitle className="text-lg flex items-center gap-2">
+              <Layers className="h-5 w-5 text-primary" />
+              Nova Tabela de IRT (Escalões Progressivos)
+            </DialogTitle>
             <DialogDescription>
-              Configure os escalões de IRT, parcelas fixas e início de vigência.
+              Configure o período de vigência, diploma legal e defina os escalões progressivos para o cálculo do IRT.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Início de Vigência</Label>
+
+          <div className="space-y-6 py-2">
+            {/* Dados Gerais de Vigência */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-lg bg-muted/30 border border-border">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">Início de Vigência *</Label>
                 <Input
                   type="date"
+                  className="h-9"
                   value={irtForm.effective_from}
                   onChange={(e) => setIrtForm({ ...irtForm, effective_from: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Referência Legal</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">Fim de Vigência (opcional)</Label>
                 <Input
+                  type="date"
+                  className="h-9"
+                  placeholder="Deixar em branco se indeterminado"
+                  value={irtForm.effective_to}
+                  onChange={(e) => setIrtForm({ ...irtForm, effective_to: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">Referência Legal / Diploma</Label>
+                <Input
+                  className="h-9"
                   placeholder="Ex: Lei n.º 28/20 - Código do IRT"
                   value={irtForm.legal_reference}
                   onChange={(e) => setIrtForm({ ...irtForm, legal_reference: e.target.value })}
@@ -749,13 +767,19 @@ export function PayrollTaxRulesPage({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="font-semibold">Escalões da Tabela</Label>
+            {/* Tabela de Escalões */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <Label className="text-sm font-bold text-foreground">Definição dos Escalões da Tabela</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Cada linha representa uma faixa de matéria coletável e suas respectivas taxas e parcelas fixas
+                  </p>
+                </div>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs gap-1"
+                  className="h-8 text-xs gap-1.5 self-start sm:self-auto"
                   onClick={() => {
                     const last = irtForm.brackets[irtForm.brackets.length - 1]
                     const nextMin = last ? (last.upper_bound ?? last.lower_bound + 100000) : 0
@@ -768,82 +792,143 @@ export function PayrollTaxRulesPage({
                     })
                   }}
                 >
-                  <Plus className="h-3 w-3" /> Adicionar Escalão
+                  <Plus className="h-3.5 w-3.5" /> Adicionar Escalão
                 </Button>
               </div>
 
-              <div className="space-y-2 border border-border rounded-lg p-3 bg-muted/20">
-                {irtForm.brackets.map((b, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-xs">
-                    <span className="w-16 font-semibold shrink-0">Escalão {idx + 1}</span>
-                    <Input
-                      type="number"
-                      placeholder="Min"
-                      className="h-8 text-xs font-mono"
-                      value={b.lower_bound}
-                      onChange={(e) => {
-                        const updated = [...irtForm.brackets]
-                        updated[idx].lower_bound = parseFloat(e.target.value) || 0
-                        setIrtForm({ ...irtForm, brackets: updated })
-                      }}
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Max (vazio = inf)"
-                      className="h-8 text-xs font-mono"
-                      value={b.upper_bound ?? ''}
-                      onChange={(e) => {
-                        const updated = [...irtForm.brackets]
-                        updated[idx].upper_bound = e.target.value ? parseFloat(e.target.value) : null
-                        setIrtForm({ ...irtForm, brackets: updated })
-                      }}
-                    />
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Input
-                        type="number"
-                        placeholder="Taxa %"
-                        className="h-8 w-20 text-xs font-mono"
-                        value={b.rate}
-                        onChange={(e) => {
-                          const updated = [...irtForm.brackets]
-                          updated[idx].rate = parseFloat(e.target.value) || 0
-                          setIrtForm({ ...irtForm, brackets: updated })
-                        }}
-                      />
-                      <span>%</span>
-                    </div>
-                    <Input
-                      type="number"
-                      placeholder="Fixa"
-                      className="h-8 w-28 text-xs font-mono"
-                      value={b.fixed_amount}
-                      onChange={(e) => {
-                        const updated = [...irtForm.brackets]
-                        updated[idx].fixed_amount = parseFloat(e.target.value) || 0
-                        setIrtForm({ ...irtForm, brackets: updated })
-                      }}
-                    />
-                    {irtForm.brackets.length > 1 && (
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        className="h-8 w-8 text-destructive shrink-0"
-                        onClick={() => {
-                          setIrtForm({
-                            ...irtForm,
-                            brackets: irtForm.brackets.filter((_, i) => i !== idx),
-                          })
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+              {/* Tabela de inputs com cabeçalhos explícitos */}
+              <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-xs">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-border bg-muted/60 text-xs font-semibold uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 text-left w-24">Escalão</th>
+                      <th className="px-4 py-3 text-left">Limite Inferior (Kz)</th>
+                      <th className="px-4 py-3 text-left">Limite Superior (Kz)</th>
+                      <th className="px-4 py-3 text-left w-36">Taxa Marginal (%)</th>
+                      <th className="px-4 py-3 text-left w-44">Parcela Fixa (Kz)</th>
+                      <th className="px-3 py-3 text-center w-12">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {irtForm.brackets.map((b, idx) => (
+                      <tr key={idx} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-xs text-muted-foreground">
+                          <Badge variant="secondary" className="font-mono text-xs font-semibold">
+                            #{idx + 1}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            placeholder="0"
+                            className="h-9 font-mono text-sm bg-background"
+                            value={b.lower_bound}
+                            onChange={(e) => {
+                              const updated = [...irtForm.brackets]
+                              updated[idx].lower_bound = parseFloat(e.target.value) || 0
+                              setIrtForm({ ...irtForm, brackets: updated })
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            placeholder="Deixe vazio se sem limite"
+                            className="h-9 font-mono text-sm bg-background placeholder:text-muted-foreground/60"
+                            value={b.upper_bound ?? ''}
+                            onChange={(e) => {
+                              const updated = [...irtForm.brackets]
+                              updated[idx].upper_bound = e.target.value ? parseFloat(e.target.value) : null
+                              setIrtForm({ ...irtForm, brackets: updated })
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              placeholder="0"
+                              className="h-9 font-mono text-sm bg-background pr-8 text-right font-medium"
+                              value={b.rate}
+                              onChange={(e) => {
+                                const updated = [...irtForm.brackets]
+                                updated[idx].rate = parseFloat(e.target.value) || 0
+                                setIrtForm({ ...irtForm, brackets: updated })
+                              }}
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground pointer-events-none">
+                              %
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="500"
+                              placeholder="0"
+                              className="h-9 font-mono text-sm bg-background pr-9 text-right"
+                              value={b.fixed_amount}
+                              onChange={(e) => {
+                                const updated = [...irtForm.brackets]
+                                updated[idx].fixed_amount = parseFloat(e.target.value) || 0
+                                setIrtForm({ ...irtForm, brackets: updated })
+                              }}
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground pointer-events-none">
+                              Kz
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {irtForm.brackets.length > 1 ? (
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              title="Remover este escalão"
+                              onClick={() => {
+                                setIrtForm({
+                                  ...irtForm,
+                                  brackets: irtForm.brackets.filter((_, i) => i !== idx),
+                                })
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/40">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Dica de Orientação de Cálculo */}
+              <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 flex items-start gap-2.5 text-xs text-blue-900 dark:text-blue-200">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold">Regra de Cálculo Oficial do IRT:</p>
+                  <p className="text-muted-foreground dark:text-blue-300">
+                    <span className="font-mono font-medium">IRT = Parcela Fixa + (Matéria Coletável − Limite Inferior) × Taxa %</span>.
+                    Para o último escalão, deixe o <strong>Limite Superior</strong> em branco para indicar que se aplica a todos os rendimentos acima do valor inferior.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsIrtCreateOpen(false)}>
               Cancelar
             </Button>
