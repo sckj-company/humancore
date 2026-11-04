@@ -23,6 +23,7 @@ class AttendanceRecord extends Model
         'break_end',
         'total_worked',
         'status',
+        'deduct_from_salary',
         'late_minutes',
         'overtime_minutes',
         'qr_code_hash',
@@ -35,6 +36,7 @@ class AttendanceRecord extends Model
     {
         return [
             'date' => 'date',
+            'deduct_from_salary' => 'boolean',
             'clock_in' => 'datetime',
             'clock_out' => 'datetime',
             'break_start' => 'datetime',

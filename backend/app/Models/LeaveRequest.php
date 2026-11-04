@@ -18,6 +18,10 @@ class LeaveRequest extends Model
         'employee_id',
         'tenant_id',
         'leave_type_id',
+        'occurrence_type',
+        'notice_type',
+        'is_justified',
+        'deduct_from_salary',
         'start_date',
         'end_date',
         'total_days',
@@ -27,6 +31,8 @@ class LeaveRequest extends Model
         'approved_at',
         'rejected_reason',
         'document_path',
+        'justification_document_path',
+        'signed_document_path',
     ];
 
     protected function casts(): array
@@ -35,6 +41,8 @@ class LeaveRequest extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'approved_at' => 'datetime',
+            'is_justified' => 'boolean',
+            'deduct_from_salary' => 'boolean',
         ];
     }
 

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\AttendanceRecord;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
 use App\Models\Setting;
@@ -113,6 +114,40 @@ class PayrollTest extends TestCase
             'payroll_period_id' => $period->id,
             'employee_id' => $employee->id,
         ]);
+    }
+
+    public function test_absence_deduction_requires_explicit_employee_consent(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        AttendanceRecord::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'date' => '2026-11-03',
+            'status' => 'absent',
+            'deduct_from_salary' => false,
+        ]);
+        AttendanceRecord::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'date' => '2026-11-04',
+            'status' => 'absent',
+            'deduct_from_salary' => true,
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(1.0, (float) $record->absent_days);
+        $this->assertSame(-round(700000 / 30, 2), (float) $record->items()->where('code', 'absence')->value('amount'));
     }
 
     public function test_admin_can_complete_payroll_workflow(): void

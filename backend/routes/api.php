@@ -161,6 +161,7 @@ Route::prefix('v1')->group(function () {
         Route::get('leave/my-requests', [LeaveController::class, 'myRequests']);
         Route::get('leave', [LeaveController::class, 'index']);
         Route::post('leave', [LeaveController::class, 'store']);
+        Route::get('leave/{leave}/documents/{kind}', [LeaveController::class, 'downloadDocument'])->whereIn('kind', ['justification', 'signed']);
         Route::post('leave/{leave}/approve', [LeaveController::class, 'approve']);
         Route::post('leave/{leave}/reject', [LeaveController::class, 'reject']);
         Route::post('leave/{leave}/cancel', [LeaveController::class, 'cancel']);

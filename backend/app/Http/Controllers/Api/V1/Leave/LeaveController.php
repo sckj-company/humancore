@@ -14,6 +14,8 @@ use App\Notifications\LeaveRequestNotification;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaveController extends BaseController
 {
@@ -35,14 +37,27 @@ class LeaveController extends BaseController
             return $this->error('Funcionário não encontrado.', 422);
         }
 
+        $year = $request->integer('year', now()->year);
         $annual = (int) ($this->setting('leave.vacation_days_per_year') ?? 22);
-        $daysUsed = LeaveRequest::where('employee_id', $employee->id)
+        $vacationRequests = LeaveRequest::where('employee_id', $employee->id)
             ->where('status', 'approved')
             ->whereHas('leaveType', fn ($q) => $q->where('code', 'vacation'))
-            ->sum('total_days');
+            ->whereDate('start_date', '<=', "{$year}-12-31")
+            ->whereDate('end_date', '>=', "{$year}-01-01")
+            ->get(['start_date', 'end_date', 'total_days']);
+        $yearStart = Carbon::create($year, 1, 1)->startOfDay();
+        $yearEnd = Carbon::create($year, 12, 31)->startOfDay();
+        $daysUsed = $vacationRequests->sum(function (LeaveRequest $leave) use ($yearStart, $yearEnd): int {
+            $start = $leave->start_date->greaterThan($yearStart) ? $leave->start_date : $yearStart;
+            $end = $leave->end_date->lessThan($yearEnd) ? $leave->end_date : $yearEnd;
+
+            return (int) $start->diffInDays($end) + 1;
+        });
 
         $pending = LeaveRequest::where('employee_id', $employee->id)
             ->where('status', 'pending')
+            ->whereDate('start_date', '<=', "{$year}-12-31")
+            ->whereDate('end_date', '>=', "{$year}-01-01")
             ->sum('total_days');
 
         return $this->success([
@@ -50,6 +65,7 @@ class LeaveController extends BaseController
             'days_used' => (int) $daysUsed,
             'days_remaining' => max(0, $annual - (int) $daysUsed),
             'days_pending' => (int) $pending,
+            'year' => $year,
         ]);
     }
 
@@ -108,6 +124,10 @@ class LeaveController extends BaseController
             'employee_id' => $employee->id,
             'tenant_id' => tenant_id() ?: $employee->tenant_id,
             'leave_type_id' => $validated['leave_type_id'],
+            'occurrence_type' => $validated['occurrence_type'] ?? 'absence',
+            'notice_type' => $validated['notice_type'] ?? null,
+            'is_justified' => $validated['is_justified'] ?? null,
+            'deduct_from_salary' => $validated['deduct_from_salary'] ?? false,
             'start_date' => $start->format('Y-m-d'),
             'end_date' => $end->format('Y-m-d'),
             'total_days' => $totalDays,
@@ -115,6 +135,8 @@ class LeaveController extends BaseController
             'status' => $status,
             'approved_by' => $status === 'approved' ? auth()->id() : null,
             'approved_at' => $status === 'approved' ? now() : null,
+            'justification_document_path' => $request->file('justification_document')?->store('leave-documents/'.$employee->tenant_id, 'local'),
+            'signed_document_path' => $request->file('signed_document')?->store('leave-documents/'.$employee->tenant_id, 'local'),
         ]);
 
         if ($status === 'pending') {
@@ -127,6 +149,23 @@ class LeaveController extends BaseController
         }
 
         return $this->success(new LeaveRequestResource($leave->load(['employee', 'leaveType'])), 'Registo de ausência/férias criado com sucesso.', 201);
+    }
+
+    public function downloadDocument(LeaveRequest $leave, string $kind): StreamedResponse|JsonResponse
+    {
+        $this->authorize('view', $leave);
+
+        $path = match ($kind) {
+            'justification' => $leave->justification_document_path ?? $leave->document_path,
+            'signed' => $leave->signed_document_path,
+            default => null,
+        };
+
+        if (! $path || ! Storage::disk('local')->exists($path)) {
+            return $this->error('Documento não encontrado.', 404);
+        }
+
+        return Storage::disk('local')->download($path);
     }
 
     public function approve(LeaveRequest $leave): JsonResponse

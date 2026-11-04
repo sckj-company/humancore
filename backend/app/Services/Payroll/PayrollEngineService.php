@@ -458,7 +458,10 @@ class PayrollEngineService
             ->get();
 
         $context->workDays = $this->expectedWorkDays($period);
-        $context->absentDays = $attendance->whereIn('status', ['absent'])->count();
+        $context->absentDays = $attendance
+            ->where('status', 'absent')
+            ->where('deduct_from_salary', true)
+            ->count();
         $context->lateMinutes = $attendance->sum('late_minutes');
         $context->overtimeHours = $attendance->sum('overtime_minutes') / 60;
 
