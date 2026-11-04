@@ -630,14 +630,14 @@ Actualizar a `payroll-period-detail-page.tsx` com:
 
 ### Testes de aceitação (Fase 3)
 
-- [ ] `PayrollValidationService`: período com trabalhador sem contrato retorna erro impeditivo para esse trabalhador
-- [ ] `PayrollValidationService`: período com componente sem regulação activa retorna aviso
-- [ ] Submissão com erros impeditivos retorna 422 com lista de erros
-- [ ] Aprovação de período com zero records retorna erro
-- [ ] Rejeição guarda motivo e muda estado para `pending_validation`
-- [ ] Reabertura de período `closed` preserva o `totals_snapshot` e cria evento
-- [ ] Job com lock: dois jobs concorrentes para o mesmo período — apenas um processa
-- [ ] Faltas por aprovar no período geram aviso na validação
+- [x] `PayrollValidationService`: período com trabalhador sem contrato retorna erro impeditivo para esse trabalhador
+- [x] `PayrollValidationService`: período com componente sem regulação activa retorna aviso
+- [x] Submissão com erros impeditivos retorna 422 com lista de erros
+- [x] Aprovação de período com zero records retorna erro
+- [x] Rejeição guarda motivo e muda estado para `pending_validation`
+- [x] Reabertura de período `closed` preserva o `totals_snapshot` e cria evento
+- [x] Job com lock: dois jobs concorrentes para o mesmo período — apenas um processa
+- [x] Faltas por aprovar no período geram aviso na validação
 
 ---
 

@@ -84,9 +84,16 @@ Route::prefix('v1')->group(function () {
         Route::post('payroll/periods', [PayrollController::class, 'store']);
         Route::get('payroll/periods/{period}', [PayrollController::class, 'show']);
         Route::post('payroll/periods/{period}/process', [PayrollController::class, 'process']);
+        Route::post('payroll/periods/{period}/simulate', [PayrollController::class, 'simulate']);
+        Route::get('payroll/periods/{period}/validations', [PayrollController::class, 'validations']);
+        Route::post('payroll/periods/{period}/submit', [PayrollController::class, 'submit']);
         Route::post('payroll/periods/{period}/approve', [PayrollController::class, 'approve']);
+        Route::post('payroll/periods/{period}/reject', [PayrollController::class, 'reject']);
         Route::post('payroll/periods/{period}/close', [PayrollController::class, 'close']);
+        Route::post('payroll/periods/{period}/reopen', [PayrollController::class, 'reopen']);
+        Route::post('payroll/periods/{period}/pay', [PayrollController::class, 'pay']);
         Route::get('payroll/periods/{period}/records', [PayrollController::class, 'records']);
+        Route::get('payroll/periods/{period}/events', [PayrollController::class, 'events']);
         Route::get('payroll/salary-components', [SalaryComponentRegulationController::class, 'components']);
         Route::post('payroll/salary-components', [SalaryComponentRegulationController::class, 'storeComponent']);
         Route::post('payroll/salary-component-regulations/initialize-angola', [SalaryComponentRegulationController::class, 'initializeAngolaDefaults']);

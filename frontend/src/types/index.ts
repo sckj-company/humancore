@@ -201,7 +201,52 @@ export interface Paginated<T> {
   }
 }
 
-export type PayrollPeriodStatus = 'open' | 'processing' | 'completed' | 'failed' | 'pending_approval' | 'approved' | 'paid' | 'closed' | 'cancelled'
+export type PayrollPeriodStatus =
+  | 'open'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'pending_validation'
+  | 'pending_approval'
+  | 'approved'
+  | 'paid'
+  | 'closed'
+  | 'cancelled'
+
+export interface PayrollValidationIssue {
+  employee_id?: number
+  employee_name?: string
+  code: string
+  message: string
+}
+
+export interface PayrollValidationReport {
+  is_valid: boolean
+  blocking_count: number
+  warning_count: number
+  errors: PayrollValidationIssue[]
+  warnings: PayrollValidationIssue[]
+}
+
+export type PayrollPeriodEventType =
+  | 'simulated'
+  | 'validated'
+  | 'submitted'
+  | 'approved'
+  | 'rejected'
+  | 'closed'
+  | 'reopened'
+  | 'paid'
+
+export interface PayrollPeriodEvent {
+  id: number
+  event_type: PayrollPeriodEventType | string
+  actor_id?: number | null
+  actor?: { id: number; name: string } | null
+  notes?: string | null
+  metadata?: Record<string, unknown> | null
+  created_at: string
+}
 
 export interface PayrollPeriodTotalsSnapshot {
   total_gross?: number
@@ -232,6 +277,7 @@ export interface PayrollPeriod {
   total_gross?: number
   total_net?: number
   records?: PayrollRecord[]
+  events?: PayrollPeriodEvent[]
 }
 
 export type PayrollRecordStatus = 'calculated' | 'approved' | 'paid' | 'rejected'

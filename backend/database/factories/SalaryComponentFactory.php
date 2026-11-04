@@ -27,6 +27,7 @@ class SalaryComponentFactory extends Factory
             'default_value' => 0,
             'is_taxable' => false,
             'is_mandatory' => false,
+            'is_active' => true,
             'priority' => 0,
         ];
     }

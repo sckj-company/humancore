@@ -5,7 +5,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ChevronRight, Play, CheckCircle2, Lock, FileDown, Users,
   TrendingUp, Wallet, Building2, AlertTriangle, AlertCircle, Info,
-  Loader2, Clock, Calendar, FileText, BarChart3, XCircle,
+  Loader2, Clock, Calendar, FileText, BarChart3, XCircle, Send,
+  Banknote, RotateCcw, History, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -14,8 +15,24 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
-import type { PayrollPeriod, PayrollRecord, PayrollRecordItem } from '@/types'
+import type {
+  PayrollPeriod,
+  PayrollPeriodEvent,
+  PayrollRecord,
+  PayrollValidationReport,
+} from '@/types'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -37,15 +54,38 @@ function formatDate(date?: string | null, locale = 'pt-AO'): string {
 // ─── Status config ──────────────────────────────────────────────────────────
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  open:             { label: 'Aberto',              color: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
-  processing:       { label: 'A Processar',         color: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
-  completed:        { label: 'Calculado',           color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20' },
-  failed:           { label: 'Com Erros',           color: 'bg-red-500/10 text-red-600 border-red-500/20' },
-  pending_approval: { label: 'Pendente Aprovação',  color: 'bg-orange-500/10 text-orange-600 border-orange-500/20' },
-  approved:         { label: 'Aprovado',            color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
-  paid:             { label: 'Pago',                color: 'bg-green-500/10 text-green-600 border-green-500/20' },
-  closed:           { label: 'Fechado',             color: 'bg-muted text-muted-foreground border-border' },
-  cancelled:        { label: 'Cancelado',           color: 'bg-red-500/10 text-red-600 border-red-500/20' },
+  open:               { label: 'Aberto',              color: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
+  processing:         { label: 'A Processar',         color: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+  completed:          { label: 'Calculado',           color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20' },
+  failed:             { label: 'Com Erros',           color: 'bg-red-500/10 text-red-600 border-red-500/20' },
+  pending_validation: { label: 'Pendente Validação',  color: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20' },
+  pending_approval:   { label: 'Pendente Aprovação',  color: 'bg-orange-500/10 text-orange-600 border-orange-500/20' },
+  approved:           { label: 'Aprovado',            color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
+  paid:               { label: 'Pago',                color: 'bg-green-500/10 text-green-600 border-green-500/20' },
+  closed:             { label: 'Fechado',             color: 'bg-muted text-muted-foreground border-border' },
+  cancelled:          { label: 'Cancelado',           color: 'bg-red-500/10 text-red-600 border-red-500/20' },
+}
+
+const eventLabel: Record<string, string> = {
+  simulated:   'Simulado',
+  validated:   'Validado',
+  submitted:   'Submetido',
+  approved:    'Aprovado',
+  rejected:    'Rejeitado',
+  closed:      'Fechado',
+  reopened:    'Reaberto',
+  paid:        'Pago',
+}
+
+const eventColor: Record<string, string> = {
+  simulated: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  validated: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
+  submitted: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+  approved:  'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  rejected:  'bg-red-500/10 text-red-600 border-red-500/20',
+  closed:    'bg-muted text-muted-foreground border-border',
+  reopened:  'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  paid:      'bg-green-500/10 text-green-600 border-green-500/20',
 }
 
 const categoryConfig: Record<string, { label: string; color: string }> = {
@@ -68,6 +108,12 @@ export function PayrollPeriodDetailPage() {
   const locale = i18n.language || 'pt-AO'
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null)
+  const [approveOpen, setApproveOpen] = useState(false)
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [reopenOpen, setReopenOpen] = useState(false)
+  const [reopenReason, setReopenReason] = useState('')
+  const [warningsAck, setWarningsAck] = useState(false)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['payroll-period', id],
@@ -75,9 +121,24 @@ export function PayrollPeriodDetailPage() {
     enabled: !!id,
   })
 
+  const statusNow = data?.status
+  const needsValidation =
+    statusNow === 'open' ||
+    statusNow === 'failed' ||
+    statusNow === 'processing' ||
+    statusNow === 'completed' ||
+    statusNow === 'pending_validation'
+
+  const { data: validationReport } = useQuery({
+    queryKey: ['payroll-period-validations', id],
+    queryFn: () => api.get<PayrollValidationReport>(`payroll/periods/${id}/validations`),
+    enabled: !!id && needsValidation,
+  })
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['payroll-period', id] })
     qc.invalidateQueries({ queryKey: ['payroll-periods'] })
+    qc.invalidateQueries({ queryKey: ['payroll-period-validations', id] })
   }
 
   const processMutation = useMutation({
@@ -86,16 +147,59 @@ export function PayrollPeriodDetailPage() {
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao processar')),
   })
 
+  const submitMutation = useMutation({
+    mutationFn: () => api.post(`payroll/periods/${id}/submit`),
+    onSuccess: () => {
+      toast.success('Período submetido para aprovação')
+      setWarningsAck(false)
+      invalidate()
+      setSearchParams({ tab: 'validations' }, { replace: true })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao submeter')),
+  })
+
   const approveMutation = useMutation({
     mutationFn: () => api.post(`payroll/periods/${id}/approve`),
-    onSuccess: () => { toast.success('Folha aprovada com sucesso'); invalidate() },
+    onSuccess: () => {
+      toast.success('Folha aprovada com sucesso')
+      setApproveOpen(false)
+      invalidate()
+    },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao aprovar')),
+  })
+
+  const rejectMutation = useMutation({
+    mutationFn: (reason: string) => api.post(`payroll/periods/${id}/reject`, { reason }),
+    onSuccess: () => {
+      toast.success('Folha rejeitada; devolvida para correções')
+      setRejectOpen(false)
+      setRejectReason('')
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao rejeitar')),
   })
 
   const closeMutation = useMutation({
     mutationFn: () => api.post(`payroll/periods/${id}/close`),
     onSuccess: () => { toast.success('Período fechado'); invalidate() },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao fechar')),
+  })
+
+  const reopenMutation = useMutation({
+    mutationFn: (reason: string) => api.post(`payroll/periods/${id}/reopen`, { reason }),
+    onSuccess: () => {
+      toast.success('Período reaberto para recálculo')
+      setReopenOpen(false)
+      setReopenReason('')
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao reabrir')),
+  })
+
+  const payMutation = useMutation({
+    mutationFn: () => api.post(`payroll/periods/${id}/pay`),
+    onSuccess: () => { toast.success('Pagamento registado'); invalidate() },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar pagamento')),
   })
 
   const downloadPayslip = async (recordId: number, filename: string) => {
@@ -124,6 +228,20 @@ export function PayrollPeriodDetailPage() {
   const records = data.records ?? []
   const status = statusConfig[data.status] ?? { label: data.status, color: 'bg-muted text-muted-foreground' }
 
+  const blockingCount = validationReport?.blocking_count ?? 0
+  const warningCount = validationReport?.warning_count ?? 0
+  const canSubmit =
+    (data.status === 'completed' || data.status === 'pending_validation') &&
+    hasPermission(user, 'process_payroll') &&
+    blockingCount === 0 &&
+    (warningCount === 0 || warningsAck)
+  const submitDisabledReason =
+    blockingCount > 0
+      ? `Existem ${blockingCount} erro(s) impeditivo(s). Corrija antes de submeter.`
+      : warningCount > 0 && !warningsAck
+        ? 'Confirme que reviu os avisos antes de submeter.'
+        : undefined
+
   // KPI calculations
   const totalGross = data.total_gross ?? records.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
   const totalNet = data.total_net ?? records.reduce((s, r) => s + (r.net_salary ?? 0), 0)
@@ -136,15 +254,17 @@ export function PayrollPeriodDetailPage() {
     (r) => r.validation_errors && r.validation_errors.length > 0,
   )
   const blockingErrors = recordsWithErrors.filter((r) =>
-    r.validation_errors?.some((e) => e.severity === 'error'),
+    r.validation_errors?.some((e) => e.severity === 'error' || e.severity === 'blocking'),
   )
   const warnings = recordsWithErrors.filter((r) =>
-    r.validation_errors?.every((e) => e.severity === 'warning'),
+    r.validation_errors?.every((e) => e.severity !== 'error' && e.severity !== 'blocking'),
   )
 
   const selectedRecord = selectedEmployeeId
     ? records.find((r) => r.employee_id === selectedEmployeeId)
     : records[0] ?? null
+
+  const events = data.events ?? []
 
   return (
     <div className="space-y-6">
@@ -203,7 +323,7 @@ export function PayrollPeriodDetailPage() {
             </div>
             {/* Contextual Actions */}
             <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-              {data.status === 'open' && hasPermission(user, 'process_payroll') && (
+              {(data.status === 'open' || data.status === 'failed') && hasPermission(user, 'process_payroll') && (
                 <Button
                   size="sm"
                   onClick={() => processMutation.mutate()}
@@ -215,17 +335,41 @@ export function PayrollPeriodDetailPage() {
                   Processar
                 </Button>
               )}
-              {(data.status === 'completed' || data.status === 'pending_approval') && hasPermission(user, 'approve_payroll') && (
+              {(data.status === 'completed' || data.status === 'pending_validation') && hasPermission(user, 'process_payroll') && (
                 <Button
                   size="sm"
-                  onClick={() => approveMutation.mutate()}
-                  disabled={approveMutation.isPending}
+                  onClick={() => submitMutation.mutate()}
+                  disabled={!canSubmit || submitMutation.isPending}
+                  title={submitDisabledReason}
                 >
-                  {approveMutation.isPending
+                  {submitMutation.isPending
                     ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
-                  Aprovar Folha
+                    : <Send className="mr-1.5 h-3.5 w-3.5" />}
+                  Submeter p/ Aprovação
                 </Button>
+              )}
+              {(data.status === 'completed' || data.status === 'pending_approval') && hasPermission(user, 'approve_payroll') && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => setApproveOpen(true)}
+                    disabled={approveMutation.isPending}
+                  >
+                    {approveMutation.isPending
+                      ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
+                    Aprovar Folha
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setRejectOpen(true)}
+                    disabled={rejectMutation.isPending}
+                  >
+                    <X className="mr-1.5 h-3.5 w-3.5" />
+                    Rejeitar
+                  </Button>
+                </>
               )}
               {(data.status === 'completed' || data.status === 'approved') && hasPermission(user, 'close_payroll') && (
                 <Button
@@ -238,6 +382,28 @@ export function PayrollPeriodDetailPage() {
                     ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                     : <Lock className="mr-1.5 h-3.5 w-3.5" />}
                   Fechar Período
+                </Button>
+              )}
+              {(data.status === 'approved' || data.status === 'closed') && hasPermission(user, 'close_payroll') && (
+                <Button
+                  size="sm"
+                  onClick={() => payMutation.mutate()}
+                  disabled={payMutation.isPending}
+                >
+                  {payMutation.isPending
+                    ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    : <Banknote className="mr-1.5 h-3.5 w-3.5" />}
+                  Registar Pagamento
+                </Button>
+              )}
+              {data.status === 'closed' && hasPermission(user, 'close_payroll') && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setReopenOpen(true)}
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  Reabrir
                 </Button>
               )}
             </div>
@@ -288,11 +454,14 @@ export function PayrollPeriodDetailPage() {
           <TabsTrigger value="validations" className="gap-1.5 px-3 py-1.5 text-xs">
             <AlertTriangle className="h-3.5 w-3.5" />
             Validações
-            {recordsWithErrors.length > 0 && (
+            {(recordsWithErrors.length > 0 || blockingCount > 0) && (
               <Badge variant="destructive" className="ml-0.5 text-[10px] h-4 px-1 font-semibold">
-                {recordsWithErrors.length}
+                {Math.max(recordsWithErrors.length, blockingCount)}
               </Badge>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5 px-3 py-1.5 text-xs">
+            <History className="h-3.5 w-3.5" />Histórico
           </TabsTrigger>
         </TabsList>
 
@@ -317,12 +486,145 @@ export function PayrollPeriodDetailPage() {
         {/* ── Tab: Validações ── */}
         <TabsContent value="validations" className="mt-4">
           <ValidationsTab
+            report={validationReport}
             blockingErrors={blockingErrors}
             warnings={warnings}
-            allClean={recordsWithErrors.length === 0}
+            allClean={recordsWithErrors.length === 0 && (!validationReport || (validationReport.blocking_count === 0 && validationReport.warning_count === 0))}
+            warningsAck={warningsAck}
+            onWarningsAckChange={setWarningsAck}
+            canSubmit={canSubmit}
+            submitDisabledReason={submitDisabledReason}
+            isSubmitting={submitMutation.isPending}
+            onSubmit={() => submitMutation.mutate()}
+            showSubmit={
+              (data.status === 'completed' || data.status === 'pending_validation') &&
+              hasPermission(user, 'process_payroll')
+            }
           />
         </TabsContent>
+
+        {/* ── Tab: Histórico ── */}
+        <TabsContent value="history" className="mt-4">
+          <HistoryTab events={events} locale={locale} />
+        </TabsContent>
       </Tabs>
+
+      {/* ── Dialog: Aprovação ── */}
+      <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Aprovar folha salarial</DialogTitle>
+            <DialogDescription>
+              Confirme os totais abaixo antes de aprovar. Esta acção marca todos os registos como aprovados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Total Bruto</p>
+                <p className="text-sm font-semibold font-mono">{fmtCurrency(totalGross)}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Total Líquido</p>
+                <p className="text-sm font-semibold font-mono">{fmtCurrency(totalNet)}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Custo Patronal</p>
+                <p className="text-sm font-semibold font-mono">{fmtCurrency(totalEmployerCost)}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Funcionários</p>
+                <p className="text-sm font-semibold font-mono">{employeeCount}</p>
+              </div>
+            </div>
+            {data.rejection_reason && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
+                <strong>Motivo de rejeição anterior:</strong> {data.rejection_reason}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproveOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => approveMutation.mutate()}
+              disabled={approveMutation.isPending}
+            >
+              {approveMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Aprovar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Rejeição ── */}
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rejeitar folha</DialogTitle>
+            <DialogDescription>
+              O período voltará ao estado <strong>Pendente de Validação</strong> para correções.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="reject-reason">Motivo (obrigatório)</Label>
+            <Textarea
+              id="reject-reason"
+              rows={3}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Descreva o que precisa de ser corrigido…"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={rejectReason.trim().length === 0 || rejectMutation.isPending}
+              onClick={() => rejectMutation.mutate(rejectReason.trim())}
+            >
+              {rejectMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Rejeitar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Reabertura ── */}
+      <Dialog open={reopenOpen} onOpenChange={setReopenOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reabrir período</DialogTitle>
+            <DialogDescription>
+              Esta acção cria uma nova versão do período. O resultado anterior é preservado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
+              O período voltará ao estado <strong>Aberto</strong> para recálculo. Totais aprovados anteriores ficam registados no histórico.
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="detail-reopen-reason">Motivo (obrigatório)</Label>
+              <Textarea
+                id="detail-reopen-reason"
+                rows={3}
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                placeholder="Indique o motivo da reabertura…"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReopenOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={reopenReason.trim().length === 0 || reopenMutation.isPending}
+              onClick={() => reopenMutation.mutate(reopenReason.trim())}
+            >
+              {reopenMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Reabrir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -404,10 +706,6 @@ function SummaryTab({
             </thead>
             <tbody className="divide-y divide-border text-sm">
               {records.map((r) => {
-                const inss = r.inss_base != null ? (r.total_taxes ?? 0) : (r.total_taxes ?? 0)
-                const irt = r.irt_taxable_base != null
-                  ? Math.max(0, (r.total_taxes ?? 0) - (r.inss_base ?? 0) * 0.11)
-                  : 0
                 const otherDeductions = Math.max(0, (r.total_deductions ?? 0))
                 const hasErrors = r.validation_errors && r.validation_errors.length > 0
                 return (
@@ -705,79 +1003,207 @@ function MiniKpi({
 // ─── Tab: Validações ─────────────────────────────────────────────────────────
 
 function ValidationsTab({
+  report,
   blockingErrors,
   warnings,
   allClean,
+  warningsAck,
+  onWarningsAckChange,
+  canSubmit,
+  submitDisabledReason,
+  isSubmitting,
+  onSubmit,
+  showSubmit,
 }: {
+  report?: PayrollValidationReport
   blockingErrors: PayrollRecord[]
   warnings: PayrollRecord[]
   allClean: boolean
+  warningsAck: boolean
+  onWarningsAckChange: (v: boolean) => void
+  canSubmit: boolean
+  submitDisabledReason?: string
+  isSubmitting: boolean
+  onSubmit: () => void
+  showSubmit: boolean
 }) {
-  if (allClean) {
+  const periodErrors = report?.errors ?? []
+  const periodWarnings = report?.warnings ?? []
+  const hasBlocking = (report?.blocking_count ?? 0) > 0 || blockingErrors.length > 0
+  const hasWarnings = (report?.warning_count ?? 0) > 0 || warnings.length > 0
+  const trulyClean = allClean && !hasBlocking && !hasWarnings
+
+  return (
+    <div className="space-y-4">
+      {showSubmit && (
+        <Card className="border-border/80">
+          <CardContent className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              {hasBlocking ? (
+                <span className="text-destructive font-medium">
+                  Existem erros impeditivos — submissão bloqueada.
+                </span>
+              ) : hasWarnings ? (
+                <span>
+                  Avisos informativos presentes.{' '}
+                  {warningsAck ? 'Confirmados.' : 'Confirme que reviu os avisos para submeter.'}
+                </span>
+              ) : (
+                <span>Validações OK — pronto para submeter.</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              {hasWarnings && !hasBlocking && (
+                <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                  <Checkbox
+                    checked={warningsAck}
+                    onCheckedChange={(v) => onWarningsAckChange(v === true)}
+                  />
+                  Confirmo que revi os avisos
+                </label>
+              )}
+              <Button
+                size="sm"
+                onClick={onSubmit}
+                disabled={!canSubmit || isSubmitting}
+                title={submitDisabledReason}
+              >
+                {isSubmitting
+                  ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  : <Send className="mr-1.5 h-3.5 w-3.5" />}
+                Submeter p/ Aprovação
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {trulyClean && (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500 mb-3" />
+            <p className="font-semibold text-foreground">Sem problemas de validação</p>
+            <p className="text-sm text-muted-foreground mt-1">Todos os registos estão válidos e prontos para aprovação.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {(hasBlocking || periodErrors.length > 0) && (
+        <Card className="border-destructive/30">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-destructive">
+              <XCircle className="h-4 w-4" />
+              Erros Impeditivos ({Math.max(report?.blocking_count ?? 0, blockingErrors.length)})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-3">
+            {periodErrors.map((e, i) => (
+              <div key={`period-err-${i}`} className="flex items-start gap-3 rounded-lg bg-destructive/5 border border-destructive/20 p-3">
+                <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-destructive">
+                    {e.employee_name ?? 'Período'}
+                  </p>
+                  <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
+                </div>
+              </div>
+            ))}
+            {blockingErrors.map((r) =>
+              r.validation_errors
+                ?.filter((e) => e.severity === 'error' || e.severity === 'blocking')
+                .map((e, i) => (
+                  <div key={`${r.id}-${i}`} className="flex items-start gap-3 rounded-lg bg-destructive/5 border border-destructive/20 p-3">
+                    <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-destructive">
+                        {r.employee?.full_name ?? `Funcionário #${r.employee_id}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
+                    </div>
+                  </div>
+                )),
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {(hasWarnings || periodWarnings.length > 0) && (
+        <Card className="border-amber-500/30">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-700">
+              <AlertCircle className="h-4 w-4" />
+              Avisos ({Math.max(report?.warning_count ?? 0, warnings.length)})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-3">
+            {periodWarnings.map((e, i) => (
+              <div key={`period-warn-${i}`} className="flex items-start gap-3 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
+                <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-700">
+                    {e.employee_name ?? 'Período'}
+                  </p>
+                  <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
+                </div>
+              </div>
+            ))}
+            {warnings.map((r) =>
+              r.validation_errors
+                ?.filter((e) => e.severity !== 'error' && e.severity !== 'blocking')
+                .map((e, i) => (
+                  <div key={`${r.id}-${i}`} className="flex items-start gap-3 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
+                    <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-700">
+                        {r.employee?.full_name ?? `Funcionário #${r.employee_id}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
+                    </div>
+                  </div>
+                )),
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ─── Tab: Histórico ──────────────────────────────────────────────────────────
+
+function HistoryTab({ events, locale }: { events: PayrollPeriodEvent[]; locale: string }) {
+  if (events.length === 0) {
     return (
       <Card>
         <CardContent className="py-16 text-center">
-          <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500 mb-3" />
-          <p className="font-semibold text-foreground">Sem problemas de validação</p>
-          <p className="text-sm text-muted-foreground mt-1">Todos os registos estão válidos e prontos para aprovação.</p>
+          <History className="mx-auto h-10 w-10 text-muted-foreground/40 mb-3" />
+          <p className="font-semibold text-foreground">Sem eventos registados</p>
+          <p className="text-sm text-muted-foreground mt-1">O histórico de transições aparecerá aqui.</p>
         </CardContent>
       </Card>
     )
   }
 
   return (
-    <div className="space-y-4">
-      {blockingErrors.length > 0 && (
-        <Card className="border-destructive/30">
-          <CardHeader className="pb-3 pt-5 px-5">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-destructive">
-              <XCircle className="h-4 w-4" />
-              Erros Bloqueantes ({blockingErrors.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-5 space-y-3">
-            {blockingErrors.map((r) =>
-              r.validation_errors?.filter((e) => e.severity === 'error').map((e, i) => (
-                <div key={`${r.id}-${i}`} className="flex items-start gap-3 rounded-lg bg-destructive/5 border border-destructive/20 p-3">
-                  <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-destructive">
-                      {r.employee?.full_name ?? `Funcionário #${r.employee_id}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
-                  </div>
-                </div>
-              )),
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {warnings.length > 0 && (
-        <Card className="border-amber-500/30">
-          <CardHeader className="pb-3 pt-5 px-5">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-700">
-              <AlertCircle className="h-4 w-4" />
-              Avisos ({warnings.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-5 space-y-3">
-            {warnings.map((r) =>
-              r.validation_errors?.filter((e) => e.severity === 'warning').map((e, i) => (
-                <div key={`${r.id}-${i}`} className="flex items-start gap-3 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
-                  <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-700">
-                      {r.employee?.full_name ?? `Funcionário #${r.employee_id}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
-                  </div>
-                </div>
-              )),
-            )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    <Card>
+      <CardContent className="p-0">
+        <ul className="divide-y divide-border">
+          {events.map((ev) => (
+            <li key={ev.id} className="px-5 py-4 flex items-start gap-4">
+              <Badge variant="outline" className={`shrink-0 text-xs ${eventColor[ev.event_type] ?? 'bg-muted text-muted-foreground border-border'}`}>
+                {eventLabel[ev.event_type] ?? ev.event_type}
+              </Badge>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-foreground">{ev.notes ?? eventLabel[ev.event_type] ?? ev.event_type}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {ev.actor?.name ? `Por ${ev.actor.name} · ` : ''}
+                  {formatDate(ev.created_at, locale)}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   )
 }

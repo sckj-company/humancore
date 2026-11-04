@@ -7,12 +7,32 @@ use App\Traits\HasTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use InvalidArgumentException;
 
 class PayrollPeriod extends Model
 {
     use Auditable;
     use HasFactory;
     use HasTenant;
+
+    /**
+     * Transições válidas de estado do período de folha salarial.
+     *
+     * Compatível com o estado legado (open/processing/completed) e o fluxo
+     * completo da Fase 3 (pending_validation → pending_approval → approved).
+     */
+    public const TRANSITIONS = [
+        'open' => ['processing', 'pending_approval', 'pending_validation', 'cancelled'],
+        'processing' => ['completed', 'pending_validation', 'failed', 'open'],
+        'completed' => ['pending_approval', 'pending_validation', 'approved', 'processing', 'open', 'closed'],
+        'pending_validation' => ['pending_approval', 'processing', 'failed', 'completed'],
+        'pending_approval' => ['approved', 'pending_validation', 'completed'],
+        'approved' => ['closed', 'paid'],
+        'closed' => ['paid', 'open'],
+        'paid' => [],
+        'failed' => ['processing', 'open'],
+        'cancelled' => [],
+    ];
 
     protected $fillable = [
         'tenant_id',
@@ -65,6 +85,42 @@ class PayrollPeriod extends Model
         return $this->hasMany(PayrollRecord::class);
     }
 
+    public function events()
+    {
+        return $this->hasMany(PayrollPeriodEvent::class)->orderByDesc('created_at');
+    }
+
+    public function recordEvent(string $type, ?int $actorId = null, ?string $notes = null, ?array $metadata = null): PayrollPeriodEvent
+    {
+        return $this->events()->create([
+            'tenant_id' => $this->tenant_id,
+            'event_type' => $type,
+            'actor_id' => $actorId ?? auth()->id(),
+            'notes' => $notes,
+            'metadata' => $metadata,
+            'created_at' => now(),
+        ]);
+    }
+
+    public function transitionTo(string $status, ?string $reason = null): void
+    {
+        if ($this->status === $status) {
+            return;
+        }
+
+        $allowed = self::TRANSITIONS[$this->status] ?? [];
+        if (! in_array($status, $allowed, true)) {
+            throw new InvalidArgumentException("Transição inválida: {$this->status} → {$status}");
+        }
+
+        $this->update(['status' => $status]);
+    }
+
+    public function canTransitionTo(string $status): bool
+    {
+        return in_array($status, self::TRANSITIONS[$this->status] ?? [], true);
+    }
+
     public function scopeOpen(Builder $query): Builder
     {
         return $query->whereIn('status', ['open', 'processing']);
@@ -72,6 +128,17 @@ class PayrollPeriod extends Model
 
     public function isClosed(): bool
     {
-        return in_array($this->status, ['closed', 'cancelled']);
+        return in_array($this->status, ['closed', 'cancelled', 'paid'], true);
+    }
+
+    public function isApprovable(): bool
+    {
+        return in_array($this->status, ['completed', 'pending_approval'], true);
+    }
+
+    public function isProcessable(): bool
+    {
+        return in_array($this->status, ['open', 'failed', 'processing', 'completed', 'pending_validation'], true)
+            && ! $this->isClosed();
     }
 }

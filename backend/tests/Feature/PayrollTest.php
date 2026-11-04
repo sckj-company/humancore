@@ -136,7 +136,7 @@ class PayrollTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true);
 
-        $this->assertSame('completed', $period->fresh()->status);
+        $this->assertSame('approved', $period->fresh()->status);
         $this->assertSame('approved', PayrollRecord::where('payroll_period_id', $period->id)->first()->status);
 
         $this->postJson("/api/v1/payroll/periods/{$period->id}/close")
@@ -325,11 +325,13 @@ class PayrollTest extends TestCase
         $this->assertEquals((float) $record->employer_inss, (float) $employerInssItem->amount);
 
         // 4. Aprovação e criação de totals_snapshot no período
+        // Período precisa estar completed (pós-processamento) para approve
+        $period->update(['status' => 'completed']);
         $response = $this->postJson("/api/v1/payroll/periods/{$period->id}/approve");
         $response->assertOk();
 
         $freshPeriod = $period->fresh();
-        $this->assertSame('completed', $freshPeriod->status);
+        $this->assertSame('approved', $freshPeriod->status);
         $this->assertNotNull($freshPeriod->approved_at);
         $this->assertIsArray($freshPeriod->totals_snapshot);
         $this->assertArrayHasKey('total_employer_cost', $freshPeriod->totals_snapshot);

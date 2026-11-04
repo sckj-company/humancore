@@ -9,9 +9,11 @@ use App\Http\Resources\V1\PayrollRecordResource;
 use App\Jobs\ProcessPayrollJob;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
+use App\Services\Payroll\PayrollValidationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use InvalidArgumentException;
 
 class PayrollController extends BaseController
 {
@@ -44,7 +46,7 @@ class PayrollController extends BaseController
     {
         $this->authorize('view', $period);
 
-        $period->load('records.employee');
+        $period->load(['records.employee', 'records.items', 'events.actor:id,name']);
 
         return $this->success(new PayrollPeriodResource($period));
     }
@@ -57,16 +59,64 @@ class PayrollController extends BaseController
             return $this->error('Não é possível processar um período fechado.', 422);
         }
 
+        // Actualiza para processing ANTES de despachar o job para não
+        // sobrescrever o estado final (completed/pending_validation/failed)
+        // quando a queue é síncrona.
+        $period->update(['status' => 'processing']);
+        $period->recordEvent('simulated', auth()->id(), 'Processamento/Simulação iniciado em background.');
+
         ProcessPayrollJob::dispatch($period->id);
 
-        $period->update(['status' => 'processing']);
-
         return $this->success(null, 'Processamento iniciado em background.');
+    }
+
+    public function simulate(PayrollPeriod $period): JsonResponse
+    {
+        return $this->process($period);
+    }
+
+    public function validations(PayrollPeriod $period, PayrollValidationService $validator): JsonResponse
+    {
+        $this->authorize('view', $period);
+
+        $report = $validator->validate($period);
+
+        return $this->success($report);
+    }
+
+    public function submit(PayrollPeriod $period, PayrollValidationService $validator): JsonResponse
+    {
+        $this->authorize('process', $period);
+
+        if ($period->isClosed()) {
+            return $this->error('Não é possível submeter um período fechado.', 422);
+        }
+
+        $report = $validator->validate($period);
+        if (! $report['is_valid']) {
+            return $this->error('O período possui erros bloqueantes que impedem a submissão para aprovação.', 422, $report);
+        }
+
+        try {
+            $period->transitionTo('pending_approval');
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        $period->recordEvent('submitted', auth()->id(), 'Período submetido para aprovação executiva.', [
+            'warning_count' => $report['warning_count'],
+        ]);
+
+        return $this->success(null, 'Período submetido para aprovação com sucesso.');
     }
 
     public function approve(PayrollPeriod $period): JsonResponse
     {
         $this->authorize('approve', $period);
+
+        if ($period->records()->count() === 0) {
+            return $this->error('Não é possível aprovar um período sem registos calculados.', 422);
+        }
 
         $totals = [
             'total_gross' => (float) $period->records()->sum('gross_salary'),
@@ -80,23 +130,122 @@ class PayrollController extends BaseController
         ];
 
         $period->records()->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => auth()->id()]);
+
+        try {
+            $period->transitionTo('approved');
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
         $period->update([
-            'status' => 'completed',
             'approved_by' => auth()->id(),
             'approved_at' => now(),
             'totals_snapshot' => $totals,
         ]);
 
+        $period->recordEvent('approved', auth()->id(), 'Folha salarial aprovada.', $totals);
+
         return $this->success(null, 'Folha aprovada com sucesso.');
+    }
+
+    public function reject(Request $request, PayrollPeriod $period): JsonResponse
+    {
+        $this->authorize('approve', $period);
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $period->transitionTo('pending_validation');
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        $period->update(['rejection_reason' => $data['reason']]);
+
+        $period->recordEvent('rejected', auth()->id(), 'Folha rejeitada: '.$data['reason'], [
+            'reason' => $data['reason'],
+        ]);
+
+        return $this->success(null, 'Folha rejeitada; devolvida para correções.');
     }
 
     public function close(PayrollPeriod $period): JsonResponse
     {
         $this->authorize('close', $period);
 
-        $period->update(['status' => 'closed', 'closed_at' => now()]);
+        try {
+            $period->transitionTo('closed');
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        $period->update(['closed_at' => now()]);
+        $period->recordEvent('closed', auth()->id(), 'Período salarial fechado definitivamente.');
 
         return $this->success(null, 'Período fechado com sucesso.');
+    }
+
+    public function reopen(Request $request, PayrollPeriod $period): JsonResponse
+    {
+        $this->authorize('reopen', $period);
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $previousSnapshot = $period->totals_snapshot;
+
+        try {
+            $period->transitionTo('open');
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        $period->update([
+            'rejection_reason' => null,
+            'approved_at' => null,
+            'approved_by' => null,
+            'closed_at' => null,
+        ]);
+
+        $period->recordEvent('reopened', auth()->id(), 'Período reaberto: '.$data['reason'], [
+            'reason' => $data['reason'],
+            'previous_totals_snapshot' => $previousSnapshot,
+        ]);
+
+        return $this->success(null, 'Período reaberto para recálculo.');
+    }
+
+    public function pay(PayrollPeriod $period): JsonResponse
+    {
+        $this->authorize('pay', $period);
+
+        if (! in_array($period->status, ['approved', 'closed'], true)) {
+            return $this->error('Apenas períodos aprovados ou fechados podem ser marcados como pagos.', 422);
+        }
+
+        $period->records()->update(['status' => 'paid', 'paid_at' => now()]);
+
+        try {
+            $period->transitionTo('paid');
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        $period->recordEvent('paid', auth()->id(), 'Pagamento da folha salarial registado.');
+
+        return $this->success(null, 'Pagamento registado com sucesso.');
+    }
+
+    public function events(PayrollPeriod $period): JsonResponse
+    {
+        $this->authorize('view', $period);
+
+        $events = $period->events()->with('actor:id,name')->get();
+
+        return $this->success($events);
     }
 
     public function records(PayrollPeriod $period): JsonResponse

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Play, CheckCircle2, Lock, Eye, Loader2 } from 'lucide-react'
+import { Plus, Play, CheckCircle2, Lock, Eye, Loader2, Send, Banknote, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -28,27 +29,29 @@ import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/s
 import type { PayrollPeriod, Paginated } from '@/types'
 
 const statusStyle: Record<string, string> = {
-  open:             'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  processing:       'bg-amber-500/10 text-amber-600 border-amber-500/20',
-  completed:        'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
-  failed:           'bg-red-500/10 text-red-600 border-red-500/20',
-  pending_approval: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
-  approved:         'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-  paid:             'bg-green-500/10 text-green-600 border-green-500/20',
-  closed:           'bg-muted text-muted-foreground border-border',
-  cancelled:        'bg-red-500/10 text-red-600 border-red-500/20',
+  open:               'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  processing:         'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  completed:          'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+  failed:             'bg-red-500/10 text-red-600 border-red-500/20',
+  pending_validation: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
+  pending_approval:   'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  approved:           'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  paid:               'bg-green-500/10 text-green-600 border-green-500/20',
+  closed:             'bg-muted text-muted-foreground border-border',
+  cancelled:          'bg-red-500/10 text-red-600 border-red-500/20',
 }
 
 const statusLabel: Record<string, string> = {
-  open:             'Aberto',
-  processing:       'A Processar',
-  completed:        'Calculado',
-  failed:           'Com Erros',
-  pending_approval: 'Pend. Aprovação',
-  approved:         'Aprovado',
-  paid:             'Pago',
-  closed:           'Fechado',
-  cancelled:        'Cancelado',
+  open:               'Aberto',
+  processing:         'A Processar',
+  completed:          'Calculado',
+  failed:             'Com Erros',
+  pending_validation: 'Pend. Validação',
+  pending_approval:   'Pend. Aprovação',
+  approved:           'Aprovado',
+  paid:               'Pago',
+  closed:             'Fechado',
+  cancelled:          'Cancelado',
 }
 
 const schema = z.object({
@@ -67,6 +70,7 @@ export function PayrollPeriodsPage() {
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const [createOpen, setCreateOpen] = useState(false)
+  const [reopenId, setReopenId] = useState<number | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['payroll-periods'],
@@ -100,6 +104,35 @@ export function PayrollPeriodsPage() {
       invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao fechar')),
+  })
+
+  const submitMutation = useMutation({
+    mutationFn: (id: number) => api.post(`payroll/periods/${id}/submit`),
+    onSuccess: () => {
+      toast.success('Período submetido para aprovação')
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao submeter')),
+  })
+
+  const payMutation = useMutation({
+    mutationFn: (id: number) => api.post(`payroll/periods/${id}/pay`),
+    onSuccess: () => {
+      toast.success('Pagamento registado')
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar pagamento')),
+  })
+
+  const reopenMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      api.post(`payroll/periods/${id}/reopen`, { reason }),
+    onSuccess: () => {
+      toast.success('Período reaberto')
+      setReopenId(null)
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao reabrir')),
   })
 
   return (
@@ -173,24 +206,60 @@ export function PayrollPeriodsPage() {
                               {processMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                             </Button>
                           )}
-                          {p.status === 'completed' && hasPermission(user, 'approve_payroll') && (
+                          {(p.status === 'completed' || p.status === 'pending_validation') &&
+                            hasPermission(user, 'process_payroll') && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Submeter para aprovação"
+                                onClick={() => submitMutation.mutate(p.id)}
+                                disabled={submitMutation.isPending}
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            )}
+                          {(p.status === 'completed' || p.status === 'pending_approval') &&
+                            hasPermission(user, 'approve_payroll') && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Aprovar"
+                                onClick={() => approveMutation.mutate(p.id)}
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          {(p.status === 'completed' || p.status === 'approved') &&
+                            hasPermission(user, 'close_payroll') && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Fechar período"
+                                onClick={() => closeMutation.mutate(p.id)}
+                              >
+                                <Lock className="h-4 w-4" />
+                              </Button>
+                            )}
+                          {(p.status === 'approved' || p.status === 'closed') &&
+                            hasPermission(user, 'close_payroll') && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Registar pagamento"
+                                onClick={() => payMutation.mutate(p.id)}
+                                disabled={payMutation.isPending}
+                              >
+                                <Banknote className="h-4 w-4" />
+                              </Button>
+                            )}
+                          {p.status === 'closed' && hasPermission(user, 'close_payroll') && (
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              title="Aprovar"
-                              onClick={() => approveMutation.mutate(p.id)}
+                              title="Reabrir período"
+                              onClick={() => setReopenId(p.id)}
                             >
-                              <CheckCircle2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {(p.status === 'completed') && hasPermission(user, 'close_payroll') && (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              title="Fechar período"
-                              onClick={() => closeMutation.mutate(p.id)}
-                            >
-                              <Lock className="h-4 w-4" />
+                              <RotateCcw className="h-4 w-4" />
                             </Button>
                           )}
                           <Button variant="ghost" size="icon-sm" asChild title="Ver detalhes">
@@ -208,7 +277,70 @@ export function PayrollPeriodsPage() {
           </CardContent>
         </Card>
       )}
+
+      <ReopenPeriodDialog
+        periodId={reopenId}
+        onOpenChange={(open) => { if (!open) setReopenId(null) }}
+        onConfirm={(reason) => {
+          if (reopenId != null) reopenMutation.mutate({ id: reopenId, reason })
+        }}
+        isPending={reopenMutation.isPending}
+      />
     </div>
+  )
+}
+
+function ReopenPeriodDialog({
+  periodId,
+  onOpenChange,
+  onConfirm,
+  isPending,
+}: {
+  periodId: number | null
+  onOpenChange: (open: boolean) => void
+  onConfirm: (reason: string) => void
+  isPending: boolean
+}) {
+  const [reason, setReason] = useState('')
+  const open = periodId != null
+  const valid = reason.trim().length > 0
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reabrir período</DialogTitle>
+          <DialogDescription>
+            Esta acção cria uma nova versão do período. O resultado anterior é preservado.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
+            O período voltará ao estado <strong>Aberto</strong> para recálculo. Totais aprovados anteriores ficam registados no histórico.
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="reopen-reason">Motivo (obrigatório)</Label>
+            <Textarea
+              id="reopen-reason"
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Indique o motivo da reabertura…"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button
+            disabled={!valid || isPending}
+            onClick={() => onConfirm(reason.trim())}
+          >
+            {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            Reabrir
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -5,6 +5,7 @@ namespace App\Services\Payroll;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\LeaveRequest;
 use App\Models\PayrollInssRule;
 use App\Models\PayrollIrtTable;
 use App\Models\PayrollPeriod;
@@ -272,6 +273,7 @@ class PayrollEngineService
                             'code' => 'CALC_ERROR',
                             'message' => $e->getMessage(),
                             'is_blocking' => true,
+                            'severity' => 'error',
                         ];
 
                         $hasBlockingErrors = true;
@@ -326,6 +328,14 @@ class PayrollEngineService
         $attendance = AttendanceRecord::query()
             ->where('employee_id', $employee->id)
             ->whereBetween('date', [$period->period_start, $period->period_end])
+            ->whereIn('status', ['present', 'late', 'absent', 'justified', 'vacation', 'holiday', 'half_day', 'sick'])
+            ->get();
+
+        $leaves = LeaveRequest::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $period->period_end)
+            ->where('end_date', '>=', $period->period_start)
             ->get();
 
         $context->workDays = $this->expectedWorkDays($period);
@@ -334,6 +344,7 @@ class PayrollEngineService
         $context->overtimeHours = $attendance->sum('overtime_minutes') / 60;
 
         $context->attendance = $attendance;
+        $context->leaves = $leaves;
         $context->salaryComponents = $employee->salaryComponents()->where('is_active', true)->with('component')->get();
 
         return $context;
