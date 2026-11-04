@@ -83,4 +83,8 @@ if [ "$NEEDS_SEED" -eq 1 ]; then
   fi
 fi
 
+# Sempre executa migracoes pendentes ao iniciar/reiniciar
+echo ">> A executar migracoes pendentes..."
+(cd "$PROJECT_DIR/backend" && DB_SOCKET="$SOCKET" php artisan migrate --force)
+
 echo ">> Pronto. MySQL 3307 OK (base: hrms, user: hrms, socket: $SOCKET)"
