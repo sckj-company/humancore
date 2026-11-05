@@ -25,4 +25,9 @@ class LeaveTypePolicy
     {
         return $user->can('view_leave');
     }
+
+    public function create(User $user): bool
+    {
+        return $user->can('manage_leave_types');
+    }
 }

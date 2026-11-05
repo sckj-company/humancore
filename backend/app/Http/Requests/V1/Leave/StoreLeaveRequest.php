@@ -16,7 +16,7 @@ class StoreLeaveRequest extends FormRequest
     {
         return [
             'leave_type_id' => ['required', 'integer', Rule::exists('leave_types', 'id')->where('tenant_id', tenant_id())],
-            'occurrence_type' => ['nullable', 'in:absence,day_off,vacation,other'],
+            'occurrence_type' => ['nullable', 'in:absence,day_off,vacation,medical,family,maternity,paternity,bereavement,unpaid,personal,training,public_duty,other'],
             'notice_type' => ['nullable', 'in:anticipated,unanticipated'],
             'is_justified' => ['nullable', 'boolean'],
             'deduct_from_salary' => ['sometimes', 'boolean'],

@@ -500,7 +500,7 @@ export interface LeaveRequest {
   id: number
   employee_id: number
   leave_type_id: number
-  occurrence_type?: 'absence' | 'day_off' | 'vacation' | 'other' | null
+  occurrence_type?: 'absence' | 'day_off' | 'vacation' | 'medical' | 'family' | 'maternity' | 'paternity' | 'bereavement' | 'unpaid' | 'personal' | 'training' | 'public_duty' | 'other' | null
   notice_type?: 'anticipated' | 'unanticipated' | null
   is_justified?: boolean | null
   deduct_from_salary?: boolean

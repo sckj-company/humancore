@@ -132,8 +132,8 @@ export function ProcessPeriodDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-3xl">
-        <DialogHeader>
+      <DialogContent className="flex h-[85vh] max-h-[85vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-3xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Processar folha salarial
@@ -181,10 +181,10 @@ export function ProcessPeriodDialog({
                     {eligible.length} seleccionado(s)
                   </p>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={selectAll}>
+                    <Button type="button" variant="outline" size="sm" onClick={selectAll}>
                       Todos
                     </Button>
-                    <Button variant="outline" size="sm" onClick={selectNone}>
+                    <Button type="button" variant="outline" size="sm" onClick={selectNone}>
                       Nenhum
                     </Button>
                   </div>
@@ -302,13 +302,14 @@ export function ProcessPeriodDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           {phase === 'select' && (
             <>
-              <Button variant="outline" onClick={() => handleClose(false)}>
+              <Button type="button" variant="outline" onClick={() => handleClose(false)}>
                 Cancelar
               </Button>
               <Button
+                type="button"
                 onClick={() => processMutation.mutate(Array.from(selectedIds))}
                 disabled={selectedIds.size === 0 || processMutation.isPending}
               >
@@ -326,6 +327,7 @@ export function ProcessPeriodDialog({
             <>
               {phase === 'error' && (
                 <Button
+                  type="button"
                   variant="outline"
                   onClick={() => {
                     setPhase('select')
@@ -335,7 +337,7 @@ export function ProcessPeriodDialog({
                   Tentar novamente
                 </Button>
               )}
-              <Button onClick={() => handleClose(false)}>Fechar</Button>
+              <Button type="button" onClick={() => handleClose(false)}>Fechar</Button>
             </>
           )}
         </DialogFooter>

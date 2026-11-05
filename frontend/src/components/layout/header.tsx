@@ -109,12 +109,12 @@ export function Header() {
       </div>
 
       <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex h-[75vh] max-h-[85vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-lg">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Selecionar empresa</DialogTitle>
             <DialogDescription>Escolha a empresa activa para gerir.</DialogDescription>
           </DialogHeader>
-          <div className="relative">
+          <div className="relative shrink-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={companySearch}
@@ -124,7 +124,7 @@ export function Header() {
               className="pl-9"
             />
           </div>
-          <div className="max-h-[55vh] overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {filteredTenants.length ? filteredTenants.map((tenant) => {
               const isSelected = String(tenant.id) === selectedTenantId
               return (

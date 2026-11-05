@@ -6,7 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Briefcase, Trash2, Eye,
   Download, Plus, Upload, ExternalLink, FileCheck, AlertCircle, Building2, User,
   CreditCard, Clock, CheckCircle2, DollarSign, Loader2, Sun, Moon, UserCheck,
-  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff,
+  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil,
 } from 'lucide-react'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -21,9 +21,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore, hasAnyRole, hasPermission } from '@/stores/auth-store'
 import { toast } from 'sonner'
 import type { Employee, EmployeeDocument, AttendanceRecord, LeaveRequest, Paginated } from '@/types'
+import { LeaveDocumentActions } from '@/features/leave/leave-document-actions'
+import { LeaveTypeCreateDialog } from '@/features/leave/leave-type-create-dialog'
+import { EmployeeEditDialog } from '@/features/employees/employee-edit-dialog'
 
 const statusLabels: Record<string, string> = { active: 'Ativo', inactive: 'Inativo', on_leave: 'Em Licença', probation: 'Em Probatório', suspended: 'Suspenso', terminated: 'Rescindido' }
 const statusColors: Record<string, string> = { active: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', inactive: 'bg-muted text-muted-foreground border-border', on_leave: 'bg-blue-500/10 text-blue-600 border-blue-500/20', probation: 'bg-amber-500/10 text-amber-600 border-amber-500/20', suspended: 'bg-rose-500/10 text-rose-600 border-rose-500/20', terminated: 'bg-red-500/10 text-red-600 border-red-500/20' }
@@ -68,6 +71,7 @@ export function EmployeeDetailPage() {
   const activeTab = searchParams.get('tab') || 'personal'
   const user = useAuthStore((s) => s.user)
   const currency = user?.tenant?.currency ?? 'AOA'
+  const canManageLeaveTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'manage_leave_types')
   const locale = i18n.language || 'pt-PT'
   const qc = useQueryClient()
 
@@ -79,6 +83,7 @@ export function EmployeeDetailPage() {
   const [isManualAttOpen, setIsManualAttOpen] = useState(false)
   const [manualAttForm, setManualAttForm] = useState({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' })
   const [isLeaveOpen, setIsLeaveOpen] = useState(false)
+  const [isEmployeeEditOpen, setIsEmployeeEditOpen] = useState(false)
   const [leaveForm, setLeaveForm] = useState({
     leave_type_id: '',
     occurrence_type: 'absence',
@@ -175,8 +180,8 @@ export function EmployeeDetailPage() {
       fd.append('leave_type_id', String(leaveForm.leave_type_id))
       fd.append('occurrence_type', leaveForm.occurrence_type)
       fd.append('notice_type', leaveForm.notice_type)
-      fd.append('is_justified', String(leaveForm.is_justified))
-      fd.append('deduct_from_salary', String(leaveForm.deduct_from_salary))
+      fd.append('is_justified', leaveForm.is_justified ? '1' : '0')
+      fd.append('deduct_from_salary', leaveForm.deduct_from_salary ? '1' : '0')
       fd.append('start_date', leaveForm.start_date)
       fd.append('end_date', leaveForm.end_date)
       if (leaveForm.reason) fd.append('reason', leaveForm.reason)
@@ -263,6 +268,9 @@ export function EmployeeDetailPage() {
   const worked = attRecords.filter((r) => r.status === 'present' || r.status === 'late').length
   const lateCount = attRecords.filter((r) => r.status === 'late').length
   const totalLateMinutes = attRecords.reduce((acc, r) => acc + (r.late_minutes ?? 0), 0)
+  const lateDurationLabel = totalLateMinutes >= 60
+    ? `${formatMinutes(totalLateMinutes)} (${totalLateMinutes} min acumulados)`
+    : `${totalLateMinutes} min acumulados`
   const absent = attRecords.filter((r) => r.status === 'absent').length
   const totalMins = attRecords.reduce((acc, r) => acc + (r.total_worked ?? 0), 0)
   const vacationUsed = leaves.filter((leave) => leave.leave_type?.code === 'vacation' && leave.status === 'approved').reduce((acc, leave) => acc + (leave.total_days ?? 0), 0)
@@ -319,6 +327,11 @@ export function EmployeeDetailPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 shrink-0">
+              {hasPermission(user, 'update_employee') && (
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setIsEmployeeEditOpen(true)}>
+                  <Pencil className="h-3.5 w-3.5" />Editar dados
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant={isClockedIn ? 'secondary' : isClockedOut ? 'outline' : 'default'}
@@ -606,7 +619,7 @@ export function EmployeeDetailPage() {
               </div>
             </Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-600"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Dias Trabalhados</p><p className="text-2xl font-bold text-foreground">{worked}</p></div></Card>
-            <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-amber-500/10 p-2.5 text-amber-600"><Clock className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Atrasos</p><p className="text-2xl font-bold text-foreground">{lateCount}</p><p className="text-[11px] text-muted-foreground">{totalLateMinutes} min</p></div></Card>
+            <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-amber-500/10 p-2.5 text-amber-600"><Clock className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Atrasos</p><p className="text-2xl font-bold text-foreground">{lateCount}</p><p className="text-[11px] text-muted-foreground">{lateDurationLabel}</p></div></Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-red-500/10 p-2.5 text-red-600"><AlertCircle className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Faltas</p><p className="text-2xl font-bold text-foreground">{absent}</p><p className="text-[11px] text-muted-foreground">{formatMinutes(totalMins)} total</p></div></Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-sky-500/10 p-2.5 text-sky-600"><Calendar className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Férias Gozadas</p><p className="text-2xl font-bold text-foreground">{vacationUsed}</p><p className="text-[11px] text-muted-foreground">dias aprovados</p></div></Card>
           </div>
@@ -684,8 +697,8 @@ export function EmployeeDetailPage() {
                 <div className="py-10 text-center text-muted-foreground text-sm"><BedDouble className="h-10 w-10 mx-auto mb-2 opacity-30" /><p className="font-medium">Sem ausências ou férias registadas</p></div>
               ) : (
                 <div className="rounded-lg border border-border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Tipo</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Início</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Fim</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Dias</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Estado</th></tr></thead>
+                  <table className="w-full min-w-[980px] text-sm">
+                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Tipo</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Início</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Fim</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Dias</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Estado</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Documentos</th></tr></thead>
                     <tbody className="divide-y divide-border">
                       {leaves.map((leave) => (
                         <tr key={leave.id} className="hover:bg-muted/30 transition-colors">
@@ -694,6 +707,7 @@ export function EmployeeDetailPage() {
                           <td className="px-4 py-3 font-mono text-xs">{formatDate(leave.end_date)}</td>
                           <td className="px-4 py-3 font-bold text-xs">{leave.total_days}d</td>
                           <td className="px-4 py-3"><Badge variant="outline" className={`text-[10px] font-medium ${leaveStatusColors[leave.status] ?? ''}`}>{leaveStatusLabels[leave.status] ?? leave.status}</Badge></td>
+                          <td className="px-4 py-3"><LeaveDocumentActions leave={leave} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -779,6 +793,12 @@ export function EmployeeDetailPage() {
       </Tabs>
 
       {/* MODALS */}
+      <EmployeeEditDialog
+        key={`${data.id}-${data.updated_at}`}
+        employee={data}
+        open={isEmployeeEditOpen}
+        onOpenChange={setIsEmployeeEditOpen}
+      />
 
       {/* Upload Documento */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
@@ -897,18 +917,18 @@ export function EmployeeDetailPage() {
               </Select>
             </div>
             {(manualAttForm.status === 'absent' || manualAttForm.status === 'excused' || manualAttForm.status === 'late') && (
-              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium">Descontar do salário?</p>
-                  <p className="text-xs text-muted-foreground">Aplica a regra de desconto configurada para este contexto.</p>
-                </div>
+              <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <span>
+                  <span className="block text-sm font-medium">Descontar do salário?</span>
+                  <span className="block text-xs text-muted-foreground">Aplica a regra de desconto configurada para este contexto.</span>
+                </span>
                 <input
                   type="checkbox"
                   checked={manualAttForm.deduct_from_salary}
                   onChange={(e) => setManualAttForm((p) => ({ ...p, deduct_from_salary: e.target.checked }))}
                   className="h-4 w-4"
                 />
-              </div>
+              </label>
             )}
             <div>
               <Label className="text-xs font-semibold">Observações</Label>
@@ -939,44 +959,43 @@ export function EmployeeDetailPage() {
 
       {/* Lançar Ausência / Férias */}
       <Dialog open={isLeaveOpen} onOpenChange={setIsLeaveOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><BedDouble className="h-5 w-5 text-primary" />Lançar Ausência / Folga / Férias</DialogTitle><DialogDescription>Registe ausência para {data.first_name} nos termos da LGT angolana.</DialogDescription></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div><Label className="text-xs font-semibold">Tipo de Ausência (LGT) <span className="text-destructive">*</span></Label><Select value={leaveForm.leave_type_id} onValueChange={(v) => setLeaveForm((p) => ({ ...p, leave_type_id: v }))}><SelectTrigger className="mt-1.5"><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger><SelectContent>{(leaveTypes ?? []).map((lt) => (<SelectItem key={lt.id} value={String(lt.id)}>{lt.name}{lt.days_per_year ? ` (até ${lt.days_per_year}d)` : ''} · {lt.is_paid ? 'Remunerado' : 'Não Remunerado'}</SelectItem>))}</SelectContent></Select></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs font-semibold">Natureza</Label><Select value={leaveForm.occurrence_type} onValueChange={(v) => setLeaveForm((p) => ({ ...p, occurrence_type: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="absence">Ausência</SelectItem><SelectItem value="day_off">Folga</SelectItem><SelectItem value="vacation">Férias</SelectItem><SelectItem value="other">Outro</SelectItem></SelectContent></Select></div>
-              <div><Label className="text-xs font-semibold">Aviso</Label><Select value={leaveForm.notice_type} onValueChange={(v) => setLeaveForm((p) => ({ ...p, notice_type: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="anticipated">Antecipada</SelectItem><SelectItem value="unanticipated">Não antecipada</SelectItem></SelectContent></Select></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs font-semibold">Data de Início <span className="text-destructive">*</span></Label><Input type="date" className="mt-1.5" value={leaveForm.start_date} onChange={(e) => setLeaveForm((p) => ({ ...p, start_date: e.target.value }))} /></div>
-              <div><Label className="text-xs font-semibold">Data de Fim <span className="text-destructive">*</span></Label><Input type="date" className="mt-1.5" value={leaveForm.end_date} onChange={(e) => setLeaveForm((p) => ({ ...p, end_date: e.target.value }))} /></div>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
-              <div>
-                <p className="text-sm font-medium">Está justificado?</p>
-                <p className="text-xs text-muted-foreground">Seleciona se existe justificativo ou documento médico.</p>
+        <DialogContent className="flex h-[90vh] max-h-[90vh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden">
+          <DialogHeader className="shrink-0"><DialogTitle className="flex items-center gap-2"><BedDouble className="h-5 w-5 text-primary" />Lançar Ausência / Folga / Férias</DialogTitle><DialogDescription>Registe ausência para {data.first_name} nos termos da LGT angolana.</DialogDescription></DialogHeader>
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto py-2 pr-1 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label className="text-xs font-semibold">Tipo de Ausência (LGT) <span className="text-destructive">*</span></Label>
+              <div className="mt-1.5 flex items-center gap-2">
+                <Select value={leaveForm.leave_type_id} onValueChange={(v) => setLeaveForm((p) => ({ ...p, leave_type_id: v }))}>
+                  <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger>
+                  <SelectContent>{(leaveTypes ?? []).map((lt) => (<SelectItem key={lt.id} value={String(lt.id)}>{lt.name}{lt.days_per_year ? ` (até ${lt.days_per_year}d)` : ''} · {lt.is_paid ? 'Remunerado' : 'Não Remunerado'}</SelectItem>))}</SelectContent>
+                </Select>
+                {canManageLeaveTypes && <LeaveTypeCreateDialog onCreated={(type) => setLeaveForm((current) => ({ ...current, leave_type_id: String(type.id) }))} />}
               </div>
+            </div>
+            <div><Label className="text-xs font-semibold">Natureza</Label><Select value={leaveForm.occurrence_type} onValueChange={(v) => setLeaveForm((p) => ({ ...p, occurrence_type: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="absence">Ausência geral</SelectItem><SelectItem value="day_off">Folga</SelectItem><SelectItem value="vacation">Férias</SelectItem><SelectItem value="medical">Consulta ou tratamento médico</SelectItem><SelectItem value="family">Assistência familiar</SelectItem><SelectItem value="maternity">Licença de maternidade</SelectItem><SelectItem value="paternity">Licença de paternidade</SelectItem><SelectItem value="bereavement">Luto</SelectItem><SelectItem value="unpaid">Licença sem vencimento</SelectItem><SelectItem value="personal">Assunto pessoal</SelectItem><SelectItem value="training">Formação</SelectItem><SelectItem value="public_duty">Dever público</SelectItem><SelectItem value="other">Outro</SelectItem></SelectContent></Select></div>
+            <div><Label className="text-xs font-semibold">Aviso</Label><Select value={leaveForm.notice_type} onValueChange={(v) => setLeaveForm((p) => ({ ...p, notice_type: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="anticipated">Antecipada</SelectItem><SelectItem value="unanticipated">Não antecipada</SelectItem></SelectContent></Select></div>
+            <div><Label className="text-xs font-semibold">Data de Início <span className="text-destructive">*</span></Label><Input type="date" className="mt-1.5" value={leaveForm.start_date} onChange={(e) => setLeaveForm((p) => ({ ...p, start_date: e.target.value }))} /></div>
+            <div><Label className="text-xs font-semibold">Data de Fim <span className="text-destructive">*</span></Label><Input type="date" className="mt-1.5" value={leaveForm.end_date} onChange={(e) => setLeaveForm((p) => ({ ...p, end_date: e.target.value }))} /></div>
+            <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <span><span className="block text-sm font-medium">Está justificado?</span><span className="block text-xs text-muted-foreground">Seleciona se existe justificativo ou documento médico.</span></span>
               <input type="checkbox" checked={leaveForm.is_justified} onChange={(e) => setLeaveForm((p) => ({ ...p, is_justified: e.target.checked }))} className="h-4 w-4" />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
-              <div>
-                <p className="text-sm font-medium">Descontar do salário?</p>
-                <p className="text-xs text-muted-foreground">A regra configurada será aplicada automaticamente.</p>
-              </div>
+            </label>
+            <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <span><span className="block text-sm font-medium">Descontar do salário?</span><span className="block text-xs text-muted-foreground">A regra configurada será aplicada automaticamente.</span></span>
               <input type="checkbox" checked={leaveForm.deduct_from_salary} onChange={(e) => setLeaveForm((p) => ({ ...p, deduct_from_salary: e.target.checked }))} className="h-4 w-4" />
-            </div>
+            </label>
             <div><Label className="text-xs font-semibold">Estado</Label><Select value={leaveForm.status} onValueChange={(v) => setLeaveForm((p) => ({ ...p, status: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="approved">Aprovado (direto)</SelectItem><SelectItem value="pending">Pendente (para aprovação)</SelectItem></SelectContent></Select></div>
             <div><Label className="text-xs font-semibold">Motivo / Observações</Label><Input className="mt-1.5" placeholder="Justificação..." value={leaveForm.reason} onChange={(e) => setLeaveForm((p) => ({ ...p, reason: e.target.value }))} /></div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label className="text-xs font-semibold">Justificativo (opcional)</Label>
               <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setLeaveForm((p) => ({ ...p, justification_document: e.target.files?.[0] ?? null }))} />
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label className="text-xs font-semibold">Documento assinado do funcionário (opcional)</Label>
               <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setLeaveForm((p) => ({ ...p, signed_document: e.target.files?.[0] ?? null }))} />
             </div>
           </div>
-          <DialogFooter><Button variant="outline" size="sm" onClick={() => setIsLeaveOpen(false)} disabled={leaveMutation.isPending}>Cancelar</Button><Button size="sm" onClick={() => leaveMutation.mutate()} disabled={leaveMutation.isPending || !leaveForm.leave_type_id}>{leaveMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}Registar</Button></DialogFooter>
+          <DialogFooter className="shrink-0"><Button type="button" variant="outline" size="sm" onClick={() => setIsLeaveOpen(false)} disabled={leaveMutation.isPending}>Cancelar</Button><Button type="button" size="sm" onClick={() => leaveMutation.mutate()} disabled={leaveMutation.isPending || !leaveForm.leave_type_id}>{leaveMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}Registar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

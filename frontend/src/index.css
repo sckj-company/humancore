@@ -214,6 +214,18 @@ summary,
   cursor: pointer;
 }
 
+input[type='checkbox']:not(:disabled),
+[role='checkbox']:not([aria-disabled='true']):not([data-disabled='true']),
+[role='switch']:not([aria-disabled='true']):not([data-disabled='true']) {
+  cursor: pointer;
+}
+
+label:has(input[type='checkbox']),
+label:has([role='checkbox']),
+label:has([role='switch']) {
+  cursor: pointer;
+}
+
 button:disabled,
 [role="button"][aria-disabled="true"],
 [disabled] {

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -26,6 +26,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/shared/page-header'
 import type { LeaveRequest, LeaveBalance, LeaveTypeSummary, Paginated } from '@/types'
+import { LeaveDocumentActions } from '@/features/leave/leave-document-actions'
+import { LeaveTypeCreateDialog } from '@/features/leave/leave-type-create-dialog'
 
 const statusStyle: Record<string, string> = {
   pending: 'bg-warning/10 text-warning',
@@ -36,6 +38,7 @@ const statusStyle: Record<string, string> = {
 
 const schema = z.object({
   leave_type_id: z.string().min(1),
+  occurrence_type: z.enum(['absence', 'day_off', 'vacation', 'medical', 'family', 'maternity', 'paternity', 'bereavement', 'unpaid', 'personal', 'training', 'public_duty', 'other']),
   start_date: z.string().min(1),
   end_date: z.string().min(1),
   reason: z.string().optional(),
@@ -86,13 +89,14 @@ export function LeavePage() {
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[980px]">
                 <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
                   <tr>
                     {isAdmin && <th className="px-6 py-3 font-medium">Funcionário</th>}
                     <th className="px-6 py-3 font-medium">Tipo</th>
                     <th className="px-6 py-3 font-medium">Período</th>
                     <th className="px-6 py-3 font-medium text-right">Dias</th>
+                    <th className="px-6 py-3 font-medium">Documentos</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.status')}</th>
                     {isAdmin && <th className="px-6 py-3 font-medium text-right">Ações</th>}
                   </tr>
@@ -111,6 +115,7 @@ export function LeavePage() {
                         {formatDate(r.start_date, i18n.language)} – {formatDate(r.end_date, i18n.language)}
                       </td>
                       <td className="px-6 py-3 text-right font-mono">{r.total_days}</td>
+                      <td className="px-6 py-3"><LeaveDocumentActions leave={r} /></td>
                       <td className="px-6 py-3 text-right">
                         <Badge className={statusStyle[r.status] ?? ''} variant="secondary">
                           {r.status}
@@ -190,6 +195,7 @@ function LeaveRequestDialog() {
   const user = useAuthStore((s) => s.user)
   const [open, setOpen] = useState(false)
   const canRequest = hasPermission(user, 'create_leave') || hasAnyRole(user, ['employee'])
+  const canManageTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'manage_leave_types')
 
   const {
     register,
@@ -197,7 +203,7 @@ function LeaveRequestDialog() {
     setValue,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) as never })
+  } = useForm<FormValues>({ resolver: zodResolver(schema) as never, defaultValues: { occurrence_type: 'absence' } })
 
   const { data: types } = useQuery({
     queryKey: ['leave-types'],
@@ -209,6 +215,7 @@ function LeaveRequestDialog() {
     mutationFn: (values: FormValues) =>
       api.post('leave', {
         leave_type_id: Number(values.leave_type_id),
+        occurrence_type: values.occurrence_type,
         start_date: values.start_date,
         end_date: values.end_date,
         reason: values.reason || undefined,
@@ -237,19 +244,43 @@ function LeaveRequestDialog() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label>Tipo de ausência</Label>
-            <Select value={watch('leave_type_id')} onValueChange={(v) => setValue('leave_type_id', v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o tipo" />
-              </SelectTrigger>
+            <div className="flex items-end gap-2">
+              <Select value={watch('leave_type_id')} onValueChange={(v) => setValue('leave_type_id', v)}>
+                <SelectTrigger className="min-w-0 flex-1">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {types?.map((tp) => (
+                    <SelectItem key={tp.id} value={String(tp.id)}>
+                      {tp.name} {tp.days_per_year ? `(${tp.days_per_year} dias)` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {canManageTypes && <LeaveTypeCreateDialog onCreated={(type) => setValue('leave_type_id', String(type.id))} />}
+            </div>
+            {errors.leave_type_id && <p className="text-xs text-destructive">Selecione o tipo</p>}
+          </div>
+          <div className="space-y-2">
+            <Label>Natureza</Label>
+            <Select value={watch('occurrence_type')} onValueChange={(v) => setValue('occurrence_type', v as FormValues['occurrence_type'])}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {types?.map((tp) => (
-                  <SelectItem key={tp.id} value={String(tp.id)}>
-                    {tp.name} ({tp.days_per_year ?? 0} dias)
-                  </SelectItem>
-                ))}
+                <SelectItem value="absence">Ausência geral</SelectItem>
+                <SelectItem value="day_off">Folga</SelectItem>
+                <SelectItem value="vacation">Férias</SelectItem>
+                <SelectItem value="medical">Consulta ou tratamento médico</SelectItem>
+                <SelectItem value="family">Assistência familiar</SelectItem>
+                <SelectItem value="maternity">Licença de maternidade</SelectItem>
+                <SelectItem value="paternity">Licença de paternidade</SelectItem>
+                <SelectItem value="bereavement">Luto</SelectItem>
+                <SelectItem value="unpaid">Licença sem vencimento</SelectItem>
+                <SelectItem value="personal">Assunto pessoal</SelectItem>
+                <SelectItem value="training">Formação</SelectItem>
+                <SelectItem value="public_duty">Dever público</SelectItem>
+                <SelectItem value="other">Outro</SelectItem>
               </SelectContent>
             </Select>
-            {errors.leave_type_id && <p className="text-xs text-destructive">Selecione o tipo</p>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">

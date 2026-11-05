@@ -15,6 +15,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaveController extends BaseController
@@ -24,6 +25,29 @@ class LeaveController extends BaseController
         $this->authorize('viewAny', LeaveType::class);
 
         return $this->success(LeaveType::query()->where('is_active', true)->get());
+    }
+
+    public function storeType(Request $request): JsonResponse
+    {
+        $this->authorize('create', LeaveType::class);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:150'],
+            'code' => ['required', 'string', 'max:50', Rule::unique('leave_types', 'code')->where('tenant_id', tenant_id())],
+            'category' => ['required', Rule::in(['vacation', 'sick', 'personal', 'family', 'maternity', 'paternity', 'unpaid', 'other'])],
+            'days_per_year' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'is_paid' => ['required', 'boolean'],
+            'requires_document' => ['sometimes', 'boolean'],
+        ]);
+
+        $type = LeaveType::create([
+            ...$validated,
+            'tenant_id' => tenant_id(),
+            'requires_approval' => true,
+            'is_active' => true,
+        ]);
+
+        return $this->success($type, 'Tipo de ausência criado com sucesso.', 201);
     }
 
     public function balance(Request $request): JsonResponse
@@ -166,6 +190,26 @@ class LeaveController extends BaseController
         }
 
         return Storage::disk('local')->download($path);
+    }
+
+    public function uploadDocument(Request $request, LeaveRequest $leave, string $kind): JsonResponse
+    {
+        $this->authorize('view', $leave);
+
+        $validated = $request->validate([
+            'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ]);
+        $attribute = $kind === 'justification' ? 'justification_document_path' : 'signed_document_path';
+        $oldPath = $leave->{$attribute};
+        $newPath = $validated['document']->store('leave-documents/'.$leave->tenant_id, 'local');
+
+        $leave->update([$attribute => $newPath]);
+
+        if ($oldPath) {
+            Storage::disk('local')->delete($oldPath);
+        }
+
+        return $this->success(new LeaveRequestResource($leave->fresh()->load(['employee', 'leaveType'])), 'Documento carregado com sucesso.');
     }
 
     public function approve(LeaveRequest $leave): JsonResponse

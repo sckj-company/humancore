@@ -147,6 +147,15 @@ export function SettingsPage() {
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao guardar')),
   })
+  const addDiscountRule = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: number }) =>
+      api.put('settings/bulk', { group: 'payroll', values: { [key]: value } }),
+    onSuccess: () => {
+      toast.success('Regra de desconto adicionada')
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao adicionar regra de desconto')),
+  })
   const saveRequiredDocuments = useMutation({
     mutationFn: () => api.put('settings/bulk', {
       group: 'documents',
@@ -278,8 +287,7 @@ export function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 md:grid-cols-2">
-              {payrollDiscountSettings.length > 0 ? (
-                payrollDiscountSettings.map((setting) => {
+              {payrollDiscountSettings.map((setting) => {
                   const config = DISCOUNT_SETTINGS.find((item) => item.key === setting.key)
                   const fieldName = `${setting.group}.${setting.key}`
 
@@ -299,12 +307,31 @@ export function SettingsPage() {
                       />
                     </div>
                   )
-                })
-              ) : (
-                <div className="md:col-span-2 rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
-                  Ainda não existem regras de desconto configuradas para este tenant.
+                })}
+              {DISCOUNT_SETTINGS.filter((rule) => !payrollDiscountSettings.some((setting) => setting.key === rule.key)).map((rule) => (
+                <div key={rule.key} className="flex items-center justify-between gap-4 rounded-lg border border-dashed border-border p-4">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-medium">{rule.label}</p>
+                    <p className="text-xs text-muted-foreground">{rule.description}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    disabled={addDiscountRule.isPending}
+                    onClick={() => addDiscountRule.mutate({
+                      key: rule.key,
+                      value: rule.key === 'discounts.lateness_free_occurrences_per_week' ? 1 : 0,
+                    })}
+                  >
+                    {addDiscountRule.isPending && addDiscountRule.variables?.key === rule.key
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Plus className="h-4 w-4" />}
+                    Adicionar
+                  </Button>
                 </div>
-              )}
+              ))}
             </CardContent>
             <CardFooter className="justify-end border-t px-6 py-4">
               <Button

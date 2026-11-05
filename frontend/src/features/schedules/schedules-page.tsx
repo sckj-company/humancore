@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -11,19 +10,16 @@ import {
   Edit,
   Loader2,
   Save,
-  Users,
-  Calendar,
   Moon,
   Sun,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader, EmptyState, ErrorState } from '@/components/shared/page-header'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { DataTable } from '@/components/data/data-table'
@@ -98,45 +94,35 @@ type ShiftFormValues = z.infer<typeof shiftSchema>
 const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 export function SchedulesPage() {
-  const { t } = useTranslation()
+  const [view, setView] = useState<'shifts' | 'assignments' | 'holidays'>('shifts')
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="GESTÃO DE TEMPO"
-        title="Horários e Turnos"
-        description="Configure turnos de trabalho, atribua horários a funcionários e gerencie feriados"
+        title={view === 'shifts' ? 'Turnos' : view === 'assignments' ? 'Atribuições de turnos' : 'Feriados'}
+        description={view === 'shifts' ? 'Configure os horários de trabalho e as respetivas regras.' : view === 'assignments' ? 'Associe turnos aos funcionários.' : 'Consulte e registe feriados.'}
       />
-      <Tabs defaultValue="shifts" className="w-full">
-        <TabsList>
-          <TabsTrigger value="shifts">
-            <Clock className="mr-2 h-4 w-4" />
-            Turnos
-          </TabsTrigger>
-          <TabsTrigger value="assignments">
-            <Users className="mr-2 h-4 w-4" />
-            Atribuições
-          </TabsTrigger>
-          <TabsTrigger value="holidays">
-            <Calendar className="mr-2 h-4 w-4" />
-            Feriados
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="shifts">
-          <ShiftsTab />
-        </TabsContent>
-        <TabsContent value="assignments">
-          <AssignmentsTab />
-        </TabsContent>
-        <TabsContent value="holidays">
-          <HolidaysTab />
-        </TabsContent>
-      </Tabs>
+      <div className="flex justify-end">
+        <select
+          aria-label="Área de horários e turnos"
+          value={view}
+          onChange={(event) => setView(event.target.value as typeof view)}
+          className="h-9 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="shifts">Turnos</option>
+          <option value="assignments">Atribuições</option>
+          <option value="holidays">Feriados</option>
+        </select>
+      </div>
+      {view === 'shifts' && <ShiftsTab />}
+      {view === 'assignments' && <AssignmentsTab />}
+      {view === 'holidays' && <HolidaysTab />}
     </div>
   )
 }
 
 function ShiftsTab() {
-  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Shift | null>(null)
   const [search, setSearch] = useState('')
@@ -315,6 +301,54 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
           notes: '',
         },
   })
+  const { reset, setValue } = form
+
+  useEffect(() => {
+    if (!open) return
+    reset(shift
+      ? {
+          name: shift.name,
+          code: shift.code ?? '',
+          start_time: shift.start_time,
+          end_time: shift.end_time,
+          break_minutes: shift.break_minutes,
+          work_hours: shift.work_hours,
+          late_tolerance_minutes: shift.late_tolerance_minutes,
+          color: shift.color ?? '',
+          is_night_shift: shift.is_night_shift,
+          is_active: shift.is_active,
+          notes: shift.notes ?? '',
+        }
+      : {
+          name: '',
+          code: '',
+          start_time: '08:00',
+          end_time: '17:00',
+          break_minutes: 60,
+          work_hours: 8,
+          late_tolerance_minutes: 10,
+          color: '#3b82f6',
+          is_night_shift: false,
+          is_active: true,
+          notes: '',
+        })
+    setSelectedDays(shift?.working_days ?? [])
+  }, [open, shift, reset])
+
+  const startTime = form.watch('start_time')
+  const endTime = form.watch('end_time')
+  const breakMinutes = form.watch('break_minutes')
+
+  useEffect(() => {
+    if (!startTime || !endTime) return
+    const [startHour, startMinute] = startTime.split(':').map(Number)
+    const [endHour, endMinute] = endTime.split(':').map(Number)
+    const start = startHour * 60 + startMinute
+    const end = endHour * 60 + endMinute
+    const duration = (end < start ? end + 24 * 60 : end) - start
+    const paidMinutes = Math.max(0, duration - Number(breakMinutes || 0))
+    setValue('work_hours', Number((paidMinutes / 60).toFixed(2)), { shouldDirty: true })
+  }, [startTime, endTime, breakMinutes, setValue])
 
   const mutation = useMutation({
     mutationFn: (data: ShiftFormValues) =>
@@ -362,7 +396,7 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
             </div>
             <div className="space-y-1.5">
               <Label>Horas/dia</Label>
-              <Input type="number" step="0.5" {...form.register('work_hours')} />
+              <Input type="number" step="0.01" readOnly {...form.register('work_hours')} />
             </div>
             <div className="space-y-1.5">
               <Label>Tolerância (min)</Label>
@@ -635,7 +669,6 @@ function AssignmentDialog({ open, onOpenChange, shifts, employees }: { open: boo
 }
 
 function HolidaysTab() {
-  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [year, setYear] = useState(new Date().getFullYear())

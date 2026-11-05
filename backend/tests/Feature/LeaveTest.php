@@ -11,7 +11,9 @@ use App\Services\Tenant\TenantManager;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\SettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class LeaveTest extends TestCase
@@ -68,10 +70,13 @@ class LeaveTest extends TestCase
 
         $this->postJson('/api/v1/leave', [
             'leave_type_id' => $vacation->id,
+            'occurrence_type' => 'medical',
             'start_date' => '2026-09-15',
             'end_date' => '2026-09-19',
             'reason' => 'Férias',
-        ])->assertCreated()->assertJsonPath('data.total_days', 5);
+        ])->assertCreated()
+            ->assertJsonPath('data.total_days', 5)
+            ->assertJsonPath('data.occurrence_type', 'medical');
     }
 
     public function test_admin_can_approve_request_and_balance_updates(): void
@@ -141,5 +146,75 @@ class LeaveTest extends TestCase
         $this->getJson('/api/v1/leave/my-requests')
             ->assertOk()
             ->assertJsonCount(0, 'data.data');
+    }
+
+    public function test_admin_can_create_a_leave_type_for_the_active_tenant(): void
+    {
+        [$tenant, , $admin] = $this->setupEmployeeUser('admin');
+        $this->actingAs($admin, 'sanctum');
+
+        $this->postJson('/api/v1/leave/types', [
+            'name' => 'Consulta médica',
+            'code' => 'medical_visit',
+            'category' => 'sick',
+            'days_per_year' => 3,
+            'is_paid' => true,
+            'requires_document' => true,
+        ])->assertCreated()
+            ->assertJsonPath('data.name', 'Consulta médica')
+            ->assertJsonPath('data.requires_document', true);
+
+        $this->assertDatabaseHas('leave_types', [
+            'tenant_id' => $tenant->id,
+            'code' => 'medical_visit',
+            'category' => 'sick',
+            'requires_document' => true,
+        ]);
+    }
+
+    public function test_admin_can_upload_a_justification_document_to_a_leave_request(): void
+    {
+        Storage::fake('local');
+        [$tenant, $employee, $admin, $vacation] = $this->setupEmployeeUser('admin');
+        $leave = LeaveRequest::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $vacation->id,
+            'start_date' => '2026-09-15',
+            'end_date' => '2026-09-16',
+            'total_days' => 2,
+            'status' => 'approved',
+        ]);
+        $this->actingAs($admin, 'sanctum');
+
+        $this->postJson("/api/v1/leave/{$leave->id}/documents/justification", [
+            'document' => UploadedFile::fake()->create('medical.pdf', 100, 'application/pdf'),
+        ])->assertOk()->assertJsonPath('data.has_justification_document', true);
+
+        $this->assertNotNull($leave->fresh()->justification_document_path);
+        Storage::disk('local')->assertExists($leave->fresh()->justification_document_path);
+    }
+
+    public function test_leave_document_upload_rejects_unsupported_file_types(): void
+    {
+        Storage::fake('local');
+        [$tenant, $employee, $admin, $vacation] = $this->setupEmployeeUser('admin');
+        $leave = LeaveRequest::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $vacation->id,
+            'start_date' => '2026-09-15',
+            'end_date' => '2026-09-16',
+            'total_days' => 2,
+            'status' => 'approved',
+        ]);
+        $this->actingAs($admin, 'sanctum');
+
+        $this->postJson("/api/v1/leave/{$leave->id}/documents/justification", [
+            'document' => UploadedFile::fake()->create('notes.txt', 10, 'text/plain'),
+        ])->assertUnprocessable()->assertJsonValidationErrors('document');
+
+        $this->assertNull($leave->fresh()->justification_document_path);
+        $this->assertSame([], Storage::disk('local')->allFiles('leave-documents/'.$tenant->id));
     }
 }
