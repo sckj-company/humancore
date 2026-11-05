@@ -39,6 +39,15 @@ const SETTING_GROUP_META: { key: string; icon: typeof Building2; title: string }
   { key: 'leave', icon: Palmtree, title: 'Férias e Ausências' },
   { key: 'communication', icon: Mail, title: 'Comunicação' },
 ]
+const DISCOUNT_SETTINGS: { key: string; label: string; description: string }[] = [
+  { key: 'discounts.absence_daily_amount', label: 'Falta diária', description: 'Valor descontado por falta injustificada ou sem consentimento explícito.' },
+  { key: 'discounts.lateness_hourly_amount', label: 'Atraso por hora', description: 'Valor aplicado por hora de atraso registada.' },
+  { key: 'discounts.lateness_minute_amount', label: 'Atraso por minuto', description: 'Valor aplicado por minuto de atraso quando a empresa usa desconto em minutos em vez de horas.' },
+  { key: 'discounts.lateness_free_occurrences_per_week', label: 'Atrasos livres por semana', description: 'Número de atrasos permitidos sem desconto em cada semana.' },
+  { key: 'discounts.lateness_weekly_accumulation_minutes', label: 'Acumulação semanal', description: 'Minutos acumulados por semana antes de iniciar o desconto adicional.' },
+  { key: 'discounts.dayoff_daily_amount', label: 'Folga diária', description: 'Valor aplicado quando a folga é concedida ou descontada por dia.' },
+  { key: 'discounts.default_amount', label: 'Desconto padrão', description: 'Valor base para situações de desconto não específicas.' },
+]
 const GROUP_ORDER = SETTING_GROUP_META.map((g) => g.key)
 
 // ─── Super-Admin Tenant Banner ─────────────────────────────────────────────────
@@ -159,6 +168,14 @@ export function SettingsPage() {
     return GROUP_ORDER.map((key) => ({ key, items: data[key] ?? [] })).filter((g) => g.items.length > 0)
   }, [data])
 
+  const payrollDiscountSettings = useMemo(
+    () =>
+      (data?.payroll ?? [])
+        .filter((s) => s.key.startsWith('discounts.'))
+        .sort((a, b) => a.key.localeCompare(b.key)),
+    [data],
+  )
+
   useEffect(() => {
     if (!data) return
     const next: Record<string, ScalarValue | string> = {}
@@ -223,6 +240,10 @@ export function SettingsPage() {
           <TabsTrigger value="general" className="gap-2">
             <Building2 className="h-4 w-4" />
             Geral
+          </TabsTrigger>
+          <TabsTrigger value="discounts" className="gap-2">
+            <Wallet className="h-4 w-4" />
+            Descontos
           </TabsTrigger>
           <TabsTrigger value="salary-components" className="gap-2">
             <ListChecks className="h-4 w-4" />
@@ -294,6 +315,60 @@ export function SettingsPage() {
               ))}
             </Tabs>
           )}
+        </TabsContent>
+
+        {/* ── Tab: Descontos ── */}
+        <TabsContent value="discounts" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Descontos do salário</CardTitle>
+              <CardDescription>
+                Configure os valores aplicados para faltas, atrasos e folgas por contexto de desconto.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-6 md:grid-cols-2">
+              {payrollDiscountSettings.length > 0 ? (
+                payrollDiscountSettings.map((setting) => {
+                  const config = DISCOUNT_SETTINGS.find((item) => item.key === setting.key)
+                  const fieldName = `${setting.group}.${setting.key}`
+
+                  return (
+                    <div key={setting.key} className="rounded-lg border border-border p-4 bg-muted/20">
+                      <div className="mb-3 space-y-1">
+                        <p className="text-sm font-medium">{config?.label ?? humanize(setting.key)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {config?.description ?? 'Valor aplicado quando existe um desconto associado a este contexto.'}
+                        </p>
+                      </div>
+
+                      <SettingField
+                        setting={setting}
+                        value={edits[fieldName]}
+                        onChange={(value) => update(fieldName, value)}
+                      />
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="md:col-span-2 rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+                  Ainda não existem regras de desconto configuradas para este tenant.
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="justify-end border-t px-6 py-4">
+              <Button
+                onClick={() => save.mutate('payroll')}
+                disabled={save.isPending || !dirtyGroups.has('payroll')}
+              >
+                {save.isPending && save.variables === 'payroll' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Guardar
+              </Button>
+            </CardFooter>
+          </Card>
         </TabsContent>
 
         {/* ── Tab: Componentes Salariais ── */}

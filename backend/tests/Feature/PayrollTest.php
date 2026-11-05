@@ -4,9 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\EmployeeSalaryComponent;
 use App\Models\AttendanceRecord;
+use App\Models\LeaveRequest;
+use App\Models\LeaveType;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
+use App\Models\SalaryComponent;
+use App\Models\SalaryComponentRegulation;
 use App\Models\Setting;
 use App\Models\Tenant;
 use App\Models\User;
@@ -148,6 +153,193 @@ class PayrollTest extends TestCase
 
         $this->assertSame(1.0, (float) $record->absent_days);
         $this->assertSame(-round(700000 / 30, 2), (float) $record->items()->where('code', 'absence')->value('amount'));
+    }
+
+    public function test_lateness_rule_uses_minute_rate_and_weekly_threshold(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_minute_amount'],
+            ['value' => 5],
+        );
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_free_occurrences_per_week'],
+            ['value' => 1],
+        );
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_weekly_accumulation_minutes'],
+            ['value' => 30],
+        );
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        foreach ([
+            ['date' => '2026-11-02', 'late_minutes' => 20],
+            ['date' => '2026-11-05', 'late_minutes' => 25],
+            ['date' => '2026-11-07', 'late_minutes' => 45],
+        ] as $record) {
+            AttendanceRecord::create([
+                'tenant_id' => $tenant->id,
+                'employee_id' => $employee->id,
+                'date' => $record['date'],
+                'status' => 'late',
+                'late_minutes' => $record['late_minutes'],
+                'deduct_from_salary' => true,
+            ]);
+        }
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(-200.0, (float) $record->items()->where('code', 'lateness')->value('amount'));
+    }
+
+    public function test_approved_leaves_adjust_workdays_and_unpaid_leave_deduction(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'subsidies.meal.daily'],
+            ['value' => 1000],
+        );
+
+        $paidVacation = LeaveType::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Férias',
+            'code' => 'vacation_test',
+            'category' => 'vacation',
+            'is_paid' => true,
+            'is_active' => true,
+        ]);
+        $unpaidLeave = LeaveType::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Licença não remunerada',
+            'code' => 'unpaid_test',
+            'category' => 'unpaid',
+            'is_paid' => false,
+            'is_active' => true,
+        ]);
+
+        foreach ([
+            ['type' => $paidVacation, 'date' => '2026-11-02', 'deduct' => false],
+            ['type' => $paidVacation, 'date' => '2026-11-03', 'deduct' => false],
+            ['type' => $unpaidLeave, 'date' => '2026-11-04', 'deduct' => false],
+        ] as $leaveData) {
+            LeaveRequest::create([
+                'tenant_id' => $tenant->id,
+                'employee_id' => $employee->id,
+                'leave_type_id' => $leaveData['type']->id,
+                'occurrence_type' => $leaveData['type']->category === 'vacation' ? 'vacation' : 'absence',
+                'deduct_from_salary' => $leaveData['deduct'],
+                'start_date' => $leaveData['date'],
+                'end_date' => $leaveData['date'],
+                'total_days' => 1,
+                'status' => 'approved',
+            ]);
+        }
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(18.0, (float) $record->work_days);
+        $this->assertSame(1.0, (float) $record->absent_days);
+        $this->assertSame(18000.0, (float) $record->items()->where('code', 'meal_subsidy')->value('amount'));
+        $this->assertSame(-round(700000 / 30, 2), (float) $record->items()->where('code', 'absence')->value('amount'));
+    }
+
+    public function test_salary_components_affect_gross_and_tax_bases(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        $contract = $employee->activeContract()->firstOrFail();
+        $componentDefinitions = [
+            [
+                'name' => 'Subsídio de risco',
+                'code' => 'risk_allowance_test',
+                'calculation_type' => 'fixed',
+                'custom_value' => 50000,
+                'formula' => null,
+                'priority' => 20,
+            ],
+            [
+                'name' => 'Bónus de desempenho',
+                'code' => 'performance_bonus_test',
+                'calculation_type' => 'formula',
+                'custom_value' => null,
+                'formula' => 'base_salary * 0.05',
+                'priority' => 30,
+            ],
+        ];
+
+        foreach ($componentDefinitions as $definition) {
+            $component = SalaryComponent::create([
+                'tenant_id' => $tenant->id,
+                'name' => $definition['name'],
+                'code' => $definition['code'],
+                'type' => 'earning',
+                'calculation_type' => $definition['calculation_type'],
+                'default_value' => 0,
+                'formula' => $definition['formula'],
+                'is_taxable' => true,
+                'is_mandatory' => false,
+                'is_active' => true,
+                'priority' => $definition['priority'],
+            ]);
+            EmployeeSalaryComponent::create([
+                'tenant_id' => $tenant->id,
+                'employee_id' => $employee->id,
+                'contract_id' => $contract->id,
+                'salary_component_id' => $component->id,
+                'custom_value' => $definition['custom_value'],
+                'start_date' => '2026-11-01',
+                'is_active' => true,
+            ]);
+            SalaryComponentRegulation::create([
+                'tenant_id' => $tenant->id,
+                'salary_component_id' => $component->id,
+                'country_code' => 'AO',
+                'regime_code' => 'standard',
+                'version' => 1,
+                'effective_from' => '2026-01-01',
+                'employee_inss_applicable' => true,
+                'employer_inss_applicable' => true,
+                'irt_applicable' => true,
+                'status' => 'active',
+                'validated_at' => now(),
+                'validated_by' => User::where('employee_id', $employee->id)->value('id'),
+            ]);
+        }
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(785000.0, (float) $record->gross_salary);
+        $this->assertSame(785000.0, (float) $record->inss_base);
+        $this->assertSame(62800.0, (float) $record->employer_inss);
+        $this->assertSame(761450.0, (float) $record->irt_taxable_base);
+        $this->assertSame(50000.0, (float) $record->items()->where('code', 'risk_allowance_test')->value('amount'));
+        $this->assertSame(35000.0, (float) $record->items()->where('code', 'performance_bonus_test')->value('amount'));
     }
 
     public function test_admin_can_complete_payroll_workflow(): void

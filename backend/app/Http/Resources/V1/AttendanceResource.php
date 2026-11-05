@@ -19,6 +19,7 @@ class AttendanceResource extends JsonResource
             'break_end' => $this->break_end?->format('H:i'),
             'total_worked' => $this->total_worked,
             'status' => $this->status,
+            'deduct_from_salary' => (bool) $this->deduct_from_salary,
             'late_minutes' => $this->late_minutes,
             'overtime_minutes' => $this->overtime_minutes,
             'notes' => $this->notes,

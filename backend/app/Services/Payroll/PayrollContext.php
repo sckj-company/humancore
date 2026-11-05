@@ -34,6 +34,14 @@ class PayrollContext
 
     public float $overtimeHours = 0;
 
+    public float $inssAmount = 0;
+
+    public float $inssBase = 0;
+
+    public float $employerInssBase = 0;
+
+    public float $irtBase = 0;
+
     public array $settings;
 
     public function __construct(

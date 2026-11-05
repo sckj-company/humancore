@@ -46,6 +46,7 @@ class AttendanceController extends BaseController
         if ($record->clock_in && ! $record->clock_out) {
             $record->clock_out = now();
             $record->total_worked = (int) Carbon::parse($record->clock_in)->diffInMinutes($record->clock_out);
+            $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee);
             $record->status = $this->resolveStatus($record);
             $record->save();
 
@@ -53,7 +54,7 @@ class AttendanceController extends BaseController
         }
 
         $record->clock_in = now();
-        $record->late_minutes = $this->lateMinutes($today, $record->clock_in);
+        $record->late_minutes = $this->lateMinutes($today, $record->clock_in, $employee);
         $record->status = $record->late_minutes > 0 ? 'late' : 'present';
         $record->ip_address = $request->ip();
         $record->device_info = substr((string) $request->userAgent(), 0, 250);
@@ -86,6 +87,7 @@ class AttendanceController extends BaseController
             'clock_in' => ['nullable', 'string'],
             'clock_out' => ['nullable', 'string'],
             'status' => ['required', 'in:present,late,absent,half_day,excused'],
+            'deduct_from_salary' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:500'],
         ], [
             'date.before_or_equal' => 'Não é permitido registar presenças para datas futuras.',
@@ -106,14 +108,18 @@ class AttendanceController extends BaseController
         }
 
         $totalMinutes = 0;
+        $lateMinutes = 0;
+        $overtimeMinutes = 0;
 
         $inDateTime = null;
         $outDateTime = null;
         if (! empty($validated['clock_in'])) {
             $inDateTime = Carbon::parse($validated['date'] . ' ' . $validated['clock_in']);
+            $lateMinutes = $this->lateMinutes($validated['date'], $inDateTime, $employee);
         }
         if (! empty($validated['clock_out'])) {
             $outDateTime = Carbon::parse($validated['date'] . ' ' . $validated['clock_out']);
+            $overtimeMinutes = $this->overtimeMinutes($validated['date'], $outDateTime, $employee);
         }
         if ($inDateTime && $outDateTime) {
             $totalMinutes = max(0, (int) $inDateTime->diffInMinutes($outDateTime));
@@ -129,7 +135,10 @@ class AttendanceController extends BaseController
                 'clock_in' => $inDateTime,
                 'clock_out' => $outDateTime,
                 'total_worked' => $totalMinutes,
-                'status' => $validated['status'],
+                'late_minutes' => $lateMinutes,
+                'overtime_minutes' => $overtimeMinutes,
+                'status' => $validated['status'] === 'late' || $lateMinutes > 0 ? 'late' : $validated['status'],
+                'deduct_from_salary' => $request->boolean('deduct_from_salary', false),
                 'notes' => $validated['notes'] ?? null,
             ]
         );
@@ -187,20 +196,52 @@ class AttendanceController extends BaseController
         return $this->success(new AttendanceResource($record), 'Presença atualizada.');
     }
 
-    protected function lateMinutes(string $date, \DateTimeInterface $clockIn): int
+    protected function lateMinutes(string $date, \DateTimeInterface $clockIn, \App\Models\Employee $employee): int
     {
-        $grace = (int) ($this->setting('hr.late_grace_minutes') ?? 10);
-        $schedule = (string) ($this->setting('hr.work_start_time') ?? '');
+        $schedule = $employee->activeSchedule()->with('shift')->first();
+        $shift = $schedule?->shift;
+        $time = $shift?->start_time ?: (string) ($this->setting('hr.work_start_time') ?? '');
+        $grace = (int) ($shift?->late_tolerance_minutes ?? (int) ($this->setting('hr.late_grace_minutes') ?? 10));
 
-        if (! $schedule) {
+        if (! $time) {
             return 0;
         }
 
         $timezone = tenant()->timezone ?? 'Africa/Luanda';
-        $expected = Carbon::parse($date.' '.$schedule, $timezone);
+        $expected = Carbon::parse($date.' '.$time, $timezone);
         $actual = Carbon::parse($clockIn)->setTimezone($timezone);
 
         return max(0, (int) $expected->diffInMinutes($actual) - $grace);
+    }
+
+    protected function overtimeMinutes(string $date, \DateTimeInterface $clockOut, \App\Models\Employee $employee): int
+    {
+        $schedule = $employee->schedules()
+            ->with('shift')
+            ->where('is_active', true)
+            ->whereDate('effective_from', '<=', $date)
+            ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date))
+            ->orderByDesc('effective_from')
+            ->first();
+        $shift = $schedule?->shift;
+        $endTime = $shift?->end_time ?: (string) ($this->setting('hr.work_end_time') ?? '');
+
+        if (! $endTime) {
+            return 0;
+        }
+
+        $timezone = tenant()->timezone ?? 'Africa/Luanda';
+        $expected = Carbon::parse($date.' '.$endTime, $timezone);
+        if ($shift?->is_night_shift || ($shift?->start_time && $endTime <= $shift->start_time)) {
+            $expected->addDay();
+        }
+
+        $actual = Carbon::parse($clockOut)->setTimezone($timezone);
+        if ($actual->lessThanOrEqualTo($expected)) {
+            return 0;
+        }
+
+        return (int) $expected->diffInMinutes($actual);
     }
 
     protected function resolveStatus(AttendanceRecord $record): string

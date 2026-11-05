@@ -470,6 +470,7 @@ export interface AttendanceRecord {
   break_end?: string | null
   total_worked?: number | null
   status: AttendanceStatus
+  deduct_from_salary?: boolean
   late_minutes: number
   overtime_minutes?: number
   notes?: string | null
@@ -481,6 +482,7 @@ export interface LeaveBalance {
   days_used: number
   days_remaining: number
   days_pending: number
+  year?: number
 }
 
 export type LeaveStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled'
@@ -498,6 +500,12 @@ export interface LeaveRequest {
   id: number
   employee_id: number
   leave_type_id: number
+  occurrence_type?: 'absence' | 'day_off' | 'vacation' | 'other' | null
+  notice_type?: 'anticipated' | 'unanticipated' | null
+  is_justified?: boolean | null
+  deduct_from_salary?: boolean
+  has_justification_document?: boolean
+  has_signed_document?: boolean
   start_date: string
   end_date: string
   total_days: number

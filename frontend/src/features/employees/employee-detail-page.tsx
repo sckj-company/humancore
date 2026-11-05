@@ -77,9 +77,21 @@ export function EmployeeDetailPage() {
   const [uploadFormData, setUploadFormData] = useState({ name: '', document_type: 'other', expiry_date: '', notes: '' })
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [isManualAttOpen, setIsManualAttOpen] = useState(false)
-  const [manualAttForm, setManualAttForm] = useState({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', status: 'present', notes: '' })
+  const [manualAttForm, setManualAttForm] = useState({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' })
   const [isLeaveOpen, setIsLeaveOpen] = useState(false)
-  const [leaveForm, setLeaveForm] = useState({ leave_type_id: '', start_date: new Date().toISOString().slice(0, 10), end_date: new Date().toISOString().slice(0, 10), reason: '', status: 'approved' })
+  const [leaveForm, setLeaveForm] = useState({
+    leave_type_id: '',
+    occurrence_type: 'absence',
+    notice_type: 'anticipated',
+    is_justified: false,
+    deduct_from_salary: false,
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: new Date().toISOString().slice(0, 10),
+    reason: '',
+    status: 'approved',
+    justification_document: null as File | null,
+    signed_document: null as File | null,
+  })
   const [isShiftOpen, setIsShiftOpen] = useState(false)
   const [shiftForm, setShiftForm] = useState({ shift_id: '', effective_from: new Date().toISOString().slice(0, 10), notes: '' })
   const [isDeactivateContractOpen, setIsDeactivateContractOpen] = useState(false)
@@ -125,9 +137,17 @@ export function EmployeeDetailPage() {
       if (selected?.clock_in && selected?.clock_out) {
         throw new Error('A jornada deste dia já foi fechada e não permite novos registos de presença.')
       }
-      return api.post('attendance/manual', { employee_id: Number(id), date: manualAttForm.date, clock_in: manualAttForm.clock_in || undefined, clock_out: manualAttForm.clock_out || undefined, status: manualAttForm.status, notes: manualAttForm.notes || undefined })
+      return api.post('attendance/manual', {
+        employee_id: Number(id),
+        date: manualAttForm.date,
+        clock_in: manualAttForm.clock_in || undefined,
+        clock_out: manualAttForm.clock_out || undefined,
+        status: manualAttForm.status,
+        deduct_from_salary: manualAttForm.deduct_from_salary,
+        notes: manualAttForm.notes || undefined,
+      })
     },
-    onSuccess: () => { toast.success('Registo manual efetuado.'); setIsManualAttOpen(false); setManualAttForm({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', status: 'present', notes: '' }); refetchAttendance(); refetchToday() },
+    onSuccess: () => { toast.success('Registo manual efetuado.'); setIsManualAttOpen(false); setManualAttForm({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' }); refetchAttendance(); refetchToday() },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar.'))
   })
   const deactivateContractMutation = useMutation({
@@ -149,8 +169,23 @@ export function EmployeeDetailPage() {
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao desativar contrato.'))
   })
   const leaveMutation = useMutation({
-    mutationFn: () => api.post('leaves', { employee_id: Number(id), leave_type_id: Number(leaveForm.leave_type_id), start_date: leaveForm.start_date, end_date: leaveForm.end_date, reason: leaveForm.reason || undefined, status: leaveForm.status }),
-    onSuccess: () => { toast.success('Ausência registada.'); setIsLeaveOpen(false); setLeaveForm({ leave_type_id: '', start_date: new Date().toISOString().slice(0, 10), end_date: new Date().toISOString().slice(0, 10), reason: '', status: 'approved' }); refetchLeaves(); refetchBalance() },
+    mutationFn: () => {
+      const fd = new FormData()
+      fd.append('employee_id', String(id))
+      fd.append('leave_type_id', String(leaveForm.leave_type_id))
+      fd.append('occurrence_type', leaveForm.occurrence_type)
+      fd.append('notice_type', leaveForm.notice_type)
+      fd.append('is_justified', String(leaveForm.is_justified))
+      fd.append('deduct_from_salary', String(leaveForm.deduct_from_salary))
+      fd.append('start_date', leaveForm.start_date)
+      fd.append('end_date', leaveForm.end_date)
+      if (leaveForm.reason) fd.append('reason', leaveForm.reason)
+      fd.append('status', leaveForm.status)
+      if (leaveForm.justification_document) fd.append('justification_document', leaveForm.justification_document)
+      if (leaveForm.signed_document) fd.append('signed_document', leaveForm.signed_document)
+      return api.upload('leaves', fd)
+    },
+    onSuccess: () => { toast.success('Ausência registada.'); setIsLeaveOpen(false); setLeaveForm({ leave_type_id: '', occurrence_type: 'absence', notice_type: 'anticipated', is_justified: false, deduct_from_salary: false, start_date: new Date().toISOString().slice(0, 10), end_date: new Date().toISOString().slice(0, 10), reason: '', status: 'approved', justification_document: null, signed_document: null }); refetchLeaves(); refetchBalance() },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar.'))
   })
   const shiftMutation = useMutation({
@@ -227,8 +262,10 @@ export function EmployeeDetailPage() {
   const leaves = leavesData?.data ?? []
   const worked = attRecords.filter((r) => r.status === 'present' || r.status === 'late').length
   const lateCount = attRecords.filter((r) => r.status === 'late').length
+  const totalLateMinutes = attRecords.reduce((acc, r) => acc + (r.late_minutes ?? 0), 0)
   const absent = attRecords.filter((r) => r.status === 'absent').length
   const totalMins = attRecords.reduce((acc, r) => acc + (r.total_worked ?? 0), 0)
+  const vacationUsed = leaves.filter((leave) => leave.leave_type?.code === 'vacation' && leave.status === 'approved').reduce((acc, leave) => acc + (leave.total_days ?? 0), 0)
   const isClockedIn = !!(todayAttendance?.clock_in && !todayAttendance?.clock_out)
   const isClockedOut = !!(todayAttendance?.clock_in && todayAttendance?.clock_out)
 
@@ -557,7 +594,7 @@ export function EmployeeDetailPage() {
 
         {/* Tab: Presença */}
         <TabsContent value="attendance" className="mt-6 space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <Card className={`p-4 flex items-center gap-3 border-2 ${isClockedIn ? 'border-emerald-500/40 bg-emerald-500/5' : isClockedOut ? 'border-blue-500/40 bg-blue-500/5' : 'border-border'}`}>
               <div className={`rounded-lg p-2.5 ${isClockedIn ? 'bg-emerald-500/15 text-emerald-600' : isClockedOut ? 'bg-blue-500/15 text-blue-600' : 'bg-muted text-muted-foreground'}`}>
                 {isClockedOut ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <Activity className="h-5 w-5" />}
@@ -569,8 +606,9 @@ export function EmployeeDetailPage() {
               </div>
             </Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-600"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Dias Trabalhados</p><p className="text-2xl font-bold text-foreground">{worked}</p></div></Card>
-            <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-amber-500/10 p-2.5 text-amber-600"><Clock className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Atrasos</p><p className="text-2xl font-bold text-foreground">{lateCount}</p></div></Card>
+            <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-amber-500/10 p-2.5 text-amber-600"><Clock className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Atrasos</p><p className="text-2xl font-bold text-foreground">{lateCount}</p><p className="text-[11px] text-muted-foreground">{totalLateMinutes} min</p></div></Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-red-500/10 p-2.5 text-red-600"><AlertCircle className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Faltas</p><p className="text-2xl font-bold text-foreground">{absent}</p><p className="text-[11px] text-muted-foreground">{formatMinutes(totalMins)} total</p></div></Card>
+            <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-sky-500/10 p-2.5 text-sky-600"><Calendar className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">Férias Gozadas</p><p className="text-2xl font-bold text-foreground">{vacationUsed}</p><p className="text-[11px] text-muted-foreground">dias aprovados</p></div></Card>
           </div>
           <Card>
             <CardHeader className="pb-3">
@@ -858,6 +896,20 @@ export function EmployeeDetailPage() {
                 </SelectContent>
               </Select>
             </div>
+            {(manualAttForm.status === 'absent' || manualAttForm.status === 'excused' || manualAttForm.status === 'late') && (
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">Descontar do salário?</p>
+                  <p className="text-xs text-muted-foreground">Aplica a regra de desconto configurada para este contexto.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={manualAttForm.deduct_from_salary}
+                  onChange={(e) => setManualAttForm((p) => ({ ...p, deduct_from_salary: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+              </div>
+            )}
             <div>
               <Label className="text-xs font-semibold">Observações</Label>
               <Input
@@ -892,11 +944,37 @@ export function EmployeeDetailPage() {
           <div className="space-y-4 py-2">
             <div><Label className="text-xs font-semibold">Tipo de Ausência (LGT) <span className="text-destructive">*</span></Label><Select value={leaveForm.leave_type_id} onValueChange={(v) => setLeaveForm((p) => ({ ...p, leave_type_id: v }))}><SelectTrigger className="mt-1.5"><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger><SelectContent>{(leaveTypes ?? []).map((lt) => (<SelectItem key={lt.id} value={String(lt.id)}>{lt.name}{lt.days_per_year ? ` (até ${lt.days_per_year}d)` : ''} · {lt.is_paid ? 'Remunerado' : 'Não Remunerado'}</SelectItem>))}</SelectContent></Select></div>
             <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs font-semibold">Natureza</Label><Select value={leaveForm.occurrence_type} onValueChange={(v) => setLeaveForm((p) => ({ ...p, occurrence_type: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="absence">Ausência</SelectItem><SelectItem value="day_off">Folga</SelectItem><SelectItem value="vacation">Férias</SelectItem><SelectItem value="other">Outro</SelectItem></SelectContent></Select></div>
+              <div><Label className="text-xs font-semibold">Aviso</Label><Select value={leaveForm.notice_type} onValueChange={(v) => setLeaveForm((p) => ({ ...p, notice_type: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="anticipated">Antecipada</SelectItem><SelectItem value="unanticipated">Não antecipada</SelectItem></SelectContent></Select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs font-semibold">Data de Início <span className="text-destructive">*</span></Label><Input type="date" className="mt-1.5" value={leaveForm.start_date} onChange={(e) => setLeaveForm((p) => ({ ...p, start_date: e.target.value }))} /></div>
               <div><Label className="text-xs font-semibold">Data de Fim <span className="text-destructive">*</span></Label><Input type="date" className="mt-1.5" value={leaveForm.end_date} onChange={(e) => setLeaveForm((p) => ({ ...p, end_date: e.target.value }))} /></div>
             </div>
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <div>
+                <p className="text-sm font-medium">Está justificado?</p>
+                <p className="text-xs text-muted-foreground">Seleciona se existe justificativo ou documento médico.</p>
+              </div>
+              <input type="checkbox" checked={leaveForm.is_justified} onChange={(e) => setLeaveForm((p) => ({ ...p, is_justified: e.target.checked }))} className="h-4 w-4" />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <div>
+                <p className="text-sm font-medium">Descontar do salário?</p>
+                <p className="text-xs text-muted-foreground">A regra configurada será aplicada automaticamente.</p>
+              </div>
+              <input type="checkbox" checked={leaveForm.deduct_from_salary} onChange={(e) => setLeaveForm((p) => ({ ...p, deduct_from_salary: e.target.checked }))} className="h-4 w-4" />
+            </div>
             <div><Label className="text-xs font-semibold">Estado</Label><Select value={leaveForm.status} onValueChange={(v) => setLeaveForm((p) => ({ ...p, status: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="approved">Aprovado (direto)</SelectItem><SelectItem value="pending">Pendente (para aprovação)</SelectItem></SelectContent></Select></div>
             <div><Label className="text-xs font-semibold">Motivo / Observações</Label><Input className="mt-1.5" placeholder="Justificação..." value={leaveForm.reason} onChange={(e) => setLeaveForm((p) => ({ ...p, reason: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Justificativo (opcional)</Label>
+              <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setLeaveForm((p) => ({ ...p, justification_document: e.target.files?.[0] ?? null }))} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Documento assinado do funcionário (opcional)</Label>
+              <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setLeaveForm((p) => ({ ...p, signed_document: e.target.files?.[0] ?? null }))} />
+            </div>
           </div>
           <DialogFooter><Button variant="outline" size="sm" onClick={() => setIsLeaveOpen(false)} disabled={leaveMutation.isPending}>Cancelar</Button><Button size="sm" onClick={() => leaveMutation.mutate()} disabled={leaveMutation.isPending || !leaveForm.leave_type_id}>{leaveMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}Registar</Button></DialogFooter>
         </DialogContent>

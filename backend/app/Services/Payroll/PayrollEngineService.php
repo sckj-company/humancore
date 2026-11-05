@@ -5,6 +5,7 @@ namespace App\Services\Payroll;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\EmployeeSchedule;
 use App\Models\LeaveRequest;
 use App\Models\PayrollInssRule;
 use App\Models\PayrollIrtTable;
@@ -18,6 +19,7 @@ use App\Services\Payroll\Rules\IRTRule;
 use App\Services\Payroll\Rules\LatenessRule;
 use App\Services\Payroll\Rules\OvertimeRule;
 use App\Services\Payroll\Rules\SubsidyRule;
+use App\Services\Payroll\SalaryComponentFormulaEvaluator;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -79,11 +81,9 @@ class PayrollEngineService
         }
 
         $context = $this->buildContext($employee, $contract, $period);
+        $componentBreakdown = $this->calculateSalaryComponents($context);
 
         $breakdown = [];
-        $totalEarnings = 0;
-        $totalDeductions = 0;
-        $totalTaxes = 0;
 
         foreach ($this->rules as $rule) {
             if (! $rule->applies($context)) {
@@ -101,24 +101,36 @@ class PayrollEngineService
                 'amount' => $amount,
             ];
 
-            if ($amount > 0 && in_array($rule->getType(), ['earning', 'benefit'], true)) {
-                $totalEarnings += $amount;
-            } elseif ($amount < 0 && in_array($rule->getType(), ['deduction'], true)) {
-                $totalDeductions += abs($amount);
-            } elseif ($rule->getType() === 'tax') {
-                $totalTaxes += abs($amount);
+            if ($rule->getCode() === 'inss') {
+                $context->inssAmount = abs($amount);
             }
         }
+
+        $breakdown = array_merge($breakdown, $componentBreakdown);
+
+        $totalEarnings = collect($breakdown)
+            ->whereIn('type', ['earning', 'benefit'])
+            ->sum(fn ($item) => max(0, $item['amount']));
+        $totalDeductions = collect($breakdown)
+            ->where('type', 'deduction')
+            ->sum(fn ($item) => abs(min(0, $item['amount'])));
+        $totalTaxes = collect($breakdown)
+            ->where('type', 'tax')
+            ->sum(fn ($item) => abs($item['amount']));
+        $employerComponentCosts = collect($breakdown)
+            ->where('type', 'contribution')
+            ->sum(fn ($item) => max(0, $item['amount']));
 
         $gross = $totalEarnings;
         $net = $gross - $totalDeductions - $totalTaxes;
 
-        $inssEmployeeAmount = abs(collect($breakdown)->firstWhere('code', 'inss')['amount'] ?? 0);
-        $inssBase = (float) $contract->base_salary;
+        $inssEmployeeAmount = $context->inssAmount;
+        $inssBase = $context->inssBase ?: (float) $contract->base_salary;
+        $employerInssBase = $context->employerInssBase ?: (float) $contract->base_salary;
         $employerInssRate = (float) ($context->inssRule?->employer_rate ?? (float) ($context->setting('payroll.inss.employer_rate', 8.0)));
-        $employerInss = round($inssBase * ($employerInssRate / 100), 2);
-        $irtTaxableBase = max(0, $gross - $inssEmployeeAmount);
-        $employerCost = round($gross + $employerInss, 2);
+        $employerInss = round($employerInssBase * ($employerInssRate / 100), 2);
+        $irtTaxableBase = max(0, $context->irtBase - $inssEmployeeAmount);
+        $employerCost = round($gross + $employerInss + $employerComponentCosts, 2);
 
         return DB::transaction(function () use (
             $period,
@@ -131,6 +143,7 @@ class PayrollEngineService
             $totalDeductions,
             $totalTaxes,
             $inssBase,
+            $employerInssBase,
             $employerInssRate,
             $employerInss,
             $irtTaxableBase,
@@ -192,6 +205,7 @@ class PayrollEngineService
                     'earning', 'benefit' => 'earning',
                     'deduction' => 'deduction',
                     'tax' => 'tax',
+                    'contribution' => 'employer_contribution',
                     default => 'earning',
                 };
 
@@ -201,9 +215,19 @@ class PayrollEngineService
                     'category' => $category,
                     'code' => $item['code'],
                     'name' => $item['name'],
-                    'base_amount' => $item['code'] === 'base_salary' ? $contract->base_salary : null,
-                    'quantity' => null,
-                    'rate' => null,
+                    'salary_component_id' => $item['salary_component_id'] ?? null,
+                    'regulation_id' => $item['regulation_id'] ?? null,
+                    'base_amount' => $item['base_amount'] ?? match ($item['code']) {
+                        'base_salary' => $contract->base_salary,
+                        'inss' => $inssBase,
+                        'irt' => $irtTaxableBase,
+                        default => null,
+                    },
+                    'quantity' => $item['quantity'] ?? null,
+                    'rate' => $item['rate'] ?? match ($item['code']) {
+                        'inss' => $context->inssRule?->employee_rate ?? (float) $context->setting('payroll.inss.employee_rate', 3.0),
+                        default => null,
+                    },
                     'amount' => $item['amount'],
                     'inss_rule_id' => $item['code'] === 'inss' ? $context->inssRule?->id : null,
                     'irt_table_id' => $item['code'] === 'irt' ? $context->irtTable?->id : null,
@@ -219,6 +243,8 @@ class PayrollEngineService
                     'category' => 'employer_contribution',
                     'code' => 'employer_inss',
                     'name' => 'INSS Patronal',
+                    'salary_component_id' => null,
+                    'regulation_id' => null,
                     'base_amount' => $inssBase,
                     'quantity' => null,
                     'rate' => $employerInssRate,
@@ -455,29 +481,196 @@ class PayrollEngineService
             ->where('status', 'approved')
             ->where('start_date', '<=', $period->period_end)
             ->where('end_date', '>=', $period->period_start)
+            ->with('leaveType')
             ->get();
 
-        $context->workDays = $this->expectedWorkDays($period);
-        $context->absentDays = $attendance
-            ->where('status', 'absent')
-            ->where('deduct_from_salary', true)
-            ->count();
+        $scheduledDates = $this->scheduledWorkDates($employee, $period);
+        $scheduledDateSet = array_fill_keys($scheduledDates, true);
+        $nonWorkedDates = [];
+        $halfDays = [];
+        $deductibleAbsences = [];
+
+        foreach ($attendance as $record) {
+            $date = \Carbon\Carbon::parse($record->date)->toDateString();
+            if (! isset($scheduledDateSet[$date])) {
+                continue;
+            }
+
+            if (in_array($record->status, ['absent', 'justified', 'vacation', 'holiday', 'sick'], true)) {
+                $nonWorkedDates[$date] = true;
+            } elseif ($record->status === 'half_day') {
+                $halfDays[$date] = true;
+            }
+
+            if ($record->status === 'absent' && $record->deduct_from_salary) {
+                $deductibleAbsences[$date] = 1.0;
+            } elseif ($record->status === 'half_day' && $record->deduct_from_salary) {
+                $deductibleAbsences[$date] = max($deductibleAbsences[$date] ?? 0, 0.5);
+            }
+        }
+
+        foreach ($leaves as $leave) {
+            $date = $leave->start_date->copy()->startOfDay();
+            $end = $leave->end_date->copy()->startOfDay();
+            while ($date->lessThanOrEqualTo($end)) {
+                $dateKey = $date->toDateString();
+                if (isset($scheduledDateSet[$dateKey])) {
+                    $nonWorkedDates[$dateKey] = true;
+                    if ($leave->deduct_from_salary || $leave->leaveType?->is_paid === false) {
+                        $deductibleAbsences[$dateKey] = 1.0;
+                    }
+                }
+                $date->addDay();
+            }
+        }
+
+        $halfDays = array_diff_key($halfDays, $nonWorkedDates);
+        $context->workDays = max(0, count($scheduledDates) - count($nonWorkedDates) - (count($halfDays) * 0.5));
+        $context->absentDays = array_sum($deductibleAbsences);
         $context->lateMinutes = $attendance->sum('late_minutes');
         $context->overtimeHours = $attendance->sum('overtime_minutes') / 60;
 
         $context->attendance = $attendance;
         $context->leaves = $leaves;
-        $context->salaryComponents = $employee->salaryComponents()->where('is_active', true)->with('component')->get();
+        $context->salaryComponents = $employee->salaryComponents()
+            ->where('contract_id', $contract->id)
+            ->where('is_active', true)
+            ->where(fn ($query) => $query->whereNull('start_date')->orWhereDate('start_date', '<=', $period->period_end))
+            ->where(fn ($query) => $query->whereNull('end_date')->orWhereDate('end_date', '>=', $period->period_start))
+            ->whereHas('component', fn ($query) => $query->where('is_active', true))
+            ->with(['component.regulations' => function ($query) use ($period): void {
+                $query->where('status', 'active')
+                    ->where('country_code', 'AO')
+                    ->where('regime_code', 'standard')
+                    ->whereDate('effective_from', '<=', $period->period_start)
+                    ->where(fn ($regulations) => $regulations->whereNull('effective_to')->orWhereDate('effective_to', '>=', $period->period_end))
+                    ->whereNotNull('validated_at')
+                    ->whereNotNull('validated_by')
+                    ->orderByDesc('version');
+            }])
+            ->get();
 
         return $context;
     }
 
-    protected function expectedWorkDays(PayrollPeriod $period): float
+    protected function calculateSalaryComponents(PayrollContext $context): array
     {
-        $days = (int) $period->period_start->diffInDays($period->period_end) + 1;
-        $weeks = (int) floor($days / 7);
-        $remainder = $days % 7;
+        $baseSalary = (float) $context->contract->base_salary;
+        $componentAmounts = [
+            'base_salary' => $baseSalary,
+            'gross_salary' => $baseSalary,
+            'work_days' => $context->workDays,
+            'absent_days' => $context->absentDays,
+            'overtime_hours' => $context->overtimeHours,
+            'late_minutes' => $context->lateMinutes,
+        ];
+        $breakdown = [];
+        $inssBase = $baseSalary;
+        $employerInssBase = $baseSalary;
+        $irtBase = $baseSalary;
 
-        return $weeks * 5 + $remainder;
+        foreach ($context->salaryComponents->sortBy(fn ($assignment) => $assignment->component?->priority ?? 0) as $assignment) {
+            $component = $assignment->component;
+            if (! $component || in_array($component->code, ['base_salary', 'overtime'], true)) {
+                continue;
+            }
+
+            $percentageOf = strtolower((string) ($component->percentage_of ?: 'base_salary'));
+            $baseAmount = (float) ($componentAmounts[$percentageOf] ?? $baseSalary);
+            $percentage = (float) ($assignment->custom_percentage ?? $component->default_value);
+            $unitRate = (float) ($assignment->custom_value ?? $component->default_value);
+            $quantity = null;
+            $rate = null;
+
+            $amount = match ($component->calculation_type) {
+                'percentage' => ($rate = $percentage) > 0 ? $baseAmount * ($percentage / 100) : 0,
+                'hours' => ($quantity = $context->overtimeHours) > 0 ? (($rate = $unitRate) * $quantity) : 0,
+                'formula' => app(SalaryComponentFormulaEvaluator::class)->evaluate((string) $component->formula, $componentAmounts) ?? 0,
+                default => $unitRate,
+            };
+
+            $amount = match ($component->type) {
+                'deduction', 'tax' => -abs($amount),
+                default => abs($amount),
+            };
+
+            $regulation = $component->regulations->first();
+            $employeeInssApplicable = (bool) ($regulation?->employee_inss_applicable ?? false);
+            $employerInssApplicable = (bool) ($regulation?->employer_inss_applicable ?? false);
+            $irtApplicable = (bool) ($regulation?->irt_applicable ?? $component->is_taxable);
+
+            if ($amount > 0 && $employeeInssApplicable) {
+                $inssBase += $amount;
+            }
+            if ($amount > 0 && $employerInssApplicable) {
+                $employerInssBase += $amount;
+            }
+            if ($amount > 0 && $irtApplicable && in_array($component->type, ['earning', 'benefit'], true)) {
+                $irtBase += $amount;
+            }
+
+            $breakdown[] = [
+                'code' => $component->code,
+                'name' => $component->name,
+                'type' => $component->type,
+                'priority' => (int) $component->priority,
+                'amount' => round($amount, 2),
+                'salary_component_id' => $component->id,
+                'regulation_id' => $regulation?->id,
+                'base_amount' => $component->calculation_type === 'percentage' ? $baseAmount : null,
+                'quantity' => $quantity,
+                'rate' => $rate,
+            ];
+
+            $componentAmounts[$component->code] = max(0, $amount);
+            if (in_array($component->type, ['earning', 'benefit'], true)) {
+                $componentAmounts['gross_salary'] += max(0, $amount);
+            }
+        }
+
+        $context->inssBase = $inssBase;
+        $context->employerInssBase = $employerInssBase;
+        $context->irtBase = $irtBase;
+
+        return $breakdown;
+    }
+
+    protected function scheduledWorkDates(Employee $employee, PayrollPeriod $period): array
+    {
+        $schedules = EmployeeSchedule::query()
+            ->where('employee_id', $employee->id)
+            ->where('is_active', true)
+            ->whereDate('effective_from', '<=', $period->period_end)
+            ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $period->period_start))
+            ->with('shift')
+            ->orderByDesc('effective_from')
+            ->get();
+        $scheduledDates = [];
+        $date = $period->period_start->copy()->startOfDay();
+        $periodEnd = $period->period_end->copy()->startOfDay();
+
+        while ($date->lessThanOrEqualTo($periodEnd)) {
+            $schedule = $schedules->first(fn ($item) =>
+                $item->effective_from->lessThanOrEqualTo($date)
+                && (! $item->effective_to || $item->effective_to->greaterThanOrEqualTo($date))
+            );
+
+            if (! $schedule) {
+                $workingDays = [1, 2, 3, 4, 5];
+            } elseif (is_array($schedule->custom_days) && count($schedule->custom_days) > 0) {
+                $workingDays = $schedule->custom_days;
+            } elseif (is_array($schedule->shift?->working_days) && count($schedule->shift->working_days) > 0) {
+                $workingDays = $schedule->shift->working_days;
+            } else {
+                $workingDays = $schedule->shift ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
+            }
+
+            if (in_array((int) $date->dayOfWeek, array_map('intval', $workingDays), true)) {
+                $scheduledDates[] = $date->toDateString();
+            }
+            $date->addDay();
+        }
+
+        return $scheduledDates;
     }
 }

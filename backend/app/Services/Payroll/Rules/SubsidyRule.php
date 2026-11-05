@@ -31,6 +31,13 @@ class SubsidyRule extends AbstractPayrollRule
         return false;
     }
 
+    public function applies(PayrollContext $context): bool
+    {
+        return ! $context->salaryComponents->contains(
+            fn ($assignment) => in_array($assignment->component?->code, ['meal_allowance', 'meal_subsidy'], true),
+        );
+    }
+
     public function calculate(PayrollContext $context): float
     {
         $daily = (float) $this->setting($context, 'payroll.subsidies.meal.daily', 0);

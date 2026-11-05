@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\EmployeeSchedule;
+use App\Models\Shift;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenant\TenantManager;
@@ -65,6 +67,36 @@ class AttendanceTest extends TestCase
         $record = AttendanceRecord::where('employee_id', $employee->id)->first();
         $this->assertNotNull($record->clock_in);
         $this->assertNotNull($record->clock_out);
+    }
+
+    public function test_manual_attendance_calculates_overtime_from_shift_end(): void
+    {
+        [$tenant, $employee, $admin] = $this->setupEmployeeUser('admin');
+        $shift = Shift::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno normal',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'late_tolerance_minutes' => 10,
+        ]);
+        EmployeeSchedule::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'effective_from' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/attendance/manual', [
+                'employee_id' => $employee->id,
+                'date' => now()->toDateString(),
+                'clock_in' => '09:00',
+                'clock_out' => '18:15',
+                'status' => 'present',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.overtime_minutes', 75);
     }
 
     public function test_admin_can_view_attendance_records_but_employee_cannot(): void

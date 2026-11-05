@@ -37,6 +37,14 @@ class OvertimeRule extends AbstractPayrollRule
             return 0.0;
         }
 
+        $overtimeComponent = $context->salaryComponents->first(
+            fn ($assignment) => $assignment->component?->code === 'overtime',
+        );
+        $configuredHourlyRate = (float) ($overtimeComponent?->custom_value ?? $overtimeComponent?->component?->default_value ?? 0);
+        if ($configuredHourlyRate > 0) {
+            return round($configuredHourlyRate * $context->overtimeHours, 2);
+        }
+
         $hourlyRate = (float) $context->contract->base_salary / 220;
         $rate = (float) $this->setting($context, 'payroll.overtime.rate', 1.5);
 

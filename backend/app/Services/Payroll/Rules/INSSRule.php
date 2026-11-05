@@ -45,6 +45,6 @@ class INSSRule extends AbstractPayrollRule
 
     protected function calculateTaxableBase(PayrollContext $context): float
     {
-        return (float) $context->contract->base_salary;
+        return $context->inssBase > 0 ? $context->inssBase : (float) $context->contract->base_salary;
     }
 }

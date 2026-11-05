@@ -38,7 +38,7 @@ class AbsenceRule extends AbstractPayrollRule
             return 0.0;
         }
 
-        $dailyRate = (float) $context->contract->base_salary / 30;
+        $dailyRate = (float) $context->setting('payroll.discounts.absence_daily_amount', (float) $context->contract->base_salary / 30);
 
         return -1 * round($dailyRate * $absentDays, 2);
     }
