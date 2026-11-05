@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { FileText, Upload, Download, Trash2, Loader2, Paperclip } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage, type ApiResponse } from '@/lib/api'
+import { cloudinaryAttachmentUrl } from '@/lib/cloudinary'
 import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -148,13 +149,20 @@ function DownloadButton({ doc }: { doc: EmployeeDocument }) {
     mutationFn: () => api.downloadFile(`documents/${doc.id}/download`, doc.original_name ?? doc.name),
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao descarregar')),
   })
+  const handleDownload = () => {
+    if (doc.file_url?.includes('res.cloudinary.com')) {
+      window.open(cloudinaryAttachmentUrl(doc.file_url, doc.original_name ?? doc.name), '_blank', 'noopener,noreferrer')
+      return
+    }
+    downloadMutation.mutate()
+  }
 
   return (
     <Button
       variant="ghost"
       size="icon-sm"
       title="Descarregar"
-      onClick={() => downloadMutation.mutate()}
+      onClick={handleDownload}
     >
       {downloadMutation.isPending ? (
         <Loader2 className="h-4 w-4 animate-spin" />

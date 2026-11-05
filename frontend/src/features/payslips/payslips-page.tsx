@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
-import { FileText, Download, Calendar, TrendingUp, DollarSign, Loader2, Eye } from 'lucide-react'
-import { api } from '@/lib/api'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { FileText, Download, Calendar, TrendingUp, DollarSign, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { api, getApiErrorMessage } from '@/lib/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -59,6 +60,14 @@ interface PayslipDetail {
   details: Record<string, number>
 }
 
+const payslipStatusLabels: Record<string, string> = {
+  paid: 'payslips.paid',
+  pending: 'common.pending',
+  approved: 'payroll.recordStatuses.approved',
+  rejected: 'payroll.recordStatuses.rejected',
+  draft: 'payroll.recordStatuses.draft',
+}
+
 export function PayslipsPage() {
   const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.user)
@@ -74,9 +83,9 @@ export function PayslipsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="FOLHA SALARIAL"
-        title="Os Meus Recibos"
-        description="Consulte e descarregue os seus recibos de vencimento"
+        eyebrow={t('payslips.eyebrow')}
+        title={t('payslips.title')}
+        description={t('payslips.description')}
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -86,7 +95,7 @@ export function PayslipsPage() {
               <FileText className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total de Recibos</p>
+              <p className="text-xs text-muted-foreground">{t('payslips.totalReceipts')}</p>
               <p className="text-xl font-semibold">{payslips?.meta?.total ?? 0}</p>
             </div>
           </CardContent>
@@ -97,7 +106,7 @@ export function PayslipsPage() {
               <DollarSign className="h-5 w-5 text-success" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Recebido</p>
+              <p className="text-xs text-muted-foreground">{t('payslips.totalReceived')}</p>
               <p className="text-xl font-semibold">
                 {formatCurrency(totalPaid, currency, i18n.language)}
               </p>
@@ -110,7 +119,7 @@ export function PayslipsPage() {
               <TrendingUp className="h-5 w-5 text-info" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Último Vencimento</p>
+              <p className="text-xs text-muted-foreground">{t('payslips.lastPayment')}</p>
               <p className="text-xl font-semibold">
                 {payslips?.data[0]
                   ? formatCurrency(payslips.data[0].net_salary, currency, i18n.language)
@@ -128,7 +137,7 @@ export function PayslipsPage() {
         columns={[
           {
             id: 'period',
-            header: 'Período',
+            header: t('payslips.period'),
             cell: (r) => (
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -138,12 +147,12 @@ export function PayslipsPage() {
           },
           {
             id: 'payment_date',
-            header: 'Data Pagamento',
+            header: t('payslips.paymentDate'),
             cell: (r) => formatDate(r.payment_date, i18n.language),
           },
           {
             id: 'gross',
-            header: 'Salário Bruto',
+            header: t('payslips.gross'),
             align: 'right',
             cell: (r) => (
               <span className="font-mono text-sm">
@@ -153,7 +162,7 @@ export function PayslipsPage() {
           },
           {
             id: 'deductions',
-            header: 'Descontos',
+            header: t('payslips.deductions'),
             align: 'right',
             cell: (r) => (
               <span className="font-mono text-sm text-destructive">
@@ -163,7 +172,7 @@ export function PayslipsPage() {
           },
           {
             id: 'net',
-            header: 'Líquido',
+            header: t('payslips.net'),
             align: 'right',
             cell: (r) => (
               <span className="font-mono text-sm font-semibold text-success">
@@ -173,40 +182,43 @@ export function PayslipsPage() {
           },
           {
             id: 'status',
-            header: 'Estado',
+            header: t('payslips.status'),
             align: 'right',
-            cell: (r) => (
-              <Badge variant={r.status === 'paid' ? 'success' : 'secondary'}>
-                {r.status === 'paid' ? 'Pago' : r.status}
-              </Badge>
-            ),
+            cell: (r) => {
+              const statusKey = payslipStatusLabels[r.status] ?? `payroll.recordStatuses.${r.status}`
+              return (
+                <Badge variant={r.status === 'paid' ? 'success' : 'secondary'}>
+                  {t(statusKey, { defaultValue: r.status })}
+                </Badge>
+              )
+            },
           },
           {
             id: 'actions',
-            header: 'Ações',
+            header: t('payslips.actions'),
             align: 'right',
-            cell: (r) => (
-              <div className="flex items-center justify-end gap-2">
-                <Button size="sm" variant="outline" asChild>
-                  <a href={`/api/v1/payroll/records/${r.id}/payslip.pdf`} target="_blank" rel="noopener noreferrer">
-                    <Eye className="mr-1.5 h-3.5 w-3.5" />
-                    Ver
-                  </a>
-                </Button>
-                <Button size="sm" variant="ghost" asChild>
-                  <a href={`/api/v1/payroll/records/${r.id}/payslip.pdf?download=1`} download>
-                    <Download className="mr-1.5 h-3.5 w-3.5" />
-                    PDF
-                  </a>
-                </Button>
-              </div>
-            ),
+            cell: (r) => <PayslipDownloadButton recordId={r.id} fileName={`recibo-${r.employee_id}-${r.id}.pdf`} />,
           },
         ]}
-        emptyTitle="Sem recibos de vencimento"
-        emptyDescription="Os seus recibos aparecerão aqui após o processamento salarial."
+        emptyTitle={t('payslips.emptyTitle')}
+        emptyDescription={t('payslips.emptyDescription')}
       />
     </div>
+  )
+}
+
+function PayslipDownloadButton({ recordId, fileName }: { recordId: number; fileName: string }) {
+  const { t } = useTranslation()
+  const mutation = useMutation({
+    mutationFn: () => api.downloadFile(`payroll/records/${recordId}/payslip.pdf`, fileName),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('payslips.downloadError'))),
+  })
+
+  return (
+    <Button size="sm" variant="ghost" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+      {mutation.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
+      {t('payslips.download')}
+    </Button>
   )
 }
 

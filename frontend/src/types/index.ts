@@ -398,6 +398,7 @@ export interface SalaryComponentRegulation {
   legal_source: string | null
   legal_reference: string | null
   legal_document_name?: string | null
+  legal_document_url?: string | null
   has_legal_document?: boolean
   validated_at: string | null
   revocation_reason?: string | null
@@ -419,6 +420,7 @@ export interface PayrollInssRule {
   legal_source: string | null
   legal_reference: string | null
   legal_document_name?: string | null
+  legal_document_url?: string | null
   has_legal_document?: boolean
   validated_at: string | null
   revoked_at?: string | null
@@ -448,6 +450,7 @@ export interface PayrollIrtTable {
   legal_source: string | null
   legal_reference: string | null
   legal_document_name?: string | null
+  legal_document_url?: string | null
   has_legal_document?: boolean
   validated_at: string | null
   revoked_at?: string | null

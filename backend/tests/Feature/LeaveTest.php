@@ -7,6 +7,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\CloudinaryService;
 use App\Services\Tenant\TenantManager;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\SettingSeeder;
@@ -185,14 +186,18 @@ class LeaveTest extends TestCase
             'total_days' => 2,
             'status' => 'approved',
         ]);
+        $this->mock(CloudinaryService::class)
+            ->shouldReceive('upload')
+            ->once()
+            ->andReturn(['url' => 'https://res.cloudinary.com/test/image/upload/medical.pdf', 'bytes' => 100]);
         $this->actingAs($admin, 'sanctum');
 
         $this->postJson("/api/v1/leave/{$leave->id}/documents/justification", [
             'document' => UploadedFile::fake()->create('medical.pdf', 100, 'application/pdf'),
         ])->assertOk()->assertJsonPath('data.has_justification_document', true);
 
-        $this->assertNotNull($leave->fresh()->justification_document_path);
-        Storage::disk('local')->assertExists($leave->fresh()->justification_document_path);
+        $this->assertSame('https://res.cloudinary.com/test/image/upload/medical.pdf', $leave->fresh()->justification_document_path);
+        Storage::disk('local')->assertDirectoryEmpty('leave-documents/'.$tenant->id);
     }
 
     public function test_leave_document_upload_rejects_unsupported_file_types(): void

@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\PayrollRecord;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\Payroll\PayslipPdfService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,7 +24,7 @@ class GeneratePayslipPdfJob implements ShouldQueue
     {
         $record = PayrollRecord::with(['employee', 'period', 'tenant', 'contract'])->findOrFail($this->payrollRecordId);
 
-        $pdf = Pdf::loadView('pdf.payslip', ['record' => $record]);
+        $pdf = app(PayslipPdfService::class)->render($record);
         $path = "tenants/{$record->tenant_id}/payslips/{$record->period->name}/{$record->employee->employee_code}.pdf";
         Storage::disk('public')->put($path, $pdf->output());
         $record->update(['payslip_path' => $path]);

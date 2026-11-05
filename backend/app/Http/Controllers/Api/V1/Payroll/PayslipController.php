@@ -4,13 +4,13 @@ namespace App\Http\Controllers\Api\V1\Payroll;
 
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Models\PayrollRecord;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\Payroll\PayslipPdfService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class PayslipController extends BaseController
 {
-    public function show(PayrollRecord $record, Request $request): SymfonyResponse
+    public function show(PayrollRecord $record, Request $request, PayslipPdfService $payslips): SymfonyResponse
     {
         $this->authorize('view', $record);
 
@@ -19,7 +19,7 @@ class PayslipController extends BaseController
         $filename = 'recibo-'.$record->employee?->employee_code.'-'.($record->period?->name ?? $record->id).'.pdf';
         $filename = str_replace(['/', '\\', ' '], '-', $filename);
 
-        $pdf = Pdf::loadView('pdf.payslip', ['record' => $record]);
+        $pdf = $payslips->render($record);
 
         if ($request->boolean('download')) {
             return $pdf->download($filename);
@@ -28,7 +28,7 @@ class PayslipController extends BaseController
         return $pdf->stream($filename);
     }
 
-    public function download(PayrollRecord $record): SymfonyResponse
+    public function download(PayrollRecord $record, PayslipPdfService $payslips): SymfonyResponse
     {
         $this->authorize('view', $record);
 
@@ -37,7 +37,7 @@ class PayslipController extends BaseController
         $filename = 'recibo-'.$record->employee?->employee_code.'-'.($record->period?->name ?? $record->id).'.pdf';
         $filename = str_replace(['/', '\\', ' '], '-', $filename);
 
-        $pdf = Pdf::loadView('pdf.payslip', ['record' => $record]);
+        $pdf = $payslips->render($record);
 
         return $pdf->download($filename);
     }

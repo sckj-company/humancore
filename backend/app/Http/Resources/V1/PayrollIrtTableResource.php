@@ -26,6 +26,7 @@ class PayrollIrtTableResource extends JsonResource
             'legal_source' => $this->legal_source,
             'legal_reference' => $this->legal_reference,
             'legal_document_name' => $this->legal_document_path ? basename($this->legal_document_path) : null,
+            'legal_document_url' => $this->legal_document_path,
             'has_legal_document' => $this->legal_document_path !== null,
             'validated_at' => $this->validated_at?->toIso8601String(),
             'revoked_at' => $this->revoked_at?->toIso8601String(),
@@ -43,4 +44,3 @@ class PayrollIrtTableResource extends JsonResource
         ];
     }
 }
-

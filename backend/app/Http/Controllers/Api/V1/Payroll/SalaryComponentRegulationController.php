@@ -6,7 +6,10 @@ use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\SalaryComponentRegulationResource;
 use App\Models\SalaryComponent;
 use App\Models\SalaryComponentRegulation;
+use App\Models\Tenant;
+use App\Services\CloudinaryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -24,8 +27,9 @@ class SalaryComponentRegulationController extends BaseController
 
         $id = tenant_id();
         if (! $id) {
-            $id = (int) (\App\Models\Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: \App\Models\Tenant::query()->orderBy('id')->value('id'));
+            $id = (int) (Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id'));
         }
+
         return $id ?: null;
     }
 
@@ -165,7 +169,7 @@ class SalaryComponentRegulationController extends BaseController
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('create', SalaryComponentRegulation::class);
         $tenantId = $this->resolveTenantId($request);
@@ -215,10 +219,11 @@ class SalaryComponentRegulationController extends BaseController
             ->max('version')) + 1;
 
         if ($legalDocument) {
-            $data['legal_document_path'] = $legalDocument->store(
-                'payroll-regulations/'.$tenantId.'/'.$component->id,
-                'local',
-            );
+            $data['legal_document_path'] = $cloudinary->upload(
+                $legalDocument,
+                'humancore/tenants/'.$tenantId.'/payroll-regulations/components/'.$component->id,
+                'auto',
+            )['url'];
         }
 
         $regulation = SalaryComponentRegulation::query()->create($data);
@@ -230,7 +235,7 @@ class SalaryComponentRegulationController extends BaseController
         );
     }
 
-    public function update(Request $request, SalaryComponentRegulation $regulation): JsonResponse
+    public function update(Request $request, SalaryComponentRegulation $regulation, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('update', $regulation);
 
@@ -270,15 +275,16 @@ class SalaryComponentRegulationController extends BaseController
 
         $oldDocumentPath = $regulation->legal_document_path;
         if ($legalDocument) {
-            $data['legal_document_path'] = $legalDocument->store(
-                'payroll-regulations/'.$regulation->tenant_id.'/'.$regulation->salary_component_id,
-                'local',
-            );
+            $data['legal_document_path'] = $cloudinary->upload(
+                $legalDocument,
+                'humancore/tenants/'.$regulation->tenant_id.'/payroll-regulations/components/'.$regulation->salary_component_id,
+                'auto',
+            )['url'];
         }
 
         $regulation->update($data);
         if ($legalDocument && $oldDocumentPath) {
-            Storage::disk('local')->delete($oldDocumentPath);
+            $this->deleteStoredDocument($oldDocumentPath, $cloudinary);
         }
 
         return $this->success(
@@ -348,7 +354,7 @@ class SalaryComponentRegulationController extends BaseController
         );
     }
 
-    public function destroy(SalaryComponentRegulation $regulation): JsonResponse
+    public function destroy(SalaryComponentRegulation $regulation, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('delete', $regulation);
 
@@ -360,7 +366,7 @@ class SalaryComponentRegulationController extends BaseController
         $regulation->delete();
 
         if ($documentPath) {
-            Storage::disk('local')->delete($documentPath);
+            $this->deleteStoredDocument($documentPath, $cloudinary);
         }
 
         return $this->success(null, 'Regra eliminada com sucesso.');
@@ -405,11 +411,19 @@ class SalaryComponentRegulationController extends BaseController
         );
     }
 
-    public function downloadDocument(SalaryComponentRegulation $regulation): StreamedResponse|JsonResponse
+    public function downloadDocument(SalaryComponentRegulation $regulation, CloudinaryService $cloudinary): StreamedResponse|RedirectResponse|JsonResponse
     {
         $this->authorize('view', $regulation);
 
-        if (! $regulation->legal_document_path || ! Storage::disk('local')->exists($regulation->legal_document_path)) {
+        if (! $regulation->legal_document_path) {
+            return $this->error('Documento não encontrado.', 404);
+        }
+
+        if ($cloudinary->isCloudinaryUrl($regulation->legal_document_path)) {
+            return redirect()->away($regulation->legal_document_path);
+        }
+
+        if (! Storage::disk('local')->exists($regulation->legal_document_path)) {
             return $this->error('Documento não encontrado.', 404);
         }
 
@@ -417,5 +431,14 @@ class SalaryComponentRegulationController extends BaseController
             $regulation->legal_document_path,
             basename($regulation->legal_document_path),
         );
+    }
+
+    private function deleteStoredDocument(string $path, CloudinaryService $cloudinary): void
+    {
+        if ($cloudinary->isCloudinaryUrl($path)) {
+            $cloudinary->delete($path);
+        } else {
+            Storage::disk('local')->delete($path);
+        }
     }
 }

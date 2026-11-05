@@ -31,6 +31,7 @@ class PayrollPhase3ValidationAndFlowTest extends TestCase
         $tenant = Tenant::factory()->create();
 
         Permission::findOrCreate('view_payroll', 'web');
+        Permission::findOrCreate('view_any_payroll', 'web');
         Permission::findOrCreate('process_payroll', 'web');
         Permission::findOrCreate('approve_payroll', 'web');
         Permission::findOrCreate('close_payroll', 'web');
@@ -39,7 +40,7 @@ class PayrollPhase3ValidationAndFlowTest extends TestCase
             'tenant_id' => $tenant->id,
             'is_active' => true,
         ]);
-        $admin->givePermissionTo(['view_payroll', 'process_payroll', 'approve_payroll', 'close_payroll']);
+        $admin->givePermissionTo(['view_payroll', 'view_any_payroll', 'process_payroll', 'approve_payroll', 'close_payroll']);
 
         return [$tenant, $admin];
     }
@@ -489,6 +490,7 @@ class PayrollPhase3ValidationAndFlowTest extends TestCase
             'payroll_period_id' => $period->id,
             'employee_id' => $activeEmployee->id,
         ]);
+
         $this->assertSame('pending_validation', $period->fresh()->status);
         $this->assertFalse($expiredEmployee->fresh()->contracts()->where('is_active', true)->exists());
     }
@@ -619,6 +621,21 @@ class PayrollPhase3ValidationAndFlowTest extends TestCase
             'payroll_period_id' => $period->id,
             'employee_id' => $activeEmployee->id,
         ]);
+
+        $detail = $this->getJson("/api/v1/payroll/periods/{$period->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.records')
+            ->assertJsonPath('data.records.0.employee_id', $activeEmployee->id)
+            ->assertJsonPath('data.records.0.employee.id', $activeEmployee->id)
+            ->json('data');
+
+        $listing = $this->getJson('/api/v1/payroll/periods')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.employee_count', 1)
+            ->json('data.data.0');
+
+        $this->assertSame((float) $detail['records'][0]['gross_salary'], (float) $listing['total_gross']);
+        $this->assertSame((float) $detail['records'][0]['net_salary'], (float) $listing['total_net']);
     }
 
     public function test_process_endpoint_rejects_empty_employee_ids(): void

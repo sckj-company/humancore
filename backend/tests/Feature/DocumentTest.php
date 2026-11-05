@@ -7,6 +7,7 @@ use App\Models\EmployeeContract;
 use App\Models\EmployeeDocument;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\CloudinaryService;
 use App\Services\Tenant\TenantManager;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\SettingSeeder;
@@ -56,6 +57,10 @@ class DocumentTest extends TestCase
     {
         [$tenant, $employee, $user] = $this->setupEmployeeUser('hr-manager');
         $other = Employee::factory()->create(['tenant_id' => $tenant->id]);
+        $this->mock(CloudinaryService::class)
+            ->shouldReceive('upload')
+            ->once()
+            ->andReturn(['url' => 'https://res.cloudinary.com/test/raw/upload/certificado.pdf', 'bytes' => 2048]);
 
         $this->actingAs($user, 'sanctum');
 
@@ -70,6 +75,7 @@ class DocumentTest extends TestCase
             'tenant_id' => $tenant->id,
             'employee_id' => $other->id,
             'name' => 'Certificado de Formação',
+            'file_path' => 'https://res.cloudinary.com/test/raw/upload/certificado.pdf',
         ]);
     }
 
@@ -131,6 +137,28 @@ class DocumentTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->get('/api/v1/documents/'.$document->id.'/download')
             ->assertRedirect('https://res.cloudinary.com/example/image/upload/fl_attachment:copiadebi/v1234567890/humancore/tenants/1/documents/bi.pdf');
+    }
+
+    public function test_upload_does_not_fall_back_to_local_storage_when_cloudinary_is_unconfigured(): void
+    {
+        Storage::fake('local');
+        config([
+            'services.cloudinary.cloud_name' => '',
+            'services.cloudinary.api_key' => '',
+            'services.cloudinary.api_secret' => '',
+        ]);
+
+        try {
+            app(CloudinaryService::class)->upload(
+                UploadedFile::fake()->create('document.pdf', 100, 'application/pdf'),
+                'humancore/test',
+            );
+            $this->fail('O upload devia falhar quando o Cloudinary não está configurado.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('O Cloudinary não está configurado.', $exception->getMessage());
+        }
+
+        Storage::disk('local')->assertDirectoryEmpty('test');
     }
 
     public function test_employee_cannot_download_document_of_other_employee(): void

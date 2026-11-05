@@ -24,6 +24,9 @@ class PayrollController extends BaseController
         $this->authorize('viewAny', PayrollPeriod::class);
 
         $periods = PayrollPeriod::query()
+            ->withCount('records')
+            ->withSum('records', 'gross_salary')
+            ->withSum('records', 'net_salary')
             ->orderByDesc('period_start')
             ->paginate($request->integer('per_page', 15));
 
@@ -48,7 +51,8 @@ class PayrollController extends BaseController
     {
         $this->authorize('view', $period);
 
-        $period->load(['records.employee', 'records.items', 'events.actor:id,name']);
+        $period->load(['records.employee', 'records.items', 'events.actor:id,name'])
+            ->loadCount('records');
 
         return $this->success(new PayrollPeriodResource($period));
     }

@@ -52,6 +52,30 @@ function formatDate(date?: string | null, locale = 'pt-AO'): string {
   return date
 }
 
+function getPayrollComponent(record: PayrollRecord, code: string): { amount: number; rate: number | null } | null {
+  const item = record.items?.find((entry) => entry.code === code)
+  if (item) {
+    return { amount: Math.abs(Number(item.amount)), rate: item.rate == null ? null : Number(item.rate) }
+  }
+
+  const legacyItem = record.details?.breakdown?.find((entry) => entry.code === code)
+  if (legacyItem) return { amount: Math.abs(Number(legacyItem.amount)), rate: null }
+
+  return null
+}
+
+function formatRate(rate: number | null): string | null {
+  return rate == null || !Number.isFinite(rate)
+    ? null
+    : `${new Intl.NumberFormat('pt-AO', { maximumFractionDigits: 2 }).format(rate)}%`
+}
+
+function formatSignedAmount(amount: number | null | undefined): string {
+  if (amount == null || !Number.isFinite(amount)) return '—'
+  const abs = Math.abs(amount)
+  return `${amount < 0 ? '-' : ''}${fmtCurrency(abs)}`
+}
+
 // ─── Status config ──────────────────────────────────────────────────────────
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -103,7 +127,7 @@ const categoryConfig: Record<string, { label: string; color: string }> = {
 
 export function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') || 'summary'
   const qc = useQueryClient()
@@ -204,21 +228,12 @@ export function PayrollPeriodDetailPage() {
   })
 
   const downloadPayslip = async (recordId: number, filename: string) => {
-    const tid = toast.loading(`A gerar recibo…`)
+    const tid = toast.loading(t('payroll.detail.payslipGenerating'))
     try {
-      const token = localStorage.getItem('hrms_token')
-      const url = `${import.meta.env.VITE_API_URL ?? '/api/v1'}/payroll/records/${recordId}/payslip.pdf`
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) throw new Error('failed')
-      const blob = await res.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(a.href)
-      toast.success('Recibo descarregado', { id: tid })
-    } catch {
-      toast.error('Não foi possível descarregar o recibo', { id: tid })
+      await api.downloadFile(`payroll/records/${recordId}/payslip.pdf`, filename)
+      toast.success(t('payslips.downloaded'), { id: tid })
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, t('payslips.downloadError')), { id: tid })
     }
   }
 
@@ -275,12 +290,12 @@ export function PayrollPeriodDetailPage() {
           <Button variant="ghost" size="icon-sm" asChild>
             <Link to="/payroll"><ArrowLeft className="h-4 w-4" /></Link>
           </Button>
-          <Link to="/payroll" className="hover:text-foreground transition-colors">Folha Salarial</Link>
+          <Link to="/payroll" className="hover:text-foreground transition-colors">{t('payroll.detail.breadcrumb')}</Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="text-foreground font-semibold">{data.name}</span>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link to="/payroll"><ArrowLeft className="mr-1.5 h-3.5 w-3.5" />Voltar</Link>
+          <Link to="/payroll"><ArrowLeft className="mr-1.5 h-3.5 w-3.5" />{t('payroll.detail.back')}</Link>
         </Button>
       </div>
 
@@ -296,7 +311,7 @@ export function PayrollPeriodDetailPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-2xl font-bold tracking-tight text-foreground">{data.name}</h1>
                   <Badge variant="outline" className={`font-medium ${status.color}`}>
-                    {status.label}
+                    {t(`payroll.periodStatuses.${data.status}`, { defaultValue: status.label })}
                   </Badge>
                 </div>
                 <p className="mt-1.5 text-sm text-muted-foreground flex flex-wrap items-center gap-3">
@@ -304,20 +319,20 @@ export function PayrollPeriodDetailPage() {
                     <Calendar className="h-3.5 w-3.5" />
                     {formatDate(data.period_start, locale)} – {formatDate(data.period_end, locale)}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 capitalize">
+                  <span className="inline-flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5" />
-                    {data.period_type === 'monthly' ? 'Mensal' : data.period_type === 'biweekly' ? 'Quinzenal' : 'Semanal'}
+                    {t(`payroll.periodTypes.${data.period_type}`)}
                   </span>
                   {data.payment_date && (
                     <span className="inline-flex items-center gap-1.5">
                       <Wallet className="h-3.5 w-3.5" />
-                      Pagamento: {formatDate(data.payment_date, locale)}
+                      {t('payroll.detail.paymentDate')} {formatDate(data.payment_date, locale)}
                     </span>
                   )}
                 </p>
                 {data.approved_at && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Aprovado em {formatDate(data.approved_at, locale)}
+                    {t('payroll.detail.approvedAt')} {formatDate(data.approved_at, locale)}
                   </p>
                 )}
               </div>
@@ -332,13 +347,13 @@ export function PayrollPeriodDetailPage() {
                 hasPermission(user, 'process_payroll') && (
                 <Button size="sm" onClick={openProcess}>
                   <Play className="mr-1.5 h-3.5 w-3.5" />
-                  Processar
+                  {t('payroll.detail.process')}
                 </Button>
               )}
               {data.status === 'processing' && (
                 <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 text-xs text-amber-700">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {data.progress_message ?? 'A processar…'}
+                  {data.progress_message ?? t('payroll.detail.processing')}
                   {data.progress_total != null && (
                     <span className="font-mono">
                       ({data.progress_done ?? 0}/{data.progress_total})
@@ -356,7 +371,7 @@ export function PayrollPeriodDetailPage() {
                   {submitMutation.isPending
                     ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                     : <Send className="mr-1.5 h-3.5 w-3.5" />}
-                  Submeter p/ Aprovação
+                  {t('payroll.detail.submit')}
                 </Button>
               )}
               {(data.status === 'completed' || data.status === 'pending_approval') && hasPermission(user, 'approve_payroll') && (
@@ -369,7 +384,7 @@ export function PayrollPeriodDetailPage() {
                     {approveMutation.isPending
                       ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                       : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
-                    Aprovar Folha
+                    {t('payroll.detail.approve')}
                   </Button>
                   <Button
                     size="sm"
@@ -378,7 +393,7 @@ export function PayrollPeriodDetailPage() {
                     disabled={rejectMutation.isPending}
                   >
                     <X className="mr-1.5 h-3.5 w-3.5" />
-                    Rejeitar
+                    {t('payroll.detail.reject')}
                   </Button>
                 </>
               )}
@@ -392,7 +407,7 @@ export function PayrollPeriodDetailPage() {
                   {closeMutation.isPending
                     ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                     : <Lock className="mr-1.5 h-3.5 w-3.5" />}
-                  Fechar Período
+                  {t('payroll.detail.close')}
                 </Button>
               )}
               {(data.status === 'approved' || data.status === 'closed') && hasPermission(user, 'close_payroll') && (
@@ -404,7 +419,7 @@ export function PayrollPeriodDetailPage() {
                   {payMutation.isPending
                     ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                     : <Banknote className="mr-1.5 h-3.5 w-3.5" />}
-                  Registar Pagamento
+                  {t('payroll.detail.registerPayment')}
                 </Button>
               )}
               {data.status === 'closed' && hasPermission(user, 'close_payroll') && (
@@ -414,7 +429,7 @@ export function PayrollPeriodDetailPage() {
                   onClick={() => setReopenOpen(true)}
                 >
                   <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                  Reabrir
+                  {t('payroll.detail.reopen')}
                 </Button>
               )}
             </div>
@@ -427,27 +442,27 @@ export function PayrollPeriodDetailPage() {
         <KpiCard
           icon={<Users className="h-5 w-5" />}
           iconBg="bg-blue-500/10 text-blue-600"
-          label="Funcionários"
+          label={t('payroll.detail.employees')}
           value={String(employeeCount)}
         />
         <KpiCard
           icon={<TrendingUp className="h-5 w-5" />}
           iconBg="bg-emerald-500/10 text-emerald-600"
-          label="Total Bruto"
+          label={t('payroll.detail.grossTotal')}
           value={fmtCurrency(totalGross)}
           sub="AOA"
         />
         <KpiCard
           icon={<Wallet className="h-5 w-5" />}
           iconBg="bg-primary/10 text-primary"
-          label="Total Líquido"
+          label={t('payroll.detail.netTotal')}
           value={fmtCurrency(totalNet)}
           sub="AOA"
         />
         <KpiCard
           icon={<Building2 className="h-5 w-5" />}
           iconBg="bg-amber-500/10 text-amber-600"
-          label="Custo Patronal"
+          label={t('payroll.detail.employerCost')}
           value={fmtCurrency(totalEmployerCost)}
           sub="AOA"
         />
@@ -457,14 +472,14 @@ export function PayrollPeriodDetailPage() {
       <Tabs value={activeTab} onValueChange={(tab) => setSearchParams({ tab }, { replace: true })} className="w-full">
         <TabsList className="w-full flex-wrap justify-start h-auto gap-1 p-1.5 bg-muted/60 border border-border/60 rounded-lg">
           <TabsTrigger value="summary" className="gap-1.5 px-3 py-1.5 text-xs">
-            <BarChart3 className="h-3.5 w-3.5" />Resumo
+            <BarChart3 className="h-3.5 w-3.5" />{t('payroll.detail.summaryTab')}
           </TabsTrigger>
           <TabsTrigger value="detail" className="gap-1.5 px-3 py-1.5 text-xs">
-            <FileText className="h-3.5 w-3.5" />Detalhe por Funcionário
+            <FileText className="h-3.5 w-3.5" />{t('payroll.detail.employeeDetailTab')}
           </TabsTrigger>
           <TabsTrigger value="validations" className="gap-1.5 px-3 py-1.5 text-xs">
             <AlertTriangle className="h-3.5 w-3.5" />
-            Validações
+            {t('payroll.detail.validationsTab')}
             {(recordsWithErrors.length > 0 || blockingCount > 0) && (
               <Badge variant="destructive" className="ml-0.5 text-[10px] h-4 px-1 font-semibold">
                 {Math.max(recordsWithErrors.length, blockingCount)}
@@ -472,7 +487,7 @@ export function PayrollPeriodDetailPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5 px-3 py-1.5 text-xs">
-            <History className="h-3.5 w-3.5" />Histórico
+            <History className="h-3.5 w-3.5" />{t('payroll.detail.historyTab')}
           </TabsTrigger>
         </TabsList>
 
@@ -532,44 +547,44 @@ export function PayrollPeriodDetailPage() {
       <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Aprovar folha salarial</DialogTitle>
+            <DialogTitle>{t('payroll.detail.dialogs.approveTitle')}</DialogTitle>
             <DialogDescription>
-              Confirme os totais abaixo antes de aprovar. Esta acção marca todos os registos como aprovados.
+              {t('payroll.detail.dialogs.approveDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Total Bruto</p>
+                <p className="text-xs text-muted-foreground">{t('payroll.detail.grossTotal')}</p>
                 <p className="text-sm font-semibold font-mono">{fmtCurrency(totalGross)}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Total Líquido</p>
+                <p className="text-xs text-muted-foreground">{t('payroll.detail.netTotal')}</p>
                 <p className="text-sm font-semibold font-mono">{fmtCurrency(totalNet)}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Custo Patronal</p>
+                <p className="text-xs text-muted-foreground">{t('payroll.detail.employerCost')}</p>
                 <p className="text-sm font-semibold font-mono">{fmtCurrency(totalEmployerCost)}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Funcionários</p>
+                <p className="text-xs text-muted-foreground">{t('payroll.detail.employees')}</p>
                 <p className="text-sm font-semibold font-mono">{employeeCount}</p>
               </div>
             </div>
             {data.rejection_reason && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
-                <strong>Motivo de rejeição anterior:</strong> {data.rejection_reason}
+                <strong>{t('payroll.detail.dialogs.previousRejection')}</strong> {data.rejection_reason}
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setApproveOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setApproveOpen(false)}>{t('payroll.detail.dialogs.cancel')}</Button>
             <Button
               onClick={() => approveMutation.mutate()}
               disabled={approveMutation.isPending}
             >
               {approveMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Aprovar
+              {t('payroll.detail.dialogs.approve')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -579,30 +594,30 @@ export function PayrollPeriodDetailPage() {
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rejeitar folha</DialogTitle>
+            <DialogTitle>{t('payroll.detail.dialogs.rejectTitle')}</DialogTitle>
             <DialogDescription>
-              O período voltará ao estado <strong>Pendente de Validação</strong> para correções.
+              {t('payroll.detail.dialogs.rejectDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label htmlFor="reject-reason">Motivo (obrigatório)</Label>
+            <Label htmlFor="reject-reason">{t('payroll.detail.dialogs.reasonRequired')}</Label>
             <Textarea
               id="reject-reason"
               rows={3}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Descreva o que precisa de ser corrigido…"
+              placeholder={t('payroll.detail.dialogs.rejectPlaceholder')}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setRejectOpen(false)}>{t('payroll.detail.dialogs.cancel')}</Button>
             <Button
               variant="destructive"
               disabled={rejectReason.trim().length === 0 || rejectMutation.isPending}
               onClick={() => rejectMutation.mutate(rejectReason.trim())}
             >
               {rejectMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Rejeitar
+              {t('payroll.detail.reject')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -612,34 +627,34 @@ export function PayrollPeriodDetailPage() {
       <Dialog open={reopenOpen} onOpenChange={setReopenOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reabrir período</DialogTitle>
+            <DialogTitle>{t('payroll.detail.dialogs.reopenTitle')}</DialogTitle>
             <DialogDescription>
-              Esta acção cria uma nova versão do período. O resultado anterior é preservado.
+              {t('payroll.detail.dialogs.reopenDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
-              O período voltará ao estado <strong>Aberto</strong> para recálculo. Totais aprovados anteriores ficam registados no histórico.
+              {t('payroll.detail.dialogs.reopenWarning')}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="detail-reopen-reason">Motivo (obrigatório)</Label>
+              <Label htmlFor="detail-reopen-reason">{t('payroll.detail.dialogs.reasonRequired')}</Label>
               <Textarea
                 id="detail-reopen-reason"
                 rows={3}
                 value={reopenReason}
                 onChange={(e) => setReopenReason(e.target.value)}
-                placeholder="Indique o motivo da reabertura…"
+                placeholder={t('payroll.periodsPage.reasonPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReopenOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setReopenOpen(false)}>{t('payroll.detail.dialogs.cancel')}</Button>
             <Button
               disabled={reopenReason.trim().length === 0 || reopenMutation.isPending}
               onClick={() => reopenMutation.mutate(reopenReason.trim())}
             >
               {reopenMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Reabrir
+              {t('payroll.detail.reopen')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -686,13 +701,14 @@ function SummaryTab({
   periodStatus: string
   onDownloadPayslip: (id: number, filename: string) => void
 }) {
+  const { t } = useTranslation()
   if (records.length === 0) {
     return (
       <Card>
         <CardContent className="py-16 text-center">
           <FileText className="mx-auto h-10 w-10 text-muted-foreground/40 mb-3" />
-          <p className="text-muted-foreground font-medium">Nenhum registo ainda</p>
-          <p className="text-sm text-muted-foreground/70 mt-1">Processe este período para gerar os registos salariais.</p>
+          <p className="text-muted-foreground font-medium">{t('payroll.detail.noRecords')}</p>
+          <p className="text-sm text-muted-foreground/70 mt-1">{t('payroll.detail.processToGenerate')}</p>
         </CardContent>
       </Card>
     )
@@ -700,8 +716,12 @@ function SummaryTab({
 
   const totalsGross = records.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
   const totalsNet = records.reduce((s, r) => s + (r.net_salary ?? 0), 0)
-  const totalsInss = records.reduce((s, r) => s + (r.total_taxes ?? 0), 0)
-  const totalsDeductions = records.reduce((s, r) => s + (r.total_deductions ?? 0), 0)
+  const totalsInss = records.reduce((sum, record) => sum + (getPayrollComponent(record, 'inss')?.amount ?? 0), 0)
+  const totalsIrt = records.reduce((sum, record) => sum + (getPayrollComponent(record, 'irt')?.amount ?? Math.abs(record.total_taxes ?? 0)), 0)
+  const totalsOtherDeductions = records.reduce((sum, record) => {
+    const inssAmount = getPayrollComponent(record, 'inss')?.amount ?? 0
+    return sum + Math.max(0, (record.total_deductions ?? 0) - inssAmount)
+  }, 0)
   const totalsCost = records.reduce((s, r) => s + (r.employer_cost ?? r.gross_salary ?? 0), 0)
 
   return (
@@ -711,21 +731,23 @@ function SummaryTab({
           <table className="w-full">
             <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="px-5 py-3 font-medium">Funcionário</th>
-                <th className="px-5 py-3 font-medium text-right">Base</th>
-                <th className="px-5 py-3 font-medium text-right">Bruto</th>
-                <th className="px-5 py-3 font-medium text-right">INSS</th>
-                <th className="px-5 py-3 font-medium text-right">IRT</th>
-                <th className="px-5 py-3 font-medium text-right">Outros Desc.</th>
-                <th className="px-5 py-3 font-medium text-right">Líquido</th>
-                <th className="px-5 py-3 font-medium text-right">Custo Patronal</th>
-                <th className="px-5 py-3 font-medium text-right">Estado</th>
-                <th className="px-5 py-3 font-medium text-right">Recibo</th>
+                <th className="px-5 py-3 font-medium">{t('payroll.detail.employee')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.base')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.gross')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.inss')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.irt')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.otherDeductions')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.net')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.employerCost')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.status')}</th>
+                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.payslip')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border text-sm">
               {records.map((r) => {
-                const otherDeductions = Math.max(0, (r.total_deductions ?? 0))
+                const inssAmount = getPayrollComponent(r, 'inss')?.amount ?? null
+                const irtAmount = getPayrollComponent(r, 'irt')?.amount ?? Math.abs(r.total_taxes ?? 0)
+                const otherDeductions = Math.max(0, (r.total_deductions ?? 0) - (inssAmount ?? 0))
                 const hasErrors = r.validation_errors && r.validation_errors.length > 0
                 return (
                   <tr key={r.id} className="transition-colors hover:bg-muted/30">
@@ -738,15 +760,13 @@ function SummaryTab({
                     <td className="px-5 py-3 text-right font-mono text-muted-foreground">{fmtCurrency(r.base_salary)}</td>
                     <td className="px-5 py-3 text-right font-mono font-medium">{fmtCurrency(r.gross_salary)}</td>
                     <td className="px-5 py-3 text-right font-mono text-orange-600">
-                      {r.inss_base != null ? `-${fmtCurrency(r.inss_base)}` : '—'}
+                      {inssAmount != null ? formatSignedAmount(-inssAmount) : '—'}
                     </td>
                     <td className="px-5 py-3 text-right font-mono text-orange-600">
-                      {r.irt_taxable_base != null
-                        ? `-${fmtCurrency(Math.max(0, (r.total_taxes ?? 0)))}`
-                        : `−${fmtCurrency(r.total_taxes)}`}
+                      {formatSignedAmount(-irtAmount)}
                     </td>
                     <td className="px-5 py-3 text-right font-mono text-destructive">
-                      {otherDeductions > 0 ? `-${fmtCurrency(otherDeductions)}` : '—'}
+                      {otherDeductions > 0 ? formatSignedAmount(-otherDeductions) : '—'}
                     </td>
                     <td className="px-5 py-3 text-right font-mono font-semibold text-emerald-700">{fmtCurrency(r.net_salary)}</td>
                     <td className="px-5 py-3 text-right font-mono text-blue-700">
@@ -756,7 +776,7 @@ function SummaryTab({
                       <div className="flex items-center justify-end gap-1">
                         {hasErrors && <AlertCircle className="h-3.5 w-3.5 text-destructive" />}
                         <Badge variant="outline" className="capitalize text-xs">
-                          {r.status}
+                          {t(`payroll.recordStatuses.${r.status}`, { defaultValue: r.status })}
                         </Badge>
                       </div>
                     </td>
@@ -765,7 +785,7 @@ function SummaryTab({
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title="Descarregar recibo (PDF)"
+                          title={t('payroll.detail.downloadPayslip')}
                           onClick={() => onDownloadPayslip(r.id, `recibo-${r.employee?.employee_code ?? r.id}.pdf`)}
                         >
                           <FileDown className="h-4 w-4" />
@@ -779,12 +799,12 @@ function SummaryTab({
             {/* Footer totals */}
             <tfoot className="border-t-2 border-border bg-muted/40 text-sm font-semibold">
               <tr>
-                <td className="px-5 py-3 text-muted-foreground uppercase text-xs">Totais</td>
+                <td className="px-5 py-3 text-muted-foreground uppercase text-xs">{t('payroll.detail.totals')}</td>
                 <td className="px-5 py-3 text-right font-mono">—</td>
                 <td className="px-5 py-3 text-right font-mono">{fmtCurrency(totalsGross)}</td>
                 <td className="px-5 py-3 text-right font-mono text-orange-600">{fmtCurrency(totalsInss)}</td>
-                <td className="px-5 py-3 text-right font-mono text-orange-600">—</td>
-                <td className="px-5 py-3 text-right font-mono text-destructive">{fmtCurrency(totalsDeductions)}</td>
+                <td className="px-5 py-3 text-right font-mono text-orange-600">{fmtCurrency(totalsIrt)}</td>
+                <td className="px-5 py-3 text-right font-mono text-destructive">{fmtCurrency(totalsOtherDeductions)}</td>
                 <td className="px-5 py-3 text-right font-mono text-emerald-700">{fmtCurrency(totalsNet)}</td>
                 <td className="px-5 py-3 text-right font-mono text-blue-700">{fmtCurrency(totalsCost)}</td>
                 <td colSpan={2} />
@@ -808,6 +828,7 @@ function EmployeeDetailTab({
   selectedEmployeeId: number | null
   onSelectEmployee: (id: number) => void
 }) {
+  const { t } = useTranslation()
   const record = records.find((r) => r.employee_id === selectedEmployeeId) ?? records[0] ?? null
 
   if (records.length === 0) {
@@ -815,7 +836,7 @@ function EmployeeDetailTab({
       <Card>
         <CardContent className="py-16 text-center">
           <Users className="mx-auto h-10 w-10 text-muted-foreground/40 mb-3" />
-          <p className="text-muted-foreground">Nenhum registo para visualizar.</p>
+          <p className="text-muted-foreground">{t('payroll.detail.noEmployeeRecord')}</p>
         </CardContent>
       </Card>
     )
@@ -827,7 +848,7 @@ function EmployeeDetailTab({
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm font-medium text-muted-foreground shrink-0">Funcionário:</span>
+            <span className="text-sm font-medium text-muted-foreground shrink-0">{t('payroll.detail.employeeSelector')}</span>
             <div className="flex flex-wrap gap-2">
               {records.map((r) => (
                 <button
@@ -853,26 +874,37 @@ function EmployeeDetailTab({
 }
 
 function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
-  const inssEmployee = record.inss_base ?? 0
-  const employerInss = record.employer_inss ?? 0
-  const irtAmount = Math.max(0, (record.total_taxes ?? 0) - inssEmployee)
+  const { t, i18n } = useTranslation()
+  const inssComponent = getPayrollComponent(record, 'inss')
+  const employerInssComponent = getPayrollComponent(record, 'employer_inss')
+  const inssEmployee = inssComponent?.amount ?? null
+  const employerInss = employerInssComponent?.amount ?? record.employer_inss ?? 0
+  const irtAmount = getPayrollComponent(record, 'irt')?.amount ?? Math.abs(record.total_taxes ?? 0)
+  const snapshotEmployeeRate = record.snapshot?.inss_employee_rate
+  const snapshotEmployerRate = record.snapshot?.inss_employer_rate
+  const inssRate = inssComponent?.rate ?? (typeof snapshotEmployeeRate === 'number' ? snapshotEmployeeRate : null)
+  const employerInssRate = employerInssComponent?.rate ?? (typeof snapshotEmployerRate === 'number' ? snapshotEmployerRate : null)
+  const inssLabel = formatRate(inssRate) ? `${t('payroll.detail.inss')} (${formatRate(inssRate)})` : t('payroll.detail.inss')
+  const employerInssLabel = formatRate(employerInssRate)
+    ? `${t('payroll.detail.employerContribution')} (${formatRate(employerInssRate)})`
+    : t('payroll.detail.employerContribution')
 
   return (
     <div className="space-y-4">
       {/* KPI mini-cards */}
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <MiniKpi label="Salário Base" value={fmtCurrency(record.base_salary)} />
-        <MiniKpi label="Salário Bruto" value={fmtCurrency(record.gross_salary)} highlight />
-        <MiniKpi label="INSS (11%)" value={`-${fmtCurrency(inssEmployee)}`} danger />
-        <MiniKpi label="IRT" value={`-${fmtCurrency(irtAmount)}`} danger />
-        <MiniKpi label="Salário Líquido" value={fmtCurrency(record.net_salary)} success />
-        <MiniKpi label="Custo Patronal" value={fmtCurrency(record.employer_cost)} />
+        <MiniKpi label={t('payroll.detail.salaryBase')} value={fmtCurrency(record.base_salary)} />
+        <MiniKpi label={t('payroll.detail.salaryGross')} value={fmtCurrency(record.gross_salary)} highlight />
+        <MiniKpi label={inssLabel} value={inssEmployee == null ? '—' : formatSignedAmount(-inssEmployee)} danger />
+        <MiniKpi label={t('payroll.detail.irt')} value={formatSignedAmount(-irtAmount)} danger />
+        <MiniKpi label={t('payroll.detail.net')} value={fmtCurrency(record.net_salary)} success />
+        <MiniKpi label={t('payroll.detail.employerCost')} value={fmtCurrency(record.employer_cost)} />
       </div>
 
       {/* Items breakdown table */}
       <Card>
         <CardHeader className="pb-3 pt-5 px-5">
-          <CardTitle className="text-sm font-semibold">Detalhe dos Componentes</CardTitle>
+          <CardTitle className="text-sm font-semibold">{t('payroll.detail.componentDetails')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {(!record.items || record.items.length === 0) ? (
@@ -883,22 +915,20 @@ function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
                   <table className="w-full text-sm">
                     <thead className="border-b border-border text-xs uppercase text-muted-foreground">
                       <tr>
-                        <th className="px-4 py-2 text-left font-medium">Descrição</th>
-                        <th className="px-4 py-2 text-left font-medium">Código</th>
-                        <th className="px-4 py-2 text-left font-medium">Tipo</th>
-                        <th className="px-4 py-2 text-right font-medium">Valor</th>
+                        <th className="px-4 py-2 text-left font-medium">{t('payroll.detail.description')}</th>
+                        <th className="px-4 py-2 text-left font-medium">{t('payroll.detail.type')}</th>
+                        <th className="px-4 py-2 text-right font-medium">{t('payroll.detail.value')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {record.details.breakdown.map((item, i) => (
                         <tr key={i} className="hover:bg-muted/30">
                           <td className="px-4 py-2.5 font-medium">{item.name}</td>
-                          <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.code}</td>
                           <td className="px-4 py-2.5">
-                            <Badge variant="outline" className="text-xs capitalize">{item.type}</Badge>
+                            <Badge variant="outline" className="text-xs capitalize">{t(`payroll.detail.categories.${item.type}`, { defaultValue: item.type })}</Badge>
                           </td>
                           <td className={`px-4 py-2.5 text-right font-mono font-medium ${item.type === 'deduction' || item.type === 'tax' ? 'text-destructive' : 'text-emerald-700'}`}>
-                            {item.type === 'deduction' || item.type === 'tax' ? '-' : ''}{fmtCurrency(item.amount)}
+                            {item.type === 'deduction' || item.type === 'tax' ? '-' : ''}{fmtCurrency(Math.abs(item.amount))}
                           </td>
                         </tr>
                       ))}
@@ -907,7 +937,7 @@ function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  Sem detalhe de componentes disponível (motor v1).
+                  {t('payroll.detail.noComponents')}
                 </p>
               )}
             </div>
@@ -916,13 +946,12 @@ function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
               <table className="w-full text-sm">
                 <thead className="border-b border-border text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="px-5 py-3 text-left font-medium">Descrição</th>
-                    <th className="px-5 py-3 text-left font-medium">Código</th>
-                    <th className="px-5 py-3 text-left font-medium">Categoria</th>
-                    <th className="px-5 py-3 text-right font-medium">Base</th>
-                    <th className="px-5 py-3 text-right font-medium">Qtd</th>
-                    <th className="px-5 py-3 text-right font-medium">Taxa %</th>
-                    <th className="px-5 py-3 text-right font-medium">Valor</th>
+                    <th className="px-5 py-3 text-left font-medium">{t('payroll.detail.description')}</th>
+                    <th className="px-5 py-3 text-left font-medium">{t('payroll.detail.category')}</th>
+                    <th className="px-5 py-3 text-right font-medium">{t('payroll.detail.base')}</th>
+                    <th className="px-5 py-3 text-right font-medium">{t('payroll.detail.quantity')}</th>
+                    <th className="px-5 py-3 text-right font-medium">{t('payroll.detail.rate')}</th>
+                    <th className="px-5 py-3 text-right font-medium">{t('payroll.detail.value')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -932,9 +961,8 @@ function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
                     return (
                       <tr key={item.id} className="hover:bg-muted/30">
                         <td className="px-5 py-3 font-medium">{item.name}</td>
-                        <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{item.code}</td>
                         <td className="px-5 py-3">
-                          <span className={`text-xs font-medium ${catCfg.color}`}>{catCfg.label}</span>
+                          <span className={`text-xs font-medium ${catCfg.color}`}>{t(`payroll.detail.categories.${item.category}`, { defaultValue: catCfg.label })}</span>
                         </td>
                         <td className="px-5 py-3 text-right font-mono text-muted-foreground">
                           {item.base_amount != null ? fmtCurrency(item.base_amount) : '—'}
@@ -943,10 +971,10 @@ function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
                           {item.quantity != null ? item.quantity : '—'}
                         </td>
                         <td className="px-5 py-3 text-right font-mono text-muted-foreground">
-                          {item.rate != null ? `${item.rate}%` : '—'}
+                          {item.rate != null ? `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 }).format(Number(item.rate))}%` : '—'}
                         </td>
                         <td className={`px-5 py-3 text-right font-mono font-semibold ${isNeg ? 'text-destructive' : catCfg.color}`}>
-                          {isNeg ? '-' : ''}{fmtCurrency(item.amount)}
+                          {isNeg ? '-' : ''}{fmtCurrency(Math.abs(item.amount))}
                         </td>
                       </tr>
                     )
@@ -962,20 +990,20 @@ function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
       {(record.employer_inss != null || record.employer_cost != null) && (
         <Card>
           <CardHeader className="pb-3 pt-5 px-5">
-            <CardTitle className="text-sm font-semibold">Encargos Patronais</CardTitle>
+            <CardTitle className="text-sm font-semibold">{t('payroll.detail.employerCharges')}</CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5">
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Salário Bruto</p>
+                <p className="text-xs text-muted-foreground">{t('payroll.detail.salaryGross')}</p>
                 <p className="text-sm font-semibold font-mono">{fmtCurrency(record.gross_salary)}</p>
               </div>
               <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-3">
-                <p className="text-xs text-muted-foreground">INSS Patronal (8%)</p>
+                <p className="text-xs text-muted-foreground">{employerInssLabel}</p>
                 <p className="text-sm font-semibold font-mono text-blue-700">{fmtCurrency(employerInss)}</p>
               </div>
               <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
-                <p className="text-xs text-muted-foreground">Custo Total</p>
+                <p className="text-xs text-muted-foreground">{t('payroll.detail.totalCost')}</p>
                 <p className="text-sm font-semibold font-mono text-amber-700">{fmtCurrency(record.employer_cost)}</p>
               </div>
             </div>
@@ -1046,6 +1074,7 @@ function ValidationsTab({
   onSubmit: () => void
   showSubmit: boolean
 }) {
+  const { t } = useTranslation()
   const periodErrors = report?.errors ?? []
   const periodWarnings = report?.warnings ?? []
   const hasBlocking = (report?.blocking_count ?? 0) > 0 || blockingErrors.length > 0
@@ -1060,15 +1089,15 @@ function ValidationsTab({
             <div className="text-sm text-muted-foreground">
               {hasBlocking ? (
                 <span className="text-destructive font-medium">
-                  Existem erros impeditivos — submissão bloqueada.
+                  {t('payroll.detail.validation.blocking')}
                 </span>
               ) : hasWarnings ? (
                 <span>
-                  Avisos informativos presentes.{' '}
-                  {warningsAck ? 'Confirmados.' : 'Confirme que reviu os avisos para submeter.'}
+                  {t('payroll.detail.validation.warnings')}{' '}
+                  {warningsAck ? t('payroll.detail.validation.confirmed') : t('payroll.detail.validation.confirmWarnings')}
                 </span>
               ) : (
-                <span>Validações OK — pronto para submeter.</span>
+                <span>{t('payroll.detail.validation.ready')}</span>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -1078,7 +1107,7 @@ function ValidationsTab({
                     checked={warningsAck}
                     onCheckedChange={(v) => onWarningsAckChange(v === true)}
                   />
-                  Confirmo que revi os avisos
+                  {t('payroll.detail.validation.acknowledge')}
                 </label>
               )}
               <Button
@@ -1090,7 +1119,7 @@ function ValidationsTab({
                 {isSubmitting
                   ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   : <Send className="mr-1.5 h-3.5 w-3.5" />}
-                Submeter p/ Aprovação
+                {t('payroll.detail.submit')}
               </Button>
             </div>
           </CardContent>
@@ -1101,8 +1130,8 @@ function ValidationsTab({
         <Card>
           <CardContent className="py-16 text-center">
             <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500 mb-3" />
-            <p className="font-semibold text-foreground">Sem problemas de validação</p>
-            <p className="text-sm text-muted-foreground mt-1">Todos os registos estão válidos e prontos para aprovação.</p>
+            <p className="font-semibold text-foreground">{t('payroll.detail.validation.cleanTitle')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('payroll.detail.validation.cleanDescription')}</p>
           </CardContent>
         </Card>
       )}
@@ -1112,7 +1141,7 @@ function ValidationsTab({
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-destructive">
               <XCircle className="h-4 w-4" />
-              Erros Impeditivos ({Math.max(report?.blocking_count ?? 0, blockingErrors.length)})
+              {t('payroll.detail.validation.blockingTitle')} ({Math.max(report?.blocking_count ?? 0, blockingErrors.length)})
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-3">
@@ -1121,7 +1150,7 @@ function ValidationsTab({
                 <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-destructive">
-                    {e.employee_name ?? 'Período'}
+                    {e.employee_name ?? t('payroll.detail.validation.period')}
                   </p>
                   <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
                 </div>
@@ -1135,7 +1164,7 @@ function ValidationsTab({
                     <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-destructive">
-                        {r.employee?.full_name ?? `Funcionário #${r.employee_id}`}
+                        {r.employee?.full_name ?? `${t('payroll.detail.employee')} #${r.employee_id}`}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
                     </div>
@@ -1151,7 +1180,7 @@ function ValidationsTab({
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-700">
               <AlertCircle className="h-4 w-4" />
-              Avisos ({Math.max(report?.warning_count ?? 0, warnings.length)})
+              {t('payroll.detail.validation.warningsTitle')} ({Math.max(report?.warning_count ?? 0, warnings.length)})
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-3">
@@ -1160,7 +1189,7 @@ function ValidationsTab({
                 <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-amber-700">
-                    {e.employee_name ?? 'Período'}
+                    {e.employee_name ?? t('payroll.detail.validation.period')}
                   </p>
                   <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
                 </div>
@@ -1174,7 +1203,7 @@ function ValidationsTab({
                     <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-amber-700">
-                        {r.employee?.full_name ?? `Funcionário #${r.employee_id}`}
+                        {r.employee?.full_name ?? `${t('payroll.detail.employee')} #${r.employee_id}`}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
                     </div>
@@ -1191,13 +1220,14 @@ function ValidationsTab({
 // ─── Tab: Histórico ──────────────────────────────────────────────────────────
 
 function HistoryTab({ events, locale }: { events: PayrollPeriodEvent[]; locale: string }) {
+  const { t } = useTranslation()
   if (events.length === 0) {
     return (
       <Card>
         <CardContent className="py-16 text-center">
           <History className="mx-auto h-10 w-10 text-muted-foreground/40 mb-3" />
-          <p className="font-semibold text-foreground">Sem eventos registados</p>
-          <p className="text-sm text-muted-foreground mt-1">O histórico de transições aparecerá aqui.</p>
+          <p className="font-semibold text-foreground">{t('payroll.detail.history.emptyTitle')}</p>
+          <p className="text-sm text-muted-foreground mt-1">{t('payroll.detail.history.emptyDescription')}</p>
         </CardContent>
       </Card>
     )
@@ -1210,12 +1240,12 @@ function HistoryTab({ events, locale }: { events: PayrollPeriodEvent[]; locale: 
           {events.map((ev) => (
             <li key={ev.id} className="px-5 py-4 flex items-start gap-4">
               <Badge variant="outline" className={`shrink-0 text-xs ${eventColor[ev.event_type] ?? 'bg-muted text-muted-foreground border-border'}`}>
-                {eventLabel[ev.event_type] ?? ev.event_type}
+                {t(`payroll.events.${ev.event_type}`, { defaultValue: eventLabel[ev.event_type] ?? ev.event_type })}
               </Badge>
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-foreground">{ev.notes ?? eventLabel[ev.event_type] ?? ev.event_type}</p>
+                <p className="text-sm text-foreground">{eventLabel[ev.event_type] ? t(`payroll.events.${ev.event_type}`, { defaultValue: eventLabel[ev.event_type] }) : ev.notes ?? ev.event_type}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {ev.actor?.name ? `Por ${ev.actor.name} · ` : ''}
+                  {ev.actor?.name ? `${t('payroll.detail.history.by')} ${ev.actor.name} · ` : ''}
                   {formatDate(ev.created_at, locale)}
                 </p>
               </div>

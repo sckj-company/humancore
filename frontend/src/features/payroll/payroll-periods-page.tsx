@@ -64,12 +64,11 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-const currencyFormatter = new Intl.NumberFormat('pt-AO', { maximumFractionDigits: 2 })
-
 export function PayrollPeriodsPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
+  const currencyFormatter = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 })
   const [createOpen, setCreateOpen] = useState(false)
   const [reopenId, setReopenId] = useState<number | null>(null)
   const [processId, setProcessId] = useState<number | null>(null)
@@ -84,7 +83,7 @@ export function PayrollPeriodsPage() {
   const approveMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/periods/${id}/approve`),
     onSuccess: () => {
-      toast.success('Folha aprovada')
+      toast.success(t('payroll.feedback.approved'))
       invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao aprovar')),
@@ -93,7 +92,7 @@ export function PayrollPeriodsPage() {
   const closeMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/periods/${id}/close`),
     onSuccess: () => {
-      toast.success('Período fechado')
+      toast.success(t('payroll.feedback.closed'))
       invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao fechar')),
@@ -102,7 +101,7 @@ export function PayrollPeriodsPage() {
   const submitMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/periods/${id}/submit`),
     onSuccess: () => {
-      toast.success('Período submetido para aprovação')
+      toast.success(t('payroll.feedback.submitted'))
       invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao submeter')),
@@ -111,7 +110,7 @@ export function PayrollPeriodsPage() {
   const payMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/periods/${id}/pay`),
     onSuccess: () => {
-      toast.success('Pagamento registado')
+      toast.success(t('payroll.feedback.paymentRegistered'))
       invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar pagamento')),
@@ -121,7 +120,7 @@ export function PayrollPeriodsPage() {
     mutationFn: ({ id, reason }: { id: number; reason: string }) =>
       api.post(`payroll/periods/${id}/reopen`, { reason }),
     onSuccess: () => {
-      toast.success('Período reaberto')
+      toast.success(t('payroll.feedback.reopened'))
       setReopenId(null)
       invalidate()
     },
@@ -146,7 +145,7 @@ export function PayrollPeriodsPage() {
       {isError && <ErrorState message="Não foi possível carregar os períodos." onRetry={refetch} />}
 
       {data && data.data.length === 0 && (
-        <EmptyState title="Nenhum período de folha" description="Crie um novo período para começar a processar folhas salariais." />
+        <EmptyState title={t('payroll.periodsPage.emptyTitle')} description={t('payroll.periodsPage.emptyDescription')} />
       )}
 
       {data && data.data.length > 0 && (
@@ -156,13 +155,13 @@ export function PayrollPeriodsPage() {
               <table className="w-full">
                 <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="px-6 py-3 font-medium">Período</th>
-                    <th className="px-6 py-3 font-medium">Tipo</th>
-                    <th className="px-6 py-3 font-medium">Intervalo</th>
+                    <th className="px-6 py-3 font-medium">{t('payroll.periodsPage.period')}</th>
+                    <th className="px-6 py-3 font-medium">{t('payroll.periodsPage.type')}</th>
+                    <th className="px-6 py-3 font-medium">{t('payroll.periodsPage.range')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.status')}</th>
-                    <th className="px-6 py-3 font-medium text-right">Funcionários</th>
-                    <th className="px-6 py-3 font-medium text-right">Total Bruto</th>
-                    <th className="px-6 py-3 font-medium text-right">Total Líquido</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('payroll.periodsPage.employees')}</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('payroll.periodsPage.grossTotal')}</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('payroll.periodsPage.netTotal')}</th>
                     <th className="px-6 py-3 text-right font-medium">{t('common.actions')}</th>
                   </tr>
                 </thead>
@@ -170,13 +169,13 @@ export function PayrollPeriodsPage() {
                   {data.data.map((p) => (
                     <tr key={p.id} className="transition-colors hover:bg-muted/30">
                       <td className="px-6 py-3 font-medium">{p.name}</td>
-                      <td className="px-6 py-3 text-muted-foreground capitalize">{p.period_type}</td>
+                      <td className="px-6 py-3 text-muted-foreground">{t(`payroll.periodTypes.${p.period_type}`)}</td>
                       <td className="px-6 py-3 text-muted-foreground">
                         {formatDate(p.period_start, i18n.language)} – {formatDate(p.period_end, i18n.language)}
                       </td>
                       <td className="px-6 py-3 text-right">
                         <Badge className={statusStyle[p.status]} variant="outline">
-                          {statusLabel[p.status] ?? p.status}
+                          {t(`payroll.periodStatuses.${p.status}`, { defaultValue: statusLabel[p.status] ?? p.status })}
                         </Badge>
                       </td>
                       <td className="px-6 py-3 text-right text-muted-foreground">{p.employee_count ?? 0}</td>
@@ -197,7 +196,7 @@ export function PayrollPeriodsPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              title="Processar"
+                              title={t('payroll.periodsPage.process')}
                               onClick={() => setProcessId(p.id)}
                             >
                               <Play className="h-4 w-4" />
@@ -208,7 +207,7 @@ export function PayrollPeriodsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                title="Submeter para aprovação"
+                                title={t('payroll.periodsPage.submit')}
                                 onClick={() => submitMutation.mutate(p.id)}
                                 disabled={submitMutation.isPending}
                               >
@@ -220,7 +219,7 @@ export function PayrollPeriodsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                title="Aprovar"
+                                title={t('payroll.periodsPage.approve')}
                                 onClick={() => approveMutation.mutate(p.id)}
                               >
                                 <CheckCircle2 className="h-4 w-4" />
@@ -231,7 +230,7 @@ export function PayrollPeriodsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                title="Fechar período"
+                                title={t('payroll.periodsPage.close')}
                                 onClick={() => closeMutation.mutate(p.id)}
                               >
                                 <Lock className="h-4 w-4" />
@@ -242,7 +241,7 @@ export function PayrollPeriodsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                title="Registar pagamento"
+                                title={t('payroll.periodsPage.registerPayment')}
                                 onClick={() => payMutation.mutate(p.id)}
                                 disabled={payMutation.isPending}
                               >
@@ -253,13 +252,13 @@ export function PayrollPeriodsPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              title="Reabrir período"
+                              title={t('payroll.periodsPage.reopen')}
                               onClick={() => setReopenId(p.id)}
                             >
                               <RotateCcw className="h-4 w-4" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon-sm" asChild title="Ver detalhes">
+                          <Button variant="ghost" size="icon-sm" asChild title={t('payroll.periodsPage.viewDetails')}>
                             <Link to={`/payroll/${p.id}`}>
                               <Eye className="h-4 w-4" />
                             </Link>
@@ -305,6 +304,7 @@ function ReopenPeriodDialog({
   onConfirm: (reason: string) => void
   isPending: boolean
 }) {
+  const { t } = useTranslation()
   const [reason, setReason] = useState('')
   const open = periodId != null
   const valid = reason.trim().length > 0
@@ -313,34 +313,34 @@ function ReopenPeriodDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Reabrir período</DialogTitle>
+          <DialogTitle>{t('payroll.periodsPage.reopenTitle')}</DialogTitle>
           <DialogDescription>
             Esta acção cria uma nova versão do período. O resultado anterior é preservado.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
-            O período voltará ao estado <strong>Aberto</strong> para recálculo. Totais aprovados anteriores ficam registados no histórico.
+            {t('payroll.detail.dialogs.reopenWarning')}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="reopen-reason">Motivo (obrigatório)</Label>
+            <Label htmlFor="reopen-reason">{t('payroll.periodsPage.reasonRequired')}</Label>
             <Textarea
               id="reopen-reason"
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Indique o motivo da reabertura…"
+              placeholder={t('payroll.periodsPage.reasonPlaceholder')}
             />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('payroll.periodsPage.cancel')}</Button>
           <Button
             disabled={!valid || isPending}
             onClick={() => onConfirm(reason.trim())}
           >
             {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            Reabrir
+            {t('payroll.periodsPage.confirmReopen')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -392,48 +392,48 @@ function CreatePeriodDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('payroll.newPeriod')}</DialogTitle>
-          <DialogDescription>Crie um novo período de processamento da folha salarial.</DialogDescription>
+          <DialogDescription>{t('payroll.periodsPage.newPeriodDescription')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Tipo</Label>
+              <Label>{t('payroll.periodsPage.periodType')}</Label>
               <Select
                 value={watch('period_type')}
                 onValueChange={(v) => setValue('period_type', v as FormValues['period_type'])}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Tipo de período" />
+                  <SelectValue placeholder={t('payroll.periodsPage.periodType')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="monthly">Mensal</SelectItem>
-                  <SelectItem value="biweekly">Quinzenal</SelectItem>
-                  <SelectItem value="weekly">Semanal</SelectItem>
+                  <SelectItem value="monthly">{t('payroll.periodTypes.monthly')}</SelectItem>
+                  <SelectItem value="biweekly">{t('payroll.periodTypes.biweekly')}</SelectItem>
+                  <SelectItem value="weekly">{t('payroll.periodTypes.weekly')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Data de pagamento</Label>
+              <Label>{t('payroll.periodsPage.paymentDate')}</Label>
               <Input type="date" {...register('payment_date')} />
             </div>
             <div className="space-y-2">
-              <Label>Início</Label>
+              <Label>{t('payroll.periodsPage.start')}</Label>
               <Input type="date" {...register('period_start')} />
               {errors.period_start && <p className="text-xs text-destructive">{errors.period_start.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label>Fim</Label>
+              <Label>{t('payroll.periodsPage.end')}</Label>
               <Input type="date" {...register('period_end')} />
               {errors.period_end && <p className="text-xs text-destructive">{errors.period_end.message}</p>}
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
+              {t('payroll.periodsPage.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting || mutation.isPending}>
               {isSubmitting || mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Criar
+              {t('payroll.periodsPage.create')}
             </Button>
           </DialogFooter>
         </form>

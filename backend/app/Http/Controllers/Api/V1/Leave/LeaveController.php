@@ -11,8 +11,10 @@ use App\Models\LeaveType;
 use App\Models\Setting;
 use App\Models\User;
 use App\Notifications\LeaveRequestNotification;
+use App\Services\CloudinaryService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -122,7 +124,7 @@ class LeaveController extends BaseController
         return $this->paginated(LeaveRequestResource::collection($requests));
     }
 
-    public function store(StoreLeaveRequest $request): JsonResponse
+    public function store(StoreLeaveRequest $request, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('create', LeaveRequest::class);
 
@@ -143,6 +145,11 @@ class LeaveController extends BaseController
 
         $isApprover = auth()->user()?->can('approve_leave');
         $status = $request->input('status', $isApprover ? 'approved' : 'pending');
+        $documentFolder = 'humancore/tenants/'.$employee->tenant_id.'/leave-documents';
+        $justificationFile = $request->file('justification_document');
+        $signedFile = $request->file('signed_document');
+        $justificationUrl = $justificationFile ? $cloudinary->upload($justificationFile, $documentFolder, 'auto')['url'] : null;
+        $signedUrl = $signedFile ? $cloudinary->upload($signedFile, $documentFolder, 'auto')['url'] : null;
 
         $leave = LeaveRequest::create([
             'employee_id' => $employee->id,
@@ -159,8 +166,8 @@ class LeaveController extends BaseController
             'status' => $status,
             'approved_by' => $status === 'approved' ? auth()->id() : null,
             'approved_at' => $status === 'approved' ? now() : null,
-            'justification_document_path' => $request->file('justification_document')?->store('leave-documents/'.$employee->tenant_id, 'local'),
-            'signed_document_path' => $request->file('signed_document')?->store('leave-documents/'.$employee->tenant_id, 'local'),
+            'justification_document_path' => $justificationUrl,
+            'signed_document_path' => $signedUrl,
         ]);
 
         if ($status === 'pending') {
@@ -175,7 +182,7 @@ class LeaveController extends BaseController
         return $this->success(new LeaveRequestResource($leave->load(['employee', 'leaveType'])), 'Registo de ausência/férias criado com sucesso.', 201);
     }
 
-    public function downloadDocument(LeaveRequest $leave, string $kind): StreamedResponse|JsonResponse
+    public function downloadDocument(LeaveRequest $leave, string $kind, CloudinaryService $cloudinary): StreamedResponse|RedirectResponse|JsonResponse
     {
         $this->authorize('view', $leave);
 
@@ -185,14 +192,22 @@ class LeaveController extends BaseController
             default => null,
         };
 
-        if (! $path || ! Storage::disk('local')->exists($path)) {
+        if (! $path) {
+            return $this->error('Documento não encontrado.', 404);
+        }
+
+        if ($cloudinary->isCloudinaryUrl($path)) {
+            return redirect()->away($path);
+        }
+
+        if (! Storage::disk('local')->exists($path)) {
             return $this->error('Documento não encontrado.', 404);
         }
 
         return Storage::disk('local')->download($path);
     }
 
-    public function uploadDocument(Request $request, LeaveRequest $leave, string $kind): JsonResponse
+    public function uploadDocument(Request $request, LeaveRequest $leave, string $kind, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('view', $leave);
 
@@ -201,12 +216,16 @@ class LeaveController extends BaseController
         ]);
         $attribute = $kind === 'justification' ? 'justification_document_path' : 'signed_document_path';
         $oldPath = $leave->{$attribute};
-        $newPath = $validated['document']->store('leave-documents/'.$leave->tenant_id, 'local');
+        $newPath = $cloudinary->upload($validated['document'], 'humancore/tenants/'.$leave->tenant_id.'/leave-documents', 'auto')['url'];
 
         $leave->update([$attribute => $newPath]);
 
         if ($oldPath) {
-            Storage::disk('local')->delete($oldPath);
+            if ($cloudinary->isCloudinaryUrl($oldPath)) {
+                $cloudinary->delete($oldPath);
+            } else {
+                Storage::disk('local')->delete($oldPath);
+            }
         }
 
         return $this->success(new LeaveRequestResource($leave->fresh()->load(['employee', 'leaveType'])), 'Documento carregado com sucesso.');

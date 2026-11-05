@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Play, Users, AlertTriangle, CheckCircle2, XCircle, Search } from 'lucide-react'
 import { toast } from 'sonner'
@@ -34,6 +35,7 @@ export function ProcessPeriodDialog({
   onOpenChange,
   onFinished,
 }: ProcessPeriodDialogProps) {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const [phase, setPhase] = useState<Phase>('select')
   const [manualSelection, setManualSelection] = useState<Set<number> | null>(null)
@@ -80,9 +82,7 @@ export function ProcessPeriodDialog({
     onMutate: () => setPhase('running'),
     onSuccess: (result) => {
       setPhase('done')
-      toast.success(
-        `Processamento concluído: ${result.processed}/${result.total} funcionário(s)`,
-      )
+      toast.success(`${t('payroll.processDialog.doneDescription')} ${result.processed}/${result.total}`)
       qc.invalidateQueries({ queryKey: ['payroll-period', String(periodId)] })
       qc.invalidateQueries({ queryKey: ['payroll-period-progress', periodId] })
       qc.invalidateQueries({ queryKey: ['payroll-periods'] })
@@ -136,13 +136,13 @@ export function ProcessPeriodDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Processar folha salarial
+            {t('payroll.processDialog.title')}
           </DialogTitle>
           <DialogDescription>
-            {phase === 'select' && 'Seleccione os funcionários que farão parte deste processamento.'}
-            {phase === 'running' && 'A processar o período — acompanhe o progresso abaixo.'}
-            {phase === 'done' && 'Processamento concluído.'}
-            {phase === 'error' && 'O processamento falhou.'}
+            {phase === 'select' && t('payroll.processDialog.selectDescription')}
+            {phase === 'running' && t('payroll.processDialog.runningDescription')}
+            {phase === 'done' && t('payroll.processDialog.doneDescription')}
+            {phase === 'error' && t('payroll.processDialog.errorDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -150,17 +150,17 @@ export function ProcessPeriodDialog({
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             {isLoading && (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> A carregar funcionários…
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('payroll.processDialog.loadingEmployees')}
               </div>
             )}
             {isError && (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                Não foi possível carregar a lista de funcionários.
+                {t('payroll.processDialog.loadError')}
               </div>
             )}
             {!isLoading && !isError && eligible.length === 0 && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
-                Nenhum funcionário elegível para processamento.
+                {t('payroll.processDialog.noneEligible')}
               </div>
             )}
             {eligible.length > 0 && (
@@ -170,22 +170,22 @@ export function ProcessPeriodDialog({
                   <Input
                     value={employeeSearch}
                     onChange={(event) => setEmployeeSearch(event.target.value)}
-                    placeholder="Pesquisar por nome ou código..."
-                    aria-label="Pesquisar funcionários"
+                    placeholder={t('payroll.processDialog.search')}
+                    aria-label={t('payroll.processDialog.searchAria')}
                     className="pl-9"
                   />
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">{selectedIds.size}</span> de{' '}
-                    {eligible.length} seleccionado(s)
+                    {eligible.length} {t('payroll.processDialog.selected')}
                   </p>
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={selectAll}>
-                      Todos
+                      {t('payroll.processDialog.all')}
                     </Button>
                     <Button type="button" variant="outline" size="sm" onClick={selectNone}>
-                      Nenhum
+                      {t('payroll.processDialog.none')}
                     </Button>
                   </div>
                 </div>
@@ -229,7 +229,7 @@ export function ProcessPeriodDialog({
                     ))}
                     {filteredEmployees.length === 0 && (
                       <li className="px-4 py-10 text-center text-sm text-muted-foreground">
-                        Nenhum funcionário encontrado.
+                        {t('payroll.processDialog.notFound')}
                       </li>
                     )}
                   </ul>
@@ -244,20 +244,20 @@ export function ProcessPeriodDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {phase === 'running' ? 'Progresso' : phase === 'done' ? 'Concluído' : 'Falhou'}
+                  {phase === 'running' ? t('payroll.processDialog.progress') : phase === 'done' ? t('payroll.processDialog.completed') : t('payroll.processDialog.failed')}
                 </span>
                 <span className="font-mono font-medium">
                   {phase === 'running' ? `${done}/${total}` : `${percent}%`}
                 </span>
               </div>
               <Progress value={percent} className="h-2.5" />
-              <p className="text-xs text-muted-foreground">{message ?? '—'}</p>
+              <p className="text-xs text-muted-foreground">{phase === 'running' ? t('payroll.processDialog.working') : message ?? '—'}</p>
             </div>
 
             {phase === 'running' && (
               <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 p-3 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
-                A processar — não feche esta janela.
+                {t('payroll.processDialog.doNotClose')}
               </div>
             )}
 
@@ -280,15 +280,14 @@ export function ProcessPeriodDialog({
                 )}
                 <div>
                   <p className="font-medium">
-                    {finalStatus === 'completed' && 'Período calculado com sucesso.'}
-                    {finalStatus === 'pending_validation' &&
-                      'Processado com avisos — reveja as validações.'}
-                    {finalStatus === 'failed' && 'Processamento terminou com erros impeditivos.'}
+                    {finalStatus === 'completed' && t('payroll.processDialog.completedSuccess')}
+                    {finalStatus === 'pending_validation' && t('payroll.processDialog.completedWarnings')}
+                    {finalStatus === 'failed' && t('payroll.processDialog.completedErrors')}
                     {!['completed', 'pending_validation', 'failed'].includes(finalStatus) &&
-                      `Estado final: ${finalStatus}`}
+                      `${t('payroll.processDialog.finalStatus')} ${finalStatus}`}
                   </p>
                   <p className="text-xs opacity-80 mt-0.5">
-                    {processMutation.data?.processed ?? done} de {processMutation.data?.total ?? total} processado(s)
+                    {processMutation.data?.processed ?? done} / {processMutation.data?.total ?? total} {t('payroll.processDialog.processedCount')}
                   </p>
                 </div>
               </div>
@@ -296,7 +295,7 @@ export function ProcessPeriodDialog({
 
             {phase === 'error' && (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                Verifique os registos e tente novamente.
+                {t('payroll.processDialog.errorDescription')}
               </div>
             )}
           </div>
@@ -306,7 +305,7 @@ export function ProcessPeriodDialog({
           {phase === 'select' && (
             <>
               <Button type="button" variant="outline" onClick={() => handleClose(false)}>
-                Cancelar
+                {t('payroll.processDialog.cancel')}
               </Button>
               <Button
                 type="button"
@@ -314,13 +313,13 @@ export function ProcessPeriodDialog({
                 disabled={selectedIds.size === 0 || processMutation.isPending}
               >
                 <Play className="mr-1.5 h-3.5 w-3.5" />
-                Processar {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
+                {t('payroll.processDialog.process')} {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
               </Button>
             </>
           )}
           {phase === 'running' && (
             <Button variant="outline" disabled>
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> A processar…
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> {t('payroll.processDialog.working')}
             </Button>
           )}
           {(phase === 'done' || phase === 'error') && (
@@ -334,10 +333,10 @@ export function ProcessPeriodDialog({
                     processMutation.reset()
                   }}
                 >
-                  Tentar novamente
+                  {t('payroll.processDialog.tryAgain')}
                 </Button>
               )}
-              <Button type="button" onClick={() => handleClose(false)}>Fechar</Button>
+              <Button type="button" onClick={() => handleClose(false)}>{t('payroll.processDialog.close')}</Button>
             </>
           )}
         </DialogFooter>

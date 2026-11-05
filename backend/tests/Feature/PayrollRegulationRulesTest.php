@@ -6,12 +6,15 @@ use App\Models\PayrollInssRule;
 use App\Models\PayrollIrtTable;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\CloudinaryService;
 use App\Services\Tenant\TenantManager;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\SettingSeeder;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class PayrollRegulationRulesTest extends TestCase
@@ -111,6 +114,69 @@ class PayrollRegulationRulesTest extends TestCase
             ->assertOk();
 
         $this->assertDatabaseMissing('payroll_inss_rules', ['id' => $ruleId]);
+    }
+
+    public function test_inss_document_is_saved_as_cloudinary_url_and_download_redirects(): void
+    {
+        Storage::fake('local');
+        [$tenant, $admin] = $this->setupTenantWithAdmin();
+        $this->actingAs($admin, 'sanctum');
+        $url = 'https://res.cloudinary.com/test/raw/upload/inss.pdf';
+        $this->mock(CloudinaryService::class)
+            ->shouldReceive('upload')
+            ->once()
+            ->andReturn(['url' => $url, 'bytes' => 100]);
+        app(CloudinaryService::class)
+            ->shouldReceive('isCloudinaryUrl')
+            ->once()
+            ->with($url)
+            ->andReturn(true);
+
+        $response = $this->post('/api/v1/payroll/inss-rules', [
+            'country_code' => 'AO',
+            'regime_code' => 'documented',
+            'employee_rate' => 3,
+            'employer_rate' => 8,
+            'effective_from' => '2026-01-01',
+            'legal_document' => UploadedFile::fake()->create('inss.pdf', 100, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        $ruleId = $response->json('data.id');
+        $this->assertSame($url, PayrollInssRule::query()->findOrFail($ruleId)->legal_document_path);
+        Storage::disk('local')->assertDirectoryEmpty('payroll-regulations');
+        $this->get("/api/v1/payroll/inss-rules/{$ruleId}/document")->assertRedirect($url);
+    }
+
+    public function test_irt_document_is_saved_as_cloudinary_url_and_download_redirects(): void
+    {
+        Storage::fake('local');
+        [, $admin] = $this->setupTenantWithAdmin();
+        $this->actingAs($admin, 'sanctum');
+        $url = 'https://res.cloudinary.com/test/raw/upload/irt.pdf';
+        $this->mock(CloudinaryService::class)
+            ->shouldReceive('upload')
+            ->once()
+            ->andReturn(['url' => $url, 'bytes' => 100]);
+        app(CloudinaryService::class)
+            ->shouldReceive('isCloudinaryUrl')
+            ->once()
+            ->with($url)
+            ->andReturn(true);
+
+        $response = $this->post('/api/v1/payroll/irt-tables', [
+            'country_code' => 'AO',
+            'regime_code' => 'documented',
+            'effective_from' => '2026-01-01',
+            'brackets' => [
+                ['lower_bound' => 0, 'upper_bound' => 100000, 'rate' => 0, 'fixed_amount' => 0],
+            ],
+            'legal_document' => UploadedFile::fake()->create('irt.pdf', 100, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        $tableId = $response->json('data.id');
+        $this->assertSame($url, PayrollIrtTable::query()->findOrFail($tableId)->legal_document_path);
+        Storage::disk('local')->assertDirectoryEmpty('payroll-regulations');
+        $this->get("/api/v1/payroll/irt-tables/{$tableId}/document")->assertRedirect($url);
     }
 
     public function test_prevent_overlapping_active_inss_rules(): void

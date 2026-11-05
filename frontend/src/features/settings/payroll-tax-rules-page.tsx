@@ -11,6 +11,7 @@ import {
   Ban,
   Plus,
   Loader2,
+  Download,
   Building2,
   Calendar,
   Layers,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { cloudinaryAttachmentUrl } from '@/lib/cloudinary'
 import { useAuthStore, hasPermission, hasAnyRole } from '@/stores/auth-store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -507,6 +509,17 @@ export function PayrollTaxRulesPage({
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {rule.legal_document_url && (rule.legal_document_url.includes('res.cloudinary.com') ? (
+                                <Button variant="ghost" size="icon-sm" asChild title="Descarregar documento legal">
+                                  <a href={cloudinaryAttachmentUrl(rule.legal_document_url, rule.legal_document_name)} target="_blank" rel="noreferrer">
+                                    <Download className="h-4 w-4" />
+                                  </a>
+                                </Button>
+                              ) : (
+                                <Button type="button" variant="ghost" size="icon-sm" title="Descarregar documento legal" onClick={() => void api.downloadFile(`payroll/inss-rules/${rule.id}/document`, rule.legal_document_name ?? undefined)}>
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              ))}
                               {rule.status === 'draft' && canConfigure && (
                                 <Button
                                   size="sm"
@@ -685,6 +698,20 @@ export function PayrollTaxRulesPage({
                           <span className="font-semibold text-foreground">Base legal:</span> {table.legal_reference}
                         </p>
                       )}
+                      {table.legal_document_url?.includes('res.cloudinary.com') ? (
+                        <a
+                          href={cloudinaryAttachmentUrl(table.legal_document_url, table.legal_document_name)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                        >
+                          <Download className="h-4 w-4" />{table.legal_document_name ?? 'Descarregar documento legal'}
+                        </a>
+                      ) : table.legal_document_url ? (
+                        <Button type="button" variant="link" size="sm" className="px-0" onClick={() => void api.downloadFile(`payroll/irt-tables/${table.id}/document`, table.legal_document_name ?? undefined)}>
+                          <Download className="h-4 w-4" />{table.legal_document_name ?? 'Descarregar documento legal'}
+                        </Button>
+                      ) : null}
 
                       <div className="overflow-x-auto rounded-lg border border-border bg-card">
                         <table className="w-full text-xs">

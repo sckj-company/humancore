@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Api\V1\Payroll;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\PayrollInssRuleResource;
 use App\Models\PayrollInssRule;
+use App\Models\Tenant;
+use App\Services\CloudinaryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -22,8 +25,9 @@ class PayrollInssRuleController extends BaseController
 
         $id = tenant_id();
         if (! $id) {
-            $id = (int) (\App\Models\Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: \App\Models\Tenant::query()->orderBy('id')->value('id'));
+            $id = (int) (Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id'));
         }
+
         return $id ?: null;
     }
 
@@ -42,7 +46,7 @@ class PayrollInssRuleController extends BaseController
         return $this->success(PayrollInssRuleResource::collection($rules));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('create', PayrollInssRule::class);
         $request->merge(['country_code' => strtoupper((string) $request->input('country_code', 'AO'))]);
@@ -87,10 +91,11 @@ class PayrollInssRuleController extends BaseController
             ->max('version')) + 1;
 
         if ($legalDocument) {
-            $data['legal_document_path'] = $legalDocument->store(
-                'payroll-regulations/' . $tenantId . '/inss',
-                'local'
-            );
+            $data['legal_document_path'] = $cloudinary->upload(
+                $legalDocument,
+                'humancore/tenants/'.$tenantId.'/payroll-regulations/inss',
+                'auto',
+            )['url'];
         }
 
         $rule = PayrollInssRule::query()->create($data);
@@ -109,7 +114,7 @@ class PayrollInssRuleController extends BaseController
         return $this->success(new PayrollInssRuleResource($rule->load(['validatedBy:id,name', 'revokedBy:id,name'])));
     }
 
-    public function update(Request $request, PayrollInssRule $rule): JsonResponse
+    public function update(Request $request, PayrollInssRule $rule, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('update', $rule);
 
@@ -149,16 +154,17 @@ class PayrollInssRuleController extends BaseController
 
         $oldDocumentPath = $rule->legal_document_path;
         if ($legalDocument) {
-            $data['legal_document_path'] = $legalDocument->store(
-                'payroll-regulations/' . $rule->tenant_id . '/inss',
-                'local'
-            );
+            $data['legal_document_path'] = $cloudinary->upload(
+                $legalDocument,
+                'humancore/tenants/'.$rule->tenant_id.'/payroll-regulations/inss',
+                'auto',
+            )['url'];
         }
 
         $rule->update($data);
 
         if ($legalDocument && $oldDocumentPath) {
-            Storage::disk('local')->delete($oldDocumentPath);
+            $this->deleteStoredDocument($oldDocumentPath, $cloudinary);
         }
 
         return $this->success(
@@ -274,10 +280,37 @@ class PayrollInssRuleController extends BaseController
         $rule->delete();
 
         if ($documentPath) {
-            Storage::disk('local')->delete($documentPath);
+            $this->deleteStoredDocument($documentPath, app(CloudinaryService::class));
         }
 
         return $this->success(null, 'Regra eliminada com sucesso.');
     }
-}
 
+    public function downloadDocument(PayrollInssRule $rule, CloudinaryService $cloudinary): StreamedResponse|RedirectResponse|JsonResponse
+    {
+        $this->authorize('view', $rule);
+
+        if (! $rule->legal_document_path) {
+            return $this->error('Documento não encontrado.', 404);
+        }
+
+        if ($cloudinary->isCloudinaryUrl($rule->legal_document_path)) {
+            return redirect()->away($rule->legal_document_path);
+        }
+
+        if (! Storage::disk('local')->exists($rule->legal_document_path)) {
+            return $this->error('Documento não encontrado.', 404);
+        }
+
+        return Storage::disk('local')->download($rule->legal_document_path, basename($rule->legal_document_path));
+    }
+
+    private function deleteStoredDocument(string $path, CloudinaryService $cloudinary): void
+    {
+        if ($cloudinary->isCloudinaryUrl($path)) {
+            $cloudinary->delete($path);
+        } else {
+            Storage::disk('local')->delete($path);
+        }
+    }
+}

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { cloudinaryAttachmentUrl } from '@/lib/cloudinary'
 import { useAuthStore, hasPermission, hasAnyRole } from '@/stores/auth-store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -494,17 +495,29 @@ export function SalaryComponentRegulationsPage({
             cell: (row) => row.regulation ? (
               <div className="max-w-[240px]">
                 {row.regulation.legal_document_name ? (
-                  <button
-                    type="button"
-                    className="flex max-w-full items-center gap-1 text-left text-primary hover:underline"
-                    onClick={() => api.downloadFile(
-                      `payroll/salary-component-regulations/${row.regulation!.id}/document`,
-                      row.regulation!.legal_document_name ?? undefined,
-                    ).catch((error: unknown) => toast.error(getApiErrorMessage(error, t('salaryRegulations.documentDownloadError'))))}
-                  >
-                    <Download className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate text-sm">{row.regulation.legal_document_name}</span>
-                  </button>
+                  row.regulation.legal_document_url?.startsWith('http') ? (
+                    <a
+                      href={cloudinaryAttachmentUrl(row.regulation.legal_document_url, row.regulation.legal_document_name)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex max-w-full items-center gap-1 text-left text-primary hover:underline"
+                    >
+                      <Download className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate text-sm">{row.regulation.legal_document_name}</span>
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      className="flex max-w-full items-center gap-1 text-left text-primary hover:underline"
+                      onClick={() => api.downloadFile(
+                        `payroll/salary-component-regulations/${row.regulation!.id}/document`,
+                        row.regulation!.legal_document_name ?? undefined,
+                      ).catch((error: unknown) => toast.error(getApiErrorMessage(error, t('salaryRegulations.documentDownloadError'))))}
+                    >
+                      <Download className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate text-sm">{row.regulation.legal_document_name}</span>
+                    </button>
+                  )
                 ) : <p className="text-sm text-muted-foreground">{t('salaryRegulations.noDocument')}</p>}
                 <p className="truncate text-xs text-muted-foreground">{row.regulation.legal_reference || ''}</p>
               </div>

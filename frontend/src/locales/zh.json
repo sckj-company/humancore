@@ -113,7 +113,30 @@
   "payroll": {
     "title": "工资",
     "newPeriod": "新周期",
-    "periods": "周期"
+    "periods": "周期",
+    "periodStatuses": { "open": "开放", "processing": "处理中", "completed": "已计算", "failed": "有错误", "pending_validation": "待验证", "pending_approval": "待审批", "approved": "已批准", "paid": "已支付", "closed": "已关闭", "cancelled": "已取消" },
+    "recordStatuses": { "open": "开放", "processing": "处理中", "calculated": "已计算", "failed": "有错误", "pending_validation": "待验证", "pending_approval": "待审批", "approved": "已批准", "paid": "已支付", "closed": "已关闭", "cancelled": "已取消", "rejected": "已驳回", "draft": "草稿" },
+    "periodTypes": { "monthly": "月度", "biweekly": "半月", "weekly": "每周" },
+    "events": { "simulated": "已模拟", "processed": "已处理", "validated": "已验证", "submitted": "已提交", "approved": "已批准", "rejected": "已驳回", "closed": "已关闭", "reopened": "已重新打开", "paid": "已支付" },
+    "detail": {
+      "breadcrumb": "工资", "back": "返回", "paymentDate": "支付日期：", "approvedAt": "批准于", "process": "处理", "processing": "处理中…", "submit": "提交审批", "approve": "批准工资", "reject": "驳回", "close": "关闭周期", "registerPayment": "登记付款", "reopen": "重新打开",
+      "employees": "员工", "grossTotal": "税前合计", "netTotal": "实发合计", "employerCost": "雇主成本", "summaryTab": "摘要", "employeeDetailTab": "员工明细", "validationsTab": "验证", "historyTab": "历史记录",
+      "employee": "员工", "base": "基数", "gross": "税前", "inss": "社保", "irt": "个人所得税", "otherDeductions": "其他扣款", "net": "实发", "status": "状态", "payslip": "工资单", "totals": "合计", "noRecords": "暂无工资记录", "processToGenerate": "处理此周期以生成工资记录。", "noEmployeeRecord": "暂无员工记录可显示。", "employeeSelector": "员工：", "componentDetails": "薪资项目明细", "description": "说明", "category": "类别", "quantity": "数量", "rate": "比率 %", "value": "金额", "type": "类型", "noComponents": "暂无薪资项目明细。", "employerCharges": "雇主缴费", "salaryBase": "基本工资", "salaryGross": "税前工资", "employerContribution": "雇主社保", "totalCost": "总成本", "downloadPayslip": "下载工资单（PDF）",
+      "categories": { "earning": "收入", "deduction": "扣款", "tax": "税费", "employer_contribution": "雇主缴费", "employer_cost": "总成本" },
+      "validation": { "blocking": "存在阻止提交的错误。", "warnings": "存在提示性警告。", "confirmed": "已确认。", "confirmWarnings": "提交前请确认已查看警告。", "ready": "验证通过 — 可以提交。", "acknowledge": "我确认已查看警告", "cleanTitle": "没有验证问题", "cleanDescription": "所有记录均有效并可供审批。", "blockingTitle": "阻止性错误", "warningsTitle": "警告", "period": "周期" },
+      "history": { "emptyTitle": "暂无事件", "emptyDescription": "周期状态变更将显示在这里。", "by": "操作人：" },
+      "dialogs": { "approveTitle": "批准工资", "approveDescription": "请先确认以下合计。批准后所有记录将标记为已批准。", "previousRejection": "上次驳回原因：", "cancel": "取消", "approve": "批准", "rejectTitle": "驳回工资", "rejectDescription": "周期将返回待验证状态以便修正。", "reasonRequired": "原因（必填）", "rejectPlaceholder": "请说明需要修正的内容…", "reopenTitle": "重新打开周期", "reopenDescription": "此操作会创建周期的新版本，并保留之前的结果。", "reopenWarning": "周期将返回开放状态以便重新计算。之前批准的合计仍保留在历史记录中。", "reopenPlaceholder": "请输入重新打开的原因…" }
+    },
+    "periodsPage": {
+      "emptyTitle": "暂无工资周期", "emptyDescription": "创建新周期以开始处理工资。", "period": "周期", "type": "类型", "range": "期间", "employees": "员工", "grossTotal": "税前合计", "netTotal": "实发合计", "process": "处理", "submit": "提交审批", "approve": "批准", "close": "关闭周期", "registerPayment": "登记付款", "reopen": "重新打开周期", "viewDetails": "查看详情", "reopenTitle": "重新打开周期", "reopenWarning": "周期将返回开放状态以便重新计算。之前批准的合计仍保留在历史记录中。", "reasonRequired": "原因（必填）", "reasonPlaceholder": "请输入重新打开的原因…", "cancel": "取消", "confirmReopen": "重新打开", "newPeriodDescription": "创建新的工资处理周期。", "periodType": "类型", "paymentDate": "支付日期", "start": "开始", "end": "结束", "typeMonthly": "月度", "typeBiweekly": "半月", "typeWeekly": "每周", "create": "创建"
+    },
+    "processDialog": {
+      "title": "处理工资", "selectDescription": "选择要纳入本次处理的员工。", "runningDescription": "正在处理周期 — 请在下方查看进度。", "doneDescription": "处理完成。", "errorDescription": "处理失败。", "loadingEmployees": "正在加载员工…", "loadError": "无法加载员工列表。", "noneEligible": "没有符合条件的员工。", "search": "按姓名或编号搜索…", "searchAria": "搜索员工", "selected": "已选择", "all": "全部", "none": "无", "notFound": "未找到员工。", "cancel": "取消", "process": "处理", "progress": "进度", "completed": "已完成", "failed": "失败", "working": "处理中…", "doNotClose": "正在处理 — 请勿关闭此窗口。", "completedSuccess": "周期计算成功。", "completedWarnings": "处理完成但有警告 — 请检查验证信息。", "completedErrors": "处理结束，但存在阻止性错误。", "finalStatus": "最终状态：", "processedCount": "已处理", "tryAgain": "重试", "close": "关闭", "expiredContract": "合同已过期", "salaryUnavailable": "—"
+    },
+    "feedback": { "approved": "工资已批准", "closed": "周期已关闭", "submitted": "周期已提交审批", "paymentRegistered": "付款已登记", "reopened": "周期已重新打开", "processed": "处理完成" }
+  },
+  "payslips": {
+    "eyebrow": "工资", "title": "我的工资单", "description": "查看和下载工资单", "totalReceipts": "工资单总数", "totalReceived": "累计实发", "lastPayment": "最近实发", "period": "周期", "paymentDate": "支付日期", "gross": "税前工资", "deductions": "扣款", "net": "实发工资", "status": "状态", "actions": "操作", "paid": "已支付", "view": "查看", "download": "PDF", "generating": "正在生成工资单…", "downloaded": "工资单已下载。", "emptyTitle": "暂无工资单", "emptyDescription": "工资处理完成后，工资单会显示在这里。", "downloadError": "无法下载工资单。", "viewError": "无法打开工资单。"
   },
   "attendance": {
     "title": "考勤",

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Download, Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { cloudinaryAttachmentUrl } from '@/lib/cloudinary'
 import { Button } from '@/components/ui/button'
 
 type DocumentKind = 'justification' | 'signed'
@@ -13,6 +14,8 @@ interface LeaveDocumentActionsProps {
     employee_id: number
     has_justification_document?: boolean
     has_signed_document?: boolean
+    justification_document_url?: string | null
+    signed_document_url?: string | null
   }
 }
 
@@ -38,6 +41,12 @@ export function LeaveDocumentActions({ leave }: LeaveDocumentActionsProps) {
   })
 
   const download = async (kind: DocumentKind) => {
+    const url = kind === 'justification' ? leave.justification_document_url : leave.signed_document_url
+    if (url?.startsWith('http')) {
+      window.open(cloudinaryAttachmentUrl(url, `ausencia-${leave.id}-${kind}`), '_blank', 'noopener,noreferrer')
+      return
+    }
+
     try {
       await api.downloadFile(`leave/${leave.id}/documents/${kind}`, `ausencia-${leave.id}-${kind}`)
     } catch (error) {

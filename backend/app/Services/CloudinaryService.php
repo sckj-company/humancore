@@ -5,33 +5,34 @@ namespace App\Services;
 use CURLFile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class CloudinaryService
 {
     protected string $cloudName;
+
     protected string $apiKey;
+
     protected string $apiSecret;
 
     public function __construct()
     {
-        $this->cloudName = config('services.cloudinary.cloud_name') ?? env('CLOUDINARY_CLOUD_NAME', 'rumbh1oe');
-        $this->apiKey = config('services.cloudinary.api_key') ?? env('CLOUDINARY_API_KEY', '561594311682618');
-        $this->apiSecret = config('services.cloudinary.api_secret') ?? env('CLOUDINARY_API_SECRET', 'KCGmwQAODoiIiVhr-MI9A1ZIMNU');
+        $this->cloudName = (string) config('services.cloudinary.cloud_name', '');
+        $this->apiKey = (string) config('services.cloudinary.api_key', '');
+        $this->apiSecret = (string) config('services.cloudinary.api_secret', '');
     }
 
     /**
      * Upload a file to Cloudinary.
      *
-     * @param UploadedFile|string $file
-     * @param string $folder
-     * @param string $resourceType ('auto', 'image', 'raw', 'video')
+     * @param  string  $resourceType  ('auto', 'image', 'raw', 'video')
      * @return array{url: string, public_id: string, resource_type: string, bytes: ?int, format: ?string}
      */
     public function upload(UploadedFile|string $file, string $folder = 'humancore/documents', string $resourceType = 'auto'): array
     {
         if (empty($this->cloudName) || empty($this->apiKey) || empty($this->apiSecret)) {
-            Log::warning('Cloudinary credentials missing, falling back to local file storage.');
-            return $this->fallbackLocalUpload($file, $folder);
+            Log::error('Cloudinary credentials are missing.');
+            throw new RuntimeException('O Cloudinary não está configurado.');
         }
 
         try {
@@ -44,9 +45,9 @@ class CloudinaryService
             ksort($params);
             $paramPairs = [];
             foreach ($params as $k => $v) {
-                $paramPairs[] = $k . '=' . $v;
+                $paramPairs[] = $k.'='.$v;
             }
-            $signature = sha1(implode('&', $paramPairs) . $this->apiSecret);
+            $signature = sha1(implode('&', $paramPairs).$this->apiSecret);
 
             $endpoint = "https://api.cloudinary.com/v1_1/{$this->cloudName}/{$resourceType}/upload";
 
@@ -95,12 +96,12 @@ class CloudinaryService
                 'curl_error' => $curlError,
             ]);
 
-            return $this->fallbackLocalUpload($file, $folder);
+            throw new RuntimeException('Não foi possível carregar o ficheiro no Cloudinary.');
         } catch (\Throwable $e) {
-            Log::error('Exception during Cloudinary upload: ' . $e->getMessage(), [
+            Log::error('Exception during Cloudinary upload: '.$e->getMessage(), [
                 'exception' => $e,
             ]);
-            return $this->fallbackLocalUpload($file, $folder);
+            throw new RuntimeException('Não foi possível carregar o ficheiro no Cloudinary.', 0, $e);
         }
     }
 
@@ -110,6 +111,12 @@ class CloudinaryService
     public function delete(string $urlOrPublicId, ?string $resourceType = null): bool
     {
         if (empty($urlOrPublicId)) {
+            return false;
+        }
+
+        if (empty($this->cloudName) || empty($this->apiKey) || empty($this->apiSecret)) {
+            Log::error('Cloudinary credentials are missing.');
+
             return false;
         }
 
@@ -141,9 +148,9 @@ class CloudinaryService
             ksort($params);
             $paramPairs = [];
             foreach ($params as $k => $v) {
-                $paramPairs[] = $k . '=' . $v;
+                $paramPairs[] = $k.'='.$v;
             }
-            $signature = sha1(implode('&', $paramPairs) . $this->apiSecret);
+            $signature = sha1(implode('&', $paramPairs).$this->apiSecret);
 
             $endpoint = "https://api.cloudinary.com/v1_1/{$this->cloudName}/{$resourceType}/destroy";
 
@@ -164,12 +171,14 @@ class CloudinaryService
 
             if ($httpCode >= 200 && $httpCode < 300 && $response) {
                 $json = json_decode($response, true);
+
                 return isset($json['result']) && in_array($json['result'], ['ok', 'not found']);
             }
 
             return false;
         } catch (\Throwable $e) {
-            Log::warning('Exception deleting from Cloudinary: ' . $e->getMessage());
+            Log::warning('Exception deleting from Cloudinary: '.$e->getMessage());
+
             return false;
         }
     }
@@ -180,45 +189,5 @@ class CloudinaryService
     public function isCloudinaryUrl(string $url): bool
     {
         return str_contains($url, 'res.cloudinary.com');
-    }
-
-    /**
-     * Local storage fallback in case of Cloudinary unavailability.
-     */
-    protected function fallbackLocalUpload(UploadedFile|string $file, string $folder): array
-    {
-        $folderName = str_replace('humancore/', '', $folder);
-        $folderName = str_replace(['tenants/', 'documents', 'photos', 'contracts'], ['tenants/', 'documents', 'photos', 'contracts'], $folderName);
-        $targetDir = public_path('uploads/' . trim($folderName, '/'));
-
-        if (! is_dir($targetDir)) {
-            mkdir($targetDir, 0755, true);
-        }
-
-        if ($file instanceof UploadedFile) {
-            $filename = time() . '_' . uniqid() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
-            $file->move($targetDir, $filename);
-            $url = '/uploads/' . trim($folderName, '/') . '/' . $filename;
-
-            return [
-                'url' => $url,
-                'public_id' => $filename,
-                'resource_type' => 'local',
-                'bytes' => $file->getSize(),
-                'format' => $file->getClientOriginalExtension(),
-            ];
-        }
-
-        $filename = time() . '_' . uniqid() . '_' . basename($file);
-        copy($file, $targetDir . '/' . $filename);
-        $url = '/uploads/' . trim($folderName, '/') . '/' . $filename;
-
-        return [
-            'url' => $url,
-            'public_id' => $filename,
-            'resource_type' => 'local',
-            'bytes' => file_exists($file) ? filesize($file) : 0,
-            'format' => pathinfo($file, PATHINFO_EXTENSION),
-        ];
     }
 }

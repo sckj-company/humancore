@@ -19,6 +19,8 @@ class LeaveRequestResource extends JsonResource
             'deduct_from_salary' => $this->deduct_from_salary,
             'has_justification_document' => (bool) ($this->justification_document_path ?? $this->document_path),
             'has_signed_document' => (bool) $this->signed_document_path,
+            'justification_document_url' => $this->justification_document_path ?? $this->document_path,
+            'signed_document_url' => $this->signed_document_path,
             'start_date' => $this->start_date?->format('Y-m-d'),
             'end_date' => $this->end_date?->format('Y-m-d'),
             'total_days' => $this->total_days,

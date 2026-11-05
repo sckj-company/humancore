@@ -28,8 +28,13 @@ class PayrollPeriodResource extends JsonResource
             'progress_done' => $this->progress_done,
             'progress_message' => $this->progress_message,
             'employee_count' => $this->whenCounted('records'),
-            'total_gross' => (float) $this->records->sum('gross_salary') ?? null,
-            'total_net' => (float) $this->records->sum('net_salary') ?? null,
+            'total_gross' => $this->records_sum_gross_salary !== null
+                ? (float) $this->records_sum_gross_salary
+                : ($this->relationLoaded('records') ? (float) $this->records->sum('gross_salary') : null),
+            'total_net' => $this->records_sum_net_salary !== null
+                ? (float) $this->records_sum_net_salary
+                : ($this->relationLoaded('records') ? (float) $this->records->sum('net_salary') : null),
+            'records' => PayrollRecordResource::collection($this->whenLoaded('records')),
             'events' => $this->whenLoaded('events'),
             'created_at' => $this->created_at,
         ];

@@ -111,6 +111,7 @@ Route::prefix('v1')->group(function () {
         Route::get('payroll/inss-rules', [PayrollInssRuleController::class, 'index']);
         Route::post('payroll/inss-rules', [PayrollInssRuleController::class, 'store']);
         Route::get('payroll/inss-rules/{rule}', [PayrollInssRuleController::class, 'show']);
+        Route::get('payroll/inss-rules/{rule}/document', [PayrollInssRuleController::class, 'downloadDocument']);
         Route::put('payroll/inss-rules/{rule}', [PayrollInssRuleController::class, 'update']);
         Route::post('payroll/inss-rules/{rule}/validate', [PayrollInssRuleController::class, 'validateRule']);
         Route::post('payroll/inss-rules/{rule}/activate', [PayrollInssRuleController::class, 'activate']);
@@ -121,6 +122,7 @@ Route::prefix('v1')->group(function () {
         Route::get('payroll/irt-tables', [PayrollIrtTableController::class, 'index']);
         Route::post('payroll/irt-tables', [PayrollIrtTableController::class, 'store']);
         Route::get('payroll/irt-tables/{irtTable}', [PayrollIrtTableController::class, 'show']);
+        Route::get('payroll/irt-tables/{irtTable}/document', [PayrollIrtTableController::class, 'downloadDocument']);
         Route::put('payroll/irt-tables/{irtTable}', [PayrollIrtTableController::class, 'update']);
         Route::post('payroll/irt-tables/{irtTable}/validate', [PayrollIrtTableController::class, 'validateTable']);
         Route::post('payroll/irt-tables/{irtTable}/activate', [PayrollIrtTableController::class, 'activate']);

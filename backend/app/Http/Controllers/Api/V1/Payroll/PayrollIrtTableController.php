@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Api\V1\Payroll;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\PayrollIrtTableResource;
 use App\Models\PayrollIrtTable;
+use App\Models\Tenant;
+use App\Services\CloudinaryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PayrollIrtTableController extends BaseController
 {
@@ -21,8 +25,9 @@ class PayrollIrtTableController extends BaseController
 
         $id = tenant_id();
         if (! $id) {
-            $id = (int) (\App\Models\Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: \App\Models\Tenant::query()->orderBy('id')->value('id'));
+            $id = (int) (Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id'));
         }
+
         return $id ?: null;
     }
 
@@ -41,7 +46,7 @@ class PayrollIrtTableController extends BaseController
         return $this->success(PayrollIrtTableResource::collection($tables));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('create', PayrollIrtTable::class);
         $request->merge(['country_code' => strtoupper((string) $request->input('country_code', 'AO'))]);
@@ -88,10 +93,11 @@ class PayrollIrtTableController extends BaseController
             ->max('version')) + 1;
 
         if ($legalDocument) {
-            $data['legal_document_path'] = $legalDocument->store(
-                'payroll-regulations/' . $tenantId . '/irt',
-                'local'
-            );
+            $data['legal_document_path'] = $cloudinary->upload(
+                $legalDocument,
+                'humancore/tenants/'.$tenantId.'/payroll-regulations/irt',
+                'auto',
+            )['url'];
         }
 
         $table = PayrollIrtTable::query()->create($data);
@@ -110,7 +116,7 @@ class PayrollIrtTableController extends BaseController
         return $this->success(new PayrollIrtTableResource($irtTable->load(['validatedBy:id,name', 'revokedBy:id,name'])));
     }
 
-    public function update(Request $request, PayrollIrtTable $irtTable): JsonResponse
+    public function update(Request $request, PayrollIrtTable $irtTable, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('update', $irtTable);
 
@@ -152,16 +158,17 @@ class PayrollIrtTableController extends BaseController
 
         $oldDocumentPath = $irtTable->legal_document_path;
         if ($legalDocument) {
-            $data['legal_document_path'] = $legalDocument->store(
-                'payroll-regulations/' . $irtTable->tenant_id . '/irt',
-                'local'
-            );
+            $data['legal_document_path'] = $cloudinary->upload(
+                $legalDocument,
+                'humancore/tenants/'.$irtTable->tenant_id.'/payroll-regulations/irt',
+                'auto',
+            )['url'];
         }
 
         $irtTable->update($data);
 
         if ($legalDocument && $oldDocumentPath) {
-            Storage::disk('local')->delete($oldDocumentPath);
+            $this->deleteStoredDocument($oldDocumentPath, $cloudinary);
         }
 
         return $this->success(
@@ -265,7 +272,7 @@ class PayrollIrtTableController extends BaseController
         );
     }
 
-    public function destroy(PayrollIrtTable $irtTable): JsonResponse
+    public function destroy(PayrollIrtTable $irtTable, CloudinaryService $cloudinary): JsonResponse
     {
         $this->authorize('delete', $irtTable);
 
@@ -277,10 +284,37 @@ class PayrollIrtTableController extends BaseController
         $irtTable->delete();
 
         if ($documentPath) {
-            Storage::disk('local')->delete($documentPath);
+            $this->deleteStoredDocument($documentPath, $cloudinary);
         }
 
         return $this->success(null, 'Tabela eliminada com sucesso.');
     }
-}
 
+    public function downloadDocument(PayrollIrtTable $irtTable, CloudinaryService $cloudinary): StreamedResponse|RedirectResponse|JsonResponse
+    {
+        $this->authorize('view', $irtTable);
+
+        if (! $irtTable->legal_document_path) {
+            return $this->error('Documento não encontrado.', 404);
+        }
+
+        if ($cloudinary->isCloudinaryUrl($irtTable->legal_document_path)) {
+            return redirect()->away($irtTable->legal_document_path);
+        }
+
+        if (! Storage::disk('local')->exists($irtTable->legal_document_path)) {
+            return $this->error('Documento não encontrado.', 404);
+        }
+
+        return Storage::disk('local')->download($irtTable->legal_document_path, basename($irtTable->legal_document_path));
+    }
+
+    private function deleteStoredDocument(string $path, CloudinaryService $cloudinary): void
+    {
+        if ($cloudinary->isCloudinaryUrl($path)) {
+            $cloudinary->delete($path);
+        } else {
+            Storage::disk('local')->delete($path);
+        }
+    }
+}

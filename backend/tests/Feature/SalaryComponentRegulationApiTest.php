@@ -6,6 +6,7 @@ use App\Models\SalaryComponent;
 use App\Models\SalaryComponentRegulation;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\CloudinaryService;
 use App\Services\Tenant\TenantManager;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -262,7 +263,7 @@ class SalaryComponentRegulationApiTest extends TestCase
         ]);
     }
 
-    public function test_legal_document_is_optional_and_uploaded_documents_are_private_downloads(): void
+    public function test_legal_document_is_optional_and_uploaded_document_url_redirects_to_cloudinary(): void
     {
         Storage::fake('local');
         [$tenant, $user, $component] = $this->createAdminContext();
@@ -283,6 +284,17 @@ class SalaryComponentRegulationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'validated');
 
+        $cloudinaryUrl = 'https://res.cloudinary.com/test/raw/upload/diploma.pdf';
+        $this->mock(CloudinaryService::class)
+            ->shouldReceive('upload')
+            ->once()
+            ->andReturn(['url' => $cloudinaryUrl, 'bytes' => 24]);
+        app(CloudinaryService::class)
+            ->shouldReceive('isCloudinaryUrl')
+            ->once()
+            ->with($cloudinaryUrl)
+            ->andReturn(true);
+
         $upload = $this->post('/api/v1/payroll/salary-component-regulations', [
             'salary_component_id' => $component->id,
             'country_code' => 'AO',
@@ -296,10 +308,10 @@ class SalaryComponentRegulationApiTest extends TestCase
         $uploadedRegulationId = $upload->json('data.id');
         $documentPath = SalaryComponentRegulation::query()->findOrFail($uploadedRegulationId)->legal_document_path;
 
-        $this->assertNotNull($documentPath);
-        Storage::disk('local')->assertExists($documentPath);
+        $this->assertSame($cloudinaryUrl, $documentPath);
+        Storage::disk('local')->assertDirectoryEmpty('payroll-regulations');
         $this->get("/api/v1/payroll/salary-component-regulations/{$uploadedRegulationId}/document")
-            ->assertOk();
+            ->assertRedirect($cloudinaryUrl);
         $this->assertSame($tenant->id, SalaryComponentRegulation::query()->findOrFail($uploadedRegulationId)->tenant_id);
     }
 
