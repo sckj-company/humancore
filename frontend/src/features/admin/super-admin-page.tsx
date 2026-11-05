@@ -705,7 +705,7 @@ export function SuperAdminPage() {
                     >
                       <option value="pt">Português</option>
                       <option value="en">English</option>
-                      <option value="fr">Français</option>
+                      <option value="zh">中文</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\AttendanceResource;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
+use App\Models\Setting;
 use App\Services\Attendance\QrCodeService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -99,6 +100,7 @@ class AttendanceQrController extends BaseController
 
             $record->clock_out = now();
             $record->total_worked = (int) Carbon::parse($record->clock_in)->diffInMinutes($record->clock_out);
+            $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee);
             $record->save();
         }
 
@@ -108,5 +110,35 @@ class AttendanceQrController extends BaseController
             new AttendanceResource($record->fresh()),
             $code->action === QrCodeService::ACTION_CLOCK_IN ? 'Entrada registada via QR.' : 'Saída registada via QR.',
         );
+    }
+
+    protected function overtimeMinutes(string $date, \DateTimeInterface $clockOut, Employee $employee): int
+    {
+        $schedule = $employee->schedules()
+            ->with('shift')
+            ->where('is_active', true)
+            ->whereDate('effective_from', '<=', $date)
+            ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date))
+            ->orderByDesc('effective_from')
+            ->first();
+        $shift = $schedule?->shift;
+        $endTime = $shift?->end_time ?: (string) Setting::where('tenant_id', tenant_id())
+            ->where('group', 'hr')
+            ->where('key', 'work_end_time')
+            ->value('value');
+
+        if (! $endTime) {
+            return 0;
+        }
+
+        $timezone = tenant()->timezone ?? 'Africa/Luanda';
+        $expected = Carbon::parse($date.' '.$endTime, $timezone);
+        if ($shift?->is_night_shift || ($shift?->start_time && $endTime <= $shift->start_time)) {
+            $expected->addDay();
+        }
+
+        $actual = Carbon::parse($clockOut)->setTimezone($timezone);
+
+        return $actual->greaterThan($expected) ? (int) $expected->diffInMinutes($actual) : 0;
     }
 }

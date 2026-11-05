@@ -12,6 +12,8 @@ import {
   Scale,
   ShieldAlert,
   ListChecks,
+  FileCheck,
+  Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -23,12 +25,10 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { PageHeader, LoadingState, ErrorState } from '@/components/shared/page-header'
 import { SalaryComponentRegulationsPage } from '@/features/settings/salary-component-regulations-page'
 import { PayrollTaxRulesPage } from '@/features/settings/payroll-tax-rules-page'
-import type { Paginated, SettingGroups, SettingItem, Tenant } from '@/types'
+import type { DocumentRequirement, SettingGroups, SettingItem } from '@/types'
 
 type ScalarValue = string | number | boolean
 
@@ -49,79 +49,28 @@ const DISCOUNT_SETTINGS: { key: string; label: string; description: string }[] =
   { key: 'discounts.default_amount', label: 'Desconto padrão', description: 'Valor base para situações de desconto não específicas.' },
 ]
 const GROUP_ORDER = SETTING_GROUP_META.map((g) => g.key)
+const REQUIRED_DOCUMENT_PRESETS: DocumentRequirement[] = [
+  { type: 'cv', label: 'Currículo (CV)' },
+  { type: 'criminal_record', label: 'Registo criminal' },
+  { type: 'term', label: 'Termo de responsabilidade' },
+  { type: 'contract', label: 'Contrato de trabalho' },
+  { type: 'medical', label: 'Atestado médico' },
+  { type: 'bank_proof', label: 'Comprovativo bancário' },
+  { type: 'id_card', label: 'Bilhete de identidade (BI)' },
+]
 
 // ─── Super-Admin Tenant Banner ─────────────────────────────────────────────────
-function SuperAdminTenantBanner({
-  selectedTenantId,
-  onChange,
-}: {
-  selectedTenantId: string
-  onChange: (id: string) => void
-}) {
-  const qc = useQueryClient()
-  const { data: tenantPage } = useQuery({
-    queryKey: ['superadmin', 'tenant-list-settings'],
-    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
-  })
-
-  const selectedTenant = tenantPage?.data?.find((t) => String(t.id) === selectedTenantId)
-
+function SuperAdminTenantBanner() {
   return (
-    <Card className="border-amber-500/40 bg-amber-500/5 shadow-xs">
-      <CardContent className="p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
-              <ShieldAlert className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                Modo Super Administrador
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Está a gerir configurações de{' '}
-                <span className="font-medium text-foreground">
-                  {selectedTenant?.name ?? 'empresa não selecionada'}
-                </span>
-                . As alterações afetam apenas este tenant.
-              </p>
-            </div>
-          </div>
-          <div className="w-full sm:w-72 shrink-0">
-            <Select
-              value={selectedTenantId}
-              onValueChange={(id) => {
-                onChange(id)
-                localStorage.setItem('hrms_selected_tenant', id)
-                qc.invalidateQueries({ queryKey: ['settings'] })
-                qc.invalidateQueries({ queryKey: ['payroll'] })
-                qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
-                qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
-              }}
-            >
-              <SelectTrigger className="w-full bg-background border-amber-300/50">
-                <SelectValue placeholder="Selecione uma empresa…" />
-              </SelectTrigger>
-              <SelectContent>
-                {tenantPage?.data?.map((tenant) => (
-                  <SelectItem key={tenant.id} value={String(tenant.id)}>
-                    <span className="flex items-center gap-2">
-                      <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      {tenant.name}
-                      {tenant.status !== 'active' && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0 ml-1">
-                          {tenant.status}
-                        </Badge>
-                      )}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-start gap-3 border border-amber-500/30 bg-amber-500/5 p-4">
+      <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+      <div>
+        <p className="text-sm font-semibold text-foreground">Modo Super Administrador</p>
+        <p className="text-xs text-muted-foreground">
+          As configurações aplicam-se à empresa ativa, selecionada no cabeçalho.
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -133,35 +82,29 @@ export function SettingsPage() {
   const isAdmin = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
   const queryClient = useQueryClient()
 
-  // Shared super-admin tenant selection (synced with localStorage + api header)
-  const [selectedTenantId, setSelectedTenantId] = useState<string>(() => {
-    return localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
-  })
-
-  // If super-admin has no tenant selected yet, pick the first active one
-  const { data: tenantPage } = useQuery({
-    queryKey: ['superadmin', 'tenant-list-settings'],
-    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
-    enabled: isSuperAdmin,
-  })
-
-  useEffect(() => {
-    if (isSuperAdmin && !selectedTenantId && tenantPage?.data?.length) {
-      const firstId = String(tenantPage.data[0].id)
-      setSelectedTenantId(firstId)
-      localStorage.setItem('hrms_selected_tenant', firstId)
-    }
-  }, [isSuperAdmin, selectedTenantId, tenantPage])
+  const selectedTenantId = localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
 
   // General settings state
   const [edits, setEdits] = useState<Record<string, ScalarValue | string>>({})
   const [dirtyGroups, setDirtyGroups] = useState<Set<string>>(new Set())
+  const [requiredDocuments, setRequiredDocuments] = useState<DocumentRequirement[]>([])
+  const [newDocumentName, setNewDocumentName] = useState('')
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['settings'],
     queryFn: () => api.get<SettingGroups>('settings'),
     enabled: isAdmin,
   })
+  const { data: documentSettings } = useQuery({
+    queryKey: ['settings', 'documents'],
+    queryFn: () => api.get<SettingGroups>('settings', { group: 'documents' }),
+    enabled: isAdmin,
+  })
+
+  useEffect(() => {
+    const saved = documentSettings?.documents?.find((setting) => setting.key === 'required')?.value
+    if (Array.isArray(saved)) setRequiredDocuments(normalizeDocumentRequirements(saved))
+  }, [documentSettings])
 
   const groups = useMemo(() => {
     if (!data) return []
@@ -204,6 +147,17 @@ export function SettingsPage() {
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao guardar')),
   })
+  const saveRequiredDocuments = useMutation({
+    mutationFn: () => api.put('settings/bulk', {
+      group: 'documents',
+      values: { required: requiredDocuments },
+    }),
+    onSuccess: () => {
+      toast.success('Documentos obrigatórios guardados')
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Erro ao guardar documentos obrigatórios')),
+  })
 
   if (!isAdmin) {
     return <ErrorState message="Não tem permissão para ver as configurações." onRetry={() => {}} />
@@ -215,10 +169,6 @@ export function SettingsPage() {
     setDirtyGroups((prev) => new Set(prev).add(groupKey))
   }
 
-  const handleTenantChange = (id: string) => {
-    setSelectedTenantId(id)
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -228,10 +178,7 @@ export function SettingsPage() {
 
       {/* Super-Admin Banner */}
       {isSuperAdmin && (
-        <SuperAdminTenantBanner
-          selectedTenantId={selectedTenantId}
-          onChange={handleTenantChange}
-        />
+        <SuperAdminTenantBanner />
       )}
 
       {/* Master Tabs */}
@@ -252,6 +199,10 @@ export function SettingsPage() {
           <TabsTrigger value="tax-rules" className="gap-2">
             <Scale className="h-4 w-4" />
             Regras Fiscais &amp; INSS
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="gap-2">
+            <FileCheck className="h-4 w-4" />
+            Documentos de admissão
           </TabsTrigger>
         </TabsList>
 
@@ -375,7 +326,6 @@ export function SettingsPage() {
         <TabsContent value="salary-components" className="mt-6">
           <SalaryComponentRegulationsPage
             embeddedTenantId={selectedTenantId}
-            onTenantChange={handleTenantChange}
           />
         </TabsContent>
 
@@ -383,8 +333,77 @@ export function SettingsPage() {
         <TabsContent value="tax-rules" className="mt-6">
           <PayrollTaxRulesPage
             embeddedTenantId={selectedTenantId}
-            onTenantChange={handleTenantChange}
           />
+        </TabsContent>
+
+        <TabsContent value="documents" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Documentos obrigatórios para admissão</CardTitle>
+              <CardDescription>
+                Selecione os documentos que devem ser anexados ao registar um funcionário. O cadastro será bloqueado enquanto faltar algum.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {REQUIRED_DOCUMENT_PRESETS.map((document) => (
+                  <label key={document.type} className="flex items-center gap-3 border border-border p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={requiredDocuments.some((required) => required.type === document.type)}
+                      onChange={(event) => setRequiredDocuments((current) => event.target.checked
+                        ? [...current, document]
+                        : current.filter((required) => required.type !== document.type))}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    <span>{document.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={newDocumentName}
+                  onChange={(event) => setNewDocumentName(event.target.value)}
+                  placeholder="Outro documento (ex.: certificado profissional)"
+                  aria-label="Nome do documento obrigatório personalizado"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const label = newDocumentName.trim()
+                    const type = `custom_${label.toLocaleLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+                    if (!label || requiredDocuments.some((document) => document.type === type)) return
+                    setRequiredDocuments((current) => [...current, { type, label }])
+                    setNewDocumentName('')
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />Adicionar
+                </Button>
+              </div>
+
+              {requiredDocuments.filter((document) => document.type.startsWith('custom_')).map((document) => (
+                <div key={document.type} className="flex items-center justify-between border border-border px-3 py-2 text-sm">
+                  <span>{document.label}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRequiredDocuments((current) => current.filter((item) => item.type !== document.type))}
+                  >
+                    Remover
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+            <CardFooter className="justify-end border-t px-6 py-4">
+              <Button onClick={() => saveRequiredDocuments.mutate()} disabled={saveRequiredDocuments.isPending}>
+                {saveRequiredDocuments.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Guardar documentos
+              </Button>
+            </CardFooter>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
@@ -456,6 +475,19 @@ function humanize(key: string): string {
           .replace(/^\w/, (c) => c.toUpperCase()),
     )
     .join(' — ')
+}
+
+function normalizeDocumentRequirements(values: unknown[]): DocumentRequirement[] {
+  return values.flatMap((value) => {
+    if (typeof value === 'string') {
+      return [{ type: value, label: REQUIRED_DOCUMENT_PRESETS.find((item) => item.type === value)?.label ?? value }]
+    }
+    if (value && typeof value === 'object' && 'type' in value && 'label' in value) {
+      const { type, label } = value as { type: unknown; label: unknown }
+      if (typeof type === 'string' && typeof label === 'string') return [{ type, label }]
+    }
+    return []
+  })
 }
 
 function coerce(setting: SettingItem, value: ScalarValue | string | undefined): ScalarValue | string {

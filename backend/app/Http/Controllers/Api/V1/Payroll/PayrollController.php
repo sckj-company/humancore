@@ -146,11 +146,6 @@ class PayrollController extends BaseController
         return $this->success($employees);
     }
 
-    public function simulate(Request $request, PayrollPeriod $period, PayrollEngineService $engine): JsonResponse
-    {
-        return $this->process($request, $period, $engine);
-    }
-
     public function validations(PayrollPeriod $period, PayrollValidationService $validator): JsonResponse
     {
         $this->authorize('view', $period);

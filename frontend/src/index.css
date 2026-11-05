@@ -3,6 +3,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.bilingual :is(label, button, [role='option'], [role='tab'], h1, h2, h3, p, span) {
+  white-space: pre-line;
+}
+
 :root {
   --radius: 0.5rem;
 

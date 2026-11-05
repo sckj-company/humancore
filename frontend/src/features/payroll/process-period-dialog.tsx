@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Play, Users, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, Play, Users, AlertTriangle, CheckCircle2, XCircle, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
@@ -36,6 +37,7 @@ export function ProcessPeriodDialog({
   const qc = useQueryClient()
   const [phase, setPhase] = useState<Phase>('select')
   const [manualSelection, setManualSelection] = useState<Set<number> | null>(null)
+  const [employeeSearch, setEmployeeSearch] = useState('')
 
   const { data: employees, isLoading, isError } = useQuery({
     queryKey: ['payroll-processable-employees', periodId],
@@ -47,6 +49,14 @@ export function ProcessPeriodDialog({
     () => (employees ?? []).filter((e) => e.eligible),
     [employees],
   )
+
+  const filteredEmployees = useMemo(() => {
+    const query = employeeSearch.trim().toLocaleLowerCase()
+    if (!query) return employees ?? []
+    return (employees ?? []).filter((employee) =>
+      `${employee.full_name} ${employee.employee_code}`.toLocaleLowerCase().includes(query),
+    )
+  }, [employees, employeeSearch])
 
   const selectedIds = useMemo(
     () => manualSelection ?? new Set(eligible.map((e) => e.id)),
@@ -109,6 +119,7 @@ export function ProcessPeriodDialog({
     if (!nextOpen) {
       setPhase('select')
       setManualSelection(null)
+      setEmployeeSearch('')
       processMutation.reset()
     }
   }
@@ -121,7 +132,7 @@ export function ProcessPeriodDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -136,7 +147,7 @@ export function ProcessPeriodDialog({
         </DialogHeader>
 
         {phase === 'select' && (
-          <div className="space-y-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             {isLoading && (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> A carregar funcionários…
@@ -154,6 +165,16 @@ export function ProcessPeriodDialog({
             )}
             {eligible.length > 0 && (
               <>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={employeeSearch}
+                    onChange={(event) => setEmployeeSearch(event.target.value)}
+                    placeholder="Pesquisar por nome ou código..."
+                    aria-label="Pesquisar funcionários"
+                    className="pl-9"
+                  />
+                </div>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">{selectedIds.size}</span> de{' '}
@@ -168,10 +189,10 @@ export function ProcessPeriodDialog({
                     </Button>
                   </div>
                 </div>
-                <ScrollArea className="h-64 rounded-lg border border-border">
+                <ScrollArea className="min-h-32 flex-1 rounded-lg border border-border">
                   <ul className="divide-y divide-border">
-                    {employees?.map((emp) => (
-                      <li key={emp.id} className="flex items-center gap-3 px-3 py-2.5">
+                    {filteredEmployees.map((emp) => (
+                      <li key={emp.id} className="flex min-h-16 items-center gap-3 px-3 py-2.5">
                         <Checkbox
                           checked={selectedIds.has(emp.id)}
                           disabled={!emp.eligible}
@@ -179,12 +200,16 @@ export function ProcessPeriodDialog({
                           aria-label={`Seleccionar ${emp.full_name}`}
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">
+                          <button
+                            type="button"
+                            disabled={!emp.eligible}
+                            aria-pressed={selectedIds.has(emp.id)}
+                            onClick={() => toggle(emp.id)}
+                            className="block max-w-full truncate text-left text-sm font-medium hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                          >
                             {emp.full_name}
-                            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                              {emp.employee_code}
-                            </span>
-                          </p>
+                          </button>
+                          <p className="truncate text-xs text-muted-foreground">{emp.employee_code}</p>
                           {emp.position && (
                             <p className="truncate text-xs text-muted-foreground">{emp.position}</p>
                           )}
@@ -202,6 +227,11 @@ export function ProcessPeriodDialog({
                         )}
                       </li>
                     ))}
+                    {filteredEmployees.length === 0 && (
+                      <li className="px-4 py-10 text-center text-sm text-muted-foreground">
+                        Nenhum funcionário encontrado.
+                      </li>
+                    )}
                   </ul>
                 </ScrollArea>
               </>

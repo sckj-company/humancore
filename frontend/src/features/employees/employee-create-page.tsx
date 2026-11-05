@@ -48,7 +48,7 @@ import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
 import { toast } from 'sonner'
 import { useQuery } from '@tanstack/react-query'
-import type { Paginated } from '@/types'
+import type { DocumentRequirement, Paginated, SettingGroups } from '@/types'
 
 interface UploadedDoc {
   id: string
@@ -57,6 +57,16 @@ interface UploadedDoc {
   document_type: string
   previewUrl?: string
 }
+
+const DOCUMENT_TYPE_OPTIONS: DocumentRequirement[] = [
+  { type: 'contract', label: 'Contrato de Trabalho' },
+  { type: 'id_card', label: 'Documento de Identificação' },
+  { type: 'cv', label: 'Currículo (CV)' },
+  { type: 'certificate', label: 'Certificado / Diploma' },
+  { type: 'bank_proof', label: 'Comprovativo Bancário' },
+  { type: 'medical', label: 'Atestado Médico' },
+  { type: 'other', label: 'Outro Documento' },
+]
 
 export function EmployeeCreatePage() {
   const { t } = useTranslation()
@@ -142,6 +152,18 @@ export function EmployeeCreatePage() {
   })
   const managers = employeesData?.data ?? []
 
+  const { data: documentSettings } = useQuery({
+    queryKey: ['settings', 'documents'],
+    queryFn: () => api.get<SettingGroups>('settings', { group: 'documents' }),
+    enabled: canCreate,
+  })
+  const requiredDocuments = normalizeDocumentRequirements(
+    documentSettings?.documents?.find((setting) => setting.key === 'required')?.value,
+  )
+  const documentTypeOptions = [...new Map(
+    [...DOCUMENT_TYPE_OPTIONS, ...requiredDocuments].map((document) => [document.type, document]),
+  ).values()]
+
   if (!canCreate) {
     return <ErrorState message="Não tem permissão para criar funcionários." />
   }
@@ -215,6 +237,31 @@ export function EmployeeCreatePage() {
     if (previewDoc?.id === id) setPreviewDoc(null)
   }
 
+  const handleRequiredDocumentChange = (requirement: DocumentRequirement, file: File | undefined) => {
+    if (!file) return
+    const isImg = file.type.startsWith('image/')
+    const isPdf = file.type === 'application/pdf'
+    const isDoc = /\.docx?$/i.test(file.name)
+    if (!isImg && !isPdf && !isDoc) {
+      toast.error(`O ficheiro ${file.name} não é suportado. Use PDF, imagens ou documentos.`)
+      return
+    }
+
+    setDocuments((current) => {
+      const previous = current.filter((document) => document.document_type !== requirement.type)
+      current.filter((document) => document.document_type === requirement.type).forEach((document) => {
+        if (document.previewUrl) URL.revokeObjectURL(document.previewUrl)
+      })
+      return [...previous, {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        file,
+        name: requirement.label,
+        document_type: requirement.type,
+        previewUrl: isImg || isPdf ? URL.createObjectURL(file) : undefined,
+      }]
+    })
+  }
+
   const handleUpdateDocumentMeta = (id: string, field: 'name' | 'document_type', val: string) => {
     setDocuments((prev) =>
       prev.map((d) => (d.id === id ? { ...d, [field]: val } : d)),
@@ -250,6 +297,13 @@ export function EmployeeCreatePage() {
       errors.contract_end_date = 'A data de término deve ser posterior ou igual à data de início.'
     }
 
+    const missingDocuments = requiredDocuments.filter(
+      (requirement) => !documents.some((document) => document.document_type === requirement.type),
+    )
+    if (missingDocuments.length > 0) {
+      errors.documents = `Anexe os documentos obrigatórios: ${missingDocuments.map((document) => document.label).join(', ')}.`
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
       // Switch to the tab with errors
@@ -259,6 +313,9 @@ export function EmployeeCreatePage() {
       } else if (errors.contract_end_date) {
         setActiveTab('contrato')
         toast.error(errors.contract_end_date)
+      } else if (errors.documents) {
+        setActiveTab('contrato')
+        toast.error(errors.documents)
       }
       return
     }
@@ -984,6 +1041,35 @@ export function EmployeeCreatePage() {
               </CardHeader>
 
               <CardContent className="space-y-4">
+                {requiredDocuments.length > 0 && (
+                  <section className="space-y-3" aria-labelledby="required-documents-heading">
+                    <div>
+                      <h4 id="required-documents-heading" className="text-sm font-semibold">Documentos obrigatórios</h4>
+                      <p className="text-xs text-muted-foreground">Todos os documentos abaixo devem ser anexados para registar o funcionário.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {requiredDocuments.map((requirement) => {
+                        const uploaded = documents.find((document) => document.document_type === requirement.type)
+                        return (
+                          <label key={requirement.type} className="flex min-w-0 flex-col gap-2 border border-border p-3">
+                            <span className="text-sm font-medium">{requirement.label} <span className="text-destructive">*</span></span>
+                            <input
+                              type="file"
+                              accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx"
+                              onChange={(event) => handleRequiredDocumentChange(requirement, event.target.files?.[0])}
+                              className="w-full text-xs file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium"
+                              aria-label={`Anexar ${requirement.label}`}
+                            />
+                            <span className={`truncate text-xs ${uploaded ? 'text-success' : 'text-muted-foreground'}`}>
+                              {uploaded ? `Anexado: ${uploaded.file.name}` : 'Ainda não anexado'}
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )}
+
                 {/* Drag & Drop Upload Zone */}
                 <div
                   onClick={() => fileInputRef.current?.click()}
@@ -1077,13 +1163,9 @@ export function EmployeeCreatePage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="contract">Contrato de Trabalho</SelectItem>
-                                <SelectItem value="id_card">Documento de Identificação</SelectItem>
-                                <SelectItem value="cv">Currículo (CV)</SelectItem>
-                                <SelectItem value="certificate">Certificado / Diploma</SelectItem>
-                                <SelectItem value="bank_proof">Comprovativo Bancário</SelectItem>
-                                <SelectItem value="medical">Atestado Médico</SelectItem>
-                                <SelectItem value="other">Outro Documento</SelectItem>
+                                {documentTypeOptions.map((option) => (
+                                  <SelectItem key={option.type} value={option.type}>{option.label}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
 
@@ -1265,4 +1347,30 @@ export function EmployeeCreatePage() {
       </Dialog>
     </div>
   )
+}
+
+function normalizeDocumentRequirements(value: unknown): DocumentRequirement[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (typeof item === 'string') {
+      return [{ type: item, label: REQUIRED_DOCUMENT_LABELS[item] ?? item }]
+    }
+    if (item && typeof item === 'object' && 'type' in item && 'label' in item) {
+      const requirement = item as { type: unknown; label: unknown }
+      if (typeof requirement.type === 'string' && typeof requirement.label === 'string') {
+        return [{ type: requirement.type, label: requirement.label }]
+      }
+    }
+    return []
+  })
+}
+
+const REQUIRED_DOCUMENT_LABELS: Record<string, string> = {
+  cv: 'Currículo (CV)',
+  criminal_record: 'Registo criminal',
+  term: 'Termo de responsabilidade',
+  contract: 'Contrato de trabalho',
+  medical: 'Atestado médico',
+  bank_proof: 'Comprovativo bancário',
+  id_card: 'Bilhete de identidade (BI)',
 }

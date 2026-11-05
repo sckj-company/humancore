@@ -31,12 +31,10 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, ErrorState, LoadingState } from '@/components/shared/page-header'
 import type {
-  Paginated,
   SalaryComponentRegulation,
   SalaryComponentRegulationStatus,
   SalaryComponentSummary,
   SalaryIncidence,
-  Tenant,
 } from '@/types'
 
 interface RegulationIndex {
@@ -112,14 +110,10 @@ function statusVariant(status: SalaryComponentRegulationStatus | 'unconfigured')
 
 export interface SalaryComponentRegulationsPageProps {
   embeddedTenantId?: string
-  onTenantChange?: (tenantId: string) => void
-  isEmbedded?: boolean
 }
 
 export function SalaryComponentRegulationsPage({
   embeddedTenantId,
-  onTenantChange,
-  isEmbedded,
 }: SalaryComponentRegulationsPageProps = {}) {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.user)
@@ -131,32 +125,7 @@ export function SalaryComponentRegulationsPage({
   const canDeleteDraft = canConfigure || hasPermission(user, 'delete_salary-component')
   const queryClient = useQueryClient()
 
-  const [selectedTenantId, setSelectedTenantId] = useState<string>(
-    () => embeddedTenantId || localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
-  )
-
-  const effectiveTenantId = embeddedTenantId || selectedTenantId
-
-  const { data: tenantPage } = useQuery({
-    queryKey: ['superadmin', 'tenant-list-components'],
-    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
-    enabled: isSuperAdmin && !embeddedTenantId,
-  })
-
-  useEffect(() => {
-    if (embeddedTenantId && embeddedTenantId !== selectedTenantId) {
-      setSelectedTenantId(embeddedTenantId)
-    }
-  }, [embeddedTenantId, selectedTenantId])
-
-  useEffect(() => {
-    if (isSuperAdmin && !effectiveTenantId && tenantPage?.data?.length) {
-      const firstId = String(tenantPage.data[0].id)
-      setSelectedTenantId(firstId)
-      localStorage.setItem('hrms_selected_tenant', firstId)
-      onTenantChange?.(firstId)
-    }
-  }, [isSuperAdmin, effectiveTenantId, tenantPage, onTenantChange])
+  const effectiveTenantId = embeddedTenantId || localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedComponent, setSelectedComponent] = useState<SalaryComponentSummary | null>(null)
@@ -439,46 +408,6 @@ export function SalaryComponentRegulationsPage({
             )}
           </div>
         </div>
-      )}
-
-      {isSuperAdmin && !embeddedTenantId && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                <Shield className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">Modo Super Administrador</p>
-                <p className="text-xs text-muted-foreground">
-                  Selecione a empresa para gerir as componentes salariais e regras de incidência.
-                </p>
-              </div>
-            </div>
-            <div className="w-full sm:w-64">
-              <Select
-                value={selectedTenantId}
-                onValueChange={(tenantId) => {
-                  setSelectedTenantId(tenantId)
-                  localStorage.setItem('hrms_selected_tenant', tenantId)
-                  onTenantChange?.(tenantId)
-                  queryClient.invalidateQueries({ queryKey: ['payroll', 'salary-component-regulations'] })
-                }}
-              >
-                <SelectTrigger className="w-full bg-background">
-                  <SelectValue placeholder="Selecione uma empresa" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tenantPage?.data.map((tenant) => (
-                    <SelectItem key={tenant.id} value={String(tenant.id)}>
-                      {tenant.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       <SalaryComponentDialog

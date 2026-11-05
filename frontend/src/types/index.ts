@@ -528,6 +528,11 @@ export interface SettingItem {
 
 export type SettingGroups = Record<string, SettingItem[]>
 
+export interface DocumentRequirement {
+  type: string
+  label: string
+}
+
 export interface EmployeeDocument {
   id: number
   employee_id: number

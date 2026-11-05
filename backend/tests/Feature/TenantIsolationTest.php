@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\Setting;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenant\TenantManager;
@@ -77,6 +78,28 @@ class TenantIsolationTest extends TestCase
         ]);
 
         $this->assertTrue(in_array($response->status(), [201, 422], true));
+    }
+
+    public function test_cannot_create_employee_without_tenant_required_documents(): void
+    {
+        [$tenant, $admin] = $this->createTenantAdmin();
+        Setting::query()->create([
+            'tenant_id' => $tenant->id,
+            'group' => 'documents',
+            'key' => 'required',
+            'value' => ['cv'],
+        ]);
+
+        $response = $this->actingAs($admin)->postJson('/api/v1/employees', [
+            'first_name' => 'Ana',
+            'last_name' => 'Costa',
+            'email' => 'ana.costa@example.com',
+            'status' => 'active',
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors('documents');
+        $this->assertDatabaseMissing('employees', ['email' => 'ana.costa@example.com']);
     }
 
     public function test_dashboard_counts_only_current_tenant(): void

@@ -126,10 +126,14 @@ export function ProfilePage() {
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao atualizar foto')),
   })
 
-  const switchLang = (lng: 'pt' | 'en' | 'fr' | 'zh') => {
-    void i18n.changeLanguage(lng)
-    localStorage.setItem('hrms_locale', lng)
-    void api.put('auth/profile', { locale: lng }).catch(() => {})
+  const switchLang = (lng: 'pt' | 'en' | 'zh' | 'bilingual') => {
+    const locale = lng === 'bilingual' ? 'pt' : lng
+    const bilingual = lng === 'bilingual'
+    localStorage.setItem('hrms_bilingual', String(bilingual))
+    document.documentElement.classList.toggle('bilingual', bilingual)
+    void i18n.changeLanguage(locale)
+    localStorage.setItem('hrms_locale', locale)
+    void api.put('auth/profile', { locale }).catch(() => {})
   }
 
   if (!user) return null
@@ -137,8 +141,8 @@ export function ProfilePage() {
   const langOptions = [
     { value: 'pt' as const, label: 'Português', flag: '🇦🇴' },
     { value: 'en' as const, label: 'English', flag: '🇬🇧' },
-    { value: 'fr' as const, label: 'Français', flag: '🇫🇷' },
     { value: 'zh' as const, label: '中文', flag: '🇨🇳' },
+    { value: 'bilingual' as const, label: 'Português + 中文', flag: '中' },
   ]
 
   return (
@@ -441,7 +445,9 @@ export function ProfilePage() {
                           key={lang.value}
                           onClick={() => switchLang(lang.value)}
                           className={`flex flex-col items-center gap-1 rounded-lg border p-3 transition-colors ${
-                            i18n.language === lang.value
+                            (lang.value === 'bilingual'
+                              ? localStorage.getItem('hrms_bilingual') === 'true'
+                              : i18n.language === lang.value && localStorage.getItem('hrms_bilingual') !== 'true')
                               ? 'border-primary bg-primary/5 text-primary'
                               : 'hover:border-muted-foreground/50'
                           }`}

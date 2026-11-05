@@ -56,14 +56,10 @@ const statusColors: Record<string, string> = {
 
 export interface PayrollTaxRulesPageProps {
   embeddedTenantId?: string
-  onTenantChange?: (tenantId: string) => void
-  isEmbedded?: boolean
 }
 
 export function PayrollTaxRulesPage({
   embeddedTenantId,
-  onTenantChange,
-  isEmbedded,
 }: PayrollTaxRulesPageProps = {}) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language || 'pt-PT'
@@ -72,11 +68,7 @@ export function PayrollTaxRulesPage({
   const canConfigure = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'process_payroll')
   const qc = useQueryClient()
 
-  const [selectedTenantId, setSelectedTenantId] = useState<string>(
-    () => embeddedTenantId || localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
-  )
-
-  const effectiveTenantId = embeddedTenantId || selectedTenantId
+  const effectiveTenantId = embeddedTenantId || localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
 
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') || 'inss'

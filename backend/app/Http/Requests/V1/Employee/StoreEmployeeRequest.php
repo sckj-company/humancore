@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\V1\Employee;
 
+use App\Models\Setting;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreEmployeeRequest extends FormRequest
 {
@@ -70,6 +72,49 @@ class StoreEmployeeRequest extends FormRequest
             'document_types' => ['nullable', 'array'],
             'document_types.*' => ['nullable', 'string', 'max:50'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $requiredDocuments = Setting::query()
+                ->where('group', 'documents')
+                ->where('key', 'required')
+                ->first()?->value ?? [];
+
+            if (! is_array($requiredDocuments)) {
+                return;
+            }
+
+            $requiredTypes = collect($requiredDocuments)
+                ->map(fn ($document) => is_array($document) ? ($document['type'] ?? null) : $document)
+                ->filter(fn ($type) => is_string($type) && $type !== '')
+                ->values();
+
+            if ($requiredTypes->isEmpty()) {
+                return;
+            }
+
+            $documentTypes = $this->input('document_types', []);
+            $uploadedTypes = collect($this->file('documents', []))
+                ->keys()
+                ->map(fn ($index) => $documentTypes[$index] ?? null)
+                ->filter()
+                ->values();
+
+            $missingTypes = $requiredTypes->diff($uploadedTypes);
+
+            if ($missingTypes->isNotEmpty()) {
+                $validator->errors()->add(
+                    'documents',
+                    'Documentos obrigatórios em falta: '.$missingTypes->implode(', ').'.',
+                );
+            }
+        });
     }
 
     public function messages(): array

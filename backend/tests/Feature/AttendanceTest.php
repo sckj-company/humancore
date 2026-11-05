@@ -10,6 +10,7 @@ use App\Models\Shift;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenant\TenantManager;
+use Carbon\Carbon;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\SettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -97,6 +98,45 @@ class AttendanceTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('data.overtime_minutes', 75);
+    }
+
+    public function test_qr_clock_out_calculates_overtime_from_shift_end(): void
+    {
+        [$tenant, $employee, $user] = $this->setupEmployeeUser('employee');
+        Carbon::setTestNow(now()->copy()->setTimezone($tenant->timezone)->setTime(18, 15));
+
+        $shift = Shift::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno normal',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'late_tolerance_minutes' => 10,
+        ]);
+        EmployeeSchedule::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'effective_from' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+        AttendanceRecord::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'date' => now()->toDateString(),
+            'clock_in' => now()->copy()->setTime(9, 0),
+            'status' => 'present',
+        ]);
+
+        $this->actingAs($user, 'sanctum');
+        $code = $this->postJson('/api/v1/attendance/qr/issue', ['action' => 'clock_out'])
+            ->assertCreated()
+            ->json('data.hash');
+
+        $this->postJson('/api/v1/attendance/qr/scan', ['hash' => $code])
+            ->assertOk()
+            ->assertJsonPath('data.overtime_minutes', 75);
+
+        Carbon::setTestNow();
     }
 
     public function test_admin_can_view_attendance_records_but_employee_cannot(): void
