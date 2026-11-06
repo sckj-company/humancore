@@ -24,6 +24,7 @@ class DeductionResource extends JsonResource
             'paid_amount' => (float) $this->paid_amount,
             'installment_count' => $this->installment_count ? (int) $this->installment_count : null,
             'installment_amount' => $this->installment_amount ? (float) $this->installment_amount : null,
+            'start_period' => $this->starts_at?->format('Y-m'),
             'is_recurring' => (bool) $this->is_recurring,
             'is_mandatory' => (bool) $this->is_mandatory,
             'legal_basis' => $this->legal_basis,

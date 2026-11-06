@@ -900,6 +900,7 @@ export interface Deduction {
   paid_amount: number
   installment_count?: number | null
   installment_amount?: number | null
+  start_period?: string | null
   is_recurring: boolean
   is_mandatory: boolean
   legal_basis?: string | null

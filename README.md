@@ -71,6 +71,55 @@ npm install
 npm run dev  # http://localhost:5173
 ```
 
+## Deploy com Docker em VPS Ubuntu
+
+O Compose executa a aplicação React, a API Laravel, MySQL, Redis e o worker de filas. O Caddy recebe o tráfego na porta `5173`, encaminha `/hrms/` para a aplicação e `/api/` para a API. MySQL e Redis ficam apenas na rede interna do Docker; uploads, dados do banco e filas persistem em volumes.
+
+1. Instale Docker Engine e o plugin Docker Compose na VPS e libere a porta `5173` no firewall.
+2. Na raiz do projeto, crie o arquivo de ambiente e configure senhas fortes para o banco:
+
+   ```bash
+   cp .env.docker.example .env
+   nano .env
+   ```
+
+3. Gere a chave Laravel e copie o valor impresso para `APP_KEY` no `.env`:
+
+   ```bash
+   docker compose build
+   docker compose run --rm --no-deps app php artisan key:generate --show
+   ```
+
+4. Inicie os serviços e aplique as migrations:
+
+   ```bash
+   docker compose up -d
+   docker compose exec app php artisan migrate --force
+   docker compose exec app php artisan db:seed --class=PermissionSeeder --force
+   ```
+
+   Crie o primeiro superadministrador com uma senha própria:
+
+   ```bash
+   docker compose exec -it app php artisan tinker
+   ```
+
+   No Tinker, substitua nome, e-mail e senha:
+
+   ```php
+   $user = \App\Models\User::create(['name' => 'Administrador', 'email' => 'admin@example.com', 'password' => 'SENHA_FORTE', 'locale' => 'pt', 'timezone' => 'Africa/Luanda', 'is_active' => true]);
+   $user->forceFill(['email_verified_at' => now()])->save();
+   $user->assignRole('super-admin');
+   ```
+
+5. Acesse `http://IP_DA_VPS:5173/hrms/`. A página inicial `/` redireciona para `/hrms/`.
+
+Para acompanhar os serviços: `docker compose ps` e `docker compose logs -f app caddy`. Faça backup dos volumes `mysql_data` e `app_uploads` antes de atualizações ou manutenção. Não use `docker compose down -v` em produção, pois isso remove os volumes persistentes.
+
+Não execute `php artisan db:seed` sem `--class` numa instalação de produção: o seeder padrão cria uma conta de superadministrador com credenciais conhecidas. Também não use as contas de demonstração em produção.
+
+O Caddy está configurado para HTTP direto na porta `5173`. Como esta aplicação processa dados pessoais e salariais, use HTTPS antes de disponibilizá-la publicamente: configure um domínio apontado para a VPS, adapte o endereço do site no `Caddyfile` e publique as portas `80` e `443` no firewall e no Compose.
+
 ### Test accounts
 | Role | Email | Password |
 |------|-------|----------|

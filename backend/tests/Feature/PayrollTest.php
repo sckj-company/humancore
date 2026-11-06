@@ -204,6 +204,85 @@ class PayrollTest extends TestCase
         $this->assertSame(35000.0, (float) $percentageDeduction->fresh()->paid_amount);
     }
 
+    public function test_deduction_starts_in_selected_period_and_continues_afterward(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        $deduction = Deduction::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'name' => 'Adiantamento com início futuro',
+            'deduction_type' => 'advance',
+            'amount_type' => 'fixed',
+            'amount' => 10000,
+            'total_amount' => 30000,
+            'paid_amount' => 0,
+            'installment_count' => 3,
+            'installment_amount' => 10000,
+            'starts_at' => '2026-11-01',
+            'is_recurring' => false,
+            'status' => 'active',
+        ]);
+        $october = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Outubro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-10-01',
+            'period_end' => '2026-10-31',
+            'status' => 'open',
+        ]);
+        $november = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+        $december = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Dezembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-12-01',
+            'period_end' => '2026-12-31',
+            'status' => 'open',
+        ]);
+
+        $beforeStart = app(PayrollEngineService::class)->calculateForEmployee($october, $employee);
+        $firstInstallment = app(PayrollEngineService::class)->calculateForEmployee($november, $employee);
+        $followingInstallment = app(PayrollEngineService::class)->calculateForEmployee($december, $employee);
+
+        $this->assertSame(0, $beforeStart->items()->where('deduction_id', $deduction->id)->count());
+        $this->assertSame(-10000.0, (float) $firstInstallment->items()->where('deduction_id', $deduction->id)->value('amount'));
+        $this->assertSame(-10000.0, (float) $followingInstallment->items()->where('deduction_id', $deduction->id)->value('amount'));
+    }
+
+    public function test_deduction_api_saves_starting_payroll_period(): void
+    {
+        [$tenant, $employee, $user] = $this->setupTenantWithEmployee();
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/deductions', [
+                'employee_id' => $employee->id,
+                'name' => 'Adiantamento a partir de dezembro',
+                'deduction_type' => 'advance',
+                'amount_type' => 'fixed',
+                'amount' => 15000,
+                'total_amount' => 45000,
+                'installment_count' => 3,
+                'start_period' => '2026-12',
+                'is_recurring' => false,
+                'status' => 'active',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.start_period', '2026-12');
+
+        $this->assertDatabaseHas('deductions', [
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'starts_at' => '2026-12-01',
+        ]);
+    }
+
     public function test_fixed_installments_adjust_for_rounding_remainder(): void
     {
         [$tenant, $employee] = $this->setupTenantWithEmployee();

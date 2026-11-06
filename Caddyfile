@@ -1,0 +1,28 @@
+:5173 {
+	encode zstd gzip
+
+	@api path /api /api/*
+	reverse_proxy @api app:80
+
+	@backend_assets path /storage /storage/* /uploads /uploads/*
+	reverse_proxy @backend_assets app:80
+
+	@site_assets path /favicon.svg
+	reverse_proxy @site_assets frontend:80
+
+	@hrms path /hrms /hrms/*
+	handle @hrms {
+		redir /hrms /hrms/ 308
+		handle_path /hrms/* {
+			reverse_proxy frontend:80
+		}
+	}
+
+	handle / {
+		redir /hrms/ 308
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

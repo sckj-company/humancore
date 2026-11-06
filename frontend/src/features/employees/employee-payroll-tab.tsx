@@ -58,6 +58,7 @@ export function EmployeePayrollTab({
   const [deductionType, setDeductionType] = useState<'advance' | 'other'>('advance')
   const [deductionTotal, setDeductionTotal] = useState('')
   const [installmentCount, setInstallmentCount] = useState('1')
+  const [deductionStartPeriod, setDeductionStartPeriod] = useState(() => new Date().toISOString().slice(0, 7))
 
   const settings = useQuery({
     queryKey: ['employees', employeeId, 'payroll-settings'],
@@ -100,7 +101,12 @@ export function EmployeePayrollTab({
     mutationFn: () => {
       const total = Number(deductionTotal)
       const installments = Number(installmentCount)
-      if (!deductionName.trim() || !Number.isFinite(total) || total <= 0 || !Number.isInteger(installments) || installments < 1) {
+      if (!deductionName.trim()
+        || !Number.isFinite(total)
+        || total <= 0
+        || !Number.isInteger(installments)
+        || installments < 1
+        || !/^\d{4}-(0[1-9]|1[0-2])$/.test(deductionStartPeriod)) {
         throw new Error(t('employeeDetail.text.invalidDeduction'))
       }
 
@@ -112,6 +118,7 @@ export function EmployeePayrollTab({
         amount: total,
         total_amount: total,
         installment_count: installments,
+        start_period: deductionStartPeriod,
         is_recurring: false,
         is_mandatory: false,
         status: 'active',
@@ -122,6 +129,7 @@ export function EmployeePayrollTab({
       setDeductionName('')
       setDeductionTotal('')
       setInstallmentCount('1')
+      setDeductionStartPeriod(new Date().toISOString().slice(0, 7))
       queryClient.invalidateQueries({ queryKey: ['deductions', 'employee', employeeId] })
       queryClient.invalidateQueries({ queryKey: ['deductions'] })
     },
@@ -223,6 +231,11 @@ export function EmployeePayrollTab({
                     <Label>{t('employeeDetail.text.installmentCount')}</Label>
                     <Input type="number" min="1" step="1" value={installmentCount} onChange={(event) => setInstallmentCount(event.target.value)} />
                   </div>
+                  <div className="space-y-1.5">
+                    <Label>{t('employeeDetail.text.deductionStartPeriod')}</Label>
+                    <Input type="month" value={deductionStartPeriod} onChange={(event) => setDeductionStartPeriod(event.target.value)} />
+                    <p className="text-xs text-muted-foreground">{t('employeeDetail.text.deductionStartPeriodDescription')}</p>
+                  </div>
                 </div>
                 <div className="flex justify-end">
                   <Button onClick={() => createDeduction.mutate()} disabled={createDeduction.isPending || !deductionName.trim() || !deductionTotal}>
@@ -238,6 +251,7 @@ export function EmployeePayrollTab({
                   <thead><tr className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                     <th className="px-4 py-3">{t('employeeDetail.text.deductionName')}</th>
                     <th className="px-4 py-3">{t('employeeDetail.text.status')}</th>
+                    <th className="px-4 py-3">{t('employeeDetail.text.deductionStartPeriod')}</th>
                     <th className="px-4 py-3 text-right">{t('employeeDetail.text.deductionTotal')}</th>
                     <th className="px-4 py-3 text-right">{t('employeeDetail.text.deductionBalance')}</th>
                   </tr></thead>
@@ -246,6 +260,7 @@ export function EmployeePayrollTab({
                       <tr key={deduction.id}>
                         <td className="px-4 py-3">{deduction.name}</td>
                         <td className="px-4 py-3">{t(`deductionsPage.statuses.${deduction.status}`, { defaultValue: deduction.status })}</td>
+                        <td className="px-4 py-3">{deduction.start_period ?? '—'}</td>
                         <td className="px-4 py-3 text-right">{deduction.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? deduction.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         <td className="px-4 py-3 text-right">{Math.max(0, (deduction.total_amount ?? deduction.amount) - deduction.paid_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       </tr>

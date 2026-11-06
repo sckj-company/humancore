@@ -53,6 +53,7 @@ class DeductionController extends BaseController
                 Rule::requiredIf(fn () => $request->input('amount_type') === 'percentage' && $request->filled('installment_count')),
             ],
             'installment_count' => ['nullable', 'integer', 'min:1'],
+            'start_period' => ['sometimes', 'nullable', 'date_format:Y-m'],
             'is_recurring' => ['nullable', 'boolean'],
             'is_mandatory' => ['nullable', 'boolean'],
             'legal_basis' => ['nullable', 'string', 'max:1000'],
@@ -63,6 +64,10 @@ class DeductionController extends BaseController
         $data['tenant_id'] = tenant_id();
         $data['status'] = $data['status'] ?? 'active';
         $data['paid_amount'] = 0;
+        if (array_key_exists('start_period', $data)) {
+            $data['starts_at'] = filled($data['start_period']) ? $data['start_period'].'-01' : null;
+            unset($data['start_period']);
+        }
 
         if (($data['amount_type'] ?? '') === 'fixed' && filled($data['installment_count'] ?? null)) {
             $data['total_amount'] = filled($data['total_amount'] ?? null)
@@ -111,6 +116,7 @@ class DeductionController extends BaseController
                         : $deduction->installment_count !== null)),
             ],
             'installment_count' => ['nullable', 'integer', 'min:1'],
+            'start_period' => ['sometimes', 'nullable', 'date_format:Y-m'],
             'is_recurring' => ['nullable', 'boolean'],
             'is_mandatory' => ['sometimes', 'boolean'],
             'legal_basis' => ['nullable', 'string', 'max:1000'],
@@ -119,6 +125,10 @@ class DeductionController extends BaseController
         ]);
 
         $amountType = $data['amount_type'] ?? $deduction->amount_type;
+        if (array_key_exists('start_period', $data)) {
+            $data['starts_at'] = filled($data['start_period']) ? $data['start_period'].'-01' : null;
+            unset($data['start_period']);
+        }
         $totalAmount = array_key_exists('total_amount', $data) ? $data['total_amount'] : $deduction->total_amount;
         $installmentCount = array_key_exists('installment_count', $data) ? $data['installment_count'] : $deduction->installment_count;
 

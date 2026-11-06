@@ -8,15 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('employee_salary_components', function (Blueprint $table) {
-            $table->string('calculation_period', 20)->nullable()->after('custom_value');
-        });
+        if (! Schema::hasColumn('employee_salary_components', 'calculation_period')) {
+            Schema::table('employee_salary_components', function (Blueprint $table) {
+                $table->string('calculation_period', 20)->nullable()->after('custom_value');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('employee_salary_components', function (Blueprint $table) {
-            $table->dropColumn('calculation_period');
-        });
+        if (Schema::hasColumn('employee_salary_components', 'calculation_period')) {
+            Schema::table('employee_salary_components', function (Blueprint $table) {
+                $table->dropColumn('calculation_period');
+            });
+        }
     }
 };

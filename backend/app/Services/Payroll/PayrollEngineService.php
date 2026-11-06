@@ -561,6 +561,8 @@ class PayrollEngineService
 
         $context->deductions = $employee->deductions()
             ->where('status', 'active')
+            ->where(fn ($query) => $query->whereNull('starts_at')
+                ->orWhereDate('starts_at', '<=', $period->period_end))
             ->get();
 
         return $context;

@@ -53,6 +53,7 @@ interface DeductionFormState {
   percentage: string
   total_amount: string
   installment_count: string
+  start_period: string
   is_recurring: boolean
   is_mandatory: boolean
   legal_basis: string
@@ -70,6 +71,7 @@ const emptyForm: DeductionFormState = {
   percentage: '',
   total_amount: '',
   installment_count: '',
+  start_period: new Date().toISOString().slice(0, 7),
   is_recurring: true,
   is_mandatory: false,
   legal_basis: '',
@@ -88,6 +90,7 @@ function toForm(d: Deduction): DeductionFormState {
     percentage: d.percentage != null ? String(d.percentage) : '',
     total_amount: d.total_amount != null ? String(d.total_amount) : '',
     installment_count: d.installment_count != null ? String(d.installment_count) : '',
+    start_period: d.start_period ?? '',
     is_recurring: d.is_recurring,
     is_mandatory: d.is_mandatory,
     legal_basis: d.legal_basis ?? '',
@@ -112,6 +115,7 @@ function toPayload(form: DeductionFormState) {
     percentage: form.amount_type === 'percentage' ? Number(form.percentage || 0) : null,
     total_amount: totalAmount,
     installment_count: installmentCount,
+    start_period: form.start_period || null,
     is_recurring: form.is_recurring,
     is_mandatory: form.is_mandatory,
     legal_basis: form.legal_basis.trim() || null,
@@ -268,6 +272,11 @@ export function DeductionsPage() {
                 {r.installment_count ? `${r.installment_count} × ${r.installment_amount ?? '—'}` : '—'}
               </span>
             ),
+          },
+          {
+            id: 'start_period',
+            header: t('deductionsPage.startPeriod'),
+            cell: (r) => <span className="text-sm text-muted-foreground">{r.start_period ?? '—'}</span>,
           },
           {
             id: 'status',
@@ -498,6 +507,11 @@ function DeductionFormDialog({
           <div className="space-y-1.5">
             <Label>{t('deductionsPage.installmentCount')}</Label>
             <Input type="number" min={1} value={form.installment_count} onChange={(e) => setForm({ ...form, installment_count: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('deductionsPage.startPeriod')}</Label>
+            <Input type="month" value={form.start_period} onChange={(e) => setForm({ ...form, start_period: e.target.value })} />
+            <p className="text-xs text-muted-foreground">{t('deductionsPage.startPeriodDescription')}</p>
           </div>
           <div className="space-y-3 md:col-span-2">
             <Label className="flex items-center gap-2 text-sm">
