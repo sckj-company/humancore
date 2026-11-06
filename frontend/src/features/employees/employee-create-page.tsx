@@ -19,9 +19,12 @@ import {
   Plus,
   Eye,
   ExternalLink,
+  FileSearch,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -58,6 +61,16 @@ interface UploadedDoc {
   previewUrl?: string
 }
 
+interface IdentityOcrFields {
+  first_name?: string
+  last_name?: string
+  birth_date?: string
+  gender?: 'male' | 'female'
+  nationality?: string
+  id_document_number?: string
+  id_document_expiry?: string
+}
+
 const DOCUMENT_TYPE_OPTIONS: DocumentRequirement[] = [
   { type: 'contract', label: 'Contrato de Trabalho' },
   { type: 'id_card', label: 'Documento de Identificação' },
@@ -86,6 +99,10 @@ export function EmployeeCreatePage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
+  const [identityImage, setIdentityImage] = useState<File | null>(null)
+  const [identityOcrConsent, setIdentityOcrConsent] = useState(false)
+  const [isReadingIdentity, setIsReadingIdentity] = useState(false)
+  const identityInputRef = useRef<HTMLInputElement>(null)
 
   // Tab 1: Dados Básicos Form State
   const [basicData, setBasicData] = useState({
@@ -187,6 +204,33 @@ export function EmployeeCreatePage() {
     if (photoPreview) URL.revokeObjectURL(photoPreview)
     setPhotoPreview(null)
     if (photoInputRef.current) photoInputRef.current.value = ''
+  }
+
+  const handleReadIdentity = async () => {
+    if (!identityImage || !identityOcrConsent) return
+
+    setIsReadingIdentity(true)
+    try {
+      const formData = new FormData()
+      formData.append('image', identityImage)
+
+      const fields = await api.upload<IdentityOcrFields>('employees/ocr-id', formData)
+      setBasicData((current) => ({
+        ...current,
+        ...(fields.first_name ? { first_name: fields.first_name } : {}),
+        ...(fields.last_name ? { last_name: fields.last_name } : {}),
+        ...(fields.birth_date ? { birth_date: fields.birth_date } : {}),
+        ...(fields.gender ? { gender: fields.gender } : {}),
+        ...(fields.nationality ? { nationality: fields.nationality } : {}),
+        ...(fields.id_document_number ? { id_document_number: fields.id_document_number } : {}),
+        ...(fields.id_document_expiry ? { id_document_expiry: fields.id_document_expiry } : {}),
+      }))
+      toast.success('Dados lidos. Confirme e corrija os campos antes de continuar.')
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Não foi possível ler o documento.'))
+    } finally {
+      setIsReadingIdentity(false)
+    }
   }
 
   // Handle Document uploads (PDFs / Images)
@@ -470,6 +514,75 @@ export function EmployeeCreatePage() {
                       )}
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <FileSearch className="h-4 w-4 text-primary" />
+                      Preencher a partir do BI
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Carregue uma imagem ou um PDF digitalizado (máximo 5 MB). Os dados reconhecidos serão
+                      apenas sugestões e devem ser confirmados antes de guardar.
+                    </p>
+                  </div>
+                  <input
+                    ref={identityInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (file && file.size > 5 * 1024 * 1024) {
+                        toast.error('O documento não pode exceder 5 MB.')
+                        setIdentityImage(null)
+                        event.target.value = ''
+                        return
+                      }
+                      setIdentityImage(file ?? null)
+                      setIdentityOcrConsent(false)
+                    }}
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => identityInputRef.current?.click()}
+                    >
+                      <Upload className="mr-1.5 h-3.5 w-3.5" />
+                      {identityImage ? 'Alterar documento do BI' : 'Selecionar imagem ou PDF do BI'}
+                    </Button>
+                    {identityImage && (
+                      <span className="text-xs text-muted-foreground">{identityImage.name}</span>
+                    )}
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="identity-ocr-consent"
+                      checked={identityOcrConsent}
+                      disabled={!identityImage || isReadingIdentity}
+                      onCheckedChange={(checked) => setIdentityOcrConsent(checked === true)}
+                    />
+                    <label htmlFor="identity-ocr-consent" className="text-xs leading-relaxed cursor-pointer">
+                      Confirmo que tenho autorização do titular para processar o BI. A imagem será enviada
+                      ao OCR.space, um serviço externo, para leitura.
+                    </label>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!identityImage || !identityOcrConsent || isReadingIdentity}
+                    onClick={handleReadIdentity}
+                  >
+                    {isReadingIdentity ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <FileSearch className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {isReadingIdentity ? 'A ler documento…' : 'Ler dados do BI'}
+                  </Button>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

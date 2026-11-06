@@ -61,6 +61,9 @@ php artisan db:seed --class=DemoSeeder  # optional
 php artisan serve --host=127.0.0.1 --port=8000
 ```
 
+### Leitura de BI no cadastro
+Configure `OCR_SPACE_API_KEY` no `.env` do backend para ativar a leitura assistida de imagens e PDFs digitalizados do BI (máximo de 5 MB). O documento é enviado ao [OCR.space](https://ocr.space/ocrapi) apenas após confirmação do operador e a chave nunca é exposta ao frontend. O endpoint de leitura não guarda o documento no HumaCore; o formulário recebe sugestões para revisão. O plano gratuito do fornecedor documenta um limite de 500 pedidos por dia e por IP.
+
 ### Frontend
 ```bash
 cd frontend

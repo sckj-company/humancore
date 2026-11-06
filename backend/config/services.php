@@ -41,4 +41,9 @@ return [
         'api_secret' => env('CLOUDINARY_API_SECRET'),
     ],
 
+    'ocr_space' => [
+        'key' => env('OCR_SPACE_API_KEY'),
+        'endpoint' => env('OCR_SPACE_ENDPOINT', 'https://api.ocr.space/parse/image'),
+    ],
+
 ];

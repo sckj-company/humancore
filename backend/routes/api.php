@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Contract\ContractController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Document\EmployeeDocumentController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
+use App\Http\Controllers\Api\V1\Employee\EmployeeIdentityOcrController;
 use App\Http\Controllers\Api\V1\Import\EmployeeImportController;
 use App\Http\Controllers\Api\V1\Leave\LeaveController;
 use App\Http\Controllers\Api\V1\Notification\NotificationController;
@@ -65,6 +66,7 @@ Route::prefix('v1')->group(function () {
         Route::get('company', [TenantController::class, 'current']);
 
         // Funcionários
+        Route::post('employees/ocr-id', EmployeeIdentityOcrController::class)->middleware('throttle:10,1');
         Route::apiResource('employees', EmployeeController::class);
         Route::get('employees/{employee}/contracts', [EmployeeController::class, 'contracts']);
         Route::get('employees/{employee}/timeline', [EmployeeController::class, 'timeline']);
