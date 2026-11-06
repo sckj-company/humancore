@@ -15,9 +15,7 @@ return [
 
     'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:5173'), env('FRONTEND_URL_PROD', 'http://rh.local'), 'http://192.168.1.117:5173'],
 
-    'allowed_origins_patterns' => [
-        '#^https?://(?:(?:10(?:\.\d{1,3}){3})|(?:192\.168(?:\.\d{1,3}){2})|(?:172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})|localhost|127\.0\.0\.1)(:\d+)?$#',
-    ],
+    'allowed_origins_patterns' => ['#^http://(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$#'],
 
     'allowed_headers' => ['*'],
 

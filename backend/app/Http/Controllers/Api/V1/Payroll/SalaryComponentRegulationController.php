@@ -27,7 +27,7 @@ class SalaryComponentRegulationController extends BaseController
 
         $id = tenant_id();
         if (! $id) {
-            $id = (int) (Tenant::query()->where('is_active', true)->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id'));
+            $id = (int) (Tenant::query()->where('status', 'active')->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id'));
         }
 
         return $id ?: null;
