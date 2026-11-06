@@ -97,14 +97,63 @@ class CompensationTest extends TestCase
                 'amount' => 15000,
                 'total_amount' => 180000,
                 'installment_count' => 12,
+                'is_mandatory' => false,
+                'legal_basis' => 'Autorização do trabalhador',
             ])
             ->assertCreated()
-            ->assertJsonPath('data.type_label', 'Empréstimo');
+            ->assertJsonPath('data.type_label', 'Empréstimo')
+            ->assertJsonPath('data.installment_amount', 15000)
+            ->assertJsonPath('data.is_mandatory', false)
+            ->assertJsonPath('data.legal_basis', 'Autorização do trabalhador');
 
         $this->assertDatabaseHas('deductions', [
             'employee_id' => $employee->id,
             'installment_amount' => 15000,
         ]);
+    }
+
+    public function test_hr_manager_can_create_a_custom_deduction_type(): void
+    {
+        $tenant = Tenant::factory()->create();
+        app(TenantManager::class)->set($tenant);
+        $user = $this->makeUser($tenant, 'hr-manager');
+        $employee = Employee::factory()->create(['tenant_id' => $tenant->id]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/deductions', [
+                'employee_id' => $employee->id,
+                'name' => 'Equipamento de trabalho',
+                'deduction_type' => 'work_equipment',
+                'amount_type' => 'fixed',
+                'amount' => 12500,
+                'is_mandatory' => true,
+                'legal_basis' => 'Cláusula contratual 8',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.deduction_type', 'work_equipment')
+            ->assertJsonPath('data.type_label', 'work_equipment')
+            ->assertJsonPath('data.is_mandatory', true);
+    }
+
+    public function test_fixed_deduction_derives_total_from_installment_count(): void
+    {
+        $tenant = Tenant::factory()->create();
+        app(TenantManager::class)->set($tenant);
+        $user = $this->makeUser($tenant, 'hr-manager');
+        $employee = Employee::factory()->create(['tenant_id' => $tenant->id]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/deductions', [
+                'employee_id' => $employee->id,
+                'name' => 'Adiantamento parcelado',
+                'deduction_type' => 'advance',
+                'amount_type' => 'fixed',
+                'amount' => 10000,
+                'installment_count' => 3,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.total_amount', 30000)
+            ->assertJsonPath('data.installment_amount', 10000);
     }
 
     public function test_deduction_approve_records_approver(): void

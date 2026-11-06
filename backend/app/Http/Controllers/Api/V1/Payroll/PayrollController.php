@@ -6,15 +6,18 @@ use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Requests\V1\Payroll\StorePeriodRequest;
 use App\Http\Resources\V1\PayrollPeriodResource;
 use App\Http\Resources\V1\PayrollRecordResource;
+use App\Models\Deduction;
 use App\Models\Employee;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
+use App\Models\PayrollRecordItem;
 use App\Services\Payroll\PayrollEngineService;
 use App\Services\Payroll\PayrollValidationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class PayrollController extends BaseController
@@ -39,7 +42,9 @@ class PayrollController extends BaseController
 
         $data = $request->validated();
         if (! isset($data['name'])) {
-            $data['name'] = Carbon::parse($data['period_start'])->format('F/Y');
+            $data['name'] = Carbon::parse($data['period_start'])
+                ->locale('pt_BR')
+                ->translatedFormat('F/Y');
         }
 
         $period = PayrollPeriod::query()->create($data);
@@ -301,10 +306,41 @@ class PayrollController extends BaseController
             return $this->error('Apenas períodos aprovados ou fechados podem ser marcados como pagos.', 422);
         }
 
-        $period->records()->update(['status' => 'paid', 'paid_at' => now()]);
-
         try {
-            $period->transitionTo('paid');
+            DB::transaction(function () use ($period): void {
+                $records = $period->records()->with('items')->get();
+                $paidAt = now();
+
+                foreach ($records as $record) {
+                    $record->update(['status' => 'paid', 'paid_at' => $paidAt]);
+                }
+
+                $deductionAmounts = $records
+                    ->flatMap(fn ($record) => $record->items)
+                    ->filter(fn (PayrollRecordItem $item) => $item->deduction_id !== null)
+                    ->groupBy('deduction_id')
+                    ->map(fn ($items) => $items->sum(fn (PayrollRecordItem $item) => abs((float) $item->amount)));
+
+                foreach ($deductionAmounts as $deductionId => $amount) {
+                    $deduction = Deduction::query()->lockForUpdate()->find($deductionId);
+                    if (! $deduction) {
+                        continue;
+                    }
+
+                    $paidAmount = round((float) $deduction->paid_amount + $amount, 2);
+                    $updates = ['paid_amount' => $paidAmount];
+                    $isComplete = ($deduction->total_amount !== null && $paidAmount >= (float) $deduction->total_amount)
+                        || (! $deduction->is_recurring && $deduction->total_amount === null);
+
+                    if ($isComplete && $deduction->status !== 'cancelled') {
+                        $updates['status'] = 'completed';
+                    }
+
+                    $deduction->update($updates);
+                }
+
+                $period->transitionTo('paid');
+            });
         } catch (InvalidArgumentException $e) {
             return $this->error($e->getMessage(), 422);
         }

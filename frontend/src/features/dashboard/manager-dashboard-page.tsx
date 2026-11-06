@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { Users, CalendarOff, Bell } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -16,28 +17,29 @@ interface ManagerDashboard {
 }
 
 export function ManagerDashboardPage() {
+  const { t } = useTranslation()
   const { data, isLoading, isError, refetch } = useQuery<ManagerDashboard>({
     queryKey: ['dashboard', 'manager'],
     queryFn: () => api.get<ManagerDashboard>('dashboard/manager'),
   })
 
   if (isLoading) return <LoadingState />
-  if (isError || !data) return <ErrorState message="Não foi possível carregar o dashboard." onRetry={refetch} />
+  if (isError || !data) return <ErrorState message={t('managerDashboard.loadError')} onRetry={refetch} />
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard do Gestor" description="Visão consolidada da sua equipa" />
+      <PageHeader title={t('managerDashboard.title')} description={t('managerDashboard.description')} />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <KpiCard label="Membros da equipa" value={data.team_size} icon={Users} accent="primary" />
-        <KpiCard label="Em férias hoje" value={data.on_leave_today.length} icon={CalendarOff} accent="info" />
-        <KpiCard label="Solicitações pendentes" value={data.pending_count} icon={Bell} accent="warning" />
+        <KpiCard label={t('managerDashboard.teamMembers')} value={data.team_size} icon={Users} accent="primary" />
+        <KpiCard label={t('managerDashboard.onLeaveToday')} value={data.on_leave_today.length} icon={CalendarOff} accent="info" />
+        <KpiCard label={t('managerDashboard.pendingRequests')} value={data.pending_count} icon={Bell} accent="warning" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">A minha equipa</CardTitle>
+            <CardTitle className="text-base">{t('managerDashboard.myTeam')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -63,18 +65,18 @@ export function ManagerDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Solicitações pendentes</CardTitle>
+            <CardTitle className="text-base">{t('managerDashboard.pendingRequests')}</CardTitle>
           </CardHeader>
           <CardContent>
             {data.pending_leaves.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sem solicitações pendentes</p>
+              <p className="text-sm text-muted-foreground">{t('managerDashboard.noPendingRequests')}</p>
             ) : (
               <div className="space-y-3">
                 {data.pending_leaves.map((l) => (
                   <div key={l.id} className="flex items-center justify-between border-b border-border pb-2 last:border-0">
                     <div>
                       <p className="text-sm font-medium">{l.employee}</p>
-                      <p className="text-xs text-muted-foreground">{l.type} · {l.days} dias</p>
+                      <p className="text-xs text-muted-foreground">{l.type} · {t('managerDashboard.days', { count: l.days })}</p>
                     </div>
                     <p className="text-xs text-muted-foreground">{l.start_date}</p>
                   </div>

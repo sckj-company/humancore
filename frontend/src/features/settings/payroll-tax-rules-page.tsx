@@ -42,13 +42,6 @@ import {
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
 import type { PayrollInssRule, PayrollIrtTable, PayrollIrtBracket } from '@/types'
 
-const statusLabels: Record<string, string> = {
-  draft: 'Rascunho',
-  validated: 'Validado',
-  active: 'Ativo',
-  revoked: 'Revogado',
-}
-
 const statusColors: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground border-border',
   validated: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
@@ -154,29 +147,29 @@ export function PayrollTaxRulesPage({
       ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
     }),
     onSuccess: () => {
-      toast.success('Regra INSS criada como rascunho.')
+      toast.success(t('payrollTaxRulesPage.inssCreated'))
       setIsInssCreateOpen(false)
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar regra INSS.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.inssCreateError'))),
   })
 
   const validateInssMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/inss-rules/${id}/validate`),
     onSuccess: () => {
-      toast.success('Regra INSS validada com sucesso.')
+      toast.success(t('payrollTaxRulesPage.inssValidated'))
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao validar regra INSS.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.inssValidateError'))),
   })
 
   const activateInssMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/inss-rules/${id}/activate`),
     onSuccess: () => {
-      toast.success('Regra INSS ativada com sucesso.')
+      toast.success(t('payrollTaxRulesPage.inssActivated'))
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao ativar regra INSS.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.inssActivateError'))),
   })
 
   // Mutations IRT
@@ -186,35 +179,35 @@ export function PayrollTaxRulesPage({
       ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
     }),
     onSuccess: () => {
-      toast.success('Tabela IRT criada como rascunho.')
+      toast.success(t('payrollTaxRulesPage.irtCreated'))
       setIsIrtCreateOpen(false)
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar tabela IRT.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.irtCreateError'))),
   })
 
   const validateIrtMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/irt-tables/${id}/validate`),
     onSuccess: () => {
-      toast.success('Tabela IRT validada com sucesso.')
+      toast.success(t('payrollTaxRulesPage.irtValidated'))
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao validar tabela IRT.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.irtValidateError'))),
   })
 
   const activateIrtMutation = useMutation({
     mutationFn: (id: number) => api.post(`payroll/irt-tables/${id}/activate`),
     onSuccess: () => {
-      toast.success('Tabela IRT ativada com sucesso.')
+      toast.success(t('payrollTaxRulesPage.irtActivated'))
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao ativar tabela IRT.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.irtActivateError'))),
   })
 
   // Mutation Revogação Comum
   const revokeMutation = useMutation({
     mutationFn: () => {
-      if (!revokeTarget) throw new Error('Alvo inválido.')
+      if (!revokeTarget) throw new Error(t('payrollTaxRulesPage.invalidTarget'))
       const path = revokeTarget.type === 'inss' ? `payroll/inss-rules` : `payroll/irt-tables`
       return api.post(`${path}/${revokeTarget.id}/revoke`, {
         reason: revokeReason,
@@ -222,13 +215,13 @@ export function PayrollTaxRulesPage({
       })
     },
     onSuccess: () => {
-      toast.success('Regra revogada com sucesso; o histórico foi preservado.')
+      toast.success(t('payrollTaxRulesPage.revoked'))
       setRevokeTarget(null)
       setRevokeReason('')
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao revogar.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.revokeError'))),
   })
 
   // Mutation Eliminar Definitivamente (rascunhos ou revogados)
@@ -238,11 +231,11 @@ export function PayrollTaxRulesPage({
       return api.delete(`${path}/${id}${effectiveTenantId ? `?tenant_id=${effectiveTenantId}` : ''}`)
     },
     onSuccess: () => {
-      toast.success('Registo eliminado com sucesso.')
+      toast.success(t('payrollTaxRulesPage.deleted'))
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao eliminar.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.deleteError'))),
   })
 
   const formatDate = (d?: string | null) => {
@@ -268,20 +261,20 @@ export function PayrollTaxRulesPage({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Button variant="ghost" size="icon-sm" asChild>
-              <Link to="/settings">
+              <Link to="/settings" aria-label={t('payrollTaxRulesPage.back')}>
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
             <Link to="/settings" className="hover:text-foreground transition-colors">
-              {t('settings.title', { defaultValue: 'Configurações' })}
+              {t('settings.title')}
             </Link>
             <ChevronRight className="h-3.5 w-3.5" />
-            <span className="text-foreground font-semibold">Regras Fiscais & Previdenciárias</span>
+            <span className="text-foreground font-semibold">{t('payrollTaxRulesPage.breadcrumbTitle')}</span>
           </div>
           <Button variant="outline" size="sm" asChild>
             <Link to="/settings">
               <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-              Voltar
+              {t('payrollTaxRulesPage.back')}
             </Link>
           </Button>
         </div>
@@ -299,28 +292,28 @@ export function PayrollTaxRulesPage({
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground">Regras Oficiais & Tabelas de Imposto</h1>
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('payrollTaxRulesPage.title')}</h1>
                   <Badge variant="outline" className="font-mono text-xs">
-                    Angola (AO)
+                    {t('payrollTaxRulesPage.angola')}
                   </Badge>
                   <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                    Regime Geral
+                    {t('payrollTaxRulesPage.generalRegime')}
                   </Badge>
                 </div>
                 <p className="mt-1.5 text-sm text-muted-foreground">
-                  Configuração auditável e versionada de taxas da Segurança Social (INSS) e escalões progressivos de IRT.
+                  {t('payrollTaxRulesPage.description')}
                 </p>
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1">
                     <ShieldCheck className="h-3 w-3 text-primary" />
-                    Validação jurídica obrigatória antes da ativação
+                    {t('payrollTaxRulesPage.legalValidationNotice')}
                   </span>
                   <Link
                     to="/settings/payroll-components"
                     className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-primary hover:bg-primary/10 transition-colors font-medium"
                   >
                     <FileCheck2 className="h-3 w-3" />
-                    Gerir Incidências de Componentes
+                    {t('payrollTaxRulesPage.manageComponentIncidences')}
                   </Link>
                 </div>
               </div>
@@ -330,11 +323,11 @@ export function PayrollTaxRulesPage({
               <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 shrink-0">
                 {activeTab === 'inss' ? (
                   <Button size="sm" className="gap-1.5" onClick={() => setIsInssCreateOpen(true)}>
-                    <Plus className="h-4 w-4" /> Nova Versão INSS
+                    <Plus className="h-4 w-4" /> {t('payrollTaxRulesPage.newInssVersion')}
                   </Button>
                 ) : (
                   <Button size="sm" className="gap-1.5" onClick={() => setIsIrtCreateOpen(true)}>
-                    <Plus className="h-4 w-4" /> Nova Tabela IRT
+                    <Plus className="h-4 w-4" /> {t('payrollTaxRulesPage.newIrtTable')}
                   </Button>
                 )}
               </div>
@@ -350,9 +343,9 @@ export function PayrollTaxRulesPage({
             <Percent className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground font-medium">INSS Trabalhador (Ativo)</p>
+            <p className="text-xs text-muted-foreground font-medium">{t('payrollTaxRulesPage.employeeInssActive')}</p>
             <p className="text-sm font-semibold truncate text-foreground">
-              {activeInss ? `${activeInss.employee_rate}%` : 'Não Configurado'}
+              {activeInss ? `${activeInss.employee_rate}%` : t('payrollTaxRulesPage.notConfigured')}
             </p>
           </div>
         </Card>
@@ -362,9 +355,9 @@ export function PayrollTaxRulesPage({
             <Building2 className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground font-medium">INSS Patronal (Ativo)</p>
+            <p className="text-xs text-muted-foreground font-medium">{t('payrollTaxRulesPage.employerInssActive')}</p>
             <p className="text-sm font-semibold truncate text-foreground">
-              {activeInss ? `${activeInss.employer_rate}%` : 'Não Configurado'}
+              {activeInss ? `${activeInss.employer_rate}%` : t('payrollTaxRulesPage.notConfigured')}
             </p>
           </div>
         </Card>
@@ -374,9 +367,11 @@ export function PayrollTaxRulesPage({
             <Layers className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground font-medium">Tabela IRT Ativa</p>
+            <p className="text-xs text-muted-foreground font-medium">{t('payrollTaxRulesPage.activeIrtTable')}</p>
             <p className="text-sm font-semibold truncate text-foreground">
-              {activeIrt ? `Versão ${activeIrt.version} (${activeIrt.brackets?.length ?? 0} escalões)` : 'Não Configurada'}
+              {activeIrt
+                ? t('payrollTaxRulesPage.activeIrtSummary', { version: activeIrt.version, count: activeIrt.brackets?.length ?? 0 })
+                : t('payrollTaxRulesPage.notConfigured')}
             </p>
           </div>
         </Card>
@@ -386,9 +381,9 @@ export function PayrollTaxRulesPage({
             <Calendar className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground font-medium">Vigência Ativa</p>
+            <p className="text-xs text-muted-foreground font-medium">{t('payrollTaxRulesPage.activePeriod')}</p>
             <p className="text-sm font-semibold truncate text-foreground">
-              {activeInss ? `Desde ${formatDate(activeInss.effective_from)}` : '—'}
+              {activeInss ? t('payrollTaxRulesPage.since', { date: formatDate(activeInss.effective_from) }) : '—'}
             </p>
           </div>
         </Card>
@@ -403,7 +398,7 @@ export function PayrollTaxRulesPage({
         <TabsList className="w-full flex-wrap justify-start h-auto gap-1 p-1.5 bg-muted/60 border border-border/60 rounded-lg">
           <TabsTrigger value="inss" className="gap-1.5 px-3 py-1.5 text-xs">
             <ShieldCheck className="h-3.5 w-3.5" />
-            Regras de Segurança Social (INSS)
+            {t('payrollTaxRulesPage.inssTab')}
             {(inssRules ?? []).length > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1 font-semibold">
                 {inssRules!.length}
@@ -412,7 +407,7 @@ export function PayrollTaxRulesPage({
           </TabsTrigger>
           <TabsTrigger value="irt" className="gap-1.5 px-3 py-1.5 text-xs">
             <Layers className="h-3.5 w-3.5" />
-            Tabelas de IRT (Escalões Progressivos)
+            {t('payrollTaxRulesPage.irtTab')}
             {(irtTables ?? []).length > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1 font-semibold">
                 {irtTables!.length}
@@ -428,10 +423,10 @@ export function PayrollTaxRulesPage({
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-primary" />
-                  Histórico de Taxas da Segurança Social (INSS)
+                  {t('payrollTaxRulesPage.inssHistoryTitle')}
                 </CardTitle>
                 <CardDescription>
-                  Taxas contributivas aplicáveis ao trabalhador e à entidade empregadora
+                  {t('payrollTaxRulesPage.inssHistoryDescription')}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -443,24 +438,26 @@ export function PayrollTaxRulesPage({
                     onClick={() => setShowRevoked(!showRevoked)}
                   >
                     <Eye className="h-3.5 w-3.5" />
-                    {showRevoked ? 'Ocultar Revogadas' : `Ver Revogadas (${inssRevokedCount})`}
+                    {showRevoked
+                      ? t('payrollTaxRulesPage.hideRevoked')
+                      : t('payrollTaxRulesPage.viewRevoked', { count: inssRevokedCount })}
                   </Button>
                 )}
                 {canConfigure && (
                   <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setIsInssCreateOpen(true)}>
-                    <Plus className="h-3.5 w-3.5" /> Nova Versão
+                    <Plus className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.newVersion')}
                   </Button>
                 )}
               </div>
             </CardHeader>
             <CardContent>
               {inssLoading && <LoadingState />}
-              {inssError && <ErrorState message="Erro ao carregar regras INSS." onRetry={refetchInss} />}
+              {inssError && <ErrorState message={t('payrollTaxRulesPage.inssLoadError')} onRetry={refetchInss} />}
               {displayedInssRules.length === 0 && (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   {inssRules && inssRules.length > 0 && !showRevoked
-                    ? 'Todas as regras existentes estão revogadas. Clique em "Ver Revogadas" ou crie uma nova versão.'
-                    : 'Nenhuma regra INSS cadastrada. Crie uma nova versão para começar.'}
+                    ? t('payrollTaxRulesPage.allInssRevoked')
+                    : t('payrollTaxRulesPage.noInssRules')}
                 </div>
               )}
               {displayedInssRules.length > 0 && (
@@ -468,14 +465,14 @@ export function PayrollTaxRulesPage({
                   <table className="w-full">
                     <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
                       <tr>
-                        <th className="px-4 py-3 font-medium">Versão</th>
-                        <th className="px-4 py-3 font-medium">Regime</th>
-                        <th className="px-4 py-3 font-medium">Taxa Trabalhador</th>
-                        <th className="px-4 py-3 font-medium">Taxa Patronal</th>
-                        <th className="px-4 py-3 font-medium">Vigência</th>
-                        <th className="px-4 py-3 font-medium">Estado</th>
-                        <th className="px-4 py-3 font-medium">Validação</th>
-                        <th className="px-4 py-3 text-right font-medium">Ações</th>
+                        <th className="px-4 py-3 font-medium">{t('payrollTaxRulesPage.version')}</th>
+                        <th className="px-4 py-3 font-medium">{t('payrollTaxRulesPage.regime')}</th>
+                        <th className="px-4 py-3 font-medium">{t('payrollTaxRulesPage.employeeRate')}</th>
+                        <th className="px-4 py-3 font-medium">{t('payrollTaxRulesPage.employerRate')}</th>
+                        <th className="px-4 py-3 font-medium">{t('payrollTaxRulesPage.period')}</th>
+                        <th className="px-4 py-3 font-medium">{t('payrollTaxRulesPage.status')}</th>
+                        <th className="px-4 py-3 font-medium">{t('payrollTaxRulesPage.validation')}</th>
+                        <th className="px-4 py-3 text-right font-medium">{t('payrollTaxRulesPage.actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border text-sm">
@@ -488,14 +485,14 @@ export function PayrollTaxRulesPage({
                           <td className="px-4 py-3 text-xs text-muted-foreground">
                             {formatDate(rule.effective_from)}{' '}
                             {rule.status === 'revoked'
-                              ? '(Revogada)'
+                              ? `(${t('payrollTaxRulesPage.revokedStatus')})`
                               : rule.effective_to
-                              ? `até ${formatDate(rule.effective_to)}`
-                              : '(vigente)'}
+                              ? t('payrollTaxRulesPage.until', { date: formatDate(rule.effective_to) })
+                              : `(${t('payrollTaxRulesPage.current')})`}
                           </td>
                           <td className="px-4 py-3">
                             <Badge variant="outline" className={`font-medium ${statusColors[rule.status] ?? ''}`}>
-                              {statusLabels[rule.status] ?? rule.status}
+                              {t(`payrollTaxRulesPage.statuses.${rule.status}`, { defaultValue: rule.status })}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">
@@ -504,19 +501,19 @@ export function PayrollTaxRulesPage({
                                 {rule.validated_by.name} ({formatDate(rule.validated_at)})
                               </span>
                             ) : (
-                              'Pendente'
+                              t('payrollTaxRulesPage.pending')
                             )}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
                               {rule.legal_document_url && (rule.legal_document_url.includes('res.cloudinary.com') ? (
-                                <Button variant="ghost" size="icon-sm" asChild title="Descarregar documento legal">
+                                <Button variant="ghost" size="icon-sm" asChild title={t('payrollTaxRulesPage.downloadLegalDocument')}>
                                   <a href={cloudinaryAttachmentUrl(rule.legal_document_url, rule.legal_document_name)} target="_blank" rel="noreferrer">
                                     <Download className="h-4 w-4" />
                                   </a>
                                 </Button>
                               ) : (
-                                <Button type="button" variant="ghost" size="icon-sm" title="Descarregar documento legal" onClick={() => void api.downloadFile(`payroll/inss-rules/${rule.id}/document`, rule.legal_document_name ?? undefined)}>
+                                <Button type="button" variant="ghost" size="icon-sm" title={t('payrollTaxRulesPage.downloadLegalDocument')} onClick={() => void api.downloadFile(`payroll/inss-rules/${rule.id}/document`, rule.legal_document_name ?? undefined)}>
                                   <Download className="h-4 w-4" />
                                 </Button>
                               ))}
@@ -528,7 +525,7 @@ export function PayrollTaxRulesPage({
                                   onClick={() => validateInssMutation.mutate(rule.id)}
                                   disabled={validateInssMutation.isPending}
                                 >
-                                  <CheckCircle2 className="h-3.5 w-3.5" /> Validar
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.validate')}
                                 </Button>
                               )}
                               {rule.status === 'validated' && canConfigure && (
@@ -539,7 +536,7 @@ export function PayrollTaxRulesPage({
                                   onClick={() => activateInssMutation.mutate(rule.id)}
                                   disabled={activateInssMutation.isPending}
                                 >
-                                  <ShieldCheck className="h-3.5 w-3.5" /> Ativar
+                                  <ShieldCheck className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.activate')}
                                 </Button>
                               )}
                               {(rule.status === 'active' || rule.status === 'validated') && canConfigure && (
@@ -549,7 +546,7 @@ export function PayrollTaxRulesPage({
                                   className="h-8 text-xs gap-1 text-destructive hover:bg-destructive/10"
                                   onClick={() => setRevokeTarget({ type: 'inss', id: rule.id })}
                                 >
-                                  <Ban className="h-3.5 w-3.5" /> Revogar
+                                  <Ban className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.revoke')}
                                 </Button>
                               )}
                               {rule.status === 'revoked' && canConfigure && (
@@ -557,15 +554,15 @@ export function PayrollTaxRulesPage({
                                   size="sm"
                                   variant="ghost"
                                   className="h-8 text-xs gap-1 text-destructive hover:bg-destructive/10"
-                                  title="Eliminar definitivamente registo revogado"
+                                  title={t('payrollTaxRulesPage.deleteRevokedInssTitle')}
                                   onClick={() => {
-                                    if (confirm('Deseja eliminar definitivamente esta regra revogada?')) {
+                                    if (confirm(t('payrollTaxRulesPage.deleteRevokedInssConfirm'))) {
                                       deleteMutation.mutate({ type: 'inss', id: rule.id })
                                     }
                                   }}
                                   disabled={deleteMutation.isPending}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                                  <Trash2 className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.delete')}
                                 </Button>
                               )}
                             </div>
@@ -602,24 +599,26 @@ export function PayrollTaxRulesPage({
                     onClick={() => setShowRevoked(!showRevoked)}
                   >
                     <Eye className="h-3.5 w-3.5" />
-                    {showRevoked ? 'Ocultar Revogadas' : `Ver Revogadas (${irtRevokedCount})`}
+                    {showRevoked
+                      ? t('payrollTaxRulesPage.hideRevoked')
+                      : t('payrollTaxRulesPage.viewRevoked', { count: irtRevokedCount })}
                   </Button>
                 )}
                 {canConfigure && (
                   <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setIsIrtCreateOpen(true)}>
-                    <Plus className="h-3.5 w-3.5" /> Nova Tabela IRT
+                    <Plus className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.newIrtTable')}
                   </Button>
                 )}
               </div>
             </CardHeader>
             <CardContent>
               {irtLoading && <LoadingState />}
-              {irtError && <ErrorState message="Erro ao carregar tabelas IRT." onRetry={refetchIrt} />}
+              {irtError && <ErrorState message={t('payrollTaxRulesPage.irtLoadError')} onRetry={refetchIrt} />}
               {displayedIrtTables.length === 0 && (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   {irtTables && irtTables.length > 0 && !showRevoked
-                    ? 'Todas as tabelas existentes estão revogadas. Clique em "Ver Revogadas" ou crie uma nova versão.'
-                    : 'Nenhuma tabela IRT cadastrada. Crie uma nova versão para começar.'}
+                    ? t('payrollTaxRulesPage.allIrtRevoked')
+                    : t('payrollTaxRulesPage.noIrtTables')}
                 </div>
               )}
               {displayedIrtTables.length > 0 && (
@@ -628,17 +627,19 @@ export function PayrollTaxRulesPage({
                     <div key={table.id} className="rounded-xl border border-border p-5 space-y-4 bg-muted/10">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <span className="font-bold text-base text-foreground">Tabela IRT v{table.version}</span>
+                          <span className="font-bold text-base text-foreground">
+                            {t('payrollTaxRulesPage.irtTableVersion', { version: table.version })}
+                          </span>
                           <Badge variant="outline" className={`font-medium ${statusColors[table.status] ?? ''}`}>
-                            {statusLabels[table.status] ?? table.status}
+                            {t(`payrollTaxRulesPage.statuses.${table.status}`, { defaultValue: table.status })}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            Vigência: {formatDate(table.effective_from)}{' '}
+                            {t('payrollTaxRulesPage.period')}: {formatDate(table.effective_from)}{' '}
                             {table.status === 'revoked'
-                              ? '(Revogada)'
+                              ? `(${t('payrollTaxRulesPage.revokedStatus')})`
                               : table.effective_to
-                              ? `até ${formatDate(table.effective_to)}`
-                              : '(vigente)'}
+                              ? t('payrollTaxRulesPage.until', { date: formatDate(table.effective_to) })
+                              : `(${t('payrollTaxRulesPage.current')})`}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -650,7 +651,7 @@ export function PayrollTaxRulesPage({
                               onClick={() => validateIrtMutation.mutate(table.id)}
                               disabled={validateIrtMutation.isPending}
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Validar
+                              <CheckCircle2 className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.validate')}
                             </Button>
                           )}
                           {table.status === 'validated' && canConfigure && (
@@ -661,7 +662,7 @@ export function PayrollTaxRulesPage({
                               onClick={() => activateIrtMutation.mutate(table.id)}
                               disabled={activateIrtMutation.isPending}
                             >
-                              <ShieldCheck className="h-3.5 w-3.5" /> Ativar
+                              <ShieldCheck className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.activate')}
                             </Button>
                           )}
                           {(table.status === 'active' || table.status === 'validated') && canConfigure && (
@@ -671,7 +672,7 @@ export function PayrollTaxRulesPage({
                               className="h-8 text-xs gap-1 text-destructive hover:bg-destructive/10"
                               onClick={() => setRevokeTarget({ type: 'irt', id: table.id })}
                             >
-                              <Ban className="h-3.5 w-3.5" /> Revogar
+                              <Ban className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.revoke')}
                             </Button>
                           )}
                           {table.status === 'revoked' && canConfigure && (
@@ -679,15 +680,15 @@ export function PayrollTaxRulesPage({
                               size="sm"
                               variant="ghost"
                               className="h-8 text-xs gap-1 text-destructive hover:bg-destructive/10"
-                              title="Eliminar definitivamente tabela revogada"
+                              title={t('payrollTaxRulesPage.deleteRevokedIrtTitle')}
                               onClick={() => {
-                                if (confirm('Deseja eliminar definitivamente esta tabela revogada?')) {
+                                if (confirm(t('payrollTaxRulesPage.deleteRevokedIrtConfirm'))) {
                                   deleteMutation.mutate({ type: 'irt', id: table.id })
                                 }
                               }}
                               disabled={deleteMutation.isPending}
                             >
-                              <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                              <Trash2 className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.delete')}
                             </Button>
                           )}
                         </div>
@@ -695,7 +696,7 @@ export function PayrollTaxRulesPage({
 
                       {table.legal_reference && (
                         <p className="text-xs text-muted-foreground">
-                          <span className="font-semibold text-foreground">Base legal:</span> {table.legal_reference}
+                          <span className="font-semibold text-foreground">{t('payrollTaxRulesPage.legalBasis')}:</span> {table.legal_reference}
                         </p>
                       )}
                       {table.legal_document_url?.includes('res.cloudinary.com') ? (
@@ -705,11 +706,11 @@ export function PayrollTaxRulesPage({
                           rel="noreferrer"
                           className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                         >
-                          <Download className="h-4 w-4" />{table.legal_document_name ?? 'Descarregar documento legal'}
+                          <Download className="h-4 w-4" />{table.legal_document_name ?? t('payrollTaxRulesPage.downloadLegalDocument')}
                         </a>
                       ) : table.legal_document_url ? (
                         <Button type="button" variant="link" size="sm" className="px-0" onClick={() => void api.downloadFile(`payroll/irt-tables/${table.id}/document`, table.legal_document_name ?? undefined)}>
-                          <Download className="h-4 w-4" />{table.legal_document_name ?? 'Descarregar documento legal'}
+                          <Download className="h-4 w-4" />{table.legal_document_name ?? t('payrollTaxRulesPage.downloadLegalDocument')}
                         </Button>
                       ) : null}
 
@@ -717,20 +718,20 @@ export function PayrollTaxRulesPage({
                         <table className="w-full text-xs">
                           <thead className="border-b border-border bg-muted/40 uppercase text-muted-foreground">
                             <tr>
-                              <th className="px-3 py-2 text-left">Escalão</th>
-                              <th className="px-3 py-2 text-right">Limite Inferior</th>
-                              <th className="px-3 py-2 text-right">Limite Superior</th>
-                              <th className="px-3 py-2 text-right">Taxa (%)</th>
-                              <th className="px-3 py-2 text-right">Parcela Fixa (Kz)</th>
+                              <th className="px-3 py-2 text-left">{t('payrollTaxRulesPage.bracket')}</th>
+                              <th className="px-3 py-2 text-right">{t('payrollTaxRulesPage.lowerBound')}</th>
+                              <th className="px-3 py-2 text-right">{t('payrollTaxRulesPage.upperBound')}</th>
+                              <th className="px-3 py-2 text-right">{t('payrollTaxRulesPage.rate')}</th>
+                              <th className="px-3 py-2 text-right">{t('payrollTaxRulesPage.fixedAmount')}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
                             {table.brackets?.map((b, idx) => (
                               <tr key={idx} className="hover:bg-muted/30">
-                                <td className="px-3 py-2 font-medium">Escalão {idx + 1}</td>
+                                <td className="px-3 py-2 font-medium">{t('payrollTaxRulesPage.bracketNumber', { number: idx + 1 })}</td>
                                 <td className="px-3 py-2 text-right font-mono">{b.lower_bound.toLocaleString()} Kz</td>
                                 <td className="px-3 py-2 text-right font-mono">
-                                  {b.upper_bound !== null ? `${b.upper_bound.toLocaleString()} Kz` : 'Infinito'}
+                                  {b.upper_bound !== null ? `${b.upper_bound.toLocaleString()} Kz` : t('payrollTaxRulesPage.infinite')}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono font-semibold text-primary">{b.rate}%</td>
                                 <td className="px-3 py-2 text-right font-mono">{b.fixed_amount.toLocaleString()} Kz</td>
@@ -752,15 +753,15 @@ export function PayrollTaxRulesPage({
       <Dialog open={isInssCreateOpen} onOpenChange={setIsInssCreateOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nova Versão de Regra INSS</DialogTitle>
+            <DialogTitle>{t('payrollTaxRulesPage.newInssRuleTitle')}</DialogTitle>
             <DialogDescription>
-              Crie uma versão de taxa contributiva com período de vigência. Entrará inicialmente como rascunho.
+              {t('payrollTaxRulesPage.newInssRuleDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Taxa Trabalhador (%)</Label>
+                <Label>{t('payrollTaxRulesPage.employeeRateWithUnit')}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -769,7 +770,7 @@ export function PayrollTaxRulesPage({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Taxa Patronal (%)</Label>
+                <Label>{t('payrollTaxRulesPage.employerRateWithUnit')}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -781,7 +782,7 @@ export function PayrollTaxRulesPage({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Início de Vigência</Label>
+                <Label>{t('payrollTaxRulesPage.effectiveFrom')}</Label>
                 <Input
                   type="date"
                   value={inssForm.effective_from}
@@ -789,7 +790,7 @@ export function PayrollTaxRulesPage({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Fim de Vigência (opcional)</Label>
+                <Label>{t('payrollTaxRulesPage.effectiveToOptional')}</Label>
                 <Input
                   type="date"
                   value={inssForm.effective_to}
@@ -799,9 +800,9 @@ export function PayrollTaxRulesPage({
             </div>
 
             <div className="space-y-2">
-              <Label>Referência Legal / Diploma</Label>
+              <Label>{t('payrollTaxRulesPage.legalReference')}</Label>
               <Input
-                placeholder="Ex: Decreto Presidencial n.º 227/18"
+                placeholder={t('payrollTaxRulesPage.inssLegalPlaceholder')}
                 value={inssForm.legal_reference}
                 onChange={(e) => setInssForm({ ...inssForm, legal_reference: e.target.value })}
               />
@@ -809,7 +810,7 @@ export function PayrollTaxRulesPage({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsInssCreateOpen(false)}>
-              Cancelar
+              {t('payrollTaxRulesPage.cancel')}
             </Button>
             <Button
               disabled={createInssMutation.isPending}
@@ -826,7 +827,7 @@ export function PayrollTaxRulesPage({
               }}
             >
               {createInssMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Criar Rascunho
+              {t('payrollTaxRulesPage.createDraft')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -838,10 +839,10 @@ export function PayrollTaxRulesPage({
           <DialogHeader>
             <DialogTitle className="text-lg flex items-center gap-2">
               <Layers className="h-5 w-5 text-primary" />
-              Nova Tabela de IRT (Escalões Progressivos)
+              {t('payrollTaxRulesPage.newIrtTableTitle')}
             </DialogTitle>
             <DialogDescription>
-              Configure o período de vigência, diploma legal e defina os escalões progressivos para o cálculo do IRT.
+              {t('payrollTaxRulesPage.newIrtTableDescription')}
             </DialogDescription>
           </DialogHeader>
 
@@ -849,7 +850,7 @@ export function PayrollTaxRulesPage({
             {/* Dados Gerais de Vigência */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-lg bg-muted/30 border border-border">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase text-muted-foreground">Início de Vigência *</Label>
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">{t('payrollTaxRulesPage.effectiveFromRequired')}</Label>
                 <Input
                   type="date"
                   className="h-9"
@@ -858,20 +859,20 @@ export function PayrollTaxRulesPage({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase text-muted-foreground">Fim de Vigência (opcional)</Label>
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">{t('payrollTaxRulesPage.effectiveToOptional')}</Label>
                 <Input
                   type="date"
                   className="h-9"
-                  placeholder="Deixar em branco se indeterminado"
+                  placeholder={t('payrollTaxRulesPage.leaveBlankIfOpenEnded')}
                   value={irtForm.effective_to}
                   onChange={(e) => setIrtForm({ ...irtForm, effective_to: e.target.value })}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase text-muted-foreground">Referência Legal / Diploma</Label>
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">{t('payrollTaxRulesPage.legalReference')}</Label>
                 <Input
                   className="h-9"
-                  placeholder="Ex: Lei n.º 28/20 - Código do IRT"
+                  placeholder={t('payrollTaxRulesPage.irtLegalPlaceholder')}
                   value={irtForm.legal_reference}
                   onChange={(e) => setIrtForm({ ...irtForm, legal_reference: e.target.value })}
                 />
@@ -882,9 +883,9 @@ export function PayrollTaxRulesPage({
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <Label className="text-sm font-bold text-foreground">Definição dos Escalões da Tabela</Label>
+                  <Label className="text-sm font-bold text-foreground">{t('payrollTaxRulesPage.bracketDefinition')}</Label>
                   <p className="text-xs text-muted-foreground">
-                    Cada linha representa uma faixa de matéria coletável e suas respectivas taxas e parcelas fixas
+                    {t('payrollTaxRulesPage.bracketDescription')}
                   </p>
                 </div>
                 <Button
@@ -903,7 +904,7 @@ export function PayrollTaxRulesPage({
                     })
                   }}
                 >
-                  <Plus className="h-3.5 w-3.5" /> Adicionar Escalão
+                  <Plus className="h-3.5 w-3.5" /> {t('payrollTaxRulesPage.addBracket')}
                 </Button>
               </div>
 
@@ -912,12 +913,12 @@ export function PayrollTaxRulesPage({
                 <table className="w-full text-sm">
                   <thead className="border-b border-border bg-muted/60 text-xs font-semibold uppercase text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-3 text-left w-24">Escalão</th>
-                      <th className="px-4 py-3 text-left">Limite Inferior (Kz)</th>
-                      <th className="px-4 py-3 text-left">Limite Superior (Kz)</th>
-                      <th className="px-4 py-3 text-left w-36">Taxa Marginal (%)</th>
-                      <th className="px-4 py-3 text-left w-44">Parcela Fixa (Kz)</th>
-                      <th className="px-3 py-3 text-center w-12">Ação</th>
+                      <th className="px-4 py-3 text-left w-24">{t('payrollTaxRulesPage.bracket')}</th>
+                      <th className="px-4 py-3 text-left">{t('payrollTaxRulesPage.lowerBoundWithUnit')}</th>
+                      <th className="px-4 py-3 text-left">{t('payrollTaxRulesPage.upperBoundWithUnit')}</th>
+                      <th className="px-4 py-3 text-left w-36">{t('payrollTaxRulesPage.marginalRate')}</th>
+                      <th className="px-4 py-3 text-left w-44">{t('payrollTaxRulesPage.fixedAmountWithUnit')}</th>
+                      <th className="px-3 py-3 text-center w-12">{t('payrollTaxRulesPage.action')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -948,7 +949,7 @@ export function PayrollTaxRulesPage({
                             type="number"
                             min="0"
                             step="1000"
-                            placeholder="Deixe vazio se sem limite"
+                            placeholder={t('payrollTaxRulesPage.leaveBlankIfUnlimited')}
                             className="h-9 font-mono text-sm bg-background placeholder:text-muted-foreground/60"
                             value={b.upper_bound ?? ''}
                             onChange={(e) => {
@@ -1005,7 +1006,7 @@ export function PayrollTaxRulesPage({
                               size="icon-sm"
                               variant="ghost"
                               className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                              title="Remover este escalão"
+                              title={t('payrollTaxRulesPage.removeBracket')}
                               onClick={() => {
                                 setIrtForm({
                                   ...irtForm,
@@ -1029,10 +1030,10 @@ export function PayrollTaxRulesPage({
               <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 flex items-start gap-2.5 text-xs text-blue-900 dark:text-blue-200">
                 <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
-                  <p className="font-semibold">Regra de Cálculo Oficial do IRT:</p>
+                  <p className="font-semibold">{t('payrollTaxRulesPage.officialIrtCalculation')}</p>
                   <p className="text-muted-foreground dark:text-blue-300">
-                    <span className="font-mono font-medium">IRT = Parcela Fixa + (Matéria Coletável − Limite Inferior) × Taxa %</span>.
-                    Para o último escalão, deixe o <strong>Limite Superior</strong> em branco para indicar que se aplica a todos os rendimentos acima do valor inferior.
+                    <span className="font-mono font-medium">{t('payrollTaxRulesPage.irtFormula')}</span>.
+                    {' '}{t('payrollTaxRulesPage.lastBracketHelp')}
                   </p>
                 </div>
               </div>
@@ -1041,7 +1042,7 @@ export function PayrollTaxRulesPage({
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsIrtCreateOpen(false)}>
-              Cancelar
+              {t('payrollTaxRulesPage.cancel')}
             </Button>
             <Button
               disabled={createIrtMutation.isPending}
@@ -1057,7 +1058,7 @@ export function PayrollTaxRulesPage({
               }}
             >
               {createIrtMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Criar Tabela IRT
+              {t('payrollTaxRulesPage.createIrtTable')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1067,22 +1068,22 @@ export function PayrollTaxRulesPage({
       <Dialog open={!!revokeTarget} onOpenChange={(open) => !open && setRevokeTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmar Revogação</DialogTitle>
+            <DialogTitle>{t('payrollTaxRulesPage.confirmRevocationTitle')}</DialogTitle>
             <DialogDescription>
-              A revogação encerra a vigência da regra, preservando todo o histórico para auditoria.
+              {t('payrollTaxRulesPage.confirmRevocationDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <Label>Motivo da Revogação (Obrigatório)</Label>
+            <Label>{t('payrollTaxRulesPage.revocationReasonRequired')}</Label>
             <Input
-              placeholder="Ex: Publicação de nova taxa oficial pelo Decreto..."
+              placeholder={t('payrollTaxRulesPage.revocationReasonPlaceholder')}
               value={revokeReason}
               onChange={(e) => setRevokeReason(e.target.value)}
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRevokeTarget(null)}>
-              Cancelar
+              {t('payrollTaxRulesPage.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -1090,7 +1091,7 @@ export function PayrollTaxRulesPage({
               onClick={() => revokeMutation.mutate()}
             >
               {revokeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Revogar Regra
+              {t('payrollTaxRulesPage.revokeRule')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1098,4 +1099,3 @@ export function PayrollTaxRulesPage({
     </div>
   )
 }
-

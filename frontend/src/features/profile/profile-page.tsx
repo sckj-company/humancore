@@ -34,9 +34,9 @@ import { useAuthStore } from '@/stores/auth-store'
 import { api, getApiErrorMessage } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
-const profileSchema = z.object({
-  name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
-  email: z.string().email('Email inválido'),
+const makeProfileSchema = (t: (key: string) => string) => z.object({
+  name: z.string().min(2, t('profilePage.validation.nameRequired')),
+  email: z.string().email(t('profilePage.validation.emailInvalid')),
   phone: z.string().optional(),
   address: z.string().optional(),
   city: z.string().optional(),
@@ -44,19 +44,19 @@ const profileSchema = z.object({
   postal_code: z.string().optional(),
 })
 
-const passwordSchema = z
+const makePasswordSchema = (t: (key: string) => string) => z
   .object({
-    current_password: z.string().min(1, 'Palavra-passe atual obrigatória'),
-    password: z.string().min(8, 'Nova palavra-passe deve ter pelo menos 8 caracteres'),
+    current_password: z.string().min(1, t('profilePage.validation.currentPasswordRequired')),
+    password: z.string().min(8, t('profilePage.validation.newPasswordMinimum')),
     password_confirmation: z.string(),
   })
   .refine((data) => data.password === data.password_confirmation, {
-    message: 'As palavras-passe não coincidem',
+    message: t('profilePage.validation.passwordsMismatch'),
     path: ['password_confirmation'],
   })
 
-type ProfileFormValues = z.infer<typeof profileSchema>
-type PasswordFormValues = z.infer<typeof passwordSchema>
+type ProfileFormValues = z.infer<ReturnType<typeof makeProfileSchema>>
+type PasswordFormValues = z.infer<ReturnType<typeof makePasswordSchema>>
 
 function initials(name?: string): string {
   if (!name) return '?'
@@ -72,7 +72,7 @@ export function ProfilePage() {
   const queryClient = useQueryClient()
 
   const profileForm = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(makeProfileSchema(t)),
     defaultValues: {
       name: user?.name ?? '',
       email: user?.email ?? '',
@@ -85,7 +85,7 @@ export function ProfilePage() {
   })
 
   const passwordForm = useForm<PasswordFormValues>({
-    resolver: zodResolver(passwordSchema),
+    resolver: zodResolver(makePasswordSchema(t)),
   })
 
   const [showCurrent, setShowCurrent] = useState(false)
@@ -94,22 +94,22 @@ export function ProfilePage() {
   const updateProfileMutation = useMutation({
     mutationFn: (data: ProfileFormValues) => api.put('auth/profile', data),
     onSuccess: (response: any) => {
-      toast.success('Perfil atualizado com sucesso')
+      toast.success(t('profilePage.profileUpdated'))
       if (response?.data) {
         setUser(response.data)
       }
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao atualizar perfil')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('profilePage.profileUpdateError'))),
   })
 
   const updatePasswordMutation = useMutation({
     mutationFn: (data: PasswordFormValues) => api.put('auth/password', data),
     onSuccess: () => {
-      toast.success('Palavra-passe atualizada com sucesso')
+      toast.success(t('profilePage.passwordUpdated'))
       passwordForm.reset()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao atualizar palavra-passe')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('profilePage.passwordUpdateError'))),
   })
 
   const uploadAvatarMutation = useMutation({
@@ -119,11 +119,11 @@ export function ProfilePage() {
       return api.upload('auth/avatar', formData)
     },
     onSuccess: async () => {
-      toast.success('Foto atualizada com sucesso')
+      toast.success(t('profilePage.photoUpdated'))
       const me = await api.get<any>('auth/me')
       setUser(me)
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao atualizar foto')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('profilePage.photoUpdateError'))),
   })
 
   const switchLang = (lng: 'pt' | 'en' | 'zh' | 'bilingual') => {
@@ -139,18 +139,18 @@ export function ProfilePage() {
   if (!user) return null
 
   const langOptions = [
-    { value: 'pt' as const, label: 'Português', flag: '🇦🇴' },
-    { value: 'en' as const, label: 'English', flag: '🇬🇧' },
-    { value: 'zh' as const, label: '中文', flag: '🇨🇳' },
-    { value: 'bilingual' as const, label: 'Português + 中文', flag: '中' },
+    { value: 'pt' as const, label: t('profilePage.languages.portuguese'), flag: '🇦🇴' },
+    { value: 'en' as const, label: t('profilePage.languages.english'), flag: '🇬🇧' },
+    { value: 'zh' as const, label: t('profilePage.languages.chinese'), flag: '🇨🇳' },
+    { value: 'bilingual' as const, label: t('profilePage.languages.bilingual'), flag: '中' },
   ]
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="CONTA"
-        title="Meu Perfil"
-        description="Gerencie as suas informações pessoais, palavra-passe e preferências"
+        eyebrow={t('profilePage.eyebrow')}
+        title={t('profilePage.title')}
+        description={t('profilePage.description')}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -205,7 +205,7 @@ export function ProfilePage() {
                   {user.employee.employee_code && (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Briefcase className="h-3.5 w-3.5" />
-                      <span>Código: {user.employee.employee_code}</span>
+                      <span>{t('profilePage.employeeCode', { code: user.employee.employee_code })}</span>
                     </div>
                   )}
                   {user.employee.department && (
@@ -223,7 +223,7 @@ export function ProfilePage() {
                   {user.employee.hired_at && (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5" />
-                      <span>Admissão: {new Date(user.employee.hired_at).toLocaleDateString('pt')}</span>
+                      <span>{t('profilePage.hireDate', { date: new Date(user.employee.hired_at).toLocaleDateString(i18n.language) })}</span>
                     </div>
                   )}
                 </div>
@@ -239,15 +239,15 @@ export function ProfilePage() {
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="personal">
                   <User className="mr-2 h-4 w-4" />
-                  Pessoal
+                  {t('profilePage.personal')}
                 </TabsTrigger>
                 <TabsTrigger value="security">
                   <Lock className="mr-2 h-4 w-4" />
-                  Segurança
+                  {t('profilePage.security')}
                 </TabsTrigger>
                 <TabsTrigger value="preferences">
                   <MapPin className="mr-2 h-4 w-4" />
-                  Preferências
+                  {t('profilePage.preferences')}
                 </TabsTrigger>
               </TabsList>
             </CardHeader>
@@ -261,7 +261,7 @@ export function ProfilePage() {
                 >
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Nome Completo *</Label>
+                      <Label htmlFor="name">{t('profilePage.fullName')} *</Label>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input id="name" className="pl-10" {...profileForm.register('name')} />
@@ -274,7 +274,7 @@ export function ProfilePage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email *</Label>
+                      <Label htmlFor="email">{t('common.email')} *</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
@@ -292,7 +292,7 @@ export function ProfilePage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="phone">Telefone</Label>
+                      <Label htmlFor="phone">{t('common.phone')}</Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input id="phone" className="pl-10" {...profileForm.register('phone')} />
@@ -300,7 +300,7 @@ export function ProfilePage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="postal_code">Código Postal</Label>
+                      <Label htmlFor="postal_code">{t('profilePage.postalCode')}</Label>
                       <Input id="postal_code" {...profileForm.register('postal_code')} />
                     </div>
                   </div>
@@ -308,7 +308,7 @@ export function ProfilePage() {
                   <Separator />
 
                   <div className="space-y-2">
-                    <Label htmlFor="address">Morada</Label>
+                    <Label htmlFor="address">{t('profilePage.address')}</Label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input id="address" className="pl-10" {...profileForm.register('address')} />
@@ -317,11 +317,11 @@ export function ProfilePage() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="city">Cidade</Label>
+                      <Label htmlFor="city">{t('profilePage.city')}</Label>
                       <Input id="city" {...profileForm.register('city')} />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="state">Província</Label>
+                      <Label htmlFor="state">{t('profilePage.province')}</Label>
                       <Input id="state" {...profileForm.register('state')} />
                     </div>
                   </div>
@@ -333,7 +333,7 @@ export function ProfilePage() {
                       ) : (
                         <Save className="mr-2 h-4 w-4" />
                       )}
-                      Guardar Alterações
+                      {t('profilePage.saveChanges')}
                     </Button>
                   </div>
                 </form>
@@ -348,7 +348,7 @@ export function ProfilePage() {
                   className="space-y-4"
                 >
                   <div className="space-y-2">
-                    <Label htmlFor="current_password">Palavra-passe Atual *</Label>
+                    <Label htmlFor="current_password">{t('profilePage.currentPassword')} *</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
@@ -373,7 +373,7 @@ export function ProfilePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="password">Nova Palavra-passe *</Label>
+                    <Label htmlFor="password">{t('profilePage.newPassword')} *</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
@@ -395,11 +395,11 @@ export function ProfilePage() {
                         {passwordForm.formState.errors.password.message}
                       </p>
                     )}
-                    <p className="text-xs text-muted-foreground">Mínimo 8 caracteres</p>
+                    <p className="text-xs text-muted-foreground">{t('profilePage.minimumPassword')}</p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="password_confirmation">Confirmar Nova Palavra-passe *</Label>
+                    <Label htmlFor="password_confirmation">{t('profilePage.confirmNewPassword')} *</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
@@ -423,7 +423,7 @@ export function ProfilePage() {
                       ) : (
                         <Check className="mr-2 h-4 w-4" />
                       )}
-                      Atualizar Palavra-passe
+                      {t('profilePage.updatePassword')}
                     </Button>
                   </div>
                 </form>
@@ -435,9 +435,9 @@ export function ProfilePage() {
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <Label>Idioma</Label>
+                    <Label>{t('profilePage.language')}</Label>
                     <p className="text-sm text-muted-foreground">
-                      Escolha o idioma da interface
+                      {t('profilePage.languageDescription')}
                     </p>
                     <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {langOptions.map((lang) => (

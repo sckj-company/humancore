@@ -64,13 +64,13 @@ import {
 } from './api'
 import { useDepartments } from '@/features/organization/api'
 
-const PIPELINE: { value: CandidateStatus; label: string; color: string; accent: string }[] = [
-  { value: 'applied', label: 'Recebidas', color: 'bg-slate-500/10 text-slate-700 dark:text-slate-300', accent: 'border-slate-500/30' },
-  { value: 'screening', label: 'Triagem', color: 'bg-info/10 text-info', accent: 'border-info/30' },
-  { value: 'interview', label: 'Entrevistas', color: 'bg-primary/10 text-primary', accent: 'border-primary/30' },
-  { value: 'test', label: 'Avaliação', color: 'bg-warning/10 text-warning', accent: 'border-warning/30' },
-  { value: 'offer', label: 'Oferta', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', accent: 'border-amber-500/30' },
-  { value: 'hired', label: 'Contratados', color: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', accent: 'border-emerald-500/40' },
+const PIPELINE: { value: CandidateStatus; labelKey: string; color: string; accent: string }[] = [
+  { value: 'applied', labelKey: 'recruitmentPage.candidateStatuses.applied', color: 'bg-slate-500/10 text-slate-700 dark:text-slate-300', accent: 'border-slate-500/30' },
+  { value: 'screening', labelKey: 'recruitmentPage.candidateStatuses.screening', color: 'bg-info/10 text-info', accent: 'border-info/30' },
+  { value: 'interview', labelKey: 'recruitmentPage.candidateStatuses.interview', color: 'bg-primary/10 text-primary', accent: 'border-primary/30' },
+  { value: 'test', labelKey: 'recruitmentPage.candidateStatuses.test', color: 'bg-warning/10 text-warning', accent: 'border-warning/30' },
+  { value: 'offer', labelKey: 'recruitmentPage.candidateStatuses.offer', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', accent: 'border-amber-500/30' },
+  { value: 'hired', labelKey: 'recruitmentPage.candidateStatuses.hired', color: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', accent: 'border-emerald-500/40' },
 ]
 
 const STATUS_VARIANT: Record<CandidateStatus, 'success' | 'warning' | 'info' | 'destructive' | 'secondary'> = {
@@ -85,30 +85,35 @@ const STATUS_VARIANT: Record<CandidateStatus, 'success' | 'warning' | 'info' | '
 }
 
 const CONTRACT_TYPE_OPTIONS = [
-  { value: 'permanent', label: 'Efetivo / Tempo Indeterminado' },
-  { value: 'fixed_term', label: 'A Termo Certo' },
-  { value: 'temporary', label: 'Trabalho Temporário' },
-  { value: 'probation', label: 'Período Probatório' },
-  { value: 'internship', label: 'Estágio Profissional' },
-  { value: 'outsourced', label: 'Prestador de Serviços' },
+  { value: 'permanent', labelKey: 'recruitmentPage.contractTypes.permanent' },
+  { value: 'fixed_term', labelKey: 'recruitmentPage.contractTypes.fixedTerm' },
+  { value: 'temporary', labelKey: 'recruitmentPage.contractTypes.temporary' },
+  { value: 'probation', labelKey: 'recruitmentPage.contractTypes.probation' },
+  { value: 'internship', labelKey: 'recruitmentPage.contractTypes.internship' },
+  { value: 'outsourced', labelKey: 'recruitmentPage.contractTypes.outsourced' },
 ]
 
 const SALARY_FREQUENCY_OPTIONS = [
-  { value: 'monthly', label: 'Mensal' },
-  { value: 'biweekly', label: 'Quinzenal' },
-  { value: 'weekly', label: 'Semanal' },
-  { value: 'hourly', label: 'Por Hora' },
+  { value: 'monthly', labelKey: 'recruitmentPage.salaryFrequencies.monthly' },
+  { value: 'biweekly', labelKey: 'recruitmentPage.salaryFrequencies.biweekly' },
+  { value: 'weekly', labelKey: 'recruitmentPage.salaryFrequencies.weekly' },
+  { value: 'hourly', labelKey: 'recruitmentPage.salaryFrequencies.hourly' },
 ]
 
 export function RecruitmentDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const canManage = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
 
   const { data: job, isLoading, isError, refetch } = useJobOpening(id)
-  const { data: candidates, isLoading: loadingCandidates, refetch: refetchCandidates } = useCandidatesByJob(id)
+  const {
+    data: candidates,
+    isLoading: loadingCandidates,
+    isError: candidatesError,
+    refetch: refetchCandidates,
+  } = useCandidatesByJob(id)
   const { data: departments } = useDepartments()
 
   const move = useMoveCandidate()
@@ -174,17 +179,20 @@ export function RecruitmentDetailPage() {
       { id: c.id, status },
       {
         onSuccess: () =>
-          toast.success(`${c.full_name} → ${PIPELINE.find((p) => p.value === status)?.label ?? status}`),
-        onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao mover candidato')),
+          toast.success(t('recruitmentPage.candidateMovedSuccess', {
+            name: c.full_name,
+            status: t(`recruitmentPage.candidateStatuses.${status}`, { defaultValue: status }),
+          })),
+        onError: (e) => toast.error(getApiErrorMessage(e, t('recruitmentPage.candidateMoveError'))),
       },
     )
   }
 
   const handleDelete = (c: Candidate) => {
-    if (!confirm(`Tem a certeza que deseja eliminar o candidato ${c.full_name}?`)) return
+    if (!confirm(t('recruitmentPage.confirmDeleteCandidate', { name: c.full_name }))) return
     remove.mutate(c.id, {
-      onSuccess: () => toast.success('Candidato removido com sucesso'),
-      onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao eliminar candidato')),
+      onSuccess: () => toast.success(t('recruitmentPage.candidateRemovedSuccess')),
+      onError: (e) => toast.error(getApiErrorMessage(e, t('recruitmentPage.candidateDeleteError'))),
     })
   }
 
@@ -211,7 +219,7 @@ export function RecruitmentDetailPage() {
       department_id: job?.department_id ?? null,
       position_id: job?.position_id ?? null,
       manager_id: null,
-      notes: `Contratado via processo seletivo: ${job?.title ?? ''}`,
+      notes: t('recruitmentPage.hiredThroughRecruitmentNote', { jobTitle: job?.title ?? '' }),
     })
   }
 
@@ -228,7 +236,10 @@ export function RecruitmentDetailPage() {
           const empCode = emp?.employee_code || ''
 
           toast.success(
-            `Candidato ${hiringCandidate.full_name} contratado com sucesso! ${empCode ? `(Funcionário #${empCode})` : ''}`,
+            t('recruitmentPage.candidateHiredSuccess', {
+              name: hiringCandidate.full_name,
+              employeeCode: empCode ? ` (#${empCode})` : '',
+            }),
           )
           setHiringCandidate(null)
           refetchCandidates()
@@ -238,7 +249,7 @@ export function RecruitmentDetailPage() {
             navigate(`/employees/${empId}?tab=documents`)
           }
         },
-        onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao contratar candidato')),
+        onError: (e) => toast.error(getApiErrorMessage(e, t('recruitmentPage.candidateHireError'))),
       },
     )
   }
@@ -261,7 +272,7 @@ export function RecruitmentDetailPage() {
       },
       {
         onSuccess: () => {
-          toast.success('Candidato registado com sucesso nesta vaga!')
+          toast.success(t('recruitmentPage.candidateRegisteredSuccess'))
           setIsNewCandidateOpen(false)
           setCandidateForm({
             first_name: '',
@@ -274,7 +285,7 @@ export function RecruitmentDetailPage() {
           })
           refetchCandidates()
         },
-        onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar candidato')),
+        onError: (e) => toast.error(getApiErrorMessage(e, t('recruitmentPage.candidateCreateError'))),
       },
     )
   }
@@ -287,36 +298,65 @@ export function RecruitmentDetailPage() {
     )
   }
   if (isError || !job) {
-    return <ErrorState message="Vaga não encontrada." onRetry={refetch} />
+    return <ErrorState message={t('recruitmentPage.jobNotFound')} onRetry={refetch} />
   }
 
   const totalCandidates = list.length
   const inProgress = list.filter((c) => !['hired', 'rejected', 'withdrawn'].includes(c.status)).length
   const hired = list.filter((c) => c.status === 'hired').length
+  const employmentTypeKey: Record<string, string> = {
+    full_time: 'recruitmentPage.employmentTypes.fullTime',
+    part_time: 'recruitmentPage.employmentTypes.partTime',
+    contract: 'recruitmentPage.employmentTypes.contract',
+    temporary: 'recruitmentPage.employmentTypes.temporary',
+    internship: 'recruitmentPage.employmentTypes.internship',
+  }
+  const experienceLevelKey: Record<string, string> = {
+    intern: 'recruitmentPage.experienceLevels.intern',
+    junior: 'recruitmentPage.experienceLevels.junior',
+    mid: 'recruitmentPage.experienceLevels.mid',
+    senior: 'recruitmentPage.experienceLevels.senior',
+    lead: 'recruitmentPage.experienceLevels.lead',
+  }
+  const employmentTypeLabel = job.employment_type
+    ? t(employmentTypeKey[job.employment_type], { defaultValue: job.employment_type_label ?? t('recruitmentPage.fullTime') })
+    : job.employment_type_label ?? t('recruitmentPage.fullTime')
+  const experienceLevelLabel = job.experience_level
+    ? t(experienceLevelKey[job.experience_level], { defaultValue: job.experience_level_label ?? job.experience_level })
+    : job.experience_level_label
+  const dateLocale = i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : i18n.resolvedLanguage?.startsWith('en') ? 'en-US' : 'pt-PT'
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={job.department?.name ? `DEPARTAMENTO DE ${job.department.name.toUpperCase()}` : 'RECRUTAMENTO & SELEÇÃO'}
+        eyebrow={job.department?.name
+          ? t('recruitmentPage.departmentEyebrow', { department: job.department.name.toUpperCase() })
+          : t('recruitmentPage.title')}
         title={job.title}
-        description={`${job.employment_type_label ?? 'Tempo Integral'} · ${job.location ?? 'Presencial'} · ${job.openings_count} vaga(s) disponível(eis)`}
+        description={t('recruitmentPage.jobSummary', {
+          employmentType: employmentTypeLabel,
+          location: job.location ?? t('recruitmentPage.onSite'),
+          openings: job.openings_count === 1
+            ? t('recruitmentPage.openingCountOne', { count: job.openings_count })
+            : t('recruitmentPage.openingCountMany', { count: job.openings_count }),
+        })}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canManage && job.status !== 'closed' && (
-              <Button size="sm" className="gap-1.5" onClick={() => setIsNewCandidateOpen(true)}>
+              <Button size="sm" className="gap-1.5 h-auto min-h-9 whitespace-normal text-center" onClick={() => setIsNewCandidateOpen(true)}>
                 <Plus className="h-4 w-4" />
-                Adicionar Candidato
+                {t('recruitmentPage.addCandidate')}
               </Button>
             )}
             {job.status === 'closed' && (
               <Badge variant="secondary" className="px-3 py-1.5 text-xs text-muted-foreground border-dashed">
-                Vaga Fechada (Candidaturas Encerradas)
+                {t('recruitmentPage.closedJobNotice')}
               </Badge>
             )}
             <Button variant="outline" size="sm" asChild>
               <Link to="/recruitment">
                 <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-                Voltar à Lista
+                {t('recruitmentPage.backToList')}
               </Link>
             </Button>
           </div>
@@ -325,10 +365,10 @@ export function RecruitmentDetailPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-        <KpiCard label="Candidatos Registados" value={totalCandidates} icon={Users} accent="primary" />
-        <KpiCard label="Em Processo Seletivo" value={inProgress} icon={Clock} accent="info" />
-        <KpiCard label="Contratados" value={hired} icon={CheckCircle2} accent="success" />
-        <KpiCard label="Vagas Abertas" value={job.openings_count} icon={Briefcase} accent="warning" />
+        <KpiCard label={t('recruitmentPage.registeredCandidates')} value={totalCandidates} icon={Users} accent="primary" />
+        <KpiCard label={t('recruitmentPage.inRecruitmentProcess')} value={inProgress} icon={Clock} accent="info" />
+        <KpiCard label={t('recruitmentPage.hiredCandidates')} value={hired} icon={CheckCircle2} accent="success" />
+        <KpiCard label={t('recruitmentPage.openJobs')} value={job.openings_count} icon={Briefcase} accent="warning" />
       </div>
 
       {/* Informações da Vaga (Sem Abas) */}
@@ -337,15 +377,15 @@ export function RecruitmentDetailPage() {
           <div className="flex flex-wrap items-center gap-4 text-xs">
             <span className="flex items-center gap-1.5 font-medium text-foreground">
               <Briefcase className="h-3.5 w-3.5 text-primary" />
-              {job.employment_type_label ?? 'Tempo Integral'}
+              {employmentTypeLabel}
             </span>
             <span className="flex items-center gap-1.5 font-medium text-foreground">
               <MapPin className="h-3.5 w-3.5 text-primary" />
-              {job.location ?? 'Presencial'}
+              {job.location ?? t('recruitmentPage.onSite')}
             </span>
             <span className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400 font-mono">
               <Banknote className="h-3.5 w-3.5" />
-              {job.salary_range ?? 'A combinar'}
+              {job.salary_range ?? t('recruitmentPage.salaryNegotiable')}
             </span>
             {job.department && (
               <span className="flex items-center gap-1.5 font-medium text-foreground">
@@ -356,13 +396,13 @@ export function RecruitmentDetailPage() {
             {job.experience_level_label && (
               <span className="flex items-center gap-1.5 font-medium text-foreground">
                 <Award className="h-3.5 w-3.5 text-primary" />
-                {job.experience_level_label}
+                {experienceLevelLabel}
               </span>
             )}
             {job.published_at && (
               <span className="flex items-center gap-1.5 text-muted-foreground ml-auto">
                 <Calendar className="h-3.5 w-3.5" />
-                Publicada em {formatDate(job.published_at, 'pt-PT')}
+                {t('recruitmentPage.publishedOn', { date: formatDate(job.published_at, dateLocale) })}
               </span>
             )}
           </div>
@@ -371,7 +411,7 @@ export function RecruitmentDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-border/70 text-xs">
               {job.description && (
                 <div>
-                  <h4 className="font-semibold text-foreground mb-1">Descrição</h4>
+                  <h4 className="font-semibold text-foreground mb-1">{t('recruitmentPage.descriptionLabel')}</h4>
                   <p className="text-muted-foreground line-clamp-3 whitespace-pre-line leading-relaxed">
                     {job.description}
                   </p>
@@ -379,7 +419,7 @@ export function RecruitmentDetailPage() {
               )}
               {job.requirements && (
                 <div>
-                  <h4 className="font-semibold text-foreground mb-1">Requisitos</h4>
+                  <h4 className="font-semibold text-foreground mb-1">{t('recruitmentPage.requirements')}</h4>
                   <p className="text-muted-foreground line-clamp-3 whitespace-pre-line leading-relaxed">
                     {job.requirements}
                   </p>
@@ -395,7 +435,7 @@ export function RecruitmentDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
-            Candidatos da Vaga ({totalCandidates})
+            {t('recruitmentPage.candidatesForJobHeading', { count: totalCandidates })}
           </h2>
 
           {/* Search + View mode */}
@@ -403,7 +443,7 @@ export function RecruitmentDetailPage() {
             <div className="relative w-48 sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Pesquisar candidato..."
+                placeholder={t('recruitmentPage.searchCandidatesPlaceholder')}
                 value={candidateSearch}
                 onChange={(e) => setCandidateSearch(e.target.value)}
                 className="pl-8 h-9 text-xs"
@@ -415,7 +455,7 @@ export function RecruitmentDetailPage() {
                 size="icon-sm"
                 className="h-7 w-7"
                 onClick={() => setViewMode('kanban')}
-                title="Visualização Pipeline (Kanban)"
+                title={t('recruitmentPage.pipelineView')}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
               </Button>
@@ -424,7 +464,7 @@ export function RecruitmentDetailPage() {
                 size="icon-sm"
                 className="h-7 w-7"
                 onClick={() => setViewMode('list')}
-                title="Visualização em Lista"
+                title={t('recruitmentPage.listView')}
               >
                 <List className="h-3.5 w-3.5" />
               </Button>
@@ -438,19 +478,30 @@ export function RecruitmentDetailPage() {
             <div className="flex h-40 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : candidatesError ? (
+            <ErrorState
+              message={t('recruitmentPage.loadCandidatesError')}
+              onRetry={refetchCandidates}
+            />
           ) : list.length === 0 ? (
             <EmptyState
               icon={<Users className="h-8 w-8 text-primary" />}
-              title="Nenhum candidato registado nesta vaga"
-              description="Adicione candidatos para iniciar o processo de triagem, entrevistas e contratação."
+              title={t('recruitmentPage.noCandidatesTitle')}
+              description={t('recruitmentPage.noCandidatesDescription')}
               action={
                 canManage && job.status !== 'closed' ? (
-                  <Button size="sm" className="mt-3 gap-1.5" onClick={() => setIsNewCandidateOpen(true)}>
+                  <Button size="sm" className="mt-3 gap-1.5 h-auto min-h-9 whitespace-normal text-center" onClick={() => setIsNewCandidateOpen(true)}>
                     <Plus className="h-4 w-4" />
-                    Adicionar Primeiro Candidato
+                    {t('recruitmentPage.addFirstCandidate')}
                   </Button>
                 ) : undefined
               }
+            />
+          ) : filteredList.length === 0 ? (
+            <EmptyState
+              icon={<Search className="h-8 w-8 text-primary" />}
+              title={t('recruitmentPage.noSearchResultsTitle')}
+              description={t('recruitmentPage.noSearchResultsDescription')}
             />
           ) : viewMode === 'kanban' ? (
             /* ================= Visão Kanban ================= */
@@ -468,7 +519,7 @@ export function RecruitmentDetailPage() {
                     >
                       <div className="mb-2.5 flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-1.5">
                         <span className={cn('rounded-md px-2 py-0.5 text-[11px] font-semibold', stage.color)}>
-                          {stage.label}
+                          {t(stage.labelKey)}
                         </span>
                         <span className="text-xs font-bold text-muted-foreground">{items.length}</span>
                       </div>
@@ -476,7 +527,7 @@ export function RecruitmentDetailPage() {
                       <div className="flex-1 space-y-2.5 overflow-y-auto scrollbar-thin pr-0.5">
                         {items.length === 0 ? (
                           <div className="h-24 flex items-center justify-center text-center text-[11px] text-muted-foreground/60 border border-dashed border-border/50 rounded-lg">
-                            Vazio
+                            {t('recruitmentPage.emptyStage')}
                           </div>
                         ) : (
                           items.map((c) => (
@@ -500,8 +551,8 @@ export function RecruitmentDetailPage() {
               {(grouped.rejected?.length ?? 0) > 0 && (
                 <details className="rounded-xl border border-dashed border-border bg-muted/20 p-4">
                   <summary className="cursor-pointer text-xs font-semibold text-muted-foreground flex items-center justify-between">
-                    <span>Arquivo de Candidatos ({grouped.rejected.length}) — Rejeitados ou Desistentes</span>
-                    <span className="text-[11px] text-muted-foreground">Clique para expandir</span>
+                    <span>{t('recruitmentPage.archivedCandidatesHeading', { count: grouped.rejected.length })}</span>
+                    <span className="text-[11px] text-muted-foreground">{t('recruitmentPage.clickToExpand')}</span>
                   </summary>
                   <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                     {grouped.rejected.map((c) => (
@@ -519,7 +570,9 @@ export function RecruitmentDetailPage() {
                           </div>
                         </div>
                         <Badge variant={STATUS_VARIANT[c.status]} className="text-[10px] shrink-0">
-                          {c.status === 'rejected' ? 'Rejeitado' : 'Desistiu'}
+                          {c.status === 'hired'
+                            ? t('recruitmentPage.candidateHired')
+                            : t(`recruitmentPage.candidateStatuses.${c.status}`, { defaultValue: c.status })}
                         </Badge>
                       </div>
                     ))}
@@ -535,12 +588,12 @@ export function RecruitmentDetailPage() {
                   <table className="w-full text-left text-xs">
                     <thead className="bg-muted/50 border-b border-border text-muted-foreground uppercase text-[10px] tracking-wider font-semibold">
                       <tr>
-                        <th className="py-3 px-4">Candidato</th>
-                        <th className="py-3 px-4">Contacto</th>
-                        <th className="py-3 px-4">Experiência</th>
-                        <th className="py-3 px-4">Pretensão Salarial</th>
-                        <th className="py-3 px-4">Etapa / Estado</th>
-                        <th className="py-3 px-4 text-right">Ações</th>
+                        <th className="py-3 px-4">{t('recruitmentPage.candidate')}</th>
+                        <th className="py-3 px-4">{t('recruitmentPage.contact')}</th>
+                        <th className="py-3 px-4">{t('recruitmentPage.experience')}</th>
+                        <th className="py-3 px-4">{t('recruitmentPage.expectedSalary')}</th>
+                        <th className="py-3 px-4">{t('recruitmentPage.stageAndStatus')}</th>
+                        <th className="py-3 px-4 text-right">{t('recruitmentPage.actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -559,7 +612,7 @@ export function RecruitmentDetailPage() {
                                 <div>
                                   <p className="font-semibold text-foreground text-sm">{c.full_name}</p>
                                   <span className="text-[10px] text-muted-foreground">
-                                    Inscrito em {formatDate(c.applied_at)}
+                                    {t('recruitmentPage.appliedOn', { date: formatDate(c.applied_at, dateLocale) })}
                                   </span>
                                 </div>
                               </div>
@@ -579,14 +632,18 @@ export function RecruitmentDetailPage() {
                               )}
                             </td>
                             <td className="py-3 px-4">
-                              {c.years_experience != null ? `${c.years_experience} anos` : '—'}
+                              {c.years_experience != null
+                                ? c.years_experience === 1
+                                  ? t('recruitmentPage.yearsExperienceOne', { count: c.years_experience })
+                                  : t('recruitmentPage.yearsExperienceMany', { count: c.years_experience })
+                                : '—'}
                             </td>
                             <td className="py-3 px-4 font-mono font-medium">
                               {c.expected_salary ? Number(c.expected_salary).toLocaleString() + ' AOA' : '—'}
                             </td>
                             <td className="py-3 px-4">
                               <Badge variant={STATUS_VARIANT[c.status]} className="text-[11px] font-medium">
-                                {PIPELINE.find((p) => p.value === c.status)?.label ?? c.status}
+                                {t(`recruitmentPage.candidateStatuses.${c.status}`, { defaultValue: c.status })}
                               </Badge>
                             </td>
                             <td className="py-3 px-4 text-right">
@@ -594,16 +651,16 @@ export function RecruitmentDetailPage() {
                                 {!isHired ? (
                                   <Button
                                     size="sm"
-                                    className="h-7 px-2.5 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                                    className="h-auto min-h-7 px-2.5 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium whitespace-normal text-center"
                                     onClick={() => handleOpenHire(c)}
                                   >
                                     <UserCheck className="h-3.5 w-3.5" />
-                                    Contratar
+                                    {t('recruitmentPage.hire')}
                                   </Button>
                                 ) : (
                                   <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs py-0.5">
                                     <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                    Contratado
+                                    {t('recruitmentPage.candidateHired')}
                                   </Badge>
                                 )}
                                 {canManage && (
@@ -612,7 +669,7 @@ export function RecruitmentDetailPage() {
                                     variant="ghost"
                                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                     onClick={() => handleDelete(c)}
-                                    title="Eliminar candidato"
+                                    title={t('recruitmentPage.deleteCandidate')}
                                   >
                                     <XCircle className="h-4 w-4" />
                                   </Button>
@@ -637,11 +694,10 @@ export function RecruitmentDetailPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg text-emerald-600">
               <UserCheck className="h-5 w-5" />
-              Contratar Candidato — {hiringCandidate?.full_name}
+              {t('recruitmentPage.hireCandidateTitle', { name: hiringCandidate?.full_name ?? '' })}
             </DialogTitle>
             <DialogDescription>
-              Ao confirmar a contratação, {hiringCandidate?.full_name} será automaticamente registado como funcionário
-              ativo no sistema e vinculado ao contrato configurado abaixo.
+              {t('recruitmentPage.hireCandidateDescription', { name: hiringCandidate?.full_name ?? '' })}
             </DialogDescription>
           </DialogHeader>
 
@@ -649,7 +705,7 @@ export function RecruitmentDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label className="text-xs font-semibold">
-                  Tipo de Contrato <span className="text-destructive">*</span>
+                  {t('recruitmentPage.contractType')} <span className="text-destructive">*</span>
                 </Label>
                 <Select
                   value={hireForm.contract_type}
@@ -661,7 +717,7 @@ export function RecruitmentDetailPage() {
                   <SelectContent>
                     {CONTRACT_TYPE_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
+                        {t(opt.labelKey)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -670,7 +726,7 @@ export function RecruitmentDetailPage() {
 
               <div>
                 <Label className="text-xs font-semibold">
-                  Salário Base (AOA) <span className="text-destructive">*</span>
+                  {t('recruitmentPage.baseSalary')} (AOA) <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   type="number"
@@ -685,7 +741,7 @@ export function RecruitmentDetailPage() {
 
               <div>
                 <Label className="text-xs font-semibold">
-                  Periodicidade Salarial <span className="text-destructive">*</span>
+                  {t('recruitmentPage.salaryFrequency')} <span className="text-destructive">*</span>
                 </Label>
                 <Select
                   value={hireForm.salary_frequency}
@@ -697,7 +753,7 @@ export function RecruitmentDetailPage() {
                   <SelectContent>
                     {SALARY_FREQUENCY_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
+                        {t(opt.labelKey)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -705,21 +761,21 @@ export function RecruitmentDetailPage() {
               </div>
 
               <div>
-                <Label className="text-xs font-semibold">Carga Horária Semanal</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.weeklyWorkHours')}</Label>
                 <Input
                   type="number"
                   min={1}
                   max={80}
                   value={hireForm.work_hours_per_week}
                   onChange={(e) => setHireForm((prev) => ({ ...prev, work_hours_per_week: Number(e.target.value) }))}
-                  placeholder="Ex: 40"
+                  placeholder={t('recruitmentPage.weeklyWorkHoursPlaceholder')}
                   className="mt-1.5"
                 />
               </div>
 
               <div>
                 <Label className="text-xs font-semibold">
-                  Data de Início / Admissão <span className="text-destructive">*</span>
+                  {t('recruitmentPage.startDate')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   type="date"
@@ -731,7 +787,7 @@ export function RecruitmentDetailPage() {
               </div>
 
               <div>
-                <Label className="text-xs font-semibold">Data de Término (Opcional)</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.endDateOptional')}</Label>
                 <Input
                   type="date"
                   value={hireForm.end_date ?? ''}
@@ -741,17 +797,19 @@ export function RecruitmentDetailPage() {
               </div>
 
               <div className="sm:col-span-2">
-                <Label className="text-xs font-semibold">Departamento Lotação</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.assignedDepartment')}</Label>
                 <Select
                   value={hireForm.department_id ? String(hireForm.department_id) : 'default'}
                   onValueChange={(val) => setHireForm((prev) => ({ ...prev, department_id: val === 'default' ? null : Number(val) }))}
                 >
                   <SelectTrigger className="mt-1.5">
-                    <SelectValue placeholder="Selecione o departamento..." />
+                    <SelectValue placeholder={t('recruitmentPage.selectDepartment')} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="default">
-                      {job?.department?.name ? `${job.department.name} (Padrão da Vaga)` : 'Sem departamento específico'}
+                      {job?.department?.name
+                        ? t('recruitmentPage.jobDefaultDepartment', { department: job.department.name })
+                        : t('recruitmentPage.noSpecificDepartment')}
                     </SelectItem>
                     {(departments ?? []).map((d) => (
                       <SelectItem key={d.id} value={String(d.id)}>
@@ -763,11 +821,11 @@ export function RecruitmentDetailPage() {
               </div>
 
               <div className="sm:col-span-2">
-                <Label className="text-xs font-semibold">Observações / Termos Adicionais</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.additionalNotesAndTerms')}</Label>
                 <Input
                   value={hireForm.notes ?? ''}
                   onChange={(e) => setHireForm((prev) => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Notas internas ou cláusulas especiais do contrato"
+                  placeholder={t('recruitmentPage.contractNotesPlaceholder')}
                   className="mt-1.5"
                 />
               </div>
@@ -781,23 +839,23 @@ export function RecruitmentDetailPage() {
                 onClick={() => setHiringCandidate(null)}
                 disabled={hire.isPending}
               >
-                Cancelar
+                {t('recruitmentPage.cancel')}
               </Button>
               <Button
                 type="submit"
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold"
+                className="h-auto min-h-9 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold whitespace-normal text-center"
                 disabled={hire.isPending || !hireForm.start_date || hireForm.base_salary < 0}
               >
                 {hire.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    A Criar Contrato & Funcionário...
+                    {t('recruitmentPage.creatingContractAndEmployee')}
                   </>
                 ) : (
                   <>
                     <UserCheck className="h-4 w-4" />
-                    Confirmar Contratação
+                    {t('recruitmentPage.confirmHire')}
                   </>
                 )}
               </Button>
@@ -812,10 +870,10 @@ export function RecruitmentDetailPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-primary" />
-              Adicionar Candidato à Vaga
+              {t('recruitmentPage.addCandidateToJobTitle')}
             </DialogTitle>
             <DialogDescription>
-              Registar um novo candidato concorrente para a vaga <span className="font-semibold text-foreground">{job.title}</span>.
+              {t('recruitmentPage.addCandidateToJobDescription', { jobTitle: job.title })}
             </DialogDescription>
           </DialogHeader>
 
@@ -823,25 +881,25 @@ export function RecruitmentDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-semibold">
-                  Nome Próprio <span className="text-destructive">*</span>
+                  {t('recruitmentPage.firstName')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   required
                   value={candidateForm.first_name}
                   onChange={(e) => setCandidateForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                  placeholder="Ex: João"
+                  placeholder={t('recruitmentPage.firstNamePlaceholder')}
                   className="mt-1.5"
                 />
               </div>
               <div>
                 <Label className="text-xs font-semibold">
-                  Apelido <span className="text-destructive">*</span>
+                  {t('recruitmentPage.lastName')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   required
                   value={candidateForm.last_name}
                   onChange={(e) => setCandidateForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                  placeholder="Ex: Silva"
+                  placeholder={t('recruitmentPage.lastNamePlaceholder')}
                   className="mt-1.5"
                 />
               </div>
@@ -849,59 +907,59 @@ export function RecruitmentDetailPage() {
 
             <div>
               <Label className="text-xs font-semibold">
-                Correio Eletrónico (Email) <span className="text-destructive">*</span>
+                {t('recruitmentPage.email')} <span className="text-destructive">*</span>
               </Label>
               <Input
                 type="email"
                 required
                 value={candidateForm.email}
                 onChange={(e) => setCandidateForm((prev) => ({ ...prev, email: e.target.value }))}
-                placeholder="candidato@email.com"
+                placeholder={t('recruitmentPage.emailPlaceholder')}
                 className="mt-1.5"
               />
             </div>
 
             <div>
-              <Label className="text-xs font-semibold">Telefone</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.phone')}</Label>
               <Input
                 value={candidateForm.phone}
                 onChange={(e) => setCandidateForm((prev) => ({ ...prev, phone: e.target.value }))}
-                placeholder="+244 9..."
+                placeholder={t('recruitmentPage.phonePlaceholder')}
                 className="mt-1.5"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs font-semibold">Anos de Experiência</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.yearsExperience')}</Label>
                 <Input
                   type="number"
                   min={0}
                   value={candidateForm.years_experience}
                   onChange={(e) => setCandidateForm((prev) => ({ ...prev, years_experience: e.target.value }))}
-                  placeholder="Ex: 3"
+                  placeholder={t('recruitmentPage.yearsExperiencePlaceholder')}
                   className="mt-1.5"
                 />
               </div>
               <div>
-                <Label className="text-xs font-semibold">Pretensão Salarial (AOA)</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.expectedSalary')} (AOA)</Label>
                 <Input
                   type="number"
                   min={0}
                   value={candidateForm.expected_salary}
                   onChange={(e) => setCandidateForm((prev) => ({ ...prev, expected_salary: e.target.value }))}
-                  placeholder="Ex: 350000"
+                  placeholder={t('recruitmentPage.expectedSalaryPlaceholder')}
                   className="mt-1.5"
                 />
               </div>
             </div>
 
             <div>
-              <Label className="text-xs font-semibold">Notas ou Resumo Curricular</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.notesOrSummary')}</Label>
               <Input
                 value={candidateForm.notes}
                 onChange={(e) => setCandidateForm((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Perfil do candidato, competências chave"
+                placeholder={t('recruitmentPage.candidateProfilePlaceholder')}
                 className="mt-1.5"
               />
             </div>
@@ -914,18 +972,18 @@ export function RecruitmentDetailPage() {
                 onClick={() => setIsNewCandidateOpen(false)}
                 disabled={createCandidate.isPending}
               >
-                Cancelar
+                {t('recruitmentPage.cancel')}
               </Button>
-              <Button type="submit" size="sm" disabled={createCandidate.isPending}>
+              <Button type="submit" size="sm" className="h-auto min-h-9 whitespace-normal text-center" disabled={createCandidate.isPending}>
                 {createCandidate.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                    A Registar...
+                    {t('recruitmentPage.registering')}
                   </>
                 ) : (
                   <>
                     <Plus className="h-4 w-4 mr-1.5" />
-                    Registar Candidato
+                    {t('recruitmentPage.registerCandidate')}
                   </>
                 )}
               </Button>
@@ -946,6 +1004,7 @@ interface CandidateCardProps {
 }
 
 function CandidateCard({ candidate: c, onMove, onDelete, onHire, canManage }: CandidateCardProps) {
+  const { t } = useTranslation()
   const nextIdx = PIPELINE.findIndex((s) => s.value === c.status) + 1
   const next = nextIdx < PIPELINE.length ? PIPELINE[nextIdx] : null
   const isHired = c.status === 'hired'
@@ -970,7 +1029,9 @@ function CandidateCard({ candidate: c, onMove, onDelete, onHire, canManage }: Ca
         {c.years_experience != null && (
           <span className="inline-flex items-center gap-1 font-medium bg-muted/60 px-1.5 py-0.5 rounded">
             <Briefcase className="h-3 w-3" />
-            {c.years_experience}a exp
+            {c.years_experience === 1
+              ? t('recruitmentPage.yearsExperienceShortOne', { count: c.years_experience })
+              : t('recruitmentPage.yearsExperienceShortMany', { count: c.years_experience })}
           </span>
         )}
         {c.expected_salary && (
@@ -1002,18 +1063,18 @@ function CandidateCard({ candidate: c, onMove, onDelete, onHire, canManage }: Ca
             className="w-full justify-center bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] py-1 font-semibold gap-1"
           >
             <CheckCircle2 className="h-3 w-3" />
-            Contratado
+            {t('recruitmentPage.candidateStatuses.hired')}
           </Badge>
         ) : (
           canManage && (
             <div className="space-y-1.5">
               <Button
                 size="sm"
-                className="w-full h-7 px-2 text-[11px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                className="w-full h-auto min-h-7 px-2 text-[11px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs whitespace-normal text-center"
                 onClick={() => onHire(c)}
               >
                 <UserCheck className="h-3.5 w-3.5" />
-                Contratar Candidato
+                {t('recruitmentPage.hireCandidate')}
               </Button>
 
               <div className="flex items-center gap-1">
@@ -1021,18 +1082,18 @@ function CandidateCard({ candidate: c, onMove, onDelete, onHire, canManage }: Ca
                   <button
                     type="button"
                     onClick={() => onMove(c, next.value)}
-                    className="flex flex-1 items-center justify-center gap-1 rounded-md bg-muted/60 px-1.5 py-1 text-[10px] font-medium text-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                    title={`Mover para ${next.label}`}
+                    className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md bg-muted/60 px-1.5 py-1 text-[10px] font-medium text-foreground transition-colors hover:bg-primary/10 hover:text-primary whitespace-normal text-center"
+                    title={t('recruitmentPage.moveCandidateToStage', { stage: t(next.labelKey) })}
                   >
                     <Sparkles className="h-3 w-3" />
-                    {next.label}
+                    {t(next.labelKey)}
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => onDelete(c)}
                   className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  title="Eliminar candidato"
+                  title={t('recruitmentPage.deleteCandidate')}
                 >
                   <XCircle className="h-3.5 w-3.5" />
                 </button>

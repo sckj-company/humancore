@@ -92,7 +92,7 @@ export function SuperAdminDashboardPage() {
       },
       series: [
         {
-          name: 'Tenants',
+          name: t('superAdminDashboard.tenants'),
           type: 'bar',
           barWidth: '45%',
           data: values,
@@ -100,7 +100,7 @@ export function SuperAdminDashboardPage() {
         },
       ],
     }
-  }, [data])
+  }, [data, t])
 
   const statusOption: EChartsOption = useMemo(() => {
     return {
@@ -127,17 +127,21 @@ export function SuperAdminDashboardPage() {
           itemStyle: { borderRadius: 6, borderColor: 'var(--card)', borderWidth: 2 },
           label: { show: false },
           data: Object.entries(data?.by_status ?? {}).map(([k, v]) => ({
-            name: k.charAt(0).toUpperCase() + k.slice(1),
+            name: t(`superAdminDashboard.status.${k}`, { defaultValue: k }),
             value: v,
           })),
         },
       ],
     }
-  }, [data])
+  }, [data, t])
 
   const segmentsOption: EChartsOption = useMemo(() => {
     const segments = data?.segments ?? { small: 0, medium: 0, large: 0 }
-    const labels = ['Small (≤10)', 'Medium (11–50)', 'Large (>50)']
+    const labels = [
+      t('superAdminDashboard.segmentLabels.small'),
+      t('superAdminDashboard.segmentLabels.medium'),
+      t('superAdminDashboard.segmentLabels.large'),
+    ]
     return {
       tooltip: {
         trigger: 'axis',
@@ -163,7 +167,7 @@ export function SuperAdminDashboardPage() {
       },
       series: [
         {
-          name: 'Tenants',
+          name: t('superAdminDashboard.tenants'),
           type: 'bar',
           barWidth: '40%',
           data: [segments.small, segments.medium, segments.large],
@@ -171,10 +175,10 @@ export function SuperAdminDashboardPage() {
         },
       ],
     }
-  }, [data])
+  }, [data, t])
 
   if (isLoading) return <LoadingState />
-  if (isError || !data) return <ErrorState message="Não foi possível carregar o dashboard." onRetry={refetch} />
+  if (isError || !data) return <ErrorState message={t('employeeDashboard.loadError')} onRetry={refetch} />
 
   return (
     <div className="space-y-6">
@@ -183,15 +187,13 @@ export function SuperAdminDashboardPage() {
         <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent_60%)] md:block" />
         <CardContent className="relative flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">Plataforma</p>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">{t('superAdminDashboard.platform')}</p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">
-              {t('superAdminDashboard.title', { defaultValue: `Dashboard Super Admin` })}
+              {t('superAdminDashboard.title')}
               {firstName ? ` · ${firstName}` : ''}
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              {t('superAdminDashboard.subtitle', {
-                defaultValue: 'Visão global de todos os tenants e utilizadores da plataforma.',
-              })}
+              {t('superAdminDashboard.subtitle')}
             </p>
             <p className="mt-2 text-xs text-muted-foreground/80">
               {new Intl.DateTimeFormat(locale, { dateStyle: 'full' }).format(new Date())}
@@ -201,7 +203,7 @@ export function SuperAdminDashboardPage() {
             <Button asChild variant="outline" size="sm" className="gap-1.5">
               <Link to="/organization">
                 <Globe className="h-3.5 w-3.5" />
-                {t('superAdminDashboard.manageTenants', { defaultValue: 'Gerir organização' })}
+                {t('superAdminDashboard.manageTenants')}
                 <ArrowRight className="h-3 w-3" />
               </Link>
             </Button>
@@ -211,13 +213,13 @@ export function SuperAdminDashboardPage() {
 
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
-        <KpiCard label="Tenants" value={data.kpis.total_tenants} icon={Building2} accent="primary" />
-        <KpiCard label="Ativos" value={data.kpis.active_tenants} icon={Activity} accent="success" />
-        <KpiCard label="Suspensos" value={data.kpis.suspended_tenants} icon={AlertTriangle} accent="destructive" />
-        <KpiCard label="Funcionários" value={data.kpis.total_employees} icon={Users} accent="info" />
-        <KpiCard label="Funcionários ativos" value={data.kpis.active_employees} icon={Users} accent="success" />
-        <KpiCard label="Utilizadores" value={data.kpis.total_users} icon={UserCog} accent="warning" />
-        <KpiCard label="Super admins" value={data.kpis.super_admins} icon={ShieldCheck} accent="neutral" />
+        <KpiCard label={t('superAdminDashboard.tenants')} value={data.kpis.total_tenants} icon={Building2} accent="primary" />
+        <KpiCard label={t('superAdminDashboard.active')} value={data.kpis.active_tenants} icon={Activity} accent="success" />
+        <KpiCard label={t('superAdminDashboard.suspended')} value={data.kpis.suspended_tenants} icon={AlertTriangle} accent="destructive" />
+        <KpiCard label={t('superAdminDashboard.employees')} value={data.kpis.total_employees} icon={Users} accent="info" />
+        <KpiCard label={t('superAdminDashboard.activeEmployees')} value={data.kpis.active_employees} icon={Users} accent="success" />
+        <KpiCard label={t('superAdminDashboard.users')} value={data.kpis.total_users} icon={UserCog} accent="warning" />
+        <KpiCard label={t('superAdminDashboard.superAdmins')} value={data.kpis.super_admins} icon={ShieldCheck} accent="neutral" />
       </div>
 
       {/* Charts row */}
@@ -226,13 +228,13 @@ export function SuperAdminDashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle className="text-base">
-                {t('superAdminDashboard.tenantTrend', { defaultValue: 'Crescimento de Tenants' })}
+                {t('superAdminDashboard.tenantTrend')}
               </CardTitle>
-              <CardDescription>Tenants criados — últimos 12 meses</CardDescription>
+              <CardDescription>{t('superAdminDashboard.tenantTrendDescription')}</CardDescription>
             </div>
             <Badge variant="soft" className="gap-1">
               <TrendingUp className="h-3 w-3 text-success" />
-              {data.tenant_trend.reduce((a, b) => a + b.count, 0)} total
+              {t('superAdminDashboard.totalCount', { count: data.tenant_trend.reduce((a, b) => a + b.count, 0) })}
             </Badge>
           </CardHeader>
           <CardContent className="pl-0">
@@ -243,9 +245,9 @@ export function SuperAdminDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {t('superAdminDashboard.byStatus', { defaultValue: 'Distribuição por Estado' })}
+              {t('superAdminDashboard.byStatus')}
             </CardTitle>
-            <CardDescription>Estado dos tenants</CardDescription>
+            <CardDescription>{t('superAdminDashboard.statusDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             <Chart option={statusOption} height={180} />
@@ -257,9 +259,9 @@ export function SuperAdminDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {t('superAdminDashboard.segments', { defaultValue: 'Segmentação por dimensão' })}
+              {t('superAdminDashboard.segments')}
             </CardTitle>
-            <CardDescription>Nº de funcionários por tenant</CardDescription>
+            <CardDescription>{t('superAdminDashboard.segmentDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="pl-0">
             <Chart option={segmentsOption} height={240} />
@@ -268,26 +270,26 @@ export function SuperAdminDashboardPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Tenants</CardTitle>
-            <CardDescription>Todos os tenants da plataforma</CardDescription>
+            <CardTitle className="text-base">{t('superAdminDashboard.tenantsTable')}</CardTitle>
+            <CardDescription>{t('superAdminDashboard.tenantsTableDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Empresa</th>
-                    <th className="px-4 py-3 font-medium">Slug</th>
-                    <th className="px-4 py-3 font-medium text-right">Funcionários</th>
-                    <th className="px-4 py-3 font-medium text-right">Criado</th>
-                    <th className="px-4 py-3 font-medium text-right">Status</th>
+                    <th className="px-4 py-3 font-medium">{t('superAdminDashboard.company')}</th>
+                    <th className="px-4 py-3 font-medium">{t('superAdminDashboard.slug')}</th>
+                    <th className="px-4 py-3 font-medium text-right">{t('superAdminDashboard.employees')}</th>
+                    <th className="px-4 py-3 font-medium text-right">{t('superAdminDashboard.created')}</th>
+                    <th className="px-4 py-3 font-medium text-right">{t('common.status')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.by_tenant.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
-                        Sem tenants.
+                        {t('superAdminDashboard.noTenants')}
                       </td>
                     </tr>
                   ) : (
@@ -303,7 +305,7 @@ export function SuperAdminDashboardPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Badge variant={ACENTS[tenant.status === 'active' ? 'true' : 'false']}>
-                            {tenant.status}
+                            {t(`superAdminDashboard.status.${tenant.status}`, { defaultValue: tenant.status })}
                           </Badge>
                         </td>
                       </tr>

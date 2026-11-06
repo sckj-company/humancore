@@ -342,6 +342,26 @@ O sistema deve distinguir descontos obrigatórios de descontos
 facultativos ou dependentes de autorização. Deve validar limites legais
 aplicáveis e impedir descontos arbitrários.
 
+Cada desconto configurado deve identificar o trabalhador, a natureza
+(incluindo tipos específicos definidos pela entidade), a forma de cálculo
+(valor fixo por período ou percentagem), a recorrência e, quando
+aplicável, o montante total e o número de prestações. O valor da prestação
+deve ser calculado a partir do montante total e do número de prestações,
+em vez de ser introduzido como um valor independente. A configuração
+deve ainda indicar se o desconto é obrigatório e permitir registar o
+fundamento legal, contratual ou a autorização correspondente.
+Para um valor fixo, quando apenas o valor por período e o número de
+prestações são indicados, o montante total é calculado automaticamente.
+Uma percentagem com número limitado de prestações exige também um
+montante total para limitar o saldo.
+
+Descontos activos configurados para o trabalhador são incluídos no
+processamento: valores percentuais incidem sobre a remuneração bruta do
+período e valores fixos usam o valor por período ou a prestação
+calculada. Quando existe um montante total, o processamento limita a
+prestação ao saldo em aberto. O registo do pagamento actualiza o montante
+pago e conclui descontos pontuais ou cujo total tenha sido liquidado.
+
 ### 4.5. Remuneração líquida
 
 Modelo geral:

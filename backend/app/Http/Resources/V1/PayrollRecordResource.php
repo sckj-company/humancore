@@ -13,6 +13,7 @@ class PayrollRecordResource extends JsonResource
             'id' => $this->id,
             'employee_id' => $this->employee_id,
             'payroll_period_id' => $this->payroll_period_id,
+            'period_name' => $this->whenLoaded('period', fn () => $this->period?->displayName()),
             'base_salary' => (float) $this->base_salary,
             'gross_salary' => (float) $this->gross_salary,
             'total_earnings' => (float) $this->total_earnings,

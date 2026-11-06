@@ -32,21 +32,21 @@ import type { DocumentRequirement, SettingGroups, SettingItem } from '@/types'
 
 type ScalarValue = string | number | boolean
 
-const SETTING_GROUP_META: { key: string; icon: typeof Building2; title: string }[] = [
-  { key: 'company', icon: Building2, title: 'Empresa' },
-  { key: 'hr', icon: Clock, title: 'Recursos Humanos' },
-  { key: 'payroll', icon: Wallet, title: 'Folha de Pagamento' },
-  { key: 'leave', icon: Palmtree, title: 'Férias e Ausências' },
-  { key: 'communication', icon: Mail, title: 'Comunicação' },
+const SETTING_GROUP_META: { key: string; icon: typeof Building2; titleKey: string }[] = [
+  { key: 'company', icon: Building2, titleKey: 'groups.company' },
+  { key: 'hr', icon: Clock, titleKey: 'groups.hr' },
+  { key: 'payroll', icon: Wallet, titleKey: 'groups.payroll' },
+  { key: 'leave', icon: Palmtree, titleKey: 'groups.leave' },
+  { key: 'communication', icon: Mail, titleKey: 'groups.communication' },
 ]
-const DISCOUNT_SETTINGS: { key: string; label: string; description: string }[] = [
-  { key: 'discounts.absence_daily_amount', label: 'Falta diária', description: 'Valor descontado por falta injustificada ou sem consentimento explícito.' },
-  { key: 'discounts.lateness_hourly_amount', label: 'Atraso por hora', description: 'Valor aplicado por hora de atraso registada.' },
-  { key: 'discounts.lateness_minute_amount', label: 'Atraso por minuto', description: 'Valor aplicado por minuto de atraso quando a empresa usa desconto em minutos em vez de horas.' },
-  { key: 'discounts.lateness_free_occurrences_per_week', label: 'Atrasos livres por semana', description: 'Número de atrasos permitidos sem desconto em cada semana.' },
-  { key: 'discounts.lateness_weekly_accumulation_minutes', label: 'Acumulação semanal', description: 'Minutos acumulados por semana antes de iniciar o desconto adicional.' },
-  { key: 'discounts.dayoff_daily_amount', label: 'Folga diária', description: 'Valor aplicado quando a folga é concedida ou descontada por dia.' },
-  { key: 'discounts.default_amount', label: 'Desconto padrão', description: 'Valor base para situações de desconto não específicas.' },
+const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string }[] = [
+  { key: 'discounts.absence_daily_amount', labelKey: 'discounts.absenceDaily', descriptionKey: 'discounts.absenceDailyDescription' },
+  { key: 'discounts.lateness_hourly_amount', labelKey: 'discounts.latenessHourly', descriptionKey: 'discounts.latenessHourlyDescription' },
+  { key: 'discounts.lateness_minute_amount', labelKey: 'discounts.latenessMinute', descriptionKey: 'discounts.latenessMinuteDescription' },
+  { key: 'discounts.lateness_free_occurrences_per_week', labelKey: 'discounts.freeLateness', descriptionKey: 'discounts.freeLatenessDescription' },
+  { key: 'discounts.lateness_weekly_accumulation_minutes', labelKey: 'discounts.weeklyAccumulation', descriptionKey: 'discounts.weeklyAccumulationDescription' },
+  { key: 'discounts.dayoff_daily_amount', labelKey: 'discounts.dayOffDaily', descriptionKey: 'discounts.dayOffDailyDescription' },
+  { key: 'discounts.default_amount', labelKey: 'discounts.default', descriptionKey: 'discounts.defaultDescription' },
 ]
 const GROUP_ORDER = SETTING_GROUP_META.map((g) => g.key)
 const REQUIRED_DOCUMENT_PRESETS: DocumentRequirement[] = [
@@ -61,13 +61,14 @@ const REQUIRED_DOCUMENT_PRESETS: DocumentRequirement[] = [
 
 // ─── Super-Admin Tenant Banner ─────────────────────────────────────────────────
 function SuperAdminTenantBanner() {
+  const { t } = useTranslation()
   return (
     <div className="flex items-start gap-3 border border-amber-500/30 bg-amber-500/5 p-4">
       <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
       <div>
-        <p className="text-sm font-semibold text-foreground">Modo Super Administrador</p>
+        <p className="text-sm font-semibold text-foreground">{t('settingsPage.superAdminTitle')}</p>
         <p className="text-xs text-muted-foreground">
-          As configurações aplicam-se à empresa ativa, selecionada no cabeçalho.
+          {t('settingsPage.superAdminDescription')}
         </p>
       </div>
     </div>
@@ -108,7 +109,9 @@ export function SettingsPage() {
 
   const groups = useMemo(() => {
     if (!data) return []
-    return GROUP_ORDER.map((key) => ({ key, items: data[key] ?? [] })).filter((g) => g.items.length > 0)
+    return GROUP_ORDER
+      .map((key) => ({ key, items: data[key] ?? [] }))
+      .filter((group) => group.items.some(isEditable))
   }, [data])
 
   const payrollDiscountSettings = useMemo(
@@ -123,7 +126,9 @@ export function SettingsPage() {
     if (!data) return
     const next: Record<string, ScalarValue | string> = {}
     Object.values(data).flat().forEach((s) => {
-      if (typeof s.value === 'string' || typeof s.value === 'number' || typeof s.value === 'boolean') {
+      if (JSON_KEYS.has(s.key)) {
+        next[`${s.group}.${s.key}`] = formatJsonValue(s.value)
+      } else if (typeof s.value === 'string' || typeof s.value === 'number' || typeof s.value === 'boolean') {
         next[`${s.group}.${s.key}`] = s.value
       }
     })
@@ -141,20 +146,20 @@ export function SettingsPage() {
       return api.put('settings/bulk', { group: groupKey, values })
     },
     onSuccess: () => {
-      toast.success('Configurações guardadas')
+      toast.success(t('settingsPage.saved'))
       setDirtyGroups(new Set())
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao guardar')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('settingsPage.saveError'))),
   })
   const addDiscountRule = useMutation({
     mutationFn: ({ key, value }: { key: string; value: number }) =>
       api.put('settings/bulk', { group: 'payroll', values: { [key]: value } }),
     onSuccess: () => {
-      toast.success('Regra de desconto adicionada')
+      toast.success(t('settingsPage.discountAdded'))
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao adicionar regra de desconto')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('settingsPage.discountAddError'))),
   })
   const saveRequiredDocuments = useMutation({
     mutationFn: () => api.put('settings/bulk', {
@@ -162,14 +167,14 @@ export function SettingsPage() {
       values: { required: requiredDocuments },
     }),
     onSuccess: () => {
-      toast.success('Documentos obrigatórios guardados')
+      toast.success(t('settingsPage.documentsSaved'))
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Erro ao guardar documentos obrigatórios')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('settingsPage.documentsSaveError'))),
   })
 
   if (!isAdmin) {
-    return <ErrorState message="Não tem permissão para ver as configurações." onRetry={() => {}} />
+    return <ErrorState message={t('settingsPage.noPermission')} onRetry={() => {}} />
   }
 
   const update = (field: string, value: ScalarValue | string) => {
@@ -181,8 +186,8 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t('settings.title', { defaultValue: 'Configurações' })}
-        description="Configure a empresa, os horários e as regras do sistema."
+        title={t('settings.title')}
+        description={t('settingsPage.description')}
       />
 
       {/* Super-Admin Banner */}
@@ -195,35 +200,43 @@ export function SettingsPage() {
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="general" className="gap-2">
             <Building2 className="h-4 w-4" />
-            Geral
+            {t('settingsPage.tabs.general')}
           </TabsTrigger>
           <TabsTrigger value="discounts" className="gap-2">
             <Wallet className="h-4 w-4" />
-            Descontos
+            {t('settingsPage.tabs.discounts')}
           </TabsTrigger>
           <TabsTrigger value="salary-components" className="gap-2">
             <ListChecks className="h-4 w-4" />
-            Componentes Salariais
+            {t('settingsPage.tabs.salaryComponents')}
           </TabsTrigger>
           <TabsTrigger value="tax-rules" className="gap-2">
             <Scale className="h-4 w-4" />
-            Regras Fiscais &amp; INSS
+            {t('settingsPage.tabs.taxRules')}
           </TabsTrigger>
           <TabsTrigger value="documents" className="gap-2">
             <FileCheck className="h-4 w-4" />
-            Documentos de admissão
+            {t('settingsPage.tabs.documents')}
           </TabsTrigger>
         </TabsList>
 
         {/* ── Tab: Geral ── */}
         <TabsContent value="general" className="mt-6">
           {isLoading && <LoadingState />}
-          {isError && <ErrorState message="Não foi possível carregar as configurações." onRetry={refetch} />}
+          {isError && <ErrorState message={t('settingsPage.loadError')} onRetry={refetch} />}
           {!isLoading && !isError && (
-            <Tabs defaultValue={groups[0]?.key} orientation="vertical" className="flex flex-col gap-6">
+            groups.length === 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('settingsPage.emptyTitle')}</CardTitle>
+                  <CardDescription>{t('settingsPage.emptyDescription')}</CardDescription>
+                </CardHeader>
+              </Card>
+            ) : <Tabs defaultValue={groups[0]?.key} orientation="vertical" className="flex flex-col gap-6">
               <TabsList className="flex-wrap h-auto justify-start gap-1 bg-transparent p-0">
                 {groups.map(({ key }) => {
-                  const Icon = SETTING_GROUP_META.find((g) => g.key === key)?.icon ?? Building2
+                  const groupMeta = SETTING_GROUP_META.find((g) => g.key === key)
+                  const Icon = groupMeta?.icon ?? Building2
                   const dirty = dirtyGroups.has(key)
                   return (
                     <TabsTrigger
@@ -232,7 +245,7 @@ export function SettingsPage() {
                       className="gap-2 data-[state=active]:bg-muted data-[state=active]:shadow-none border border-transparent data-[state=active]:border-border"
                     >
                       <Icon className="h-4 w-4" />
-                      {SETTING_GROUP_META.find((g) => g.key === key)?.title ?? key}
+                      {groupMeta ? t(`settingsPage.${groupMeta.titleKey}`) : key}
                       {dirty && <span className="ml-1 h-2 w-2 rounded-full bg-primary" />}
                     </TabsTrigger>
                   )
@@ -242,8 +255,12 @@ export function SettingsPage() {
                 <TabsContent key={key} value={key}>
                   <Card>
                     <CardHeader>
-                      <CardTitle>{SETTING_GROUP_META.find((g) => g.key === key)?.title ?? key}</CardTitle>
-                      <CardDescription>Atualize as definições deste módulo.</CardDescription>
+                      <CardTitle>
+                        {SETTING_GROUP_META.find((g) => g.key === key)
+                          ? t(`settingsPage.${SETTING_GROUP_META.find((g) => g.key === key)!.titleKey}`)
+                          : key}
+                      </CardTitle>
+                      <CardDescription>{t('settingsPage.groupDescription')}</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-6 sm:grid-cols-2">
                       {items
@@ -267,7 +284,7 @@ export function SettingsPage() {
                         ) : (
                           <Save className="mr-2 h-4 w-4" />
                         )}
-                        Guardar
+                        {t('settingsPage.save')}
                       </Button>
                     </CardFooter>
                   </Card>
@@ -281,9 +298,9 @@ export function SettingsPage() {
         <TabsContent value="discounts" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Descontos do salário</CardTitle>
+              <CardTitle>{t('settingsPage.discountTitle')}</CardTitle>
               <CardDescription>
-                Configure os valores aplicados para faltas, atrasos e folgas por contexto de desconto.
+                {t('settingsPage.discountDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 md:grid-cols-2">
@@ -294,9 +311,9 @@ export function SettingsPage() {
                   return (
                     <div key={setting.key} className="rounded-lg border border-border p-4 bg-muted/20">
                       <div className="mb-3 space-y-1">
-                        <p className="text-sm font-medium">{config?.label ?? humanize(setting.key)}</p>
+                        <p className="text-sm font-medium">{config ? t(`settingsPage.${config.labelKey}`) : humanize(setting.key)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {config?.description ?? 'Valor aplicado quando existe um desconto associado a este contexto.'}
+                          {config ? t(`settingsPage.${config.descriptionKey}`) : t('settingsPage.discountFallbackDescription')}
                         </p>
                       </div>
 
@@ -311,8 +328,8 @@ export function SettingsPage() {
               {DISCOUNT_SETTINGS.filter((rule) => !payrollDiscountSettings.some((setting) => setting.key === rule.key)).map((rule) => (
                 <div key={rule.key} className="flex items-center justify-between gap-4 rounded-lg border border-dashed border-border p-4">
                   <div className="min-w-0 space-y-1">
-                    <p className="text-sm font-medium">{rule.label}</p>
-                    <p className="text-xs text-muted-foreground">{rule.description}</p>
+                    <p className="text-sm font-medium">{t(`settingsPage.${rule.labelKey}`)}</p>
+                    <p className="text-xs text-muted-foreground">{t(`settingsPage.${rule.descriptionKey}`)}</p>
                   </div>
                   <Button
                     type="button"
@@ -328,7 +345,7 @@ export function SettingsPage() {
                     {addDiscountRule.isPending && addDiscountRule.variables?.key === rule.key
                       ? <Loader2 className="h-4 w-4 animate-spin" />
                       : <Plus className="h-4 w-4" />}
-                    Adicionar
+                    {t('settingsPage.add')}
                   </Button>
                 </div>
               ))}
@@ -343,7 +360,7 @@ export function SettingsPage() {
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                Guardar
+                {t('settingsPage.save')}
               </Button>
             </CardFooter>
           </Card>
@@ -366,9 +383,9 @@ export function SettingsPage() {
         <TabsContent value="documents" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Documentos obrigatórios para admissão</CardTitle>
+              <CardTitle>{t('settingsPage.documentTitle')}</CardTitle>
               <CardDescription>
-                Selecione os documentos que devem ser anexados ao registar um funcionário. O cadastro será bloqueado enquanto faltar algum.
+                {t('settingsPage.documentDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -383,7 +400,11 @@ export function SettingsPage() {
                         : current.filter((required) => required.type !== document.type))}
                       className="h-4 w-4 accent-primary"
                     />
-                    <span>{document.label}</span>
+                    <span>
+                      {REQUIRED_DOCUMENT_PRESETS.some((preset) => preset.type === document.type)
+                        ? t(`settingsPage.documentTypes.${document.type}`)
+                        : document.label}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -392,8 +413,8 @@ export function SettingsPage() {
                 <Input
                   value={newDocumentName}
                   onChange={(event) => setNewDocumentName(event.target.value)}
-                  placeholder="Outro documento (ex.: certificado profissional)"
-                  aria-label="Nome do documento obrigatório personalizado"
+                  placeholder={t('settingsPage.customDocumentPlaceholder')}
+                  aria-label={t('settingsPage.customDocumentAriaLabel')}
                 />
                 <Button
                   type="button"
@@ -406,7 +427,7 @@ export function SettingsPage() {
                     setNewDocumentName('')
                   }}
                 >
-                  <Plus className="mr-2 h-4 w-4" />Adicionar
+                  <Plus className="mr-2 h-4 w-4" />{t('settingsPage.add')}
                 </Button>
               </div>
 
@@ -419,7 +440,7 @@ export function SettingsPage() {
                     size="sm"
                     onClick={() => setRequiredDocuments((current) => current.filter((item) => item.type !== document.type))}
                   >
-                    Remover
+                    {t('settingsPage.remove')}
                   </Button>
                 </div>
               ))}
@@ -427,7 +448,7 @@ export function SettingsPage() {
             <CardFooter className="justify-end border-t px-6 py-4">
               <Button onClick={() => saveRequiredDocuments.mutate()} disabled={saveRequiredDocuments.isPending}>
                 {saveRequiredDocuments.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Guardar documentos
+                {t('settingsPage.saveDocuments')}
               </Button>
             </CardFooter>
           </Card>
@@ -445,6 +466,17 @@ function isEditable(s: SettingItem): boolean {
   if (JSON_KEYS.has(s.key)) return true
   if (typeof s.value === 'string' || typeof s.value === 'number' || typeof s.value === 'boolean') return true
   return false
+}
+
+function formatJsonValue(value: unknown): string {
+  if (typeof value === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2)
+    } catch {
+      return value
+    }
+  }
+  return JSON.stringify(value, null, 2) ?? ''
 }
 
 function SettingField({
@@ -475,7 +507,7 @@ function SettingField({
       {isJson ? (
         <Textarea
           id={`set-${setting.key}`}
-          value={Array.isArray(value) ? JSON.stringify(value) : String(value ?? '')}
+          value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}
           rows={4}
           className="font-mono text-xs"

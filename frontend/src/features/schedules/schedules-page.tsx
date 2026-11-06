@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -75,11 +76,11 @@ interface Holiday {
   description: string | null
 }
 
-const shiftSchema = z.object({
-  name: z.string().min(2, 'Nome obrigatório'),
+const makeShiftSchema = (t: (key: string) => string) => z.object({
+  name: z.string().min(2, t('schedules.requiredName')),
   code: z.string().optional(),
-  start_time: z.string().min(1, 'Hora de início obrigatória'),
-  end_time: z.string().min(1, 'Hora de fim obrigatória'),
+  start_time: z.string().min(1, t('schedules.requiredStartTime')),
+  end_time: z.string().min(1, t('schedules.requiredEndTime')),
   break_minutes: z.coerce.number().min(0).max(480),
   work_hours: z.coerce.number().min(0).max(24),
   late_tolerance_minutes: z.coerce.number().min(0).max(120),
@@ -91,28 +92,27 @@ const shiftSchema = z.object({
 
 type ShiftFormValues = z.infer<typeof shiftSchema>
 
-const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-
 export function SchedulesPage() {
+  const { t } = useTranslation()
   const [view, setView] = useState<'shifts' | 'assignments' | 'holidays'>('shifts')
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="GESTÃO DE TEMPO"
-        title={view === 'shifts' ? 'Turnos' : view === 'assignments' ? 'Atribuições de turnos' : 'Feriados'}
-        description={view === 'shifts' ? 'Configure os horários de trabalho e as respetivas regras.' : view === 'assignments' ? 'Associe turnos aos funcionários.' : 'Consulte e registe feriados.'}
+        eyebrow={t('schedules.eyebrow')}
+        title={view === 'shifts' ? t('schedules.shifts') : view === 'assignments' ? t('schedules.assignments') : t('schedules.holidays')}
+        description={view === 'shifts' ? t('schedules.shiftsDescription') : view === 'assignments' ? t('schedules.assignmentsDescription') : t('schedules.holidaysDescription')}
       />
       <div className="flex justify-end">
         <select
-          aria-label="Área de horários e turnos"
+          aria-label={t('schedules.areaLabel')}
           value={view}
           onChange={(event) => setView(event.target.value as typeof view)}
           className="h-9 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm"
         >
-          <option value="shifts">Turnos</option>
-          <option value="assignments">Atribuições</option>
-          <option value="holidays">Feriados</option>
+          <option value="shifts">{t('schedules.shifts')}</option>
+          <option value="assignments">{t('schedules.assignments')}</option>
+          <option value="holidays">{t('schedules.holidays')}</option>
         </select>
       </div>
       {view === 'shifts' && <ShiftsTab />}
@@ -123,6 +123,7 @@ export function SchedulesPage() {
 }
 
 function ShiftsTab() {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Shift | null>(null)
   const [search, setSearch] = useState('')
@@ -139,14 +140,14 @@ function ShiftsTab() {
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-3">
-        <KpiCard label="Total de Turnos" value={totalShifts} icon={Clock} accent="primary" />
-        <KpiCard label="Turnos Ativos" value={activeShifts} icon={Sun} accent="success" />
-        <KpiCard label="Turnos Noturnos" value={nightShifts} icon={Moon} accent="info" />
+        <KpiCard label={t('schedules.totalShifts')} value={totalShifts} icon={Clock} accent="primary" />
+        <KpiCard label={t('schedules.activeShifts')} value={activeShifts} icon={Sun} accent="success" />
+        <KpiCard label={t('schedules.nightShifts')} value={nightShifts} icon={Moon} accent="info" />
       </div>
 
       <div className="flex items-center justify-between gap-2">
         <Input
-          placeholder="Pesquisar turno..."
+          placeholder={t('schedules.searchShift')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
@@ -155,14 +156,14 @@ function ShiftsTab() {
           <DialogTrigger asChild>
             <Button onClick={() => setEditing(null)}>
               <Plus className="mr-2 h-4 w-4" />
-              Novo Turno
+              {t('schedules.newShift')}
             </Button>
           </DialogTrigger>
           <ShiftDialog open={open} onOpenChange={setOpen} shift={editing} />
         </Dialog>
       </div>
 
-      {isError && <ErrorState message="Erro ao carregar turnos" onRetry={refetch} />}
+      {isError && <ErrorState message={t('schedules.loadShiftsError')} onRetry={refetch} />}
 
       {isLoading ? (
         <div className="flex justify-center p-8">
@@ -170,8 +171,8 @@ function ShiftsTab() {
         </div>
       ) : data?.data.length === 0 ? (
         <EmptyState
-          title="Sem turnos configurados"
-          description="Crie o primeiro turno para começar"
+          title={t('schedules.noShifts')}
+          description={t('schedules.createFirstShift')}
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -185,15 +186,16 @@ function ShiftsTab() {
 }
 
 function ShiftCard({ shift, onEdit }: { shift: Shift; onEdit: (s: Shift) => void }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`shifts/${shift.id}`),
     onSuccess: () => {
-      toast.success('Turno eliminado')
+      toast.success(t('schedules.shiftDeleted'))
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao eliminar')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('schedules.deleteError'))),
   })
 
   return (
@@ -228,21 +230,21 @@ function ShiftCard({ shift, onEdit }: { shift: Shift; onEdit: (s: Shift) => void
         </div>
         <div className="mt-4 space-y-2 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Horário</span>
+            <span className="text-muted-foreground">{t('schedules.time')}</span>
             <span className="font-mono font-medium">
               {shift.start_time} – {shift.end_time}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Horas/dia</span>
+            <span className="text-muted-foreground">{t('schedules.hoursPerDay')}</span>
             <span className="font-mono">{shift.work_hours}h</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Pausa</span>
+            <span className="text-muted-foreground">{t('schedules.break')}</span>
             <span className="font-mono">{shift.break_minutes} min</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Tolerância</span>
+            <span className="text-muted-foreground">{t('schedules.tolerance')}</span>
             <span className="font-mono">{shift.late_tolerance_minutes} min</span>
           </div>
         </div>
@@ -250,16 +252,16 @@ function ShiftCard({ shift, onEdit }: { shift: Shift; onEdit: (s: Shift) => void
           {shift.working_days && shift.working_days.length > 0 ? (
             shift.working_days.map((d) => (
               <Badge key={d} variant="secondary" className="text-[10px]">
-                {dayNames[d]}
+                {t(`common.weekdaysShort.${d}`)}
               </Badge>
             ))
           ) : (
-            <Badge variant="secondary" className="text-[10px]">Todos os dias</Badge>
+            <Badge variant="secondary" className="text-[10px]">{t('schedules.everyDay')}</Badge>
           )}
         </div>
         <div className="mt-3 flex items-center justify-between">
           <Badge variant={shift.is_active ? 'success' : 'secondary'}>
-            {shift.is_active ? 'Ativo' : 'Inativo'}
+            {shift.is_active ? t('common.active') : t('common.inactive')}
           </Badge>
         </div>
       </CardContent>
@@ -268,11 +270,12 @@ function ShiftCard({ shift, onEdit }: { shift: Shift; onEdit: (s: Shift) => void
 }
 
 function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChange: (o: boolean) => void; shift: Shift | null }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [selectedDays, setSelectedDays] = useState<number[]>([])
 
   const form = useForm<ShiftFormValues>({
-    resolver: zodResolver(shiftSchema) as never,
+    resolver: zodResolver(makeShiftSchema(t)) as never,
     defaultValues: shift
       ? {
           name: shift.name,
@@ -354,13 +357,13 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
     mutationFn: (data: ShiftFormValues) =>
       shift ? api.put(`shifts/${shift.id}`, { ...data, working_days: selectedDays }) : api.post('shifts', { ...data, working_days: selectedDays }),
     onSuccess: () => {
-      toast.success(shift ? 'Turno atualizado' : 'Turno criado')
+      toast.success(shift ? t('schedules.shiftUpdated') : t('schedules.shiftCreated'))
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
       onOpenChange(false)
       form.reset()
       setSelectedDays([])
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao guardar')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('schedules.saveError'))),
   })
 
   const onSubmit = (data: ShiftFormValues) => mutation.mutate(data)
@@ -369,49 +372,49 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{shift ? 'Editar Turno' : 'Novo Turno'}</DialogTitle>
-          <DialogDescription>Defina o horário de trabalho padrão do turno</DialogDescription>
+          <DialogTitle>{shift ? t('schedules.editShift') : t('schedules.newShift')}</DialogTitle>
+          <DialogDescription>{t('schedules.shiftDialogDescription')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Nome *</Label>
-              <Input {...form.register('name')} placeholder="Ex: Turno da Manhã" />
+              <Label>{t('common.name')} *</Label>
+              <Input {...form.register('name')} placeholder={t('schedules.shiftNameExample')} />
             </div>
             <div className="space-y-1.5">
-              <Label>Código</Label>
+              <Label>{t('employees.code')}</Label>
               <Input {...form.register('code')} placeholder="TM" />
             </div>
             <div className="space-y-1.5">
-              <Label>Hora de Início *</Label>
+              <Label>{t('schedules.startTime')} *</Label>
               <Input type="time" {...form.register('start_time')} />
             </div>
             <div className="space-y-1.5">
-              <Label>Hora de Fim *</Label>
+              <Label>{t('schedules.endTime')} *</Label>
               <Input type="time" {...form.register('end_time')} />
             </div>
             <div className="space-y-1.5">
-              <Label>Pausa (min)</Label>
+              <Label>{t('schedules.breakMinutes')}</Label>
               <Input type="number" {...form.register('break_minutes')} />
             </div>
             <div className="space-y-1.5">
-              <Label>Horas/dia</Label>
+              <Label>{t('schedules.hoursPerDay')}</Label>
               <Input type="number" step="0.01" readOnly {...form.register('work_hours')} />
             </div>
             <div className="space-y-1.5">
-              <Label>Tolerância (min)</Label>
+              <Label>{t('schedules.toleranceMinutes')}</Label>
               <Input type="number" {...form.register('late_tolerance_minutes')} />
             </div>
             <div className="space-y-1.5">
-              <Label>Cor</Label>
+              <Label>{t('schedules.color')}</Label>
               <Input type="color" {...form.register('color')} />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Dias de Trabalho</Label>
+            <Label>{t('schedules.workingDays')}</Label>
             <div className="flex flex-wrap gap-2">
-              {dayNames.map((day, idx) => (
+              {Array.from({ length: 7 }, (_, idx) => (
                 <label key={idx} className="flex items-center gap-1.5 cursor-pointer">
                   <Checkbox
                     checked={selectedDays.includes(idx)}
@@ -420,7 +423,7 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
                       else setSelectedDays(selectedDays.filter((d) => d !== idx))
                     }}
                   />
-                  <span className="text-sm">{day}</span>
+                  <span className="text-sm">{t(`common.weekdaysShort.${idx}`)}</span>
                 </label>
               ))}
             </div>
@@ -429,26 +432,26 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2">
               <Switch {...form.register('is_night_shift')} />
-              <span className="text-sm">Turno noturno</span>
+              <span className="text-sm">{t('schedules.nightShift')}</span>
             </label>
             <label className="flex items-center gap-2">
               <Switch {...form.register('is_active')} />
-              <span className="text-sm">Ativo</span>
+              <span className="text-sm">{t('common.active')}</span>
             </label>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Notas</Label>
+            <Label>{t('common.notes')}</Label>
             <Input {...form.register('notes')} />
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Guardar
+              {t('common.save')}
             </Button>
           </DialogFooter>
         </form>
@@ -458,6 +461,7 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
 }
 
 function AssignmentsTab() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -480,17 +484,17 @@ function AssignmentsTab() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`employee-schedules/${id}`),
     onSuccess: () => {
-      toast.success('Atribuição removida')
+      toast.success(t('schedules.assignmentRemoved'))
       queryClient.invalidateQueries({ queryKey: ['employee-schedules'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao remover')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('schedules.removeError'))),
   })
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Input
-          placeholder="Pesquisar..."
+          placeholder={t('common.search')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
@@ -499,7 +503,7 @@ function AssignmentsTab() {
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Atribuir Horário
+              {t('schedules.assignSchedule')}
             </Button>
           </DialogTrigger>
           <AssignmentDialog
@@ -511,7 +515,7 @@ function AssignmentsTab() {
         </Dialog>
       </div>
 
-      {isError && <ErrorState message="Erro ao carregar" onRetry={refetch} />}
+      {isError && <ErrorState message={t('schedules.loadError')} onRetry={refetch} />}
 
       <DataTable
         data={data?.data ?? []}
@@ -520,7 +524,7 @@ function AssignmentsTab() {
         columns={[
           {
             id: 'employee',
-            header: 'Funcionário',
+            header: t('schedules.employee'),
             cell: (r) => (
               <div>
                 <p className="font-medium">
@@ -532,7 +536,7 @@ function AssignmentsTab() {
           },
           {
             id: 'shift',
-            header: 'Turno',
+            header: t('schedules.shift'),
             cell: (r) => (
               <div className="flex items-center gap-2">
                 <span
@@ -550,22 +554,22 @@ function AssignmentsTab() {
           },
           {
             id: 'period',
-            header: 'Vigência',
+            header: t('schedules.effectivePeriod'),
             cell: (r) => (
               <span className="text-sm">
-                {r.effective_from} {r.effective_to ? `→ ${r.effective_to}` : '(sem fim)'}
+                {r.effective_from} {r.effective_to ? `→ ${r.effective_to}` : t('schedules.noEndDate')}
               </span>
             ),
           },
           {
             id: 'status',
-            header: 'Estado',
+            header: t('common.status'),
             align: 'right',
-            cell: (r) => <Badge variant={r.is_active ? 'success' : 'secondary'}>{r.is_active ? 'Ativo' : 'Inativo'}</Badge>,
+            cell: (r) => <Badge variant={r.is_active ? 'success' : 'secondary'}>{r.is_active ? t('common.active') : t('common.inactive')}</Badge>,
           },
           {
             id: 'actions',
-            header: 'Ações',
+            header: t('common.actions'),
             align: 'right',
             cell: (r) => (
               <Button
@@ -580,14 +584,15 @@ function AssignmentsTab() {
             ),
           },
         ]}
-        emptyTitle="Sem atribuições"
-        emptyDescription="Atribua turnos aos funcionários"
+        emptyTitle={t('schedules.noAssignments')}
+        emptyDescription={t('schedules.assignShiftsToEmployees')}
       />
     </div>
   )
 }
 
 function AssignmentDialog({ open, onOpenChange, shifts, employees }: { open: boolean; onOpenChange: (o: boolean) => void; shifts: Shift[]; employees: { id: number; first_name: string; last_name: string; employee_code: string }[] }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [employeeId, setEmployeeId] = useState('')
   const [shiftId, setShiftId] = useState('')
@@ -601,31 +606,31 @@ function AssignmentDialog({ open, onOpenChange, shifts, employees }: { open: boo
         effective_from: effectiveFrom,
       }),
     onSuccess: () => {
-      toast.success('Horário atribuído')
+      toast.success(t('schedules.scheduleAssigned'))
       queryClient.invalidateQueries({ queryKey: ['employee-schedules'] })
       onOpenChange(false)
       setEmployeeId('')
       setShiftId('')
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao atribuir')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('schedules.assignError'))),
   })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Atribuir Horário</DialogTitle>
-          <DialogDescription>Associe um turno a um funcionário</DialogDescription>
+          <DialogTitle>{t('schedules.assignSchedule')}</DialogTitle>
+          <DialogDescription>{t('schedules.assignDescription')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Funcionário *</Label>
+            <Label>{t('schedules.employee')} *</Label>
             <select
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
             >
-              <option value="">Selecione...</option>
+              <option value="">{t('common.select')}...</option>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.first_name} {e.last_name} ({e.employee_code})
@@ -634,13 +639,13 @@ function AssignmentDialog({ open, onOpenChange, shifts, employees }: { open: boo
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Turno *</Label>
+            <Label>{t('schedules.shift')} *</Label>
             <select
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
               value={shiftId}
               onChange={(e) => setShiftId(e.target.value)}
             >
-              <option value="">Selecione...</option>
+              <option value="">{t('common.select')}...</option>
               {shifts.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.start_time}–{s.end_time})
@@ -649,18 +654,18 @@ function AssignmentDialog({ open, onOpenChange, shifts, employees }: { open: boo
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Vigente a partir de *</Label>
+            <Label>{t('schedules.effectiveFrom')} *</Label>
             <Input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
           <Button
             onClick={() => mutation.mutate()}
             disabled={!employeeId || !shiftId || mutation.isPending}
           >
             {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Atribuir
+            {t('schedules.assign')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -669,6 +674,7 @@ function AssignmentDialog({ open, onOpenChange, shifts, employees }: { open: boo
 }
 
 function HolidaysTab() {
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [year, setYear] = useState(new Date().getFullYear())
@@ -689,28 +695,21 @@ function HolidaysTab() {
   const createMutation = useMutation({
     mutationFn: (data: typeof form) => api.post('holidays', data),
     onSuccess: () => {
-      toast.success('Feriado criado')
+      toast.success(t('schedules.holidayCreated'))
       queryClient.invalidateQueries({ queryKey: ['holidays'] })
       setOpen(false)
       setForm({ name: '', date: new Date().toISOString().slice(0, 10), type: 'national', is_recurring: false, description: '' })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('schedules.createError'))),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`holidays/${id}`),
     onSuccess: () => {
-      toast.success('Feriado removido')
+      toast.success(t('schedules.holidayRemoved'))
       queryClient.invalidateQueries({ queryKey: ['holidays'] })
     },
   })
-
-  const typeLabels: Record<string, string> = {
-    national: 'Nacional',
-    regional: 'Regional',
-    company: 'Empresa',
-    optional: 'Opcional',
-  }
 
   return (
     <div className="space-y-4">
@@ -728,51 +727,51 @@ function HolidaysTab() {
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Novo Feriado
+              {t('schedules.newHoliday')}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Novo Feriado</DialogTitle>
+              <DialogTitle>{t('schedules.newHoliday')}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Nome *</Label>
+                <Label>{t('common.name')} *</Label>
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Data *</Label>
+                <Label>{t('common.date')} *</Label>
                 <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Tipo</Label>
+                <Label>{t('schedules.holidayType')}</Label>
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                 >
-                  {Object.entries(typeLabels).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
+                  {(['national', 'regional', 'company', 'optional'] as const).map((type) => (
+                    <option key={type} value={type}>{t(`schedules.holidayTypes.${type}`)}</option>
                   ))}
                 </select>
               </div>
               <label className="flex items-center gap-2">
                 <Switch checked={form.is_recurring} onCheckedChange={(c) => setForm({ ...form, is_recurring: c })} />
-                <span className="text-sm">Recorrente (anual)</span>
+                <span className="text-sm">{t('schedules.recurringAnnual')}</span>
               </label>
               <div className="space-y-1.5">
-                <Label>Descrição</Label>
+                <Label>{t('schedules.description')}</Label>
                 <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
               <Button
                 onClick={() => createMutation.mutate(form)}
                 disabled={!form.name || createMutation.isPending}
               >
                 {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Criar
+                {t('common.create')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -782,7 +781,7 @@ function HolidaysTab() {
       {isLoading ? (
         <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : data && data.length === 0 ? (
-        <EmptyState title="Sem feriados configurados" description="Adicione feriados para o ano corrente" />
+        <EmptyState title={t('schedules.noHolidays')} description={t('schedules.addHolidays')} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data?.map((h) => (
@@ -790,7 +789,7 @@ function HolidaysTab() {
               <CardContent className="flex items-center gap-3 p-4">
                 <div className="flex h-12 w-12 flex-col items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <span className="text-xs font-medium uppercase">
-                    {new Date(h.date).toLocaleDateString('pt', { month: 'short' })}
+                    {new Date(h.date).toLocaleDateString(i18n.language, { month: 'short' })}
                   </span>
                   <span className="text-lg font-bold leading-none">
                     {new Date(h.date).getDate()}
@@ -800,9 +799,9 @@ function HolidaysTab() {
                   <p className="font-medium">{h.name}</p>
                   <div className="flex items-center gap-1">
                     <Badge variant="secondary" className="text-[10px]">
-                      {typeLabels[h.type] ?? h.type}
+                      {t(`schedules.holidayTypes.${h.type}`, { defaultValue: h.type })}
                     </Badge>
-                    {h.is_recurring && <Badge variant="outline" className="text-[10px]">Anual</Badge>}
+                    {h.is_recurring && <Badge variant="outline" className="text-[10px]">{t('schedules.annual')}</Badge>}
                   </div>
                 </div>
                 <Button size="icon-sm" variant="ghost" onClick={() => deleteMutation.mutate(h.id)} className="text-destructive">

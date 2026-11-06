@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
@@ -39,6 +39,7 @@ const deductionTypeOptions: DeductionType[] = [
   'union_fee',
   'other',
 ]
+const customTypeValue = '__custom__'
 
 const statusOptions: DeductionStatus[] = ['active', 'paused', 'completed', 'cancelled']
 
@@ -46,13 +47,15 @@ interface DeductionFormState {
   employee_id: string
   name: string
   deduction_type: DeductionType
+  custom_type: string
   amount_type: AmountType
   amount: string
   percentage: string
   total_amount: string
   installment_count: string
-  installment_amount: string
   is_recurring: boolean
+  is_mandatory: boolean
+  legal_basis: string
   status: DeductionStatus
   notes: string
 }
@@ -61,13 +64,15 @@ const emptyForm: DeductionFormState = {
   employee_id: '',
   name: '',
   deduction_type: 'other',
+  custom_type: '',
   amount_type: 'fixed',
   amount: '',
   percentage: '',
   total_amount: '',
   installment_count: '',
-  installment_amount: '',
   is_recurring: true,
+  is_mandatory: false,
+  legal_basis: '',
   status: 'active',
   notes: '',
 }
@@ -76,31 +81,40 @@ function toForm(d: Deduction): DeductionFormState {
   return {
     employee_id: String(d.employee_id),
     name: d.name,
-    deduction_type: d.deduction_type,
+    deduction_type: deductionTypeOptions.includes(d.deduction_type) ? d.deduction_type : customTypeValue,
+    custom_type: deductionTypeOptions.includes(d.deduction_type) ? '' : d.deduction_type,
     amount_type: d.amount_type,
     amount: d.amount_type === 'fixed' ? String(d.amount) : '',
     percentage: d.percentage != null ? String(d.percentage) : '',
     total_amount: d.total_amount != null ? String(d.total_amount) : '',
     installment_count: d.installment_count != null ? String(d.installment_count) : '',
-    installment_amount: d.installment_amount != null ? String(d.installment_amount) : '',
     is_recurring: d.is_recurring,
+    is_mandatory: d.is_mandatory,
+    legal_basis: d.legal_basis ?? '',
     status: d.status,
     notes: d.notes ?? '',
   }
 }
 
 function toPayload(form: DeductionFormState) {
+  const totalAmount = form.total_amount ? Number(form.total_amount) : null
+  const installmentCount = form.installment_count ? Number(form.installment_count) : null
+  const calculatedInstallment = totalAmount && installmentCount
+    ? Math.round((totalAmount / installmentCount) * 100) / 100
+    : null
+
   return {
     employee_id: Number(form.employee_id),
     name: form.name,
-    deduction_type: form.deduction_type,
+    deduction_type: form.deduction_type === customTypeValue ? form.custom_type.trim() : form.deduction_type,
     amount_type: form.amount_type,
-    amount: form.amount_type === 'fixed' ? Number(form.amount || 0) : 0,
+    amount: form.amount_type === 'fixed' ? calculatedInstallment ?? Number(form.amount || 0) : 0,
     percentage: form.amount_type === 'percentage' ? Number(form.percentage || 0) : null,
-    total_amount: form.total_amount ? Number(form.total_amount) : null,
-    installment_count: form.installment_count ? Number(form.installment_count) : null,
-    installment_amount: form.installment_amount ? Number(form.installment_amount) : null,
+    total_amount: totalAmount,
+    installment_count: installmentCount,
     is_recurring: form.is_recurring,
+    is_mandatory: form.is_mandatory,
+    legal_basis: form.legal_basis.trim() || null,
     status: form.status,
     notes: form.notes || null,
   }
@@ -129,6 +143,12 @@ export function DeductionsPage() {
         per_page: 30,
       }),
   })
+  const customTypes = useMemo(
+    () => [...new Set((deductions.data?.data ?? [])
+      .map((deduction) => deduction.deduction_type)
+      .filter((type) => !deductionTypeOptions.includes(type)))],
+    [deductions.data?.data],
+  )
 
   const remove = useMutation({
     mutationFn: (id: number) => api.delete(`deductions/${id}`),
@@ -145,7 +165,7 @@ export function DeductionsPage() {
         eyebrow={t('deductionsPage.eyebrow')}
         title={t('deductionsPage.title')}
         description={t('deductionsPage.description')}
-        actions={canCreate ? <NewDeductionDialog onCreated={() => deductions.refetch()} /> : undefined}
+        actions={canCreate ? <NewDeductionDialog customTypes={customTypes} onCreated={() => deductions.refetch()} /> : undefined}
       />
 
       <Card>
@@ -167,6 +187,7 @@ export function DeductionsPage() {
                 {deductionTypeOptions.map((type) => (
                   <SelectItem key={type} value={type}>{t(`deductionsPage.typeOptions.${type}`)}</SelectItem>
                 ))}
+                {customTypes.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -283,6 +304,7 @@ export function DeductionsPage() {
 
       <DeductionFormDialog
         editing={editTarget}
+        customTypes={customTypes}
         open={editTarget !== null}
         onOpenChange={(open) => {
           if (!open) setEditTarget(null)
@@ -292,7 +314,7 @@ export function DeductionsPage() {
   )
 }
 
-function NewDeductionDialog({ onCreated }: { onCreated: () => void }) {
+function NewDeductionDialog({ onCreated, customTypes }: { onCreated: () => void; customTypes: string[] }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const qc = useQueryClient()
@@ -301,6 +323,7 @@ function NewDeductionDialog({ onCreated }: { onCreated: () => void }) {
     <DeductionFormDialog
       open={open}
       onOpenChange={setOpen}
+      customTypes={customTypes}
       onCreated={() => {
         qc.invalidateQueries({ queryKey: ['deductions'] })
         onCreated()
@@ -321,16 +344,22 @@ function DeductionFormDialog({
   open,
   onOpenChange,
   onCreated,
+  customTypes,
 }: {
   editing?: Deduction | null
   trigger?: React.ReactNode
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated?: () => void
+  customTypes: string[]
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const [form, setForm] = useState<DeductionFormState>(emptyForm)
+
+  useEffect(() => {
+    setForm(editing ? toForm(editing) : emptyForm)
+  }, [editing, open])
 
   const { data: employeeOptions } = useQuery({
     queryKey: ['employees', 'select'],
@@ -352,6 +381,17 @@ function DeductionFormDialog({
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('deductionsPage.error'))),
   })
+  const totalAmountValue = Number(form.total_amount)
+  const installmentCountValue = Number(form.installment_count)
+  const amountValue = Number(form.amount)
+  const percentageValue = Number(form.percentage)
+  const hasCalculatedInstallment = Number.isFinite(totalAmountValue)
+    && totalAmountValue > 0
+    && Number.isInteger(installmentCountValue)
+    && installmentCountValue > 0
+  const hasInvalidInstallmentConfig =
+    (form.total_amount !== '' && (!Number.isFinite(totalAmountValue) || totalAmountValue <= 0))
+    || (form.installment_count !== '' && (!Number.isInteger(installmentCountValue) || installmentCountValue < 1))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -359,7 +399,7 @@ function DeductionFormDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Download className="h-4 w-4 text-primary" />
+            <Plus className="h-4 w-4 text-primary" />
             {editing ? t('deductionsPage.editDeduction') : t('deductionsPage.newDeduction')}
           </DialogTitle>
         </DialogHeader>
@@ -389,9 +429,26 @@ function DeductionFormDialog({
                 {deductionTypeOptions.map((type) => (
                   <SelectItem key={type} value={type}>{t(`deductionsPage.typeOptions.${type}`)}</SelectItem>
                 ))}
+                {customTypes.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                <SelectItem value={customTypeValue}>{t('deductionsPage.customType')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {form.deduction_type === customTypeValue && (
+            <div className="space-y-1.5">
+              <Label>{t('deductionsPage.customType')} *</Label>
+              <Input
+                list="deduction-type-suggestions"
+                maxLength={50}
+                value={form.custom_type}
+                onChange={(e) => setForm({ ...form, custom_type: e.target.value })}
+                placeholder={t('deductionsPage.customTypePlaceholder')}
+              />
+              <datalist id="deduction-type-suggestions">
+                {customTypes.map((type) => <option key={type} value={type} />)}
+              </datalist>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>{t('deductionsPage.status')}</Label>
             <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as DeductionStatus })}>
@@ -414,36 +471,62 @@ function DeductionFormDialog({
             </Select>
           </div>
           {form.amount_type === 'fixed' ? (
-            <div className="space-y-1.5">
-              <Label>{t('deductionsPage.amount')}</Label>
-              <Input type="number" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-            </div>
+            hasCalculatedInstallment ? (
+              <div className="space-y-1.5">
+                <Label>{t('deductionsPage.installmentAmount')}</Label>
+                <Input
+                  readOnly
+                  value={`${(Number(form.total_amount) / Number(form.installment_count)).toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kz`}
+                />
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>{t('deductionsPage.amountPerPeriod')}</Label>
+                <Input type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+              </div>
+            )
           ) : (
             <div className="space-y-1.5">
               <Label>{t('deductionsPage.percentage')}</Label>
-              <Input type="number" min={0} max={100} value={form.percentage} onChange={(e) => setForm({ ...form, percentage: e.target.value })} />
+              <Input type="number" min="0.01" max={100} step="0.01" value={form.percentage} onChange={(e) => setForm({ ...form, percentage: e.target.value })} />
             </div>
           )}
           <div className="space-y-1.5">
             <Label>{t('deductionsPage.totalAmount')}</Label>
-            <Input type="number" min={0} value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} />
+            <Input type="number" min="0.01" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} />
           </div>
           <div className="space-y-1.5">
             <Label>{t('deductionsPage.installmentCount')}</Label>
             <Input type="number" min={1} value={form.installment_count} onChange={(e) => setForm({ ...form, installment_count: e.target.value })} />
           </div>
-          <div className="space-y-1.5">
-            <Label>{t('deductionsPage.installmentAmount')}</Label>
-            <Input type="number" min={0} value={form.installment_amount} onChange={(e) => setForm({ ...form, installment_amount: e.target.value })} />
+          <div className="space-y-3 md:col-span-2">
+            <Label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.is_recurring}
+                onChange={(e) => setForm({ ...form, is_recurring: e.target.checked })}
+              />
+              {t('deductionsPage.recurring')}
+            </Label>
+            <Label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.is_mandatory}
+                onChange={(e) => setForm({ ...form, is_mandatory: e.target.checked })}
+              />
+              {t('deductionsPage.mandatory')}
+            </Label>
           </div>
-          <Label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.is_recurring}
-              onChange={(e) => setForm({ ...form, is_recurring: e.target.checked })}
+          <div className="space-y-1.5 md:col-span-2">
+            <Label>{t('deductionsPage.legalBasis')}</Label>
+            <textarea
+              className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+              maxLength={1000}
+              value={form.legal_basis}
+              onChange={(e) => setForm({ ...form, legal_basis: e.target.value })}
+              placeholder={t('deductionsPage.legalBasisPlaceholder')}
             />
-            {t('deductionsPage.recurring')}
-          </Label>
+          </div>
           <div className="space-y-1.5 md:col-span-2">
             <Label>{t('common.notes')}</Label>
             <textarea
@@ -455,7 +538,19 @@ function DeductionFormDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => save.mutate()} disabled={!form.name || !form.employee_id || save.isPending}>
+          <Button
+            onClick={() => save.mutate()}
+            disabled={
+              !form.name.trim()
+              || !form.employee_id
+              || (form.deduction_type === customTypeValue && !form.custom_type.trim())
+              || hasInvalidInstallmentConfig
+              || (form.amount_type === 'fixed' && (!Number.isFinite(amountValue) || amountValue <= 0) && !hasCalculatedInstallment)
+              || (form.amount_type === 'percentage' && (!Number.isFinite(percentageValue) || percentageValue <= 0))
+              || (form.amount_type === 'percentage' && installmentCountValue > 0 && !hasCalculatedInstallment)
+              || save.isPending
+            }
+          >
             {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Employee, Paginated } from '@/types'
 
@@ -48,6 +50,7 @@ type EmployeeEditForm = Record<
 const toFormValue = (value?: string | number | null) => value == null ? '' : String(value).slice(0, 10)
 
 export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEditDialogProps) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState<EmployeeEditForm>(() => createForm(employee))
 
@@ -76,13 +79,13 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
       manager_id: form.manager_id ? Number(form.manager_id) : null,
     }),
     onSuccess: () => {
-      toast.success('Dados do funcionário atualizados')
+      toast.success(t('employeeEdit.updated'))
       queryClient.invalidateQueries({ queryKey: ['employees', String(employee.id)] })
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       queryClient.invalidateQueries({ queryKey: ['employees', String(employee.id), 'timeline'] })
       onOpenChange(false)
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Erro ao atualizar funcionário')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('employeeEdit.updateError'))),
   })
 
   const update = (key: keyof EmployeeEditForm, value: string) => {
@@ -99,73 +102,75 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-4xl flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">
-          <DialogTitle>Editar funcionário</DialogTitle>
-          <DialogDescription>Atualize os dados pessoais, contactos e informação organizacional.</DialogDescription>
+      <DialogContent className="flex h-[min(90vh,900px)] w-[calc(100vw-1rem)] max-w-6xl flex-col overflow-hidden p-0 sm:w-[calc(100vw-2rem)] sm:max-w-6xl">
+        <DialogHeader className="shrink-0 px-6 pt-6">
+          <DialogTitle>{t('employeeEdit.title')}</DialogTitle>
+          <DialogDescription>{t('employeeEdit.description')}</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto py-1 pr-1">
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Identificação</h3>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <TextField label="Nome próprio" value={form.first_name} onChange={(value) => update('first_name', value)} required />
-              <TextField label="Apelido" value={form.last_name} onChange={(value) => update('last_name', value)} required />
-              <TextField label="Código" value={form.employee_code} onChange={(value) => update('employee_code', value)} required />
-              <TextField label="Email" type="email" value={form.email} onChange={(value) => update('email', value)} />
-              <TextField label="Telefone" value={form.phone} onChange={(value) => update('phone', value)} />
-              <TextField label="Telefone alternativo" value={form.alternative_phone} onChange={(value) => update('alternative_phone', value)} />
-              <TextField label="Nascimento" type="date" value={form.birth_date} onChange={(value) => update('birth_date', value)} />
-              <SelectField label="Género" value={selectValue('gender')} onChange={(value) => setSelectValue('gender', value)} options={[
-                ['male', 'Masculino'], ['female', 'Feminino'], ['other', 'Outro'],
-              ]} />
-              <SelectField label="Estado civil" value={selectValue('marital_status')} onChange={(value) => setSelectValue('marital_status', value)} options={[
-                ['single', 'Solteiro(a)'], ['married', 'Casado(a)'], ['divorced', 'Divorciado(a)'], ['widowed', 'Viúvo(a)'],
-              ]} />
-              <TextField label="Nacionalidade" value={form.nationality} onChange={(value) => update('nationality', value)} />
-            </div>
-          </section>
+        <ScrollArea className="min-h-0 flex-1 px-6">
+          <div className="space-y-5 py-2">
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <h3 className="text-sm font-semibold">{t('employeeEdit.identification')}</h3>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <TextField label={t('employeeEdit.firstName')} value={form.first_name} onChange={(value) => update('first_name', value)} required />
+                <TextField label={t('employeeEdit.lastName')} value={form.last_name} onChange={(value) => update('last_name', value)} required />
+                <TextField label={t('employees.code')} value={form.employee_code} onChange={(value) => update('employee_code', value)} required />
+                <TextField label={t('common.email')} type="email" value={form.email} onChange={(value) => update('email', value)} />
+                <TextField label={t('common.phone')} value={form.phone} onChange={(value) => update('phone', value)} />
+                <TextField label={t('employeeEdit.alternativePhone')} value={form.alternative_phone} onChange={(value) => update('alternative_phone', value)} />
+                <TextField label={t('employeeEdit.birthDate')} type="date" value={form.birth_date} onChange={(value) => update('birth_date', value)} />
+                <SelectField label={t('employeeEdit.gender')} value={selectValue('gender')} onChange={(value) => setSelectValue('gender', value)} options={[
+                  ['male', t('employeeEdit.genders.male')], ['female', t('employeeEdit.genders.female')], ['other', t('employeeEdit.genders.other')],
+                ]} />
+                <SelectField label={t('employeeEdit.maritalStatus')} value={selectValue('marital_status')} onChange={(value) => setSelectValue('marital_status', value)} options={[
+                  ['single', t('employeeEdit.maritalStatuses.single')], ['married', t('employeeEdit.maritalStatuses.married')], ['divorced', t('employeeEdit.maritalStatuses.divorced')], ['widowed', t('employeeEdit.maritalStatuses.widowed')],
+                ]} />
+                <TextField label={t('employeeEdit.nationality')} value={form.nationality} onChange={(value) => update('nationality', value)} />
+              </div>
+            </section>
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Documentos oficiais</h3>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <TextField label="Tipo de documento" value={form.id_document_type} onChange={(value) => update('id_document_type', value)} />
-              <TextField label="Número do documento" value={form.id_document_number} onChange={(value) => update('id_document_number', value)} />
-              <TextField label="Validade do documento" type="date" value={form.id_document_expiry} onChange={(value) => update('id_document_expiry', value)} />
-              <TextField label="NIF" value={form.tax_id} onChange={(value) => update('tax_id', value)} />
-              <TextField label="Número INSS" value={form.social_security_id} onChange={(value) => update('social_security_id', value)} />
-            </div>
-          </section>
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <h3 className="text-sm font-semibold">{t('employeeEdit.officialDocuments')}</h3>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <TextField label={t('employeeEdit.documentType')} value={form.id_document_type} onChange={(value) => update('id_document_type', value)} />
+                <TextField label={t('employeeEdit.documentNumber')} value={form.id_document_number} onChange={(value) => update('id_document_number', value)} />
+                <TextField label={t('employeeEdit.documentExpiry')} type="date" value={form.id_document_expiry} onChange={(value) => update('id_document_expiry', value)} />
+                <TextField label="NIF" value={form.tax_id} onChange={(value) => update('tax_id', value)} />
+                <TextField label={t('employeeEdit.socialSecurityNumber')} value={form.social_security_id} onChange={(value) => update('social_security_id', value)} />
+              </div>
+            </section>
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Morada</h3>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <TextField label="Endereço" value={form.address} onChange={(value) => update('address', value)} />
-              <TextField label="Cidade" value={form.city} onChange={(value) => update('city', value)} />
-              <TextField label="Província / Estado" value={form.state} onChange={(value) => update('state', value)} />
-              <TextField label="País" value={form.country} onChange={(value) => update('country', value)} />
-              <TextField label="Código postal" value={form.postal_code} onChange={(value) => update('postal_code', value)} />
-            </div>
-          </section>
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <h3 className="text-sm font-semibold">{t('employeeEdit.address')}</h3>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <TextField label={t('employeeEdit.streetAddress')} value={form.address} onChange={(value) => update('address', value)} />
+                <TextField label={t('employeeEdit.city')} value={form.city} onChange={(value) => update('city', value)} />
+                <TextField label={t('employeeEdit.stateProvince')} value={form.state} onChange={(value) => update('state', value)} />
+                <TextField label={t('employeeEdit.country')} value={form.country} onChange={(value) => update('country', value)} />
+                <TextField label={t('employeeEdit.postalCode')} value={form.postal_code} onChange={(value) => update('postal_code', value)} />
+              </div>
+            </section>
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Vínculo organizacional</h3>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <SelectField label="Departamento" value={selectValue('department_id')} onChange={(value) => setSelectValue('department_id', value)} options={departments.map((item) => [String(item.id), item.name])} />
-              <SelectField label="Cargo" value={selectValue('position_id')} onChange={(value) => setSelectValue('position_id', value)} options={positions.map((item) => [String(item.id), item.title])} />
-              <SelectField label="Gestor" value={selectValue('manager_id')} onChange={(value) => setSelectValue('manager_id', value)} options={(employeePage?.data ?? []).filter((item) => item.id !== employee.id).map((item) => [String(item.id), item.full_name])} />
-              <SelectField label="Estado" value={selectValue('status')} onChange={(value) => setSelectValue('status', value)} allowClear={false} options={[
-                ['active', 'Ativo'], ['inactive', 'Inativo'], ['suspended', 'Suspenso'], ['terminated', 'Rescindido'],
-              ]} />
-              <TextField label="Data de admissão" type="date" value={form.hired_at} onChange={(value) => update('hired_at', value)} />
-              <TextField label="Fim do período probatório" type="date" value={form.probation_end} onChange={(value) => update('probation_end', value)} />
-            </div>
-          </section>
-        </div>
-        <DialogFooter className="shrink-0">
-          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={mutation.isPending}>Cancelar</Button>
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <h3 className="text-sm font-semibold">{t('employeeEdit.organization')}</h3>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <SelectField label={t('employees.department')} value={selectValue('department_id')} onChange={(value) => setSelectValue('department_id', value)} options={departments.map((item) => [String(item.id), item.name])} />
+                <SelectField label={t('employees.position')} value={selectValue('position_id')} onChange={(value) => setSelectValue('position_id', value)} options={positions.map((item) => [String(item.id), item.title])} />
+                <SelectField label={t('employeeEdit.manager')} value={selectValue('manager_id')} onChange={(value) => setSelectValue('manager_id', value)} options={(employeePage?.data ?? []).filter((item) => item.id !== employee.id).map((item) => [String(item.id), item.full_name])} />
+                <SelectField label={t('common.status')} value={selectValue('status')} onChange={(value) => setSelectValue('status', value)} allowClear={false} options={[
+                  ['active', t('common.active')], ['inactive', t('common.inactive')], ['suspended', t('employeeEdit.statuses.suspended')], ['terminated', t('employeeEdit.statuses.terminated')],
+                ]} />
+                <TextField label={t('employees.hired_at')} type="date" value={form.hired_at} onChange={(value) => update('hired_at', value)} />
+                <TextField label={t('employeeEdit.probationEnd')} type="date" value={form.probation_end} onChange={(value) => update('probation_end', value)} />
+              </div>
+            </section>
+          </div>
+        </ScrollArea>
+        <DialogFooter className="shrink-0 px-6 pb-6">
+          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={mutation.isPending}>{t('common.cancel')}</Button>
           <Button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.first_name.trim() || !form.last_name.trim() || !form.employee_code.trim()}>
             {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-            Guardar alterações
+            {t('employeeEdit.saveChanges')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -209,13 +214,15 @@ function SelectField({
   options: string[][]
   allowClear?: boolean
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger><SelectValue placeholder="Não definido" /></SelectTrigger>
+        <SelectTrigger><SelectValue placeholder={t('employeeEdit.undefined')} /></SelectTrigger>
         <SelectContent>
-          {allowClear && <SelectItem value="none">Não definido</SelectItem>}
+          {allowClear && <SelectItem value="none">{t('employeeEdit.undefined')}</SelectItem>}
           {options.map(([optionValue, optionLabel]) => (
             <SelectItem key={optionValue} value={optionValue}>{optionLabel}</SelectItem>
           ))}

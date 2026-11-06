@@ -90,8 +90,8 @@ export function RecruitmentPage() {
     <div className="space-y-6">
       {/* Cabeçalho da Página: Apenas o botão de criação de vaga */}
       <PageHeader
-        title={t('recruitment.title', { defaultValue: 'Recrutamento & Seleção' })}
-        description={t('recruitment.description', { defaultValue: 'Gestão de vagas e processos de recrutamento da organização' })}
+        title={t('recruitmentPage.title')}
+        description={t('recruitmentPage.description')}
         actions={
           canCreate ? (
             <NewJobDialog onCreated={() => jobs.refetch()} />
@@ -103,30 +103,30 @@ export function RecruitmentPage() {
       <Card className="border-border/80">
         <CardContent className="flex flex-wrap items-end gap-3 pt-5 pb-5">
           <div className="flex-1 min-w-[220px] space-y-1.5">
-            <Label className="text-xs font-semibold">{t('common.search', { defaultValue: 'Pesquisar' })}</Label>
+            <Label className="text-xs font-semibold">{t('recruitmentPage.search')}</Label>
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Pesquisar por título de vaga, localização ou departamento..."
+                placeholder={t('recruitmentPage.searchJobsPlaceholder')}
                 className="pl-9 h-9 text-xs"
               />
             </div>
           </div>
 
           <div className="space-y-1.5 w-full sm:w-[200px]">
-            <Label className="text-xs font-semibold">{t('recruitment.job.status', { defaultValue: 'Estado da Vaga' })}</Label>
+            <Label className="text-xs font-semibold">{t('recruitmentPage.jobStatus')}</Label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('common.all', { defaultValue: 'Todos os Estados' })}</SelectItem>
-                <SelectItem value="open">Abertas</SelectItem>
-                <SelectItem value="draft">Rascunhos</SelectItem>
-                <SelectItem value="on_hold">Em Pausa</SelectItem>
-                <SelectItem value="closed">Fechadas</SelectItem>
+                <SelectItem value="all">{t('recruitmentPage.allJobStatuses')}</SelectItem>
+                <SelectItem value="open">{t('recruitmentPage.jobStatusOptions.open')}</SelectItem>
+                <SelectItem value="draft">{t('recruitmentPage.jobStatusOptions.draft')}</SelectItem>
+                <SelectItem value="on_hold">{t('recruitmentPage.jobStatusOptions.onHold')}</SelectItem>
+                <SelectItem value="closed">{t('recruitmentPage.jobStatusOptions.closed')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -138,19 +138,19 @@ export function RecruitmentPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
             <Briefcase className="h-4 w-4 text-primary" />
-            Vagas Publicadas & Processos ({jobs.data?.meta?.total ?? jobs.data?.data?.length ?? 0})
+            {t('recruitmentPage.publishedJobsHeading', { count: jobs.data?.meta?.total ?? jobs.data?.data?.length ?? 0 })}
           </h2>
         </div>
 
         {jobs.isLoading ? (
           <LoadingState />
         ) : jobs.isError ? (
-          <ErrorState message={t('recruitment.error', { defaultValue: 'Erro ao carregar vagas.' })} onRetry={jobs.refetch} />
+          <ErrorState message={t('recruitmentPage.loadJobsError')} onRetry={jobs.refetch} />
         ) : (jobs.data?.data?.length ?? 0) === 0 ? (
           <EmptyState
             icon={<Briefcase className="h-8 w-8 text-primary" />}
-            title="Nenhuma vaga encontrada"
-            description="Crie uma nova vaga de recrutamento para receber candidaturas e iniciar processos seletivos."
+            title={t('recruitmentPage.noJobsTitle')}
+            description={t('recruitmentPage.noJobsDescription')}
             action={
               canCreate ? (
                 <NewJobDialog onCreated={() => jobs.refetch()} />
@@ -162,12 +162,12 @@ export function RecruitmentPage() {
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead className="font-semibold text-xs text-foreground w-[32%]">Vaga & Posição</TableHead>
-                  <TableHead className="font-semibold text-xs text-foreground w-[14%]">Localização</TableHead>
-                  <TableHead className="font-semibold text-xs text-foreground w-[15%]">Vagas & Candidatos</TableHead>
-                  <TableHead className="font-semibold text-xs text-foreground w-[14%]">Remuneração</TableHead>
-                  <TableHead className="font-semibold text-xs text-foreground w-[10%]">Estado</TableHead>
-                  <TableHead className="font-semibold text-xs text-foreground text-right w-[15%]">Ações</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[32%]">{t('recruitmentPage.jobAndPosition')}</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[14%]">{t('recruitmentPage.location')}</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[15%]">{t('recruitmentPage.openingsAndCandidates')}</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[14%]">{t('recruitmentPage.compensation')}</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground w-[10%]">{t('recruitmentPage.status')}</TableHead>
+                  <TableHead className="font-semibold text-xs text-foreground text-right w-[15%]">{t('recruitmentPage.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -200,22 +200,23 @@ function JobRow({
   canCreateCandidate: boolean
   onRefresh: () => void
 }) {
+  const { t } = useTranslation()
   const publish = useMutation({
     mutationFn: () => api.post<JobOpening>(`recruitment/jobs/${job.id}/publish`),
     onSuccess: () => {
-      toast.success('Vaga reaberta com sucesso.')
+      toast.success(t('recruitmentPage.jobReopenedSuccess'))
       onRefresh()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao reabrir vaga.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitmentPage.jobReopenError'))),
   })
 
   const close = useMutation({
     mutationFn: () => api.post<JobOpening>(`recruitment/jobs/${job.id}/close`),
     onSuccess: () => {
-      toast.success('Vaga fechada com sucesso.')
+      toast.success(t('recruitmentPage.jobClosedSuccess'))
       onRefresh()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao fechar vaga.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitmentPage.jobCloseError'))),
   })
 
   const isClosed = job.status === 'closed'
@@ -258,7 +259,7 @@ function JobRow({
             <span className="truncate">{job.location}</span>
           </div>
         ) : (
-          <span>Presencial</span>
+          <span>{t('recruitmentPage.onSite')}</span>
         )}
       </TableCell>
 
@@ -267,7 +268,11 @@ function JobRow({
         <div className="space-y-0.5 text-xs">
           <div className="flex items-center gap-1 text-muted-foreground">
             <Briefcase className="h-3 w-3 text-primary shrink-0" />
-            <span className="font-semibold text-foreground">{job.openings_count}</span> vaga(s)
+            <span className="font-semibold text-foreground">
+              {job.openings_count === 1
+                ? t('recruitmentPage.openingCountOne', { count: job.openings_count })
+                : t('recruitmentPage.openingCountMany', { count: job.openings_count })}
+            </span>
           </div>
           <div>
             <Link
@@ -275,7 +280,11 @@ function JobRow({
               className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
             >
               <Users className="h-3 w-3 shrink-0" />
-              <span>{job.candidates_count ?? 0} candidato(s)</span>
+              <span>
+                {(job.candidates_count ?? 0) === 1
+                  ? t('recruitmentPage.candidateCountOne', { count: job.candidates_count ?? 0 })
+                  : t('recruitmentPage.candidateCountMany', { count: job.candidates_count ?? 0 })}
+              </span>
             </Link>
           </div>
         </div>
@@ -288,31 +297,33 @@ function JobRow({
             {job.salary_range}
           </span>
         ) : (
-          <span className="text-muted-foreground">A combinar</span>
+          <span className="text-muted-foreground">{t('recruitmentPage.salaryNegotiable')}</span>
         )}
       </TableCell>
 
       {/* Estado */}
       <TableCell className="py-2.5">
         <Badge variant={job.status_variant} className="font-medium text-[11px] whitespace-nowrap">
-          {job.status_label}
+          {t(`recruitmentPage.jobStatusOptions.${job.status === 'on_hold' ? 'onHold' : job.status}`, {
+            defaultValue: job.status_label,
+          })}
         </Badge>
       </TableCell>
 
       {/* Ações em cada linha */}
       <TableCell className="py-2.5 text-right">
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           {/* Se a vaga NÃO estiver fechada, permite adicionar candidatos */}
           {canCreateCandidate && !isClosed ? (
             <AddCandidateToJobDialog job={job} onCreated={onRefresh} />
           ) : isClosed ? (
             <Badge variant="secondary" className="text-[10px] text-muted-foreground font-normal py-0.5 px-1.5 border-dashed whitespace-nowrap">
-              Fechada
+              {t('recruitmentPage.jobStatusOptions.closed')}
             </Badge>
           ) : null}
 
           {/* Botão Ver Detalhes e Candidatos */}
-          <Button size="icon-sm" variant="outline" className="h-7 w-7 shrink-0" asChild title="Ver Candidatos e Detalhes">
+          <Button size="icon-sm" variant="outline" className="h-7 w-7 shrink-0" asChild title={t('recruitmentPage.viewCandidatesAndDetails')}>
             <Link to={`/recruitment/${job.id}`}>
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
@@ -324,25 +335,25 @@ function JobRow({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 px-2 text-xs gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 shrink-0"
+                className="h-auto min-h-7 px-2 text-xs gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 shrink-0 whitespace-normal text-center"
                 onClick={() => close.mutate()}
                 disabled={close.isPending}
-                title="Fechar Vaga"
+                title={t('recruitmentPage.closeJob')}
               >
                 <XCircle className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Fechar</span>
+                <span className="hidden sm:inline">{t('recruitmentPage.close')}</span>
               </Button>
             ) : (
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 px-2 text-xs gap-1 text-emerald-600 hover:bg-emerald-500/10 border-emerald-300 dark:border-emerald-800 shrink-0"
+                className="h-auto min-h-7 px-2 text-xs gap-1 text-emerald-600 hover:bg-emerald-500/10 border-emerald-300 dark:border-emerald-800 shrink-0 whitespace-normal text-center"
                 onClick={() => publish.mutate()}
                 disabled={publish.isPending}
-                title="Reabrir Vaga"
+                title={t('recruitmentPage.reopenJob')}
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Reabrir</span>
+                <span className="hidden sm:inline">{t('recruitmentPage.reopen')}</span>
               </Button>
             )
           )}
@@ -383,29 +394,29 @@ function NewJobDialog({ onCreated }: { onCreated: () => void }) {
         salary_max: form.salary_max ? Number(form.salary_max) : null,
       }),
     onSuccess: () => {
-      toast.success('Vaga criada com sucesso.')
+      toast.success(t('recruitmentPage.jobCreatedSuccess'))
       setOpen(false)
       onCreated()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar vaga.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitmentPage.jobCreateError'))),
   })
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="gap-1.5 shadow-xs">
+        <Button size="sm" className="gap-1.5 shadow-xs h-auto min-h-9 whitespace-normal text-center">
           <Plus className="h-4 w-4" />
-          Nova Vaga
+          {t('recruitmentPage.newJob')}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[85vh] p-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-6 pb-4 border-b border-border shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Briefcase className="h-5 w-5 text-primary" />
-            Criar Nova Vaga de Emprego
+            {t('recruitmentPage.createJobTitle')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Publique uma vaga para abrir processo seletivo e receber candidaturas.
+            {t('recruitmentPage.createJobDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -413,21 +424,21 @@ function NewJobDialog({ onCreated }: { onCreated: () => void }) {
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5 md:col-span-2">
-              <Label className="text-xs font-semibold">Título da Vaga *</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.jobTitle')} *</Label>
               <Input
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="Ex: Engenheiro de Software Sénior"
+                placeholder={t('recruitmentPage.jobTitlePlaceholder')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Departamento</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.department')}</Label>
               <Select
                 value={form.department_id}
                 onValueChange={(v) => setForm({ ...form, department_id: v })}
               >
-                <SelectTrigger><SelectValue placeholder="Selecione o departamento..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('recruitmentPage.selectDepartment')} /></SelectTrigger>
                 <SelectContent>
                   {(departments ?? []).map((d) => (
                     <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
@@ -437,12 +448,12 @@ function NewJobDialog({ onCreated }: { onCreated: () => void }) {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Cargo Associado</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.associatedPosition')}</Label>
               <Select
                 value={form.position_id}
                 onValueChange={(v) => setForm({ ...form, position_id: v })}
               >
-                <SelectTrigger><SelectValue placeholder="Selecione o cargo..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('recruitmentPage.selectPosition')} /></SelectTrigger>
                 <SelectContent>
                   {(positions ?? []).map((p) => (
                     <SelectItem key={p.id} value={String(p.id)}>{p.title}</SelectItem>
@@ -452,16 +463,16 @@ function NewJobDialog({ onCreated }: { onCreated: () => void }) {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Localização</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.location')}</Label>
               <Input
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
-                placeholder="Ex: Luanda, Talatona (ou Remoto)"
+                placeholder={t('recruitmentPage.locationPlaceholder')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Número de Vagas</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.numberOfOpenings')}</Label>
               <Input
                 type="number"
                 min={1}
@@ -471,76 +482,76 @@ function NewJobDialog({ onCreated }: { onCreated: () => void }) {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Regime de Trabalho</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.employmentType')}</Label>
               <Select
                 value={form.employment_type}
                 onValueChange={(v) => setForm({ ...form, employment_type: v })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="full_time">Tempo Integral</SelectItem>
-                  <SelectItem value="part_time">Tempo Parcial</SelectItem>
-                  <SelectItem value="contract">Contrato a Termo</SelectItem>
-                  <SelectItem value="temporary">Temporário</SelectItem>
-                  <SelectItem value="internship">Estágio</SelectItem>
+                  <SelectItem value="full_time">{t('recruitmentPage.employmentTypes.fullTime')}</SelectItem>
+                  <SelectItem value="part_time">{t('recruitmentPage.employmentTypes.partTime')}</SelectItem>
+                  <SelectItem value="contract">{t('recruitmentPage.employmentTypes.contract')}</SelectItem>
+                  <SelectItem value="temporary">{t('recruitmentPage.employmentTypes.temporary')}</SelectItem>
+                  <SelectItem value="internship">{t('recruitmentPage.employmentTypes.internship')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Nível de Experiência</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.experienceLevel')}</Label>
               <Select
                 value={form.experience_level}
                 onValueChange={(v) => setForm({ ...form, experience_level: v })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="intern">Estagiário</SelectItem>
-                  <SelectItem value="junior">Júnior</SelectItem>
-                  <SelectItem value="mid">Pleno</SelectItem>
-                  <SelectItem value="senior">Sénior</SelectItem>
-                  <SelectItem value="lead">Lead / Especialista</SelectItem>
+                  <SelectItem value="intern">{t('recruitmentPage.experienceLevels.intern')}</SelectItem>
+                  <SelectItem value="junior">{t('recruitmentPage.experienceLevels.junior')}</SelectItem>
+                  <SelectItem value="mid">{t('recruitmentPage.experienceLevels.mid')}</SelectItem>
+                  <SelectItem value="senior">{t('recruitmentPage.experienceLevels.senior')}</SelectItem>
+                  <SelectItem value="lead">{t('recruitmentPage.experienceLevels.lead')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Salário Mínimo (AOA)</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.minimumSalary')} (AOA)</Label>
               <Input
                 type="number"
                 value={form.salary_min}
                 onChange={(e) => setForm({ ...form, salary_min: e.target.value })}
-                placeholder="Ex: 300000"
+                placeholder={t('recruitmentPage.minimumSalaryPlaceholder')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Salário Máximo (AOA)</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.maximumSalary')} (AOA)</Label>
               <Input
                 type="number"
                 value={form.salary_max}
                 onChange={(e) => setForm({ ...form, salary_max: e.target.value })}
-                placeholder="Ex: 500000"
+                placeholder={t('recruitmentPage.maximumSalaryPlaceholder')}
               />
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
-              <Label className="text-xs font-semibold">Descrição das Responsabilidades</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.responsibilitiesDescription')}</Label>
               <textarea
                 className="flex min-h-[90px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Descreva as principais funções, tarefas e objetivos da posição..."
+                placeholder={t('recruitmentPage.responsibilitiesPlaceholder')}
               />
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
-              <Label className="text-xs font-semibold">Requisitos e Competências</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.requirementsAndSkills')}</Label>
               <textarea
                 className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={form.requirements}
                 onChange={(e) => setForm({ ...form, requirements: e.target.value })}
-                placeholder="Qualificações obrigatórias, línguas, ferramentas..."
+                placeholder={t('recruitmentPage.requirementsPlaceholder')}
               />
             </div>
           </div>
@@ -548,11 +559,11 @@ function NewJobDialog({ onCreated }: { onCreated: () => void }) {
 
         <DialogFooter className="p-4 px-6 border-t border-border bg-muted/20 shrink-0 flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
-            Cancelar
+            {t('recruitmentPage.cancel')}
           </Button>
           <Button size="sm" onClick={() => create.mutate()} disabled={!form.title || create.isPending}>
             {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar Vaga
+            {t('recruitmentPage.saveJob')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -567,6 +578,7 @@ function AddCandidateToJobDialog({
   job: JobOpening
   onCreated: () => void
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({
     first_name: '',
@@ -592,7 +604,7 @@ function AddCandidateToJobDialog({
         status: 'applied',
       }),
     onSuccess: () => {
-      toast.success(`Candidato adicionado com sucesso à vaga "${job.title}".`)
+      toast.success(t('recruitmentPage.candidateAddedToJobSuccess', { jobTitle: job.title }))
       setOpen(false)
       setForm({
         first_name: '',
@@ -605,25 +617,25 @@ function AddCandidateToJobDialog({
       })
       onCreated()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar candidato.')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('recruitmentPage.candidateCreateError'))),
   })
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="h-7 px-2.5 gap-1 text-xs bg-primary text-primary-foreground shrink-0 shadow-xs">
+        <Button size="sm" className="h-auto min-h-7 px-2.5 gap-1 text-xs bg-primary text-primary-foreground shrink-0 shadow-xs whitespace-normal text-center">
           <UserPlus className="h-3.5 w-3.5" />
-          <span>+ Candidato</span>
+          <span>{t('recruitmentPage.addCandidateShort')}</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md max-h-[85vh] p-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-6 pb-4 border-b border-border shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-primary" />
-            Adicionar Candidato
+            {t('recruitmentPage.addCandidate')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Inscreva um candidato na vaga <span className="font-semibold text-foreground">{job.title}</span>.
+            {t('recruitmentPage.addCandidateDescription', { jobTitle: job.title })}
           </DialogDescription>
         </DialogHeader>
 
@@ -637,75 +649,75 @@ function AddCandidateToJobDialog({
           <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-3.5">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Nome Próprio *</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.firstName')} *</Label>
                 <Input
                   required
                   value={form.first_name}
                   onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-                  placeholder="Ex: Carlos"
+                  placeholder={t('recruitmentPage.firstNamePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Apelido *</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.lastName')} *</Label>
                 <Input
                   required
                   value={form.last_name}
                   onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-                  placeholder="Ex: Sousa"
+                  placeholder={t('recruitmentPage.lastNamePlaceholder')}
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Email *</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.email')} *</Label>
               <Input
                 type="email"
                 required
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="candidato@exemplo.com"
+                placeholder={t('recruitmentPage.emailPlaceholder')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Telefone</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.phone')}</Label>
               <Input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="+244 9..."
+                placeholder={t('recruitmentPage.phonePlaceholder')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Anos de Experiência</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.yearsExperience')}</Label>
                 <Input
                   type="number"
                   min={0}
                   value={form.years_experience}
                   onChange={(e) => setForm({ ...form, years_experience: e.target.value })}
-                  placeholder="Ex: 3"
+                  placeholder={t('recruitmentPage.yearsExperiencePlaceholder')}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Pretensão Salarial (AOA)</Label>
+                <Label className="text-xs font-semibold">{t('recruitmentPage.expectedSalary')} (AOA)</Label>
                 <Input
                   type="number"
                   min={0}
                   value={form.expected_salary}
                   onChange={(e) => setForm({ ...form, expected_salary: e.target.value })}
-                  placeholder="Ex: 350000"
+                  placeholder={t('recruitmentPage.expectedSalaryPlaceholder')}
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Observações / Resumo</Label>
+              <Label className="text-xs font-semibold">{t('recruitmentPage.notesOrSummary')}</Label>
               <Input
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Competências ou fonte da candidatura"
+                placeholder={t('recruitmentPage.candidateNotesPlaceholder')}
               />
             </div>
           </div>
@@ -718,7 +730,7 @@ function AddCandidateToJobDialog({
               onClick={() => setOpen(false)}
               disabled={create.isPending}
             >
-              Cancelar
+              {t('recruitmentPage.cancel')}
             </Button>
             <Button
               type="submit"
@@ -726,7 +738,7 @@ function AddCandidateToJobDialog({
               disabled={!form.first_name || !form.last_name || !form.email || create.isPending}
             >
               {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar Candidato
+              {t('recruitmentPage.saveCandidate')}
             </Button>
           </DialogFooter>
         </form>

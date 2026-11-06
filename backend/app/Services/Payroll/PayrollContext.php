@@ -22,6 +22,8 @@ class PayrollContext
 
     public Collection $salaryComponents;
 
+    public Collection $deductions;
+
     public ?PayrollInssRule $inssRule = null;
 
     public ?PayrollIrtTable $irtTable = null;
@@ -54,6 +56,7 @@ class PayrollContext
         $this->absences = collect();
         $this->leaves = collect();
         $this->salaryComponents = collect();
+        $this->deductions = collect();
 
         $this->settings = $period->tenant
             ? $this->collectSettings($period->tenant)

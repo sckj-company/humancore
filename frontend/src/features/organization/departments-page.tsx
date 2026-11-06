@@ -121,7 +121,7 @@ export function DepartmentsPage() {
 
     const errors: Record<string, string> = {}
     if (!formData.name.trim()) {
-      errors.name = 'O nome do departamento é obrigatório.'
+      errors.name = t('organizationPage.departments.validation.nameRequired')
     }
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
@@ -139,7 +139,7 @@ export function DepartmentsPage() {
             description: formData.description?.trim() || null,
           },
         })
-        toast.success('Departamento atualizado com sucesso!')
+        toast.success(t('organizationPage.toast.updated', { entity: t('organizationPage.departments.singular') }))
       } else {
         await createMutation.mutateAsync({
           ...formData,
@@ -147,11 +147,11 @@ export function DepartmentsPage() {
           cost_center: formData.cost_center?.trim() || null,
           description: formData.description?.trim() || null,
         })
-        toast.success('Departamento criado com sucesso!')
+        toast.success(t('organizationPage.toast.created', { entity: t('organizationPage.departments.singular') }))
       }
       setIsDialogOpen(false)
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Erro ao gravar departamento.'))
+      toast.error(getApiErrorMessage(err, t('organizationPage.toast.saveError', { entity: t('organizationPage.departments.singular') })))
     }
   }
 
@@ -160,10 +160,10 @@ export function DepartmentsPage() {
     if (!deleteDepartmentTarget) return
     try {
       await deleteMutation.mutateAsync(deleteDepartmentTarget.id)
-      toast.success('Departamento eliminado com sucesso!')
+      toast.success(t('organizationPage.toast.deleted', { entity: t('organizationPage.departments.singular') }))
       setDeleteDepartmentTarget(null)
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Erro ao eliminar departamento.'))
+      toast.error(getApiErrorMessage(err, t('organizationPage.toast.deleteError', { entity: t('organizationPage.departments.singular') })))
     }
   }
 
@@ -185,10 +185,10 @@ export function DepartmentsPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('nav.departments')}
-        description="Gestão de departamentos e estrutura interna da organização"
+        description={t('organizationPage.departments.description')}
         actions={
-          <Button onClick={handleOpenCreate} className="shadow-sm">
-            <Plus className="mr-2 h-4 w-4" /> Novo Departamento
+          <Button onClick={handleOpenCreate} className="shadow-sm max-w-full whitespace-normal text-center">
+            <Plus className="mr-2 h-4 w-4 shrink-0" /> {t('organizationPage.departments.new')}
           </Button>
         }
       />
@@ -202,17 +202,17 @@ export function DepartmentsPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Pesquisar por nome ou código..."
+                placeholder={t('organizationPage.departments.searchPlaceholder')}
                 className="pl-9"
               />
             </div>
 
             <Select value={branchFilter} onValueChange={setBranchFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Todas as filiais" />
+                <SelectValue placeholder={t('organizationPage.filters.allBranches')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas as filiais</SelectItem>
+                <SelectItem value="all">{t('organizationPage.filters.allBranches')}</SelectItem>
                 {branches?.map((b) => (
                   <SelectItem key={b.id} value={String(b.id)}>
                     {b.name}
@@ -223,12 +223,12 @@ export function DepartmentsPage() {
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Todos os estados" />
+                <SelectValue placeholder={t('organizationPage.filters.allStatuses')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os estados</SelectItem>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="inactive">Inativo</SelectItem>
+                <SelectItem value="all">{t('organizationPage.filters.allStatuses')}</SelectItem>
+                <SelectItem value="active">{t('organizationPage.status.active')}</SelectItem>
+                <SelectItem value="inactive">{t('organizationPage.status.inactive')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -236,12 +236,12 @@ export function DepartmentsPage() {
       </Card>
 
       {isLoading && <LoadingState />}
-      {isError && <ErrorState message="Erro ao carregar departamentos" onRetry={refetch} />}
+      {isError && <ErrorState message={t('organizationPage.departments.loadError')} onRetry={refetch} />}
 
       {departments && filtered.length === 0 && (
         <EmptyState
-          title="Nenhum departamento encontrado"
-          description={search ? 'Tente ajustar os filtros de pesquisa.' : 'Crie o primeiro departamento para começar.'}
+          title={t('organizationPage.departments.emptyTitle')}
+          description={search ? t('organizationPage.empty.filterHint') : t('organizationPage.departments.emptyDescription')}
         />
       )}
 
@@ -272,7 +272,7 @@ export function DepartmentsPage() {
                   </div>
 
                   <Badge variant={d.status === 'active' ? 'default' : 'secondary'} className="capitalize shrink-0">
-                    {d.status === 'active' ? 'Ativo' : 'Inativo'}
+                    {d.status === 'active' ? t('organizationPage.status.active') : t('organizationPage.status.inactive')}
                   </Badge>
                 </div>
 
@@ -293,28 +293,28 @@ export function DepartmentsPage() {
                   {parentName && (
                     <div className="flex items-center gap-1.5">
                       <Layers className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
-                      <span className="truncate">Superior: {parentName}</span>
+                      <span className="truncate">{t('organizationPage.departments.parentLabel', { name: parentName })}</span>
                     </div>
                   )}
 
                   {managerName && (
                     <div className="flex items-center gap-1.5">
                       <User className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
-                      <span className="truncate">Responsável: {managerName}</span>
+                      <span className="truncate">{t('organizationPage.departments.managerLabel', { name: managerName })}</span>
                     </div>
                   )}
 
                   {d.cost_center && (
                     <div className="flex items-center gap-1.5">
                       <DollarSign className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
-                      <span className="truncate font-mono">CC: {d.cost_center}</span>
+                      <span className="truncate font-mono">{t('organizationPage.departments.costCenterLabel', { code: d.cost_center })}</span>
                     </div>
                   )}
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3">
                   <span className="text-xs font-medium text-muted-foreground">
-                    {d.employee_count ?? 0} funcionário{(d.employee_count ?? 0) !== 1 ? 's' : ''}
+                    {t('organizationPage.departments.employeeCount', { count: d.employee_count ?? 0 })}
                   </span>
 
                   <div className="flex items-center gap-1">
@@ -322,7 +322,7 @@ export function DepartmentsPage() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => handleOpenEdit(d)}
-                      title="Editar departamento"
+                      title={t('organizationPage.actions.edit', { entity: t('organizationPage.departments.singular') })}
                       className="text-muted-foreground hover:text-foreground"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -331,7 +331,7 @@ export function DepartmentsPage() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => setDeleteDepartmentTarget(d)}
-                      title="Eliminar departamento"
+                      title={t('organizationPage.actions.delete', { entity: t('organizationPage.departments.singular') })}
                       className="text-muted-foreground hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -349,18 +349,18 @@ export function DepartmentsPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {editingDepartment ? 'Editar Departamento' : 'Novo Departamento'}
+              {editingDepartment ? t('organizationPage.actions.edit', { entity: t('organizationPage.departments.singular') }) : t('organizationPage.departments.new')}
             </DialogTitle>
             <DialogDescription>
               {editingDepartment
-                ? 'Atualize as informações do departamento selecionado.'
-                : 'Preencha os detalhes para registar um novo departamento.'}
+                ? t('organizationPage.departments.editDescription')
+                : t('organizationPage.departments.createDescription')}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="dept-name">Nome do Departamento *</Label>
+              <Label htmlFor="dept-name">{t('organizationPage.departments.name')} *</Label>
               <Input
                 id="dept-name"
                 value={formData.name}
@@ -368,7 +368,7 @@ export function DepartmentsPage() {
                   setFormData((prev) => ({ ...prev, name: e.target.value }))
                   if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: '' }))
                 }}
-                placeholder="Ex: Recursos Humanos, Tecnologia..."
+                placeholder={t('organizationPage.departments.namePlaceholder')}
               />
               {formErrors.name && (
                 <p className="text-xs text-destructive">{formErrors.name}</p>
@@ -377,17 +377,17 @@ export function DepartmentsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="dept-code">Código</Label>
+                <Label htmlFor="dept-code">{t('organizationPage.fields.code')}</Label>
                 <Input
                   id="dept-code"
                   value={formData.code ?? ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, code: e.target.value }))}
-                  placeholder="Ex: RH, TI, FIN"
+                  placeholder={t('organizationPage.departments.codePlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="dept-status">Estado</Label>
+                <Label htmlFor="dept-status">{t('organizationPage.fields.status')}</Label>
                 <Select
                   value={formData.status}
                   onValueChange={(val: 'active' | 'inactive') =>
@@ -398,8 +398,8 @@ export function DepartmentsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Ativo</SelectItem>
-                    <SelectItem value="inactive">Inativo</SelectItem>
+                    <SelectItem value="active">{t('organizationPage.status.active')}</SelectItem>
+                    <SelectItem value="inactive">{t('organizationPage.status.inactive')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -407,7 +407,7 @@ export function DepartmentsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="dept-branch">Filial</Label>
+                <Label htmlFor="dept-branch">{t('organizationPage.fields.branch')}</Label>
                 <Select
                   value={formData.branch_id ? String(formData.branch_id) : 'none'}
                   onValueChange={(val) =>
@@ -418,10 +418,10 @@ export function DepartmentsPage() {
                   }
                 >
                   <SelectTrigger id="dept-branch">
-                    <SelectValue placeholder="Selecionar filial" />
+                    <SelectValue placeholder={t('organizationPage.departments.selectBranch')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhuma</SelectItem>
+                    <SelectItem value="none">{t('organizationPage.common.none')}</SelectItem>
                     {branches?.map((b) => (
                       <SelectItem key={b.id} value={String(b.id)}>
                         {b.name}
@@ -432,7 +432,7 @@ export function DepartmentsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="dept-parent">Departamento Superior</Label>
+                <Label htmlFor="dept-parent">{t('organizationPage.departments.parent')}</Label>
                 <Select
                   value={formData.parent_id ? String(formData.parent_id) : 'none'}
                   onValueChange={(val) =>
@@ -443,10 +443,10 @@ export function DepartmentsPage() {
                   }
                 >
                   <SelectTrigger id="dept-parent">
-                    <SelectValue placeholder="Nenhum (Raiz)" />
+                    <SelectValue placeholder={t('organizationPage.departments.noParent')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum (Raiz)</SelectItem>
+                    <SelectItem value="none">{t('organizationPage.departments.noParent')}</SelectItem>
                     {departments
                       ?.filter((d) => !editingDepartment || d.id !== editingDepartment.id)
                       .map((d) => (
@@ -461,7 +461,7 @@ export function DepartmentsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="dept-manager">Responsável / Gestor</Label>
+                <Label htmlFor="dept-manager">{t('organizationPage.fields.manager')}</Label>
                 <Select
                   value={formData.manager_id ? String(formData.manager_id) : 'none'}
                   onValueChange={(val) =>
@@ -472,10 +472,10 @@ export function DepartmentsPage() {
                   }
                 >
                   <SelectTrigger id="dept-manager">
-                    <SelectValue placeholder="Selecionar gestor" />
+                    <SelectValue placeholder={t('organizationPage.common.selectManager')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
+                    <SelectItem value="none">{t('organizationPage.common.none')}</SelectItem>
                     {employees?.map((emp) => (
                       <SelectItem key={emp.id} value={String(emp.id)}>
                         {emp.full_name}
@@ -486,20 +486,20 @@ export function DepartmentsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="dept-cc">Centro de Custo</Label>
+                <Label htmlFor="dept-cc">{t('organizationPage.departments.costCenter')}</Label>
                 <Input
                   id="dept-cc"
                   value={formData.cost_center ?? ''}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, cost_center: e.target.value }))
                   }
-                  placeholder="Ex: CC-1002"
+                  placeholder={t('organizationPage.departments.costCenterPlaceholder')}
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="dept-desc">Descrição</Label>
+              <Label htmlFor="dept-desc">{t('organizationPage.fields.description')}</Label>
               <Textarea
                 id="dept-desc"
                 value={formData.description ?? ''}
@@ -507,7 +507,7 @@ export function DepartmentsPage() {
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
                 rows={2}
-                placeholder="Breve descrição da função e escopo do departamento..."
+                placeholder={t('organizationPage.departments.descriptionPlaceholder')}
               />
             </div>
 
@@ -518,10 +518,10 @@ export function DepartmentsPage() {
                 onClick={() => setIsDialogOpen(false)}
                 disabled={isSaving}
               >
-                Cancelar
+                {t('organizationPage.common.cancel')}
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? 'A guardar...' : editingDepartment ? 'Guardar Alterações' : 'Criar Departamento'}
+                {isSaving ? t('organizationPage.common.saving') : editingDepartment ? t('organizationPage.common.saveChanges') : t('organizationPage.departments.new')}
               </Button>
             </DialogFooter>
           </form>
@@ -535,25 +535,25 @@ export function DepartmentsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar Departamento</AlertDialogTitle>
+            <AlertDialogTitle>{t('organizationPage.actions.delete', { entity: t('organizationPage.departments.singular') })}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza de que deseja eliminar o departamento{' '}
+              {t('organizationPage.deleteConfirmation', { entity: t('organizationPage.departments.singular') })}{' '}
               <strong className="text-foreground">
                 {deleteDepartmentTarget?.name}
-              </strong>
-              ? Esta ação removerá o registo permanentemente da base de dados.
+              </strong>{'? '}
+              {t('organizationPage.deleteWarning')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMutation.isPending}>
-              Cancelar
+              {t('organizationPage.common.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={deleteMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending ? 'A eliminar...' : 'Eliminar'}
+              {deleteMutation.isPending ? t('organizationPage.common.deleting') : t('organizationPage.common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

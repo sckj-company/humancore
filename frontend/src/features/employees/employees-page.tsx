@@ -22,25 +22,17 @@ const statusColor: Record<string, string> = {
   expired_contract: 'bg-warning/10 text-warning',
 }
 
-const statusLabels: Record<string, string> = {
-  active: 'Ativo',
-  inactive: 'Inativo',
-  suspended: 'Suspenso',
-  terminated: 'Desligado',
-  expired_contract: 'Contrato Expirado',
-}
-
-function getDisplayStatus(e: EmployeeSummary): { key: string; label: string } {
+function getDisplayStatus(e: EmployeeSummary): string {
   const contractEnded =
     e.status === 'active' &&
     !!e.active_contract?.end_date &&
     e.active_contract.end_date < new Date().toISOString().slice(0, 10)
 
   if (e.is_contract_expired || contractEnded) {
-    return { key: 'expired_contract', label: statusLabels.expired_contract }
+    return 'expired_contract'
   }
 
-  return { key: e.status, label: statusLabels[e.status] ?? e.status }
+  return e.status
 }
 
 export function EmployeesPage() {
@@ -61,14 +53,14 @@ export function EmployeesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t('employees.title')}
-        description={`${data?.meta?.total ?? 0} ${t('common.active').toLowerCase()}`}
+        title={t('employeesPage.title')}
+        description={t('employeesPage.totalEmployees', { count: data?.meta?.total ?? 0 })}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <EmployeeImportModal onSuccess={() => refetch()} />
-            <Button asChild>
+            <Button asChild className="h-auto min-h-9 max-w-full whitespace-normal text-center">
               <Link to="/employees/new">
-                <Plus className="mr-2 h-4 w-4" /> {t('employees.add')}
+                <Plus className="mr-2 h-4 w-4 shrink-0" /> {t('employees.add')}
               </Link>
             </Button>
           </div>
@@ -95,10 +87,10 @@ export function EmployeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('common.all')}</SelectItem>
-                  <SelectItem value="active">Ativo</SelectItem>
-                  <SelectItem value="inactive">Inativo</SelectItem>
-                  <SelectItem value="terminated">Desligado</SelectItem>
-                  <SelectItem value="suspended">Suspenso</SelectItem>
+                  <SelectItem value="active">{t('employeesPage.status.active')}</SelectItem>
+                  <SelectItem value="inactive">{t('employeesPage.status.inactive')}</SelectItem>
+                  <SelectItem value="terminated">{t('employeesPage.status.terminated')}</SelectItem>
+                  <SelectItem value="suspended">{t('employeesPage.status.suspended')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -108,16 +100,16 @@ export function EmployeesPage() {
 
       {isLoading && <LoadingState />}
 
-      {isError && <ErrorState message="Não foi possível carregar os funcionários." onRetry={refetch} />}
+      {isError && <ErrorState message={t('employeesPage.loadError')} onRetry={refetch} />}
 
       {data && data.data.length === 0 && (
         <EmptyState
-          title="Nenhum funcionário encontrado"
-          description="Tente ajustar os filtros ou crie um novo funcionário."
+          title={t('employeesPage.emptyTitle')}
+          description={t('employeesPage.emptyDescription')}
           action={
-            <Button asChild>
+            <Button asChild className="h-auto min-h-9 max-w-full whitespace-normal text-center">
               <Link to="/employees/new">
-                <Plus className="mr-2 h-4 w-4" /> {t('employees.add')}
+                <Plus className="mr-2 h-4 w-4 shrink-0" /> {t('employees.add')}
               </Link>
             </Button>
           }
@@ -131,12 +123,12 @@ export function EmployeesPage() {
               <table className="w-full">
                 <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="px-6 py-3 font-medium">Funcionário</th>
-                    <th className="px-6 py-3 font-medium">Cargo</th>
-                    <th className="px-6 py-3 font-medium">Departamento</th>
+                    <th className="px-6 py-3 font-medium">{t('employeesPage.employee')}</th>
+                    <th className="px-6 py-3 font-medium">{t('employeesPage.position')}</th>
+                    <th className="px-6 py-3 font-medium">{t('employeesPage.department')}</th>
                     <th className="px-6 py-3 font-medium">{t('common.status')}</th>
-                    <th className="px-6 py-3 font-medium">Admissão</th>
-                    <th className="px-6 py-3 font-medium text-right">Salário</th>
+                    <th className="px-6 py-3 font-medium">{t('employeesPage.hireDate')}</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('employeesPage.salary')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
@@ -163,8 +155,8 @@ export function EmployeesPage() {
                       <td className="px-6 py-3 text-muted-foreground">{e.position ?? '—'}</td>
                       <td className="px-6 py-3 text-muted-foreground">{e.department ?? '—'}</td>
                       <td className="px-6 py-3">
-                        <Badge className={statusColor[displayStatus.key] ?? 'bg-muted text-foreground'} variant="secondary">
-                          {displayStatus.label}
+                        <Badge className={statusColor[displayStatus] ?? 'bg-muted text-foreground'} variant="secondary">
+                          {t(`employeesPage.status.${displayStatus}`, { defaultValue: displayStatus })}
                         </Badge>
                       </td>
                       <td className="px-6 py-3 text-muted-foreground">
@@ -177,7 +169,7 @@ export function EmployeesPage() {
                       </td>
                       <td className="px-6 py-3 text-right">
                         <Button variant="ghost" size="icon-sm" asChild>
-                          <Link to={`/employees/${e.id}`}>
+                          <Link to={`/employees/${e.id}`} aria-label={t('employeesPage.viewEmployee', { name: e.full_name })}>
                             <Eye className="h-4 w-4" />
                           </Link>
                         </Button>
@@ -192,7 +184,11 @@ export function EmployeesPage() {
             {data.meta && data.meta.last_page > 1 && (
               <div className="flex items-center justify-between border-t border-border px-6 py-3 text-sm">
                 <div className="text-muted-foreground">
-                  Página {data.meta.current_page} de {data.meta.last_page} · {data.meta.total} total
+                  {t('employeesPage.pagination', {
+                    current: data.meta.current_page,
+                    pages: data.meta.last_page,
+                    total: data.meta.total,
+                  })}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>

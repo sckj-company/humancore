@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Download, Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
@@ -20,6 +21,7 @@ interface LeaveDocumentActionsProps {
 }
 
 export function LeaveDocumentActions({ leave }: LeaveDocumentActionsProps) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const justificationInput = useRef<HTMLInputElement>(null)
   const signedInput = useRef<HTMLInputElement>(null)
@@ -32,11 +34,11 @@ export function LeaveDocumentActions({ leave }: LeaveDocumentActionsProps) {
       return api.upload(`leave/${leave.id}/documents/${kind}`, formData)
     },
     onSuccess: () => {
-      toast.success('Documento carregado')
+      toast.success(t('leave.documentUploaded'))
       queryClient.invalidateQueries({ queryKey: ['leave-requests'] })
       queryClient.invalidateQueries({ queryKey: ['leaves'] })
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Erro ao carregar documento')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('leave.documentUploadError'))),
     onSettled: () => setUploadingKind(null),
   })
 
@@ -50,7 +52,7 @@ export function LeaveDocumentActions({ leave }: LeaveDocumentActionsProps) {
     try {
       await api.downloadFile(`leave/${leave.id}/documents/${kind}`, `ausencia-${leave.id}-${kind}`)
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Erro ao descarregar documento'))
+      toast.error(getApiErrorMessage(error, t('leave.documentDownloadError')))
     }
   }
 
@@ -88,23 +90,23 @@ export function LeaveDocumentActions({ leave }: LeaveDocumentActionsProps) {
         }}
       />
       {leave.has_justification_document ? (
-        <Button type="button" variant="outline" size="sm" title="Descarregar justificativo" onClick={() => void download('justification')}>
-          <Download />Justificativo
+        <Button type="button" variant="outline" size="sm" title={t('leave.downloadJustification')} onClick={() => void download('justification')}>
+          <Download />{t('leave.justification')}
         </Button>
       ) : (
-        <Button type="button" variant="outline" size="sm" title="Carregar justificativo" disabled={uploadMutation.isPending} onClick={() => chooseFile('justification')}>
+        <Button type="button" variant="outline" size="sm" title={t('leave.uploadJustification')} disabled={uploadMutation.isPending} onClick={() => chooseFile('justification')}>
           {uploadMutation.isPending && uploadingKind === 'justification' ? <Loader2 className="animate-spin" /> : <Upload />}
-          Justificativo
+          {t('leave.justification')}
         </Button>
       )}
       {leave.has_signed_document ? (
-        <Button type="button" variant="outline" size="sm" title="Descarregar documento assinado" onClick={() => void download('signed')}>
-          <Download />Assinado
+        <Button type="button" variant="outline" size="sm" title={t('leave.downloadSignedDocument')} onClick={() => void download('signed')}>
+          <Download />{t('leave.signed')}
         </Button>
       ) : (
-        <Button type="button" variant="outline" size="sm" title="Carregar documento assinado" disabled={uploadMutation.isPending} onClick={() => chooseFile('signed')}>
+        <Button type="button" variant="outline" size="sm" title={t('leave.uploadSignedDocument')} disabled={uploadMutation.isPending} onClick={() => chooseFile('signed')}>
           {uploadMutation.isPending && uploadingKind === 'signed' ? <Loader2 className="animate-spin" /> : <Upload />}
-          Assinado
+          {t('leave.signed')}
         </Button>
       )}
     </div>

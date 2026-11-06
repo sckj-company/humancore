@@ -121,10 +121,10 @@ export function BranchesPage() {
 
     const errors: Record<string, string> = {}
     if (!formData.name.trim()) {
-      errors.name = 'O nome da filial é obrigatório.'
+      errors.name = t('organizationPage.branches.validation.nameRequired')
     }
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Insira um email válido.'
+      errors.email = t('organizationPage.branches.validation.emailInvalid')
     }
 
     if (Object.keys(errors).length > 0) {
@@ -145,7 +145,7 @@ export function BranchesPage() {
             email: formData.email?.trim() || null,
           },
         })
-        toast.success('Filial atualizada com sucesso!')
+        toast.success(t('organizationPage.toast.updated', { entity: t('organizationPage.branches.singular') }))
       } else {
         await createMutation.mutateAsync({
           ...formData,
@@ -155,11 +155,11 @@ export function BranchesPage() {
           phone: formData.phone?.trim() || null,
           email: formData.email?.trim() || null,
         })
-        toast.success('Filial criada com sucesso!')
+        toast.success(t('organizationPage.toast.created', { entity: t('organizationPage.branches.singular') }))
       }
       setIsDialogOpen(false)
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Erro ao gravar filial.'))
+      toast.error(getApiErrorMessage(err, t('organizationPage.toast.saveError', { entity: t('organizationPage.branches.singular') })))
     }
   }
 
@@ -168,10 +168,10 @@ export function BranchesPage() {
     if (!deleteTarget) return
     try {
       await deleteMutation.mutateAsync(deleteTarget.id)
-      toast.success('Filial eliminada com sucesso!')
+      toast.success(t('organizationPage.toast.deleted', { entity: t('organizationPage.branches.singular') }))
       setDeleteTarget(null)
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Erro ao eliminar filial.'))
+      toast.error(getApiErrorMessage(err, t('organizationPage.toast.deleteError', { entity: t('organizationPage.branches.singular') })))
     }
   }
 
@@ -191,11 +191,11 @@ export function BranchesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t('nav.branches', { defaultValue: 'Filiais' })}
-        description="Gestão de sedes, filiais e localizações físicas da organização"
+        title={t('nav.branches')}
+        description={t('organizationPage.branches.description')}
         actions={
-          <Button onClick={handleOpenCreate} className="shadow-sm">
-            <Plus className="mr-2 h-4 w-4" /> Nova Filial
+          <Button onClick={handleOpenCreate} className="shadow-sm max-w-full whitespace-normal text-center">
+            <Plus className="mr-2 h-4 w-4 shrink-0" /> {t('organizationPage.branches.new')}
           </Button>
         }
       />
@@ -209,19 +209,19 @@ export function BranchesPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Pesquisar por nome, código ou cidade..."
+                placeholder={t('organizationPage.branches.searchPlaceholder')}
                 className="pl-9"
               />
             </div>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Todos os estados" />
+                <SelectValue placeholder={t('organizationPage.filters.allStatuses')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os estados</SelectItem>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="inactive">Inativo</SelectItem>
+                <SelectItem value="all">{t('organizationPage.filters.allStatuses')}</SelectItem>
+                <SelectItem value="active">{t('organizationPage.status.active')}</SelectItem>
+                <SelectItem value="inactive">{t('organizationPage.status.inactive')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -229,12 +229,12 @@ export function BranchesPage() {
       </Card>
 
       {isLoading && <LoadingState />}
-      {isError && <ErrorState message="Erro ao carregar filiais" onRetry={refetch} />}
+      {isError && <ErrorState message={t('organizationPage.branches.loadError')} onRetry={refetch} />}
 
       {branches && filtered.length === 0 && (
         <EmptyState
-          title="Nenhuma filial encontrada"
-          description={search ? 'Tente ajustar os filtros de pesquisa.' : 'Registe a sede ou primeira filial da empresa.'}
+          title={t('organizationPage.branches.emptyTitle')}
+          description={search ? t('organizationPage.empty.filterHint') : t('organizationPage.branches.emptyDescription')}
         />
       )}
 
@@ -257,7 +257,7 @@ export function BranchesPage() {
                         <h3 className="font-semibold leading-tight text-foreground">{b.name}</h3>
                         {b.is_headquarter && (
                           <Badge variant="default" className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-300/30 text-[10px] flex items-center gap-1">
-                            <Crown className="h-3 w-3" /> Sede
+                            <Crown className="h-3 w-3" /> {t('organizationPage.branches.headquartersBadge')}
                           </Badge>
                         )}
                       </div>
@@ -270,7 +270,7 @@ export function BranchesPage() {
                   </div>
 
                   <Badge variant={b.status === 'active' ? 'default' : 'secondary'} className="capitalize shrink-0">
-                    {b.status === 'active' ? 'Ativo' : 'Inativo'}
+                    {b.status === 'active' ? t('organizationPage.status.active') : t('organizationPage.status.inactive')}
                   </Badge>
                 </div>
 
@@ -303,14 +303,14 @@ export function BranchesPage() {
                   {managerName && (
                     <div className="flex items-center gap-1.5">
                       <User className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
-                      <span className="truncate">Responsável: {managerName}</span>
+                      <span className="truncate">{t('organizationPage.branches.managerLabel', { name: managerName })}</span>
                     </div>
                   )}
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3">
                   <span className="text-xs font-medium text-muted-foreground">
-                    {b.department_count ?? 0} departamento{(b.department_count ?? 0) !== 1 ? 's' : ''}
+                    {t('organizationPage.branches.departmentCount', { count: b.department_count ?? 0 })}
                   </span>
 
                   <div className="flex items-center gap-1">
@@ -318,7 +318,7 @@ export function BranchesPage() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => handleOpenEdit(b)}
-                      title="Editar filial"
+                      title={t('organizationPage.actions.edit', { entity: t('organizationPage.branches.singular') })}
                       className="text-muted-foreground hover:text-foreground"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -327,7 +327,7 @@ export function BranchesPage() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => setDeleteTarget(b)}
-                      title="Eliminar filial"
+                      title={t('organizationPage.actions.delete', { entity: t('organizationPage.branches.singular') })}
                       className="text-muted-foreground hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -345,18 +345,18 @@ export function BranchesPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {editingBranch ? 'Editar Filial' : 'Nova Filial'}
+              {editingBranch ? t('organizationPage.actions.edit', { entity: t('organizationPage.branches.singular') }) : t('organizationPage.branches.new')}
             </DialogTitle>
             <DialogDescription>
               {editingBranch
-                ? 'Atualize os dados e localização da filial.'
-                : 'Registe uma nova sede ou unidade de operação da empresa.'}
+                ? t('organizationPage.branches.editDescription')
+                : t('organizationPage.branches.createDescription')}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="branch-name">Nome da Filial *</Label>
+              <Label htmlFor="branch-name">{t('organizationPage.branches.name')} *</Label>
               <Input
                 id="branch-name"
                 value={formData.name}
@@ -364,7 +364,7 @@ export function BranchesPage() {
                   setFormData((prev) => ({ ...prev, name: e.target.value }))
                   if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: '' }))
                 }}
-                placeholder="Ex: Sede Luanda, Delegação Benguela..."
+                placeholder={t('organizationPage.branches.namePlaceholder')}
               />
               {formErrors.name && (
                 <p className="text-xs text-destructive">{formErrors.name}</p>
@@ -373,17 +373,17 @@ export function BranchesPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="branch-code">Código</Label>
+                <Label htmlFor="branch-code">{t('organizationPage.fields.code')}</Label>
                 <Input
                   id="branch-code"
                   value={formData.code ?? ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, code: e.target.value }))}
-                  placeholder="Ex: FIL-01, SEDE"
+                  placeholder={t('organizationPage.branches.codePlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="branch-status">Estado</Label>
+                <Label htmlFor="branch-status">{t('organizationPage.fields.status')}</Label>
                 <Select
                   value={formData.status}
                   onValueChange={(val: 'active' | 'inactive') =>
@@ -394,8 +394,8 @@ export function BranchesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Ativo</SelectItem>
-                    <SelectItem value="inactive">Inativo</SelectItem>
+                    <SelectItem value="active">{t('organizationPage.status.active')}</SelectItem>
+                    <SelectItem value="inactive">{t('organizationPage.status.inactive')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -403,39 +403,39 @@ export function BranchesPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="branch-city">Cidade</Label>
+                <Label htmlFor="branch-city">{t('organizationPage.branches.city')}</Label>
                 <Input
                   id="branch-city"
                   value={formData.city ?? ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
-                  placeholder="Ex: Luanda, Benguela, Lubango..."
+                  placeholder={t('organizationPage.branches.cityPlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="branch-phone">Telefone</Label>
+                <Label htmlFor="branch-phone">{t('organizationPage.branches.phone')}</Label>
                 <Input
                   id="branch-phone"
                   value={formData.phone ?? ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-                  placeholder="+244 9..."
+                  placeholder={t('organizationPage.branches.phonePlaceholder')}
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="branch-address">Endereço Completo</Label>
+              <Label htmlFor="branch-address">{t('organizationPage.branches.address')}</Label>
               <Input
                 id="branch-address"
                 value={formData.address ?? ''}
                 onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
-                placeholder="Rua, Número, Edifício, Bairro..."
+                placeholder={t('organizationPage.branches.addressPlaceholder')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="branch-email">Email de Contacto</Label>
+                <Label htmlFor="branch-email">{t('organizationPage.branches.email')}</Label>
                 <Input
                   id="branch-email"
                   type="email"
@@ -444,7 +444,7 @@ export function BranchesPage() {
                     setFormData((prev) => ({ ...prev, email: e.target.value }))
                     if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: '' }))
                   }}
-                  placeholder="filial@empresa.co.ao"
+                  placeholder={t('organizationPage.branches.emailPlaceholder')}
                 />
                 {formErrors.email && (
                   <p className="text-xs text-destructive">{formErrors.email}</p>
@@ -452,7 +452,7 @@ export function BranchesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="branch-manager">Responsável / Gerente</Label>
+                <Label htmlFor="branch-manager">{t('organizationPage.fields.manager')}</Label>
                 <Select
                   value={formData.manager_id ? String(formData.manager_id) : 'none'}
                   onValueChange={(val) =>
@@ -463,10 +463,10 @@ export function BranchesPage() {
                   }
                 >
                   <SelectTrigger id="branch-manager">
-                    <SelectValue placeholder="Selecionar gestor" />
+                    <SelectValue placeholder={t('organizationPage.common.selectManager')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
+                    <SelectItem value="none">{t('organizationPage.common.none')}</SelectItem>
                     {employees?.map((emp) => (
                       <SelectItem key={emp.id} value={String(emp.id)}>
                         {emp.full_name}
@@ -479,9 +479,9 @@ export function BranchesPage() {
 
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div className="space-y-0.5">
-                <Label htmlFor="branch-headquarter" className="text-sm font-medium">Sede Principal da Empresa</Label>
+                <Label htmlFor="branch-headquarter" className="text-sm font-medium">{t('organizationPage.branches.headquartersLabel')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  Marque esta opção se esta filial for a sede corporativa principal.
+                  {t('organizationPage.branches.headquartersDescription')}
                 </p>
               </div>
               <Switch
@@ -500,10 +500,10 @@ export function BranchesPage() {
                 onClick={() => setIsDialogOpen(false)}
                 disabled={isSaving}
               >
-                Cancelar
+                {t('organizationPage.common.cancel')}
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? 'A guardar...' : editingBranch ? 'Guardar Alterações' : 'Criar Filial'}
+                {isSaving ? t('organizationPage.common.saving') : editingBranch ? t('organizationPage.common.saveChanges') : t('organizationPage.branches.new')}
               </Button>
             </DialogFooter>
           </form>
@@ -517,23 +517,23 @@ export function BranchesPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar Filial</AlertDialogTitle>
+            <AlertDialogTitle>{t('organizationPage.actions.delete', { entity: t('organizationPage.branches.singular') })}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza de que deseja eliminar a filial{' '}
-              <strong className="text-foreground">{deleteTarget?.name}</strong>? Esta
-              ação removerá o registo permanentemente da base de dados.
+              {t('organizationPage.deleteConfirmation', { entity: t('organizationPage.branches.singular') })}{' '}
+              <strong className="text-foreground">{deleteTarget?.name}</strong>{'? '}
+              {t('organizationPage.deleteWarning')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMutation.isPending}>
-              Cancelar
+              {t('organizationPage.common.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={deleteMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending ? 'A eliminar...' : 'Eliminar'}
+              {deleteMutation.isPending ? t('organizationPage.common.deleting') : t('organizationPage.common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

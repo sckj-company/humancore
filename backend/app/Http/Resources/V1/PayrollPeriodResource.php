@@ -12,7 +12,7 @@ class PayrollPeriodResource extends JsonResource
         return [
             'id' => $this->id,
             'tenant_id' => $this->tenant_id,
-            'name' => $this->name,
+            'name' => $this->displayName(),
             'period_type' => $this->period_type,
             'period_start' => $this->period_start?->format('Y-m-d'),
             'period_end' => $this->period_end?->format('Y-m-d'),

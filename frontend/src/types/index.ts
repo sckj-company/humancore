@@ -854,14 +854,7 @@ export type BenefitType =
   | 'gym'
   | 'other'
 
-export type DeductionType =
-  | 'loan'
-  | 'advance'
-  | 'pension'
-  | 'insurance'
-  | 'garnishment'
-  | 'union_fee'
-  | 'other'
+export type DeductionType = string
 
 export type DeductionStatus = 'active' | 'paused' | 'completed' | 'cancelled'
 export type BenefitStatus = 'active' | 'inactive'
@@ -908,6 +901,8 @@ export interface Deduction {
   installment_count?: number | null
   installment_amount?: number | null
   is_recurring: boolean
+  is_mandatory: boolean
+  legal_basis?: string | null
   status: DeductionStatus
   status_label: string
   status_variant: 'success' | 'warning' | 'info' | 'destructive'

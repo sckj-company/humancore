@@ -26,18 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/shared/page-header'
 import type { EmployeeDocument, EmployeeSummary, Paginated } from '@/types'
 
-const DOC_TYPES: { value: string; label: string }[] = [
-  { value: 'id_card_front', label: 'BI / Passaporte (Frente)' },
-  { value: 'id_card_back', label: 'BI / Passaporte (Verso)' },
-  { value: 'id', label: 'Documento de identidade' },
-  { value: 'contract', label: 'Contrato de trabalho' },
-  { value: 'certification', label: 'Certificado / formação' },
-  { value: 'medical', label: 'Exame médico' },
-  { value: 'tax', label: 'Documento fiscal' },
-  { value: 'bank', label: 'Dados bancários' },
-  { value: 'education', label: 'Habilitações académicas' },
-  { value: 'other', label: 'Outro' },
-]
+const DOC_TYPES = ['id_card_front', 'id_card_back', 'id', 'contract', 'certification', 'medical', 'tax', 'bank', 'education', 'other']
 
 export function DocumentsPage() {
   const { t } = useTranslation()
@@ -55,21 +44,21 @@ export function DocumentsPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('documents.title')}
-        description="Documentos dos funcionários: contratos, certificados, identificação e mais."
+        description={t('documents.description')}
         actions={isHr ? <UploadDialog refetch={refetch} /> : undefined}
       />
 
       {isLoading && <LoadingState />}
-      {isError && <ErrorState message="Não foi possível carregar os documentos." onRetry={refetch} />}
+      {isError && <ErrorState message={t('documents.loadError')} onRetry={refetch} />}
 
       {data && data.data.length === 0 && (
         <EmptyState
-          title="Sem documentos"
-          description="Ainda não existem documentos guardados para mostrar."
+          title={t('documents.emptyTitle')}
+          description={t('documents.emptyDescription')}
           action={
             isHr ? (
               <UploadDialog refetch={refetch}>
-                <Button><Upload className="mr-2 h-4 w-4" /> Carregar documento</Button>
+                <Button><Upload className="mr-2 h-4 w-4" /> {t('documents.upload')}</Button>
               </UploadDialog>
             ) : undefined
           }
@@ -83,12 +72,12 @@ export function DocumentsPage() {
               <table className="w-full">
                 <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="px-6 py-3 font-medium">Documento</th>
-                    {isHr && <th className="px-6 py-3 font-medium">Funcionário</th>}
-                    <th className="px-6 py-3 font-medium">Tipo</th>
-                    <th className="px-6 py-3 font-medium text-right">Tamanho</th>
-                    <th className="px-6 py-3 font-medium text-right">Validade</th>
-                    <th className="px-6 py-3 font-medium text-right">Ações</th>
+                    <th className="px-6 py-3 font-medium">{t('documents.document')}</th>
+                    {isHr && <th className="px-6 py-3 font-medium">{t('documents.employee')}</th>}
+                    <th className="px-6 py-3 font-medium">{t('documents.type')}</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('documents.size')}</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('documents.expiry')}</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border text-sm">
@@ -102,7 +91,7 @@ export function DocumentsPage() {
                           <div>
                             <p className="font-medium">{d.name}</p>
                             {d.is_confidential && (
-                              <Badge variant="secondary" className="mt-0.5">Confidencial</Badge>
+                              <Badge variant="secondary" className="mt-0.5">{t('documents.confidential')}</Badge>
                             )}
                           </div>
                         </div>
@@ -113,11 +102,11 @@ export function DocumentsPage() {
                           <p className="text-xs text-muted-foreground">{d.employee?.employee_code}</p>
                         </td>
                       )}
-                      <td className="px-6 py-3 text-muted-foreground">{docTypeLabel(d.document_type)}</td>
+                      <td className="px-6 py-3 text-muted-foreground">{t(`documents.types.${d.document_type}`, { defaultValue: d.document_type })}</td>
                       <td className="px-6 py-3 text-right font-mono text-muted-foreground">{d.size_label ?? '—'}</td>
                       <td className="px-6 py-3 text-right">
                         {d.is_expired ? (
-                          <Badge className="bg-destructive/10 text-destructive" variant="secondary">Expirado</Badge>
+                          <Badge className="bg-destructive/10 text-destructive" variant="secondary">{t('documents.expired')}</Badge>
                         ) : d.is_expiring ? (
                           <Badge className="bg-warning/10 text-warning" variant="secondary">{d.expiry_date}</Badge>
                         ) : d.expiry_date ? (
@@ -145,9 +134,10 @@ export function DocumentsPage() {
 }
 
 function DownloadButton({ doc }: { doc: EmployeeDocument }) {
+  const { t } = useTranslation()
   const downloadMutation = useMutation({
     mutationFn: () => api.downloadFile(`documents/${doc.id}/download`, doc.original_name ?? doc.name),
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao descarregar')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('documents.downloadError'))),
   })
   const handleDownload = () => {
     if (doc.file_url?.includes('res.cloudinary.com')) {
@@ -161,7 +151,7 @@ function DownloadButton({ doc }: { doc: EmployeeDocument }) {
     <Button
       variant="ghost"
       size="icon-sm"
-      title="Descarregar"
+      title={t('documents.download')}
       onClick={handleDownload}
     >
       {downloadMutation.isPending ? (
@@ -174,21 +164,22 @@ function DownloadButton({ doc }: { doc: EmployeeDocument }) {
 }
 
 function DeleteButton({ doc }: { doc: EmployeeDocument }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: () => api.delete(`documents/${doc.id}`),
     onSuccess: () => {
-      toast.success('Documento eliminado')
+      toast.success(t('documents.deleted'))
       queryClient.invalidateQueries({ queryKey: ['documents'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao eliminar')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('documents.deleteError'))),
   })
 
   return (
     <Button
       variant="ghost"
       size="icon-sm"
-      title="Eliminar"
+      title={t('common.delete')}
       onClick={() => mutation.mutate()}
     >
       {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
@@ -203,6 +194,7 @@ function UploadDialog({
   refetch?: () => void
   children?: React.ReactNode
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [employeeId, setEmployeeId] = useState('')
   const [name, setName] = useState('')
@@ -232,12 +224,12 @@ function UploadDialog({
       return api.upload<ApiResponse<EmployeeDocument>>('documents', form, setProgress)
     },
     onSuccess: () => {
-      toast.success('Documento carregado')
+      toast.success(t('documents.uploaded'))
       setOpen(false)
       reset()
       refetch?.()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao carregar documento')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('documents.uploadError'))),
   })
 
   const reset = () => {
@@ -260,11 +252,11 @@ function UploadDialog({
 
   const submit = () => {
     if (!file) {
-      toast.warning('Selecione um ficheiro')
+      toast.warning(t('documents.selectFile'))
       return
     }
     if (!employeeId) {
-      toast.warning('Selecione o funcionário')
+      toast.warning(t('documents.selectEmployee'))
       return
     }
     mutation.mutate()
@@ -275,21 +267,21 @@ function UploadDialog({
       <DialogTrigger asChild>
         {children ?? (
           <Button>
-            <Upload className="mr-2 h-4 w-4" /> Carregar documento
+          <Upload className="mr-2 h-4 w-4" /> {t('documents.upload')}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Carregar documento</DialogTitle>
-          <DialogDescription>Guarde um documento no processo do funcionário.</DialogDescription>
+          <DialogTitle>{t('documents.upload')}</DialogTitle>
+          <DialogDescription>{t('documents.uploadDescription')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Funcionário</Label>
+            <Label>{t('documents.employee')}</Label>
             <Select value={employeeId} onValueChange={setEmployeeId}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o funcionário" />
+                <SelectValue placeholder={t('documents.selectEmployee')} />
               </SelectTrigger>
               <SelectContent>
                 {employees?.data.map((emp) => (
@@ -302,38 +294,38 @@ function UploadDialog({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Nome do documento</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Certificado de Formação" />
+              <Label>{t('documents.documentName')}</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('documents.documentNameExample')} />
             </div>
             <div className="space-y-2">
-              <Label>Tipo</Label>
+              <Label>{t('documents.type')}</Label>
               <Select value={docType} onValueChange={setDocType}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {DOC_TYPES.map((dt) => (
-                    <SelectItem key={dt.value} value={dt.value}>{dt.label}</SelectItem>
+                    <SelectItem key={dt} value={dt}>{t(`documents.types.${dt}`)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Ficheiro</Label>
+            <Label>{t('documents.file')}</Label>
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border p-6 text-center transition-colors hover:bg-muted/30">
               <Paperclip className="h-6 w-6 text-muted-foreground" />
               {file ? (
                 <span className="text-sm font-medium">{file.name}</span>
               ) : (
-                <span className="text-sm text-muted-foreground">Clique para escolher (PDF, imagens, Office até 10MB)</span>
+                <span className="text-sm text-muted-foreground">{t('documents.chooseFileDescription')}</span>
               )}
               <input type="file" className="hidden" onChange={onFileChange} />
             </label>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Validade</Label>
+              <Label>{t('documents.expiry')}</Label>
               <Input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
             </div>
             <div className="flex items-end pb-1">
@@ -344,30 +336,26 @@ function UploadDialog({
                   checked={isConfidential}
                   onChange={(e) => setIsConfidential(e.target.checked)}
                 />
-                Confidencial
+                {t('documents.confidential')}
               </label>
             </div>
           </div>
           {notes && (
             <div className="space-y-2">
-              <Label>Notas</Label>
+              <Label>{t('common.notes')}</Label>
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
             </div>
           )}
           {mutation.isPending && <Progress value={progress} className="w-full" />}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={submit} disabled={mutation.isPending}>
             {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-            Carregar
+            {t('documents.upload')}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
-}
-
-function docTypeLabel(value: string): string {
-  return DOC_TYPES.find((dt) => dt.value === value)?.label ?? value
 }

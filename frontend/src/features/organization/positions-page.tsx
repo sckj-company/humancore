@@ -123,14 +123,14 @@ export function PositionsPage() {
 
     const errors: Record<string, string> = {}
     if (!formData.title.trim()) {
-      errors.title = 'O título do cargo é obrigatório.'
+      errors.title = t('organizationPage.positions.validation.titleRequired')
     }
     if (
       formData.salary_min != null &&
       formData.salary_max != null &&
       Number(formData.salary_min) > Number(formData.salary_max)
     ) {
-      errors.salary_max = 'O salário máximo deve ser maior ou igual ao mínimo.'
+      errors.salary_max = t('organizationPage.positions.validation.salaryRange')
     }
 
     if (Object.keys(errors).length > 0) {
@@ -151,7 +151,7 @@ export function PositionsPage() {
             salary_max: formData.salary_max ? Number(formData.salary_max) : null,
           },
         })
-        toast.success('Cargo atualizado com sucesso!')
+        toast.success(t('organizationPage.toast.updated', { entity: t('organizationPage.positions.singular') }))
       } else {
         await createMutation.mutateAsync({
           ...formData,
@@ -161,11 +161,11 @@ export function PositionsPage() {
           salary_min: formData.salary_min ? Number(formData.salary_min) : null,
           salary_max: formData.salary_max ? Number(formData.salary_max) : null,
         })
-        toast.success('Cargo criado com sucesso!')
+        toast.success(t('organizationPage.toast.created', { entity: t('organizationPage.positions.singular') }))
       }
       setIsDialogOpen(false)
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Erro ao gravar cargo.'))
+      toast.error(getApiErrorMessage(err, t('organizationPage.toast.saveError', { entity: t('organizationPage.positions.singular') })))
     }
   }
 
@@ -174,10 +174,10 @@ export function PositionsPage() {
     if (!deleteTarget) return
     try {
       await deleteMutation.mutateAsync(deleteTarget.id)
-      toast.success('Cargo eliminado com sucesso!')
+      toast.success(t('organizationPage.toast.deleted', { entity: t('organizationPage.positions.singular') }))
       setDeleteTarget(null)
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Erro ao eliminar cargo.'))
+      toast.error(getApiErrorMessage(err, t('organizationPage.toast.deleteError', { entity: t('organizationPage.positions.singular') })))
     }
   }
 
@@ -199,10 +199,10 @@ export function PositionsPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('nav.positions')}
-        description="Gestão de cargos, níveis de gestão e faixas salariais"
+        description={t('organizationPage.positions.description')}
         actions={
-          <Button onClick={handleOpenCreate} className="shadow-sm">
-            <Plus className="mr-2 h-4 w-4" /> Novo Cargo
+          <Button onClick={handleOpenCreate} className="shadow-sm max-w-full whitespace-normal text-center">
+            <Plus className="mr-2 h-4 w-4 shrink-0" /> {t('organizationPage.positions.new')}
           </Button>
         }
       />
@@ -216,17 +216,17 @@ export function PositionsPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Pesquisar por título ou código do cargo..."
+                placeholder={t('organizationPage.positions.searchPlaceholder')}
                 className="pl-9"
               />
             </div>
 
             <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Todos os departamentos" />
+                <SelectValue placeholder={t('organizationPage.filters.allDepartments')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os departamentos</SelectItem>
+                <SelectItem value="all">{t('organizationPage.filters.allDepartments')}</SelectItem>
                 {departments?.map((d) => (
                   <SelectItem key={d.id} value={String(d.id)}>
                     {d.name}
@@ -239,12 +239,12 @@ export function PositionsPage() {
       </Card>
 
       {isLoading && <LoadingState />}
-      {isError && <ErrorState message="Erro ao carregar cargos" onRetry={refetch} />}
+      {isError && <ErrorState message={t('organizationPage.positions.loadError')} onRetry={refetch} />}
 
       {positions && filtered.length === 0 && (
         <EmptyState
-          title="Nenhum cargo encontrado"
-          description={search ? 'Tente ajustar os filtros de pesquisa.' : 'Registe o primeiro cargo para a empresa.'}
+          title={t('organizationPage.positions.emptyTitle')}
+          description={search ? t('organizationPage.empty.filterHint') : t('organizationPage.positions.emptyDescription')}
         />
       )}
 
@@ -275,7 +275,7 @@ export function PositionsPage() {
                   {p.is_management && (
                     <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
                       <Shield className="h-3 w-3 text-warning" />
-                      Gestão
+                      {t('organizationPage.positions.management')}
                     </Badge>
                   )}
                 </div>
@@ -293,7 +293,7 @@ export function PositionsPage() {
                       <span className="truncate">{deptName}</span>
                     </div>
                   ) : (
-                    <span className="text-muted-foreground/60 italic">Geral / Sem departamento</span>
+                    <span className="text-muted-foreground/60 italic">{t('organizationPage.positions.noDepartment')}</span>
                   )}
 
                   {(p.salary_min !== null || p.salary_max !== null) && (
@@ -321,7 +321,7 @@ export function PositionsPage() {
 
                   {p.requirements && (
                     <p className="text-[11px] text-muted-foreground/80 line-clamp-1 italic">
-                      Requisitos: {p.requirements}
+                      {t('organizationPage.positions.requirementsLabel', { requirements: p.requirements })}
                     </p>
                   )}
                 </div>
@@ -331,7 +331,7 @@ export function PositionsPage() {
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => handleOpenEdit(p)}
-                    title="Editar cargo"
+                    title={t('organizationPage.actions.edit', { entity: t('organizationPage.positions.singular') })}
                     className="text-muted-foreground hover:text-foreground"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -340,7 +340,7 @@ export function PositionsPage() {
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => setDeleteTarget(p)}
-                    title="Eliminar cargo"
+                    title={t('organizationPage.actions.delete', { entity: t('organizationPage.positions.singular') })}
                     className="text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -357,18 +357,18 @@ export function PositionsPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {editingPosition ? 'Editar Cargo' : 'Novo Cargo'}
+              {editingPosition ? t('organizationPage.actions.edit', { entity: t('organizationPage.positions.singular') }) : t('organizationPage.positions.new')}
             </DialogTitle>
             <DialogDescription>
               {editingPosition
-                ? 'Atualize as informações do cargo selecionado.'
-                : 'Defina os detalhes e faixas salariais para o novo cargo.'}
+                ? t('organizationPage.positions.editDescription')
+                : t('organizationPage.positions.createDescription')}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="pos-title">Título do Cargo *</Label>
+              <Label htmlFor="pos-title">{t('organizationPage.positions.titleLabel')} *</Label>
               <Input
                 id="pos-title"
                 value={formData.title}
@@ -376,7 +376,7 @@ export function PositionsPage() {
                   setFormData((prev) => ({ ...prev, title: e.target.value }))
                   if (formErrors.title) setFormErrors((prev) => ({ ...prev, title: '' }))
                 }}
-                placeholder="Ex: Engenheiro de Software Sénior, Gestor de RH..."
+                placeholder={t('organizationPage.positions.titlePlaceholder')}
               />
               {formErrors.title && (
                 <p className="text-xs text-destructive">{formErrors.title}</p>
@@ -385,17 +385,17 @@ export function PositionsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="pos-code">Código</Label>
+                <Label htmlFor="pos-code">{t('organizationPage.fields.code')}</Label>
                 <Input
                   id="pos-code"
                   value={formData.code ?? ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, code: e.target.value }))}
-                  placeholder="Ex: ENG-01"
+                  placeholder={t('organizationPage.positions.codePlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="pos-dept">Departamento</Label>
+                <Label htmlFor="pos-dept">{t('organizationPage.fields.department')}</Label>
                 <Select
                   value={formData.department_id ? String(formData.department_id) : 'none'}
                   onValueChange={(val) =>
@@ -406,10 +406,10 @@ export function PositionsPage() {
                   }
                 >
                   <SelectTrigger id="pos-dept">
-                    <SelectValue placeholder="Selecionar departamento" />
+                    <SelectValue placeholder={t('organizationPage.positions.selectDepartment')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Geral (Nenhum)</SelectItem>
+                    <SelectItem value="none">{t('organizationPage.positions.noDepartment')}</SelectItem>
                     {departments?.map((d) => (
                       <SelectItem key={d.id} value={String(d.id)}>
                         {d.name}
@@ -422,7 +422,7 @@ export function PositionsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="pos-salary-min">Salário Mínimo ({currency})</Label>
+                <Label htmlFor="pos-salary-min">{t('organizationPage.positions.salaryMinimum', { currency })}</Label>
                 <Input
                   id="pos-salary-min"
                   type="number"
@@ -435,12 +435,12 @@ export function PositionsPage() {
                       salary_min: e.target.value ? Number(e.target.value) : null,
                     }))
                   }
-                  placeholder="0.00"
+                  placeholder={t('organizationPage.positions.amountPlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="pos-salary-max">Salário Máximo ({currency})</Label>
+                <Label htmlFor="pos-salary-max">{t('organizationPage.positions.salaryMaximum', { currency })}</Label>
                 <Input
                   id="pos-salary-max"
                   type="number"
@@ -454,7 +454,7 @@ export function PositionsPage() {
                     }))
                     if (formErrors.salary_max) setFormErrors((prev) => ({ ...prev, salary_max: '' }))
                   }}
-                  placeholder="0.00"
+                  placeholder={t('organizationPage.positions.amountPlaceholder')}
                 />
                 {formErrors.salary_max && (
                   <p className="text-xs text-destructive">{formErrors.salary_max}</p>
@@ -464,9 +464,9 @@ export function PositionsPage() {
 
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div className="space-y-0.5">
-                <Label htmlFor="pos-management" className="text-sm font-medium">Cargo de Gestão / Chefia</Label>
+                <Label htmlFor="pos-management" className="text-sm font-medium">{t('organizationPage.positions.managementLabel')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  Identifica se este cargo possui responsabilidades de liderança de equipa.
+                  {t('organizationPage.positions.managementDescription')}
                 </p>
               </div>
               <Switch
@@ -479,7 +479,7 @@ export function PositionsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="pos-desc">Descrição do Cargo</Label>
+              <Label htmlFor="pos-desc">{t('organizationPage.positions.descriptionLabel')}</Label>
               <Textarea
                 id="pos-desc"
                 value={formData.description ?? ''}
@@ -487,12 +487,12 @@ export function PositionsPage() {
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
                 rows={2}
-                placeholder="Principais responsabilidades e funções..."
+                placeholder={t('organizationPage.positions.descriptionPlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="pos-req">Requisitos e Qualificações</Label>
+              <Label htmlFor="pos-req">{t('organizationPage.positions.requirements')}</Label>
               <Textarea
                 id="pos-req"
                 value={formData.requirements ?? ''}
@@ -500,7 +500,7 @@ export function PositionsPage() {
                   setFormData((prev) => ({ ...prev, requirements: e.target.value }))
                 }
                 rows={2}
-                placeholder="Experiência exigida, qualificações académicas, certificações..."
+                placeholder={t('organizationPage.positions.requirementsPlaceholder')}
               />
             </div>
 
@@ -511,10 +511,10 @@ export function PositionsPage() {
                 onClick={() => setIsDialogOpen(false)}
                 disabled={isSaving}
               >
-                Cancelar
+                {t('organizationPage.common.cancel')}
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? 'A guardar...' : editingPosition ? 'Guardar Alterações' : 'Criar Cargo'}
+                {isSaving ? t('organizationPage.common.saving') : editingPosition ? t('organizationPage.common.saveChanges') : t('organizationPage.positions.new')}
               </Button>
             </DialogFooter>
           </form>
@@ -528,23 +528,23 @@ export function PositionsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar Cargo</AlertDialogTitle>
+            <AlertDialogTitle>{t('organizationPage.actions.delete', { entity: t('organizationPage.positions.singular') })}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza de que deseja eliminar o cargo{' '}
-              <strong className="text-foreground">{deleteTarget?.title}</strong>? Esta
-              ação removerá o registo permanentemente da base de dados.
+              {t('organizationPage.deleteConfirmation', { entity: t('organizationPage.positions.singular') })}{' '}
+              <strong className="text-foreground">{deleteTarget?.title}</strong>{'? '}
+              {t('organizationPage.deleteWarning')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMutation.isPending}>
-              Cancelar
+              {t('organizationPage.common.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={deleteMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending ? 'A eliminar...' : 'Eliminar'}
+              {deleteMutation.isPending ? t('organizationPage.common.deleting') : t('organizationPage.common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

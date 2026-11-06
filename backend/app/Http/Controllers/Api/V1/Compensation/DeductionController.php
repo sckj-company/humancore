@@ -7,6 +7,7 @@ use App\Http\Resources\V1\DeductionResource;
 use App\Models\Deduction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class DeductionController extends BaseController
 {
@@ -41,13 +42,20 @@ class DeductionController extends BaseController
         $data = $request->validate([
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
             'name' => ['required', 'string', 'max:255'],
-            'deduction_type' => ['required', 'in:'.implode(',', array_keys(Deduction::TYPES))],
+            'deduction_type' => ['required', 'string', 'max:50'],
             'amount_type' => ['required', 'in:'.implode(',', array_keys(Deduction::AMOUNT_TYPES))],
             'amount' => ['required_if:amount_type,fixed', 'nullable', 'numeric', 'min:0'],
             'percentage' => ['required_if:amount_type,percentage', 'nullable', 'numeric', 'min:0', 'max:100'],
-            'total_amount' => ['nullable', 'numeric', 'min:0'],
+            'total_amount' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                Rule::requiredIf(fn () => $request->input('amount_type') === 'percentage' && $request->filled('installment_count')),
+            ],
             'installment_count' => ['nullable', 'integer', 'min:1'],
             'is_recurring' => ['nullable', 'boolean'],
+            'is_mandatory' => ['nullable', 'boolean'],
+            'legal_basis' => ['nullable', 'string', 'max:1000'],
             'status' => ['nullable', 'in:'.implode(',', array_keys(Deduction::STATUSES))],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
@@ -56,8 +64,14 @@ class DeductionController extends BaseController
         $data['status'] = $data['status'] ?? 'active';
         $data['paid_amount'] = 0;
 
-        if (($data['amount_type'] ?? '') === 'fixed' && filled($data['total_amount'] ?? null) && filled($data['installment_count'] ?? null)) {
-            $data['installment_amount'] = round(((float) $data['total_amount']) / ((int) $data['installment_count']), 2);
+        if (($data['amount_type'] ?? '') === 'fixed' && filled($data['installment_count'] ?? null)) {
+            $data['total_amount'] = filled($data['total_amount'] ?? null)
+                ? (float) $data['total_amount']
+                : round((float) $data['amount'] * (int) $data['installment_count'], 2);
+            $data['installment_amount'] = round($data['total_amount'] / (int) $data['installment_count'], 2);
+            $data['amount'] = $data['installment_amount'];
+        } else {
+            $data['installment_amount'] = null;
         }
 
         $deduction = Deduction::query()->create($data);
@@ -83,16 +97,41 @@ class DeductionController extends BaseController
         $data = $request->validate([
             'employee_id' => ['sometimes', 'integer', 'exists:employees,id'],
             'name' => ['sometimes', 'string', 'max:255'],
-            'deduction_type' => ['sometimes', 'in:'.implode(',', array_keys(Deduction::TYPES))],
+            'deduction_type' => ['sometimes', 'string', 'max:50'],
             'amount_type' => ['sometimes', 'in:'.implode(',', array_keys(Deduction::AMOUNT_TYPES))],
             'amount' => ['nullable', 'numeric', 'min:0'],
             'percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'total_amount' => ['nullable', 'numeric', 'min:0'],
+            'total_amount' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                Rule::requiredIf(fn () => $request->input('amount_type', $deduction->amount_type) === 'percentage'
+                    && ($request->exists('installment_count')
+                        ? $request->filled('installment_count')
+                        : $deduction->installment_count !== null)),
+            ],
             'installment_count' => ['nullable', 'integer', 'min:1'],
             'is_recurring' => ['nullable', 'boolean'],
+            'is_mandatory' => ['sometimes', 'boolean'],
+            'legal_basis' => ['nullable', 'string', 'max:1000'],
             'status' => ['sometimes', 'in:'.implode(',', array_keys(Deduction::STATUSES))],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
+
+        $amountType = $data['amount_type'] ?? $deduction->amount_type;
+        $totalAmount = array_key_exists('total_amount', $data) ? $data['total_amount'] : $deduction->total_amount;
+        $installmentCount = array_key_exists('installment_count', $data) ? $data['installment_count'] : $deduction->installment_count;
+
+        if ($amountType === 'fixed' && filled($installmentCount)) {
+            $totalAmount = filled($totalAmount)
+                ? (float) $totalAmount
+                : round((float) ($data['amount'] ?? $deduction->amount) * (int) $installmentCount, 2);
+            $data['total_amount'] = $totalAmount;
+            $data['installment_amount'] = round(((float) $totalAmount) / ((int) $installmentCount), 2);
+            $data['amount'] = $data['installment_amount'];
+        } else {
+            $data['installment_amount'] = null;
+        }
 
         $deduction->update($data);
 

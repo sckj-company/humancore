@@ -51,6 +51,8 @@ class Deduction extends Model
         'installment_count',
         'installment_amount',
         'is_recurring',
+        'is_mandatory',
+        'legal_basis',
         'status',
         'approved_by',
         'approved_at',
@@ -66,6 +68,7 @@ class Deduction extends Model
             'paid_amount' => 'decimal:2',
             'installment_amount' => 'decimal:2',
             'is_recurring' => 'boolean',
+            'is_mandatory' => 'boolean',
             'approved_at' => 'datetime',
         ];
     }

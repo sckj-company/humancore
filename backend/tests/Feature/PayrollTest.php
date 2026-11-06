@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\EmployeeContract;
 use App\Models\EmployeeSalaryComponent;
 use App\Models\AttendanceRecord;
+use App\Models\Deduction;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PayrollPeriod;
@@ -61,6 +62,17 @@ class PayrollTest extends TestCase
         $user->assignRole('admin');
 
         return [$tenant, $employee, $user];
+    }
+
+    public function test_monthly_period_name_is_localized_in_portuguese(): void
+    {
+        $period = new PayrollPeriod([
+            'name' => 'February/2027',
+            'period_type' => 'monthly',
+            'period_start' => '2027-02-01',
+        ]);
+
+        $this->assertSame('fevereiro/2027', $period->displayName());
     }
 
     public function test_calculation_uses_db_settings_and_rules_are_accurate(): void
@@ -121,9 +133,119 @@ class PayrollTest extends TestCase
         ]);
     }
 
+    public function test_active_deduction_is_applied_and_progressed_when_payroll_is_paid(): void
+    {
+        [$tenant, $employee, $user] = $this->setupTenantWithEmployee();
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Janeiro/2027',
+            'period_type' => 'monthly',
+            'period_start' => '2027-01-01',
+            'period_end' => '2027-01-31',
+            'status' => 'open',
+        ]);
+        $deduction = Deduction::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'name' => 'Equipamento de trabalho',
+            'deduction_type' => 'work_equipment',
+            'amount_type' => 'fixed',
+            'amount' => 12000,
+            'total_amount' => 12000,
+            'paid_amount' => 0,
+            'installment_count' => 1,
+            'installment_amount' => 12000,
+            'is_recurring' => false,
+            'is_mandatory' => false,
+            'status' => 'active',
+        ]);
+        $percentageDeduction = Deduction::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'name' => 'Desconto percentual',
+            'deduction_type' => 'custom_percentage',
+            'amount_type' => 'percentage',
+            'amount' => 0,
+            'percentage' => 5,
+            'paid_amount' => 0,
+            'is_recurring' => true,
+            'is_mandatory' => false,
+            'status' => 'active',
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertDatabaseHas('payroll_record_items', [
+            'payroll_record_id' => $record->id,
+            'deduction_id' => $deduction->id,
+            'code' => 'deduction_'.$deduction->id,
+            'amount' => -12000,
+        ]);
+        $this->assertDatabaseHas('payroll_record_items', [
+            'payroll_record_id' => $record->id,
+            'deduction_id' => $percentageDeduction->id,
+            'base_amount' => 700000,
+            'rate' => 5,
+            'amount' => -35000,
+        ]);
+        $this->assertSame(
+            (float) $record->gross_salary - (float) $record->total_deductions - (float) $record->total_taxes,
+            (float) $record->net_salary,
+        );
+
+        $period->update(['status' => 'approved']);
+        $record->update(['status' => 'approved']);
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/payroll/periods/{$period->id}/pay")
+            ->assertOk();
+
+        $this->assertSame(12000.0, (float) $deduction->fresh()->paid_amount);
+        $this->assertSame('completed', $deduction->fresh()->status);
+        $this->assertSame(35000.0, (float) $percentageDeduction->fresh()->paid_amount);
+    }
+
+    public function test_fixed_installments_adjust_for_rounding_remainder(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        $deduction = Deduction::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'name' => 'Adiantamento em prestações',
+            'deduction_type' => 'advance',
+            'amount_type' => 'fixed',
+            'amount' => 333.33,
+            'total_amount' => 1000,
+            'paid_amount' => 333.33,
+            'installment_count' => 3,
+            'installment_amount' => 333.33,
+            'is_recurring' => false,
+            'status' => 'active',
+        ]);
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Fevereiro/2027',
+            'period_type' => 'monthly',
+            'period_start' => '2027-02-01',
+            'period_end' => '2027-02-28',
+            'status' => 'open',
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertDatabaseHas('payroll_record_items', [
+            'payroll_record_id' => $record->id,
+            'deduction_id' => $deduction->id,
+            'amount' => -333.34,
+        ]);
+    }
+
     public function test_absence_deduction_requires_explicit_employee_consent(): void
     {
         [$tenant, $employee] = $this->setupTenantWithEmployee();
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.absence_daily_amount'],
+            ['value' => 2000],
+        );
 
         $period = PayrollPeriod::create([
             'tenant_id' => $tenant->id,
@@ -152,7 +274,8 @@ class PayrollTest extends TestCase
         $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
 
         $this->assertSame(1.0, (float) $record->absent_days);
-        $this->assertSame(-round(700000 / 30, 2), (float) $record->items()->where('code', 'absence')->value('amount'));
+        $this->assertSame(-2000.0, (float) $record->items()->where('code', 'absence')->value('amount'));
+        $this->assertSame(56000.0, (float) $record->items()->where('code', 'employer_inss')->value('amount'));
     }
 
     public function test_lateness_rule_uses_minute_rate_and_weekly_threshold(): void
@@ -417,6 +540,15 @@ class PayrollTest extends TestCase
 
         $this->actingAs($employeeUser, 'sanctum');
         $this->getJson("/api/v1/payroll/records/{$record->id}/payslip")->assertOk();
+        $pdfResponse = $this->get("/api/v1/payroll/records/{$record->id}/payslip.pdf");
+        $pdfResponse->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+        $this->assertStringContainsString('attachment', $pdfResponse->headers->get('content-disposition'));
+        $pdfContent = $pdfResponse->getContent();
+        $this->assertStringStartsWith('%PDF', $pdfContent);
+        $this->assertMatchesRegularExpression('/\/MediaBox\s*\[\s*0\s+0\s+841\.89\s+595\.28\s*\]/', $pdfContent);
+        $this->assertStringContainsString('/FontFile2', $pdfContent);
+        $this->assertStringContainsString('/ToUnicode', $pdfContent);
         // Other tenant's record is hidden by the tenant scope (404) - not exposed
         $this->getJson("/api/v1/payroll/records/{$otherRecord->id}/payslip")->assertNotFound();
     }

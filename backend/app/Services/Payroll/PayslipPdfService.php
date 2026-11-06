@@ -4,12 +4,12 @@ namespace App\Services\Payroll;
 
 use App\Models\PayrollRecord;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Barryvdh\DomPDF\PDF;
+use Barryvdh\DomPDF\PDF as DomPdfDocument;
 use Illuminate\Support\Facades\File;
 
 class PayslipPdfService
 {
-    public function render(PayrollRecord $record): PDF
+    public function render(PayrollRecord $record): DomPdfDocument
     {
         $fontCache = storage_path('framework/cache/dompdf/fonts');
         File::ensureDirectoryExists($fontCache);

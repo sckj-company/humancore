@@ -90,6 +90,15 @@ class PayrollPeriod extends Model
         return $this->hasMany(PayrollRecord::class);
     }
 
+    public function displayName(): string
+    {
+        if ($this->period_type === 'monthly' && $this->period_start !== null) {
+            return $this->period_start->locale('pt_BR')->translatedFormat('F/Y');
+        }
+
+        return $this->name;
+    }
+
     public function events()
     {
         return $this->hasMany(PayrollPeriodEvent::class)->orderByDesc('created_at');

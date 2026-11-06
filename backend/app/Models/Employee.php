@@ -113,6 +113,11 @@ class Employee extends Model
         return $this->hasMany(EmployeeSalaryComponent::class);
     }
 
+    public function deductions()
+    {
+        return $this->hasMany(Deduction::class);
+    }
+
     public function documents()
     {
         return $this->hasMany(EmployeeDocument::class);
