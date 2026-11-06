@@ -27,6 +27,7 @@ import type { Employee, EmployeeDocument, AttendanceRecord, LeaveRequest, Pagina
 import { LeaveDocumentActions } from '@/features/leave/leave-document-actions'
 import { LeaveTypeCreateDialog } from '@/features/leave/leave-type-create-dialog'
 import { EmployeeEditDialog } from '@/features/employees/employee-edit-dialog'
+import { EmployeePayrollTab } from '@/features/employees/employee-payroll-tab'
 
 const statusColors: Record<string, string> = { active: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', inactive: 'bg-muted text-muted-foreground border-border', on_leave: 'bg-blue-500/10 text-blue-600 border-blue-500/20', probation: 'bg-amber-500/10 text-amber-600 border-amber-500/20', suspended: 'bg-rose-500/10 text-rose-600 border-rose-500/20', terminated: 'bg-red-500/10 text-red-600 border-red-500/20' }
 const attendanceStatusColors: Record<string, string> = { present: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', late: 'bg-amber-500/10 text-amber-600 border-amber-500/20', absent: 'bg-red-500/10 text-red-600 border-red-500/20', half_day: 'bg-blue-500/10 text-blue-600 border-blue-500/20', excused: 'bg-gray-500/10 text-gray-600 border-gray-500/20', justified: 'bg-gray-500/10 text-gray-600 border-gray-500/20', vacation: 'bg-sky-500/10 text-sky-600 border-sky-500/20', sick: 'bg-rose-500/10 text-rose-600 border-rose-500/20' }
@@ -71,6 +72,13 @@ export function EmployeeDetailPage() {
   const user = useAuthStore((s) => s.user)
   const currency = user?.tenant?.currency ?? 'AOA'
   const canManageLeaveTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'manage_leave_types')
+  const canViewPayroll = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
+    || hasPermission(user, 'view_any_deduction')
+    || hasPermission(user, 'create_deduction')
+    || hasPermission(user, 'update_employee')
+  const canViewDeductions = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'view_any_deduction')
+  const canManageAllowances = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_employee')
+  const canManageDeductions = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'create_deduction')
   const locale = i18n.language || 'pt-PT'
   const qc = useQueryClient()
 
@@ -401,6 +409,7 @@ export function EmployeeDetailPage() {
         <TabsList className="w-full flex-wrap justify-start h-auto gap-1 p-1.5 bg-muted/60 border border-border/60 rounded-lg">
           <TabsTrigger value="personal" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><User className="h-3.5 w-3.5" />{t('employeeDetail.text.personalTab')}</TabsTrigger>
           <TabsTrigger value="contract" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><Briefcase className="h-3.5 w-3.5" />{t('employeeDetail.text.contractTab')}</TabsTrigger>
+          {canViewPayroll && <TabsTrigger value="payroll" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><DollarSign className="h-3.5 w-3.5" />{t('employeeDetail.text.payrollTab')}</TabsTrigger>}
           <TabsTrigger value="documents" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs">
             <FileText className="h-3.5 w-3.5" />{t('employeeDetail.text.documentsTab')}
             {(documents ?? []).length > 0 && <Badge variant="secondary" className="ml-0.5 text-[10px] h-4 px-1 font-semibold">{documents!.length}</Badge>}
@@ -542,6 +551,17 @@ export function EmployeeDetailPage() {
             </Card>
           </div>
         </TabsContent>
+
+        {canViewPayroll && (
+          <TabsContent value="payroll">
+            <EmployeePayrollTab
+              employeeId={Number(id)}
+              canManageAllowances={canManageAllowances}
+              canManageDeductions={canManageDeductions}
+              canViewDeductions={canViewDeductions}
+            />
+          </TabsContent>
+        )}
 
         {/* Tab: Documentos */}
         <TabsContent value="documents" className="mt-6 space-y-4">

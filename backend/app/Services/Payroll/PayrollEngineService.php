@@ -647,10 +647,16 @@ class PayrollEngineService
             $quantity = null;
             $rate = null;
 
-            $amount = match ($component->calculation_type) {
-                'percentage' => ($rate = $percentage) > 0 ? $baseAmount * ($percentage / 100) : 0,
-                'hours' => ($quantity = $context->overtimeHours) > 0 ? (($rate = $unitRate) * $quantity) : 0,
-                'formula' => app(SalaryComponentFormulaEvaluator::class)->evaluate((string) $component->formula, $componentAmounts) ?? 0,
+            $amount = match (true) {
+                in_array($component->code, ['meal_allowance', 'meal_subsidy', 'transport_allowance'], true)
+                    && in_array($assignment->calculation_period, ['daily', 'weekly'], true)
+                    => $unitRate * $context->workDays / ($assignment->calculation_period === 'weekly' ? 5 : 1),
+                $component->calculation_type === 'percentage'
+                    => ($rate = $percentage) > 0 ? $baseAmount * ($percentage / 100) : 0,
+                $component->calculation_type === 'hours'
+                    => ($quantity = $context->overtimeHours) > 0 ? (($rate = $unitRate) * $quantity) : 0,
+                $component->calculation_type === 'formula'
+                    => app(SalaryComponentFormulaEvaluator::class)->evaluate((string) $component->formula, $componentAmounts) ?? 0,
                 default => $unitRate,
             };
 

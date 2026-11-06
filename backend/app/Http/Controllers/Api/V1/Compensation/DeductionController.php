@@ -40,7 +40,7 @@ class DeductionController extends BaseController
         $this->authorize('create', Deduction::class);
 
         $data = $request->validate([
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employee_id' => ['required', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
             'name' => ['required', 'string', 'max:255'],
             'deduction_type' => ['required', 'string', 'max:50'],
             'amount_type' => ['required', 'in:'.implode(',', array_keys(Deduction::AMOUNT_TYPES))],
@@ -95,7 +95,7 @@ class DeductionController extends BaseController
         $this->authorize('update', $deduction);
 
         $data = $request->validate([
-            'employee_id' => ['sometimes', 'integer', 'exists:employees,id'],
+            'employee_id' => ['sometimes', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
             'name' => ['sometimes', 'string', 'max:255'],
             'deduction_type' => ['sometimes', 'string', 'max:50'],
             'amount_type' => ['sometimes', 'in:'.implode(',', array_keys(Deduction::AMOUNT_TYPES))],

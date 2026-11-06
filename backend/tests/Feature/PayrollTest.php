@@ -278,6 +278,37 @@ class PayrollTest extends TestCase
         $this->assertSame(56000.0, (float) $record->items()->where('code', 'employer_inss')->value('amount'));
     }
 
+    public function test_employee_daily_and_weekly_allowances_are_prorated_in_payroll(): void
+    {
+        [$tenant, $employee, $user] = $this->setupTenantWithEmployee();
+
+        $this->actingAs($user, 'sanctum')
+            ->putJson("/api/v1/employees/{$employee->id}/payroll-settings", [
+                'allowances' => [
+                    'meal' => ['amount' => 1000, 'period' => 'daily'],
+                    'transport' => ['amount' => 5000, 'period' => 'weekly'],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.allowances.meal.amount', 1000)
+            ->assertJsonPath('data.allowances.transport.period', 'weekly');
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(21.0, (float) $record->work_days);
+        $this->assertSame(21000.0, (float) $record->items()->where('code', 'meal_allowance')->value('amount'));
+        $this->assertSame(21000.0, (float) $record->items()->where('code', 'transport_allowance')->value('amount'));
+    }
+
     public function test_lateness_rule_uses_minute_rate_and_weekly_threshold(): void
     {
         [$tenant, $employee] = $this->setupTenantWithEmployee();

@@ -16,6 +16,7 @@ class EmployeeSalaryComponent extends Model
         'contract_id',
         'salary_component_id',
         'custom_value',
+        'calculation_period',
         'custom_percentage',
         'start_date',
         'end_date',

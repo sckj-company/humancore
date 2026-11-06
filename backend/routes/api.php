@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Onboarding\OnboardingTemplateController;
 use App\Http\Controllers\Api\V1\Organization\BranchController;
 use App\Http\Controllers\Api\V1\Organization\DepartmentController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
+use App\Http\Controllers\Api\V1\Payroll\EmployeePayrollSettingsController;
 use App\Http\Controllers\Api\V1\Payroll\MyPayslipsController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollInssRuleController;
@@ -97,6 +98,8 @@ Route::prefix('v1')->group(function () {
         Route::post('payroll/periods/{period}/pay', [PayrollController::class, 'pay']);
         Route::get('payroll/periods/{period}/records', [PayrollController::class, 'records']);
         Route::get('payroll/periods/{period}/events', [PayrollController::class, 'events']);
+        Route::get('employees/{employee}/payroll-settings', [EmployeePayrollSettingsController::class, 'show']);
+        Route::put('employees/{employee}/payroll-settings', [EmployeePayrollSettingsController::class, 'update']);
         Route::get('payroll/salary-components', [SalaryComponentRegulationController::class, 'components']);
         Route::post('payroll/salary-components', [SalaryComponentRegulationController::class, 'storeComponent']);
         Route::post('payroll/salary-component-regulations/initialize-angola', [SalaryComponentRegulationController::class, 'initializeAngolaDefaults']);
