@@ -34,7 +34,7 @@ COPY . .
 
 RUN mkdir -p storage/app/private storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache public/uploads \
     && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader \
-    && php artisan storage:link --relative \
+    && php artisan storage:link \
     && chown -R www-data:www-data storage bootstrap/cache public/uploads \
     && rm /usr/bin/composer
 
