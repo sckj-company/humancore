@@ -2,13 +2,19 @@
 	encode zstd gzip
 
 	@api path /api /api/*
-	reverse_proxy @api app:80
+	handle @api {
+		reverse_proxy app:80
+	}
 
 	@backend_assets path /storage /storage/* /uploads /uploads/*
-	reverse_proxy @backend_assets app:80
+	handle @backend_assets {
+		reverse_proxy app:80
+	}
 
 	@site_assets path /favicon.svg
-	reverse_proxy @site_assets frontend:80
+	handle @site_assets {
+		reverse_proxy frontend:80
+	}
 
 	@hrms path /hrms /hrms/*
 	handle @hrms {
