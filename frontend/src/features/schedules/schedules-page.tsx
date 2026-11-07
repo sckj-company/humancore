@@ -90,7 +90,7 @@ const makeShiftSchema = (t: (key: string) => string) => z.object({
   notes: z.string().optional(),
 })
 
-type ShiftFormValues = z.infer<typeof shiftSchema>
+type ShiftFormValues = z.infer<ReturnType<typeof makeShiftSchema>>
 
 export function SchedulesPage() {
   const { t } = useTranslation()

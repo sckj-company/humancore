@@ -83,6 +83,8 @@ O Compose executa a aplicação React, a API Laravel, MySQL, Redis e o worker de
    nano .env
    ```
 
+   Configure também `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` e `CLOUDINARY_API_SECRET` no `.env` da raiz para uploads no Cloudinary; `OCR_SPACE_API_KEY` é opcional e ativa a leitura assistida de BI. O Compose passa esse arquivo ao backend e ao worker.
+
 3. Gere a chave Laravel e copie o valor impresso para `APP_KEY` no `.env`:
 
    ```bash
