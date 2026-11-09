@@ -23,7 +23,8 @@ class BenefitPolicy
 
     public function view(User $user, Benefit $benefit): bool
     {
-        return $benefit->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($benefit->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('view_benefit'));
     }
 
     public function create(User $user): bool
@@ -33,11 +34,11 @@ class BenefitPolicy
 
     public function update(User $user, Benefit $benefit): bool
     {
-        return $user->can('update_benefit') && $benefit->tenant_id === $user->tenant_id;
+        return $user->can('update_benefit') && $user->canAccessTenant($benefit->tenant_id);
     }
 
     public function delete(User $user, Benefit $benefit): bool
     {
-        return $user->can('delete_benefit') && $benefit->tenant_id === $user->tenant_id;
+        return $user->can('delete_benefit') && $user->canAccessTenant($benefit->tenant_id);
     }
 }

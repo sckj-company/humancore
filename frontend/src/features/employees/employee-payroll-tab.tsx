@@ -22,6 +22,7 @@ interface EmployeePayrollSettings {
   has_active_contract: boolean
   advance_monthly_limit: number
   advance_monthly_used: number
+  advance_monthly_reserved: number
   advance_monthly_remaining: number
   allowances: {
     meal: AllowanceValue
@@ -156,6 +157,7 @@ export function EmployeePayrollTab({
       setDeductionStartPeriod(new Date().toISOString().slice(0, 7))
       queryClient.invalidateQueries({ queryKey: ['deductions', 'employee', employeeId] })
       queryClient.invalidateQueries({ queryKey: ['deductions'] })
+      queryClient.invalidateQueries({ queryKey: ['employees', employeeId, 'payroll-settings'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('employeeDetail.text.deductionCreateError'))),
   })
@@ -297,7 +299,15 @@ export function EmployeePayrollTab({
                   </div>
                 )}
                 <div className="flex justify-end">
-                  <Button onClick={() => createDeduction.mutate()} disabled={createDeduction.isPending || !deductionName.trim() || !deductionTotal}>
+                  <Button
+                    onClick={() => createDeduction.mutate()}
+                    disabled={
+                      createDeduction.isPending
+                      || !deductionName.trim()
+                      || !deductionTotal
+                      || (deductionType === 'advance' && settings.data.advance_monthly_remaining <= 0)
+                    }
+                  >
                     <Plus className="mr-2 h-4 w-4" />{t('employeeDetail.text.addDeduction')}
                   </Button>
                 </div>

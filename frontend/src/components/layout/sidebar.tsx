@@ -31,7 +31,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { useUiStore } from '@/stores/ui-store'
-import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
+import { hasAnyRole, hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -52,6 +52,7 @@ interface NavItem {
   href: string
   icon: typeof LayoutDashboard
   roles?: string[]
+  permission?: string
 }
 
 interface NavSection {
@@ -63,69 +64,69 @@ interface NavSection {
 const superAdminSections: NavSection[] = [
   {
     items: [
-      { titleKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { titleKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_any_tenant' },
     ],
   },
   {
     titleKey: 'nav.section_platform',
     items: [
-      { titleKey: 'nav.tenants', href: '/admin/tenants', icon: Globe2 },
-      { titleKey: 'nav.audits', href: '/audits', icon: Activity },
+      { titleKey: 'nav.tenants', href: '/admin/tenants', icon: Globe2, permission: 'view_any_tenant' },
+      { titleKey: 'nav.audits', href: '/audits', icon: Activity, permission: 'view_any_audit' },
     ],
   },
 ]
 
 const superAdminFooterItems: NavItem[] = [
-  { titleKey: 'nav.settings', href: '/settings', icon: Settings },
+  { titleKey: 'nav.settings', href: '/settings', icon: Settings, permission: 'view_any_setting' },
 ]
 
 // Menus normais dos utilizadores de tenant
 const sections: NavSection[] = [
   {
     items: [
-      { titleKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { titleKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_any_employee' },
     ],
   },
   {
     titleKey: 'nav.section_people',
     items: [
-      { titleKey: 'nav.employees', href: '/employees', icon: Users },
-      { titleKey: 'nav.organization', href: '/organization', icon: Building2, roles: ['admin', 'hr-manager', 'manager'] },
-      { titleKey: 'nav.recruitment', href: '/recruitment', icon: UserPlus, roles: ['admin', 'hr-manager', 'manager'] },
+      { titleKey: 'nav.employees', href: '/employees', icon: Users, permission: 'view_any_employee' },
+      { titleKey: 'nav.organization', href: '/organization', icon: Building2, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_department' },
+      { titleKey: 'nav.recruitment', href: '/recruitment', icon: UserPlus, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_recruitment' },
     ],
   },
   {
     titleKey: 'nav.section_time',
     items: [
-      { titleKey: 'nav.attendance', href: '/attendance', icon: CalendarCheck, roles: ['admin', 'hr-manager', 'manager'] },
-      { titleKey: 'nav.schedules', href: '/schedules', icon: Clock, roles: ['admin', 'hr-manager', 'manager'] },
+      { titleKey: 'nav.attendance', href: '/attendance', icon: CalendarCheck, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_attendance' },
+      { titleKey: 'nav.schedules', href: '/schedules', icon: Clock, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_attendance' },
     ],
   },
   {
     titleKey: 'nav.section_management',
     items: [
-      { titleKey: 'nav.payroll', href: '/payroll', icon: Wallet, roles: ['admin', 'hr-manager'] },
-      { titleKey: 'nav.salaryComponents', href: '/settings/payroll-components', icon: CircleDollarSign, roles: ['admin', 'hr-manager'] },
-      { titleKey: 'nav.documents', href: '/documents', icon: FileText },
-      { titleKey: 'nav.performance', href: '/performance', icon: TrendingUp, roles: ['admin', 'hr-manager', 'manager'] },
-      { titleKey: 'nav.training', href: '/training', icon: GraduationCap, roles: ['admin', 'hr-manager', 'manager'] },
-      { titleKey: 'nav.trainings', href: '/trainings', icon: GraduationCap, roles: ['admin', 'hr-manager'] },
-      { titleKey: 'nav.benefits', href: '/benefits', icon: Gift, roles: ['admin', 'hr-manager'] },
-      { titleKey: 'nav.deductions', href: '/deductions', icon: CircleDollarSign, roles: ['admin', 'hr-manager'] },
+      { titleKey: 'nav.payroll', href: '/payroll', icon: Wallet, roles: ['admin', 'hr-manager'], permission: 'view_any_payroll' },
+      { titleKey: 'nav.salaryComponents', href: '/settings/payroll-components', icon: CircleDollarSign, roles: ['admin', 'hr-manager'], permission: 'view_any_salary-component' },
+      { titleKey: 'nav.documents', href: '/documents', icon: FileText, permission: 'view_any_document' },
+      { titleKey: 'nav.performance', href: '/performance', icon: TrendingUp, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_performance' },
+      { titleKey: 'nav.training', href: '/training', icon: GraduationCap, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_training' },
+      { titleKey: 'nav.trainings', href: '/trainings', icon: GraduationCap, roles: ['admin', 'hr-manager'], permission: 'view_any_training' },
+      { titleKey: 'nav.benefits', href: '/benefits', icon: Gift, roles: ['admin', 'hr-manager'], permission: 'view_any_benefit' },
+      { titleKey: 'nav.deductions', href: '/deductions', icon: CircleDollarSign, roles: ['admin', 'hr-manager'], permission: 'view_any_deduction' },
     ],
   },
   {
     titleKey: 'nav.section_analytics',
     items: [
-      { titleKey: 'nav.reports', href: '/reports', icon: BarChart3, roles: ['admin', 'hr-manager', 'manager'] },
-      { titleKey: 'nav.audits', href: '/audits', icon: Activity, roles: ['admin', 'hr-manager'] },
-      { titleKey: 'nav.emailTemplates', href: '/email-templates', icon: Mail, roles: ['admin'] },
+      { titleKey: 'nav.reports', href: '/reports', icon: BarChart3, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_report' },
+      { titleKey: 'nav.audits', href: '/audits', icon: Activity, roles: ['admin', 'hr-manager'], permission: 'view_any_audit' },
+      { titleKey: 'nav.emailTemplates', href: '/email-templates', icon: Mail, roles: ['admin'], permission: 'view_any_email-template' },
     ],
   },
 ]
 
 const footerItems: NavItem[] = [
-  { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin'] },
+  { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin'], permission: 'view_any_setting' },
   { titleKey: 'nav.help', href: '/help', icon: HelpCircle },
 ]
 
@@ -182,6 +183,8 @@ export function Sidebar() {
   const clear = useAuthStore((s) => s.clear)
   const navigate = useNavigate()
   const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
+  const hasPlatformRole = isPlatformAdmin(user)
+  const enforceAssignedPermissions = hasPlatformRole && !isSuperAdmin
 
   const logout = async () => {
     try {
@@ -192,10 +195,10 @@ export function Sidebar() {
     navigate('/login')
   }
 
-  const activeSections = isSuperAdmin
+  const activeSections = hasPlatformRole
     ? [superAdminSections[0], ...sections.slice(1), superAdminSections[1]]
     : sections
-  const activeFooterItems = isSuperAdmin ? superAdminFooterItems : footerItems
+  const activeFooterItems = hasPlatformRole ? superAdminFooterItems : footerItems
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -227,7 +230,7 @@ export function Sidebar() {
         {/* Navigation & all items housed inside sidebar scroll */}
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-4 scrollbar-thin">
           {/* Badge de super-admin */}
-          {isSuperAdmin && sidebarOpen && (
+          {hasPlatformRole && sidebarOpen && (
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
               <Shield className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
@@ -235,7 +238,7 @@ export function Sidebar() {
               </span>
             </div>
           )}
-          {isSuperAdmin && !sidebarOpen && (
+          {hasPlatformRole && !sidebarOpen && (
             <div className="mb-4 flex justify-center">
               <Shield className="h-4 w-4 text-primary" />
             </div>
@@ -243,7 +246,8 @@ export function Sidebar() {
           <nav className="space-y-5">
             {activeSections.map((section, idx) => {
               const visibleItems = section.items.filter(
-                (item) => isSuperAdmin || !item.roles || hasAnyRole(user, item.roles),
+                (item) => (isSuperAdmin || enforceAssignedPermissions || !item.roles || hasAnyRole(user, item.roles))
+                  && (!enforceAssignedPermissions || !item.permission || hasPermission(user, item.permission)),
               )
               if (visibleItems.length === 0) return null
 
@@ -271,7 +275,8 @@ export function Sidebar() {
           {/* Footer items housed inside the scroll */}
           <div className="space-y-1">
             {activeFooterItems
-              .filter((item) => isSuperAdmin || !item.roles || hasAnyRole(user, item.roles))
+              .filter((item) => isSuperAdmin || enforceAssignedPermissions || !item.roles || hasAnyRole(user, item.roles))
+              .filter((item) => !enforceAssignedPermissions || !item.permission || hasPermission(user, item.permission))
               .map((item) => (
                 <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
               ))}

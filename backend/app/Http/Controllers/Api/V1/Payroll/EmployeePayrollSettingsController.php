@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Payroll;
 
 use App\Http\Controllers\Api\V1\BaseController;
+use App\Models\Deduction;
 use App\Models\Employee;
 use App\Models\EmployeeSalaryComponent;
 use App\Models\PayrollRecordItem;
@@ -146,6 +147,37 @@ class EmployeePayrollSettingsController extends BaseController
                     ->whereBetween('period_start', [$monthStart->toDateString(), $monthEnd->toDateString()])))
             ->get(['amount'])
             ->sum(fn (PayrollRecordItem $item) => abs((float) $item->amount));
+        $advanceMonthlyReserved = Deduction::query()
+            ->where('employee_id', $employee->id)
+            ->where('deduction_type', 'advance')
+            ->where('amount_type', 'fixed')
+            ->where('status', 'active')
+            ->where(fn ($query) => $query->whereNull('starts_at')->orWhereDate('starts_at', '<=', $monthEnd))
+            ->get()
+            ->sum(function (Deduction $deduction) use ($employee, $monthStart, $monthEnd): float {
+                $alreadyInPayroll = PayrollRecordItem::query()
+                    ->where('deduction_id', $deduction->id)
+                    ->whereHas('payrollRecord', fn ($query) => $query
+                        ->where('employee_id', $employee->id)
+                        ->whereIn('status', ['calculated', 'approved', 'paid'])
+                        ->whereHas('period', fn ($periodQuery) => $periodQuery
+                            ->whereBetween('period_start', [$monthStart->toDateString(), $monthEnd->toDateString()])))
+                    ->exists();
+                if ($alreadyInPayroll) {
+                    return 0.0;
+                }
+
+                if (! $deduction->is_recurring && $deduction->total_amount === null && (float) $deduction->paid_amount > 0) {
+                    return 0.0;
+                }
+
+                $installment = (float) ($deduction->installment_amount ?? $deduction->amount);
+                $balance = $deduction->total_amount !== null
+                    ? max(0, (float) $deduction->total_amount - (float) $deduction->paid_amount)
+                    : $installment;
+
+                return min($installment, $balance);
+            });
 
         $contract = $employee->activeContract()->first();
         $assignments = $contract
@@ -183,7 +215,8 @@ class EmployeePayrollSettingsController extends BaseController
             'advance_month' => $monthStart->format('Y-m'),
             'advance_monthly_limit' => $advanceMonthlyLimit,
             'advance_monthly_used' => $advanceMonthlyUsed,
-            'advance_monthly_remaining' => max(0, $advanceMonthlyLimit - $advanceMonthlyUsed),
+            'advance_monthly_reserved' => $advanceMonthlyReserved,
+            'advance_monthly_remaining' => max(0, $advanceMonthlyLimit - $advanceMonthlyUsed - $advanceMonthlyReserved),
         ];
     }
 }

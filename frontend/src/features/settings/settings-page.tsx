@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
-import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
+import { hasAnyRole, hasPermission, useAuthStore } from '@/stores/auth-store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -82,6 +82,7 @@ export function SettingsPage() {
   const user = useAuthStore((s) => s.user)
   const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
   const isAdmin = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
+    || hasPermission(user, 'view_any_setting')
   const queryClient = useQueryClient()
 
   const selectedTenantId = localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')

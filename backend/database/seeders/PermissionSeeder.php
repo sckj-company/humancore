@@ -39,7 +39,7 @@ class PermissionSeeder extends Seeder
         }
 
         // Ações globais (sem recurso específico)
-        $globalActions = ['impersonate_user', 'manage_platform', 'view_system_logs'];
+        $globalActions = ['impersonate_user', 'manage_platform', 'manage_super_admins', 'view_system_logs'];
         foreach ($globalActions as $action) {
             $permissions[] = [
                 'name' => $action,
@@ -58,6 +58,10 @@ class PermissionSeeder extends Seeder
         // Roles do sistema
         $superAdmin = Role::updateOrCreate(['name' => 'super-admin', 'guard_name' => 'web'], [
             'description' => 'Acesso total à plataforma e todos os tenants',
+            'is_system' => true,
+        ]);
+        $restrictedSuperAdmin = Role::updateOrCreate(['name' => 'super-admin-limited', 'guard_name' => 'web'], [
+            'description' => 'Acesso global limitado às permissões atribuídas',
             'is_system' => true,
         ]);
         $admin = Role::updateOrCreate(['name' => 'admin', 'guard_name' => 'web'], [
@@ -79,6 +83,7 @@ class PermissionSeeder extends Seeder
 
         // Super Admin: todas as permissões
         $superAdmin->syncPermissions(Permission::all());
+        $restrictedSuperAdmin->syncPermissions([]);
 
         // Admin (tenant): quase todas as permissões exceto gestão global de plataforma
         $admin->syncPermissions(Permission::where('group_name', '!=', 'system')->get());

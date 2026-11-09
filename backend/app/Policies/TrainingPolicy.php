@@ -23,7 +23,8 @@ class TrainingPolicy
 
     public function view(User $user, Training $training): bool
     {
-        return $training->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($training->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('view_training'));
     }
 
     public function create(User $user): bool
@@ -33,11 +34,11 @@ class TrainingPolicy
 
     public function update(User $user, Training $training): bool
     {
-        return $user->can('update_training') && $training->tenant_id === $user->tenant_id;
+        return $user->can('update_training') && $user->canAccessTenant($training->tenant_id);
     }
 
     public function delete(User $user, Training $training): bool
     {
-        return $user->can('delete_training') && $training->tenant_id === $user->tenant_id;
+        return $user->can('delete_training') && $user->canAccessTenant($training->tenant_id);
     }
 }

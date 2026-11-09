@@ -62,7 +62,7 @@ php artisan serve --host=127.0.0.1 --port=8000
 ```
 
 ### Leitura de BI no cadastro
-Configure `OCR_SPACE_API_KEY` no `.env` do backend para ativar a leitura assistida de imagens e PDFs digitalizados do BI (máximo de 5 MB). O documento é enviado ao [OCR.space](https://ocr.space/ocrapi) apenas após confirmação do operador e a chave nunca é exposta ao frontend. O endpoint de leitura não guarda o documento no HumaCore; o formulário recebe sugestões para revisão. O plano gratuito do fornecedor documenta um limite de 500 pedidos por dia e por IP.
+Configure `GROQ_API_KEY` no `.env` do backend para ativar a leitura assistida de imagens e PDFs digitalizados do BI (upload máximo de 5 MB). A integração usa a API compatível com OpenAI da Groq e o modelo de visão `qwen/qwen3.8-27b` por padrão. Conforme a [documentação de visão da Groq](https://console.groq.com/docs/vision), o pedido tem no máximo 3 imagens, cada uma contabilizada como até 2.048 tokens de entrada, e o pedido com imagens não pode exceder 20 MB. Assim, três páginas consomem até cerca de 6.144 tokens de imagem, além do prompt atual de 51 palavras; a saída está limitada a 256 tokens. As imagens são redimensionadas para no máximo 1.800 px e o conjunto comprimido fica limitado a 12 MiB, mantendo o pedido codificado abaixo do limite documentado. PDFs são convertidos no servidor (Poppler), com no máximo 3 páginas por pedido. Os limites podem ser reduzidos por `GROQ_OCR_MAX_IMAGES`, `GROQ_OCR_MAX_PDF_PAGES`, `GROQ_OCR_MAX_PROMPT_WORDS`, `GROQ_OCR_MAX_COMPLETION_TOKENS` e `GROQ_OCR_MAX_IMAGE_BYTES`; os limites de imagem/página não ultrapassam o teto suportado pelo serviço. Limites de RPM/TPM da conta Groq são específicos da organização; se ocorrer HTTP 429, o endpoint devolve uma resposta temporária com `Retry-After`. O documento é enviado à Groq apenas após confirmação do operador; a chave nunca é exposta ao frontend e o endpoint não guarda o documento no HumaCore. Os dados devolvidos são sugestões e devem ser confirmados pelo operador.
 
 ### Frontend
 ```bash
@@ -83,7 +83,7 @@ O Compose executa a aplicação React, a API Laravel, MySQL, Redis e o worker de
    nano .env
    ```
 
-   Configure também `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` e `CLOUDINARY_API_SECRET` no `.env` da raiz para uploads no Cloudinary; `OCR_SPACE_API_KEY` é opcional e ativa a leitura assistida de BI. O Compose passa esse arquivo ao backend e ao worker.
+   Configure também `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` e `CLOUDINARY_API_SECRET` no `.env` da raiz para uploads no Cloudinary; `GROQ_API_KEY` é opcional e ativa a leitura assistida de BI. O Compose passa esse arquivo ao backend e ao worker.
 
 3. Gere a chave Laravel e copie o valor impresso para `APP_KEY` no `.env`:
 

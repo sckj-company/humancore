@@ -14,6 +14,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+use Spatie\Permission\Models\Permission;
 
 class SuperAdminController extends BaseController
 {
@@ -28,7 +30,7 @@ class SuperAdminController extends BaseController
         $totalEmployees = Employee::withoutGlobalScopes()->count();
         $activeEmployees = Employee::withoutGlobalScopes()->where('status', 'active')->count();
         $totalUsers = User::query()->count();
-        $superAdmins = User::query()->whereHas('roles', fn ($q) => $q->where('name', 'super-admin'))->count();
+        $superAdmins = User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['super-admin', 'super-admin-limited']))->count();
 
         $tenantTrend = collect(range(11, 0))->map(function ($monthsAgo) {
             $month = now()->startOfMonth()->subMonths($monthsAgo);
@@ -92,6 +94,96 @@ class SuperAdminController extends BaseController
             'segments' => $segments,
             'by_tenant' => $byTenant,
         ]);
+    }
+
+    public function platformUsers(Request $request): JsonResponse
+    {
+        $this->authorizePlatformUserManagement($request);
+
+        $users = User::query()
+            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['super-admin', 'super-admin-limited']))
+            ->with(['roles', 'permissions'])
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'is_active' => $user->is_active,
+                'roles' => $user->getRoleNames(),
+                'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+            ]);
+
+        $permissions = Permission::query()
+            ->where('guard_name', 'web')
+            ->where('name', '!=', 'manage_platform')
+            ->whereIn('name', $request->user()->getAllPermissions()->pluck('name'))
+            ->orderBy('group_name')
+            ->orderBy('name')
+            ->get(['name', 'group_name']);
+
+        return $this->success([
+            'users' => $users,
+            'permissions' => $permissions,
+        ]);
+    }
+
+    public function storePlatformUser(Request $request): JsonResponse
+    {
+        $this->authorizePlatformUserManagement($request);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8'],
+            'permissions' => ['required', 'array'],
+            'permissions.*' => ['required', 'string', 'distinct', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+        ]);
+
+        $assignablePermissions = $request->user()->getAllPermissions()
+            ->reject(fn (Permission $permission) => $permission->name === 'manage_platform')
+            ->pluck('name')
+            ->all();
+        $requestedPermissions = $data['permissions'];
+        if (array_diff($requestedPermissions, $assignablePermissions)) {
+            return $this->error('Não pode atribuir permissões que não possui.', 403);
+        }
+        if (! in_array('view_any_tenant', $requestedPermissions, true)) {
+            return $this->error('O acesso global requer a permissão de consultar empresas.', 422);
+        }
+
+        $user = DB::transaction(function () use ($data, $requestedPermissions): User {
+            $user = User::query()->create([
+                'tenant_id' => null,
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'locale' => 'pt',
+                'timezone' => 'Africa/Luanda',
+                'email_verified_at' => now(),
+                'is_active' => true,
+            ]);
+            $user->assignRole('super-admin-limited');
+            $user->syncPermissions($requestedPermissions);
+
+            return $user;
+        });
+
+        return $this->success([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'is_active' => $user->is_active,
+            'roles' => $user->getRoleNames(),
+            'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+        ], 'Super-admin limitado criado com sucesso.', 201);
+    }
+
+    private function authorizePlatformUserManagement(Request $request): void
+    {
+        if (! $request->user()->hasRole('super-admin')) {
+            $this->authorize('manage_super_admins');
+        }
     }
 
     public function tenants(Request $request): JsonResponse

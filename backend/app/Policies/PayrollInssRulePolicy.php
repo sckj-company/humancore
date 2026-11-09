@@ -23,37 +23,44 @@ class PayrollInssRulePolicy
 
     public function view(User $user, PayrollInssRule $rule): bool
     {
-        return $rule->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($rule->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('view_payroll'));
     }
 
     public function create(User $user): bool
     {
-        return $user->can('process_payroll') || $user->can('create_salary-component');
+        return $user->isSuperAdmin()
+            ? $user->can('configure_payroll')
+            : ($user->can('process_payroll') || $user->can('create_salary-component'));
     }
 
     public function update(User $user, PayrollInssRule $rule): bool
     {
-        return $rule->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($rule->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('configure_payroll'));
     }
 
     public function validate(User $user, PayrollInssRule $rule): bool
     {
-        return $rule->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($rule->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('approve_payroll') || $user->can('configure_payroll'));
     }
 
     public function activate(User $user, PayrollInssRule $rule): bool
     {
-        return $rule->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($rule->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('configure_payroll'));
     }
 
     public function delete(User $user, PayrollInssRule $rule): bool
     {
-        return $rule->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($rule->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('delete_payroll'));
     }
 
     public function revoke(User $user, PayrollInssRule $rule): bool
     {
-        return $rule->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($rule->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('configure_payroll'));
     }
 }
-

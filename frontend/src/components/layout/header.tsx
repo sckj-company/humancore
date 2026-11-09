@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useAuthStore } from '@/stores/auth-store'
+import { hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
 import { Building2, Check, ChevronsUpDown, Globe, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,14 +26,15 @@ import type { Paginated, Tenant } from '@/types'
 export function Header() {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
-  const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
+  const isSuperAdmin = isPlatformAdmin(user)
+  const canListTenants = hasPermission(user, 'view_any_tenant')
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false)
   const [companySearch, setCompanySearch] = useState('')
   const selectedTenantId = localStorage.getItem('hrms_selected_tenant') ?? String(user?.tenant?.id ?? '')
   const { data: tenantPage } = useQuery({
     queryKey: ['superadmin', 'tenant-switcher'],
     queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
-    enabled: isSuperAdmin,
+    enabled: isSuperAdmin && canListTenants,
   })
 
   useEffect(() => {

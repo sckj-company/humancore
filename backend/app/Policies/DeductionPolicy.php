@@ -23,7 +23,8 @@ class DeductionPolicy
 
     public function view(User $user, Deduction $deduction): bool
     {
-        return $deduction->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($deduction->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('view_deduction'));
     }
 
     public function create(User $user): bool
@@ -33,16 +34,16 @@ class DeductionPolicy
 
     public function update(User $user, Deduction $deduction): bool
     {
-        return $user->can('update_deduction') && $deduction->tenant_id === $user->tenant_id;
+        return $user->can('update_deduction') && $user->canAccessTenant($deduction->tenant_id);
     }
 
     public function delete(User $user, Deduction $deduction): bool
     {
-        return $user->can('delete_deduction') && $deduction->tenant_id === $user->tenant_id;
+        return $user->can('delete_deduction') && $user->canAccessTenant($deduction->tenant_id);
     }
 
     public function approve(User $user, Deduction $deduction): bool
     {
-        return $user->can('approve_deduction') && $deduction->tenant_id === $user->tenant_id;
+        return $user->can('approve_deduction') && $user->canAccessTenant($deduction->tenant_id);
     }
 }

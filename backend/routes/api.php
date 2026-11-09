@@ -245,6 +245,8 @@ Route::prefix('v1')->group(function () {
         Route::get('superadmin/tenants/{tenant}/users', [SuperAdminController::class, 'listTenantUsers']);
         Route::post('superadmin/tenants/{tenant}/users', [SuperAdminController::class, 'storeUser']);
         Route::delete('superadmin/tenants/{tenant}/users/{user}', [SuperAdminController::class, 'destroyUser']);
+        Route::get('superadmin/platform-users', [SuperAdminController::class, 'platformUsers']);
+        Route::post('superadmin/platform-users', [SuperAdminController::class, 'storePlatformUser']);
 
         // Benefícios e Descontos
         Route::apiResource('benefits', BenefitController::class);

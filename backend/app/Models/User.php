@@ -51,7 +51,13 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->hasRole('super-admin');
+        return $this->hasAnyRole(['super-admin', 'super-admin-limited']);
+    }
+
+    public function canAccessTenant(int|string|null $tenantId): bool
+    {
+        return $this->isSuperAdmin()
+            || ($tenantId !== null && $this->tenant_id !== null && (string) $this->tenant_id === (string) $tenantId);
     }
 
     public function isActive(): bool

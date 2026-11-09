@@ -23,7 +23,7 @@ class PerformanceEvaluationPolicy
 
     public function view(User $user, PerformanceEvaluation $evaluation): bool
     {
-        if ($user->can('view_performance') && $evaluation->tenant_id === $user->tenant_id) {
+        if ($user->can('view_performance') && $user->canAccessTenant($evaluation->tenant_id)) {
             if ($user->can('view_any_performance')) {
                 return true;
             }
@@ -45,12 +45,12 @@ class PerformanceEvaluationPolicy
 
     public function update(User $user, PerformanceEvaluation $evaluation): bool
     {
-        if (! $user->can('update_performance') || $evaluation->tenant_id !== $user->tenant_id) {
+        if (! $user->can('update_performance') || ! $user->canAccessTenant($evaluation->tenant_id)) {
             return false;
         }
 
         if (in_array($evaluation->status, ['approved', 'rejected'], true)) {
-            return $user->hasRole('super-admin');
+            return $user->can('approve_performance');
         }
 
         return true;
@@ -58,6 +58,6 @@ class PerformanceEvaluationPolicy
 
     public function delete(User $user, PerformanceEvaluation $evaluation): bool
     {
-        return $user->can('delete_performance') && $evaluation->tenant_id === $user->tenant_id;
+        return $user->can('delete_performance') && $user->canAccessTenant($evaluation->tenant_id);
     }
 }

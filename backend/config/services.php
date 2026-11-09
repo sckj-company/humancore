@@ -41,9 +41,15 @@ return [
         'api_secret' => env('CLOUDINARY_API_SECRET'),
     ],
 
-    'ocr_space' => [
-        'key' => env('OCR_SPACE_API_KEY'),
-        'endpoint' => env('OCR_SPACE_ENDPOINT', 'https://api.ocr.space/parse/image'),
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+        'base_url' => env('GROQ_BASE_URL', 'https://api.groq.com/openai/v1'),
+        'model' => env('GROQ_OCR_MODEL', 'qwen/qwen3.8-27b'),
+        'max_images' => (int) env('GROQ_OCR_MAX_IMAGES', 3),
+        'max_pdf_pages' => (int) env('GROQ_OCR_MAX_PDF_PAGES', 3),
+        'max_completion_tokens' => (int) env('GROQ_OCR_MAX_COMPLETION_TOKENS', 256),
+        'max_prompt_words' => (int) env('GROQ_OCR_MAX_PROMPT_WORDS', 80),
+        'max_image_bytes' => (int) env('GROQ_OCR_MAX_IMAGE_BYTES', 12582912),
     ],
 
 ];

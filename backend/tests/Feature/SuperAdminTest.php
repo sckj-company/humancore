@@ -10,6 +10,7 @@ use Database\Seeders\PermissionSeeder;
 use Database\Seeders\SettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class SuperAdminTest extends TestCase
@@ -63,6 +64,34 @@ class SuperAdminTest extends TestCase
             ]);
     }
 
+    public function test_existing_super_admin_can_load_platform_users_without_the_new_management_permission(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('super-admin');
+
+        Role::findByName('super-admin')->revokePermissionTo('manage_super_admins');
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/superadmin/platform-users')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'users',
+                    'permissions' => [['name', 'group_name']],
+                ],
+            ]);
+    }
+
+    public function test_restricted_platform_admin_without_management_permission_cannot_load_platform_users(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('super-admin-limited');
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/superadmin/platform-users')
+            ->assertForbidden();
+    }
+
     public function test_super_admin_can_list_tenants_with_stats(): void
     {
         $user = User::factory()->create(['is_active' => true]);
@@ -110,6 +139,58 @@ class SuperAdminTest extends TestCase
             ], ['X-Tenant-ID' => (string) $selectedTenant->id])
             ->assertCreated()
             ->assertJsonPath('data.tenant_id', $selectedTenant->id);
+    }
+
+    public function test_super_admin_can_create_a_restricted_platform_admin_with_only_selected_permissions(): void
+    {
+        $creator = User::factory()->create(['is_active' => true]);
+        $creator->assignRole('super-admin');
+        $tenant = Tenant::factory()->create();
+
+        $created = $this->actingAs($creator, 'sanctum')
+            ->postJson('/api/v1/superadmin/platform-users', [
+                'name' => 'Admin RH',
+                'email' => 'admin-rh@platform.test',
+                'password' => 'secure-password',
+                'permissions' => ['view_any_tenant', 'view_any_employee'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.roles.0', 'super-admin-limited');
+        $this->assertEqualsCanonicalizing(
+            ['view_any_tenant', 'view_any_employee'],
+            $created->json('data.permissions'),
+        );
+
+        $restrictedAdmin = User::query()->where('email', 'admin-rh@platform.test')->firstOrFail();
+
+        $this->actingAs($restrictedAdmin, 'sanctum')
+            ->getJson('/api/v1/employees', ['X-Tenant-ID' => (string) $tenant->id])
+            ->assertOk();
+
+        $this->actingAs($restrictedAdmin, 'sanctum')
+            ->putJson("/api/v1/superadmin/tenants/{$tenant->id}", ['status' => 'suspended'])
+            ->assertForbidden();
+
+        $this->assertSame(
+            ['view_any_employee', 'view_any_tenant'],
+            $restrictedAdmin->getAllPermissions()->pluck('name')->sort()->values()->all(),
+        );
+    }
+
+    public function test_restricted_platform_admin_cannot_assign_permissions_the_creator_does_not_have(): void
+    {
+        $creator = User::factory()->create(['is_active' => true]);
+        $creator->assignRole('super-admin-limited');
+        $creator->givePermissionTo(['manage_super_admins', 'view_any_tenant']);
+
+        $this->actingAs($creator, 'sanctum')
+            ->postJson('/api/v1/superadmin/platform-users', [
+                'name' => 'Admin Elevado',
+                'email' => 'elevado@platform.test',
+                'password' => 'secure-password',
+                'permissions' => ['view_any_tenant', 'create_employee'],
+            ])
+            ->assertForbidden();
     }
 
     public function test_super_admin_can_create_update_and_delete_tenant(): void

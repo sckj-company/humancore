@@ -14,6 +14,6 @@ class AttendanceQrCodePolicy
 
     public function view(User $user, AttendanceQrCode $code): bool
     {
-        return $user->can('view_attendance') && $code->tenant_id === $user->tenant_id;
+        return $user->can('view_attendance') && $user->canAccessTenant($code->tenant_id);
     }
 }

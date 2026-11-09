@@ -23,7 +23,8 @@ class OnboardingTemplatePolicy
 
     public function view(User $user, OnboardingTemplate $template): bool
     {
-        return $template->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($template->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('view_training') || $user->can('view_performance'));
     }
 
     public function create(User $user): bool
@@ -33,11 +34,11 @@ class OnboardingTemplatePolicy
 
     public function update(User $user, OnboardingTemplate $template): bool
     {
-        return $user->can('update_training') && $template->tenant_id === $user->tenant_id;
+        return $user->can('update_training') && $user->canAccessTenant($template->tenant_id);
     }
 
     public function delete(User $user, OnboardingTemplate $template): bool
     {
-        return $user->can('delete_training') && $template->tenant_id === $user->tenant_id;
+        return $user->can('delete_training') && $user->canAccessTenant($template->tenant_id);
     }
 }

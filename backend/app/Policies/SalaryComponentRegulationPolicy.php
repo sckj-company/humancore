@@ -23,7 +23,7 @@ class SalaryComponentRegulationPolicy
 
     public function view(User $user, SalaryComponentRegulation $salaryComponentRegulation): bool
     {
-        return $salaryComponentRegulation->tenant_id === $user->tenant_id
+        return $user->canAccessTenant($salaryComponentRegulation->tenant_id)
             && $user->can('view_salary-component');
     }
 
@@ -34,31 +34,31 @@ class SalaryComponentRegulationPolicy
 
     public function update(User $user, SalaryComponentRegulation $salaryComponentRegulation): bool
     {
-        return $salaryComponentRegulation->tenant_id === $user->tenant_id
+        return $user->canAccessTenant($salaryComponentRegulation->tenant_id)
             && $user->can('update_salary-component');
     }
 
     public function validate(User $user, SalaryComponentRegulation $salaryComponentRegulation): bool
     {
-        return $salaryComponentRegulation->tenant_id === $user->tenant_id
+        return $user->canAccessTenant($salaryComponentRegulation->tenant_id)
             && $user->can('configure_salary-component');
     }
 
     public function activate(User $user, SalaryComponentRegulation $salaryComponentRegulation): bool
     {
-        return $salaryComponentRegulation->tenant_id === $user->tenant_id
+        return $user->canAccessTenant($salaryComponentRegulation->tenant_id)
             && $user->can('configure_salary-component');
     }
 
     public function delete(User $user, SalaryComponentRegulation $salaryComponentRegulation): bool
     {
-        return $salaryComponentRegulation->tenant_id === $user->tenant_id
+        return $user->canAccessTenant($salaryComponentRegulation->tenant_id)
             && $user->can('delete_salary-component');
     }
 
     public function revoke(User $user, SalaryComponentRegulation $salaryComponentRegulation): bool
     {
-        return $salaryComponentRegulation->tenant_id === $user->tenant_id
+        return $user->canAccessTenant($salaryComponentRegulation->tenant_id)
             && $user->can('configure_salary-component');
     }
 }

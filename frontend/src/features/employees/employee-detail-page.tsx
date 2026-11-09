@@ -73,6 +73,7 @@ export function EmployeeDetailPage() {
   const currency = user?.tenant?.currency ?? 'AOA'
   const canManageLeaveTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'manage_leave_types')
   const canViewPayroll = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
+    || hasPermission(user, 'view_any_payroll')
     || hasPermission(user, 'view_any_deduction')
     || hasPermission(user, 'create_deduction')
     || hasPermission(user, 'update_employee')

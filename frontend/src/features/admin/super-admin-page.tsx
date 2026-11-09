@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import {
   Building2,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { hasPermission, useAuthStore } from '@/stores/auth-store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -146,6 +148,39 @@ interface TenantUser {
   created_at?: string
 }
 
+interface PlatformPermission {
+  name: string
+  group_name: string | null
+}
+
+interface PlatformUser {
+  id: number
+  name: string
+  email: string
+  is_active: boolean
+  roles: string[]
+  permissions: string[]
+}
+
+interface PlatformUsersResponse {
+  users: PlatformUser[]
+  permissions: PlatformPermission[]
+}
+
+interface NewPlatformUser {
+  name: string
+  email: string
+  password: string
+  permissions: string[]
+}
+
+const emptyPlatformUser: NewPlatformUser = {
+  name: '',
+  email: '',
+  password: '',
+  permissions: ['view_any_tenant'],
+}
+
 const userSchema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
   email: z.string().email('Email inválido'),
@@ -159,6 +194,35 @@ const emptyUserForm: UserForm = { name: '', email: '', password: '', role: 'admi
 
 export function SuperAdminPage() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
+  const currentUser = useAuthStore((state) => state.user)
+  const canManagePlatformUsers = hasPermission(currentUser, 'manage_super_admins')
+  const canCreateTenant = hasPermission(currentUser, 'create_tenant')
+  const canUpdateTenant = hasPermission(currentUser, 'update_tenant')
+  const canDeleteTenant = hasPermission(currentUser, 'delete_tenant')
+  const canViewTenantUsers = canUpdateTenant && hasPermission(currentUser, 'view_tenant')
+  const getPermissionLabel = (name: string) => {
+    const globalLabel = t(`superAdminPage.permissionLabels.${name}`, { defaultValue: '' }).trim()
+    if (globalLabel) return globalLabel
+
+    const action = ['force_delete', 'view_any', 'view', 'create', 'update', 'delete', 'restore', 'approve', 'reject', 'process', 'close', 'export', 'print', 'configure']
+      .find((candidate) => name.startsWith(`${candidate}_`))
+    const resource = action ? name.slice(action.length + 1) : ''
+    const normalizedResource = resource.replaceAll('_', '-')
+    const resourceForm = action === 'view_any' ? 'plural' : 'singular'
+    const resourceLabel = normalizedResource
+      ? t(`superAdminPage.permissionResources.${normalizedResource}.${resourceForm}`, { defaultValue: '' }).trim()
+      : ''
+    if (!action || !resourceLabel) {
+      return t('superAdminPage.permissionFallback', { name, defaultValue: name })
+    }
+
+    const label = t(`superAdminPage.permissionActions.${action}`, {
+      resource: resourceLabel,
+      defaultValue: '',
+    }).trim()
+    return label || t('superAdminPage.permissionFallback', { name, defaultValue: name })
+  }
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -172,6 +236,8 @@ export function SuperAdminPage() {
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [userForm, setUserForm] = useState<UserForm>(emptyUserForm)
   const [userErrors, setUserErrors] = useState<Record<string, string>>({})
+  const [platformUserDialogOpen, setPlatformUserDialogOpen] = useState(false)
+  const [platformUserForm, setPlatformUserForm] = useState<NewPlatformUser>(emptyPlatformUser)
 
   const { data: tenants, isLoading: loadingTenants } = useQuery({
     queryKey: ['superadmin', 'tenants', search, statusFilter],
@@ -187,6 +253,12 @@ export function SuperAdminPage() {
     queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'],
     queryFn: () => api.get<TenantUser[]>(`superadmin/tenants/${selectedTenant!.id}/users`),
     enabled: !!selectedTenant,
+  })
+
+  const platformUsersQuery = useQuery({
+    queryKey: ['superadmin', 'platform-users'],
+    queryFn: () => api.get<PlatformUsersResponse>('superadmin/platform-users'),
+    enabled: canManagePlatformUsers,
   })
 
   const invalidate = () => {
@@ -288,6 +360,17 @@ export function SuperAdminPage() {
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro')),
   })
 
+  const createPlatformUser = useMutation({
+    mutationFn: (data: NewPlatformUser) => api.post<PlatformUser>('superadmin/platform-users', data),
+    onSuccess: () => {
+      toast.success(t('superAdminPage.created'))
+      setPlatformUserDialogOpen(false)
+      setPlatformUserForm(emptyPlatformUser)
+      qc.invalidateQueries({ queryKey: ['superadmin', 'platform-users'] })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, t('superAdminPage.createError'))),
+  })
+
   const handleSubmit = () => {
     const parsed = tenantSchema.safeParse(form)
     if (!parsed.success) {
@@ -312,6 +395,28 @@ export function SuperAdminPage() {
     createUser.mutate(parsed.data)
   }
 
+  const handlePlatformUserSubmit = () => {
+    if (!platformUserForm.name.trim() || !platformUserForm.email.trim() || platformUserForm.password.length < 8) {
+      toast.error(t('superAdminPage.requiredFields'))
+      return
+    }
+    if (!platformUserForm.permissions.includes('view_any_tenant')) {
+      toast.error(t('superAdminPage.tenantPermissionRequired'))
+      return
+    }
+    createPlatformUser.mutate(platformUserForm)
+  }
+
+  const platformPermissionGroups = (platformUsersQuery.data?.permissions ?? []).reduce<Record<string, PlatformPermission[]>>(
+    (groups, permission) => {
+      const group = permission.group_name ?? 'outros'
+      groups[group] ??= []
+      groups[group].push(permission)
+      return groups
+    },
+    {},
+  )
+
   const tabs = [
     { id: 'info' as const, label: 'Identificação' },
     { id: 'address' as const, label: 'Localização' },
@@ -327,14 +432,67 @@ export function SuperAdminPage() {
         description="Registe e gira as empresas (tenants) da plataforma"
       />
 
+      {canManagePlatformUsers && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-base">{t('superAdminPage.title')}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{t('superAdminPage.description')}</p>
+            </div>
+            <Button size="sm" onClick={() => setPlatformUserDialogOpen(true)}>
+              <UserPlus className="mr-1.5 h-4 w-4" />
+              {t('superAdminPage.createButton')}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {platformUsersQuery.isLoading ? (
+              <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : platformUsersQuery.isError ? (
+              <div className="flex items-center justify-between gap-3 text-sm text-destructive">
+                <span>{getApiErrorMessage(platformUsersQuery.error, t('superAdminPage.loadError'))}</span>
+                <Button size="sm" variant="outline" onClick={() => platformUsersQuery.refetch()}>{t('superAdminPage.retry')}</Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2.5 font-medium">{t('superAdminPage.user')}</th>
+                      <th className="px-3 py-2.5 font-medium">{t('superAdminPage.type')}</th>
+                      <th className="px-3 py-2.5 font-medium">{t('superAdminPage.assignedPermissions')}</th>
+                      <th className="px-3 py-2.5 font-medium">{t('superAdminPage.status')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {(platformUsersQuery.data?.users ?? []).map((platformUser) => (
+                      <tr key={platformUser.id}>
+                        <td className="px-3 py-2.5">
+                          <p className="font-medium">{platformUser.name}</p>
+                          <p className="text-xs text-muted-foreground">{platformUser.email}</p>
+                        </td>
+                        <td className="px-3 py-2.5">{platformUser.roles.includes('super-admin') ? t('superAdminPage.fullAdmin') : t('superAdminPage.restrictedAdmin')}</td>
+                        <td className="px-3 py-2.5">{platformUser.permissions.length}</td>
+                        <td className="px-3 py-2.5">{platformUser.is_active ? t('superAdminPage.active') : t('superAdminPage.inactive')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Listagem de empresas ─────────────────────────────────────── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Empresas registadas</CardTitle>
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Nova empresa
-          </Button>
+          {canCreateTenant && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Nova empresa
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Filtros */}
@@ -423,27 +581,37 @@ export function SuperAdminPage() {
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="ghost" title="Gerir utilizadores" onClick={() => openUsers(t)}>
-                            <Users className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(t)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm" variant="ghost"
-                            title={t.status === 'suspended' ? 'Reativar empresa' : 'Suspender empresa'}
-                            disabled={setStatus.isPending}
-                            onClick={() => setStatus.mutate({ id: t.id, status: t.status === 'suspended' ? 'active' : 'suspended' })}
-                          >
-                            <Power className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm" variant="ghost" className="text-destructive hover:text-destructive"
-                            disabled={deleteTenant.isPending}
-                            onClick={() => { if (window.confirm(`Eliminar a empresa "${t.name}"?`)) deleteTenant.mutate(t.id) }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {canViewTenantUsers && (
+                            <>
+                              <Button size="sm" variant="ghost" title="Gerir utilizadores" onClick={() => openUsers(t)}>
+                                <Users className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                          {canUpdateTenant && (
+                            <>
+                              <Button size="sm" variant="ghost" onClick={() => openEdit(t)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="sm" variant="ghost"
+                                title={t.status === 'suspended' ? 'Reativar empresa' : 'Suspender empresa'}
+                                disabled={setStatus.isPending}
+                                onClick={() => setStatus.mutate({ id: t.id, status: t.status === 'suspended' ? 'active' : 'suspended' })}
+                              >
+                                <Power className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                          {canDeleteTenant && (
+                            <Button
+                              size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+                              disabled={deleteTenant.isPending}
+                              onClick={() => { if (window.confirm(`Eliminar a empresa "${t.name}"?`)) deleteTenant.mutate(t.id) }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -860,6 +1028,78 @@ export function SuperAdminPage() {
       </Dialog>
 
       {/* ── Dialog: Adicionar Utilizador ─────────────────────────────── */}
+      <Dialog open={platformUserDialogOpen} onOpenChange={setPlatformUserDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t('superAdminPage.dialogTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('superAdminPage.dialogDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>{t('superAdminPage.name')} *</Label>
+                <Input value={platformUserForm.name} onChange={(event) => setPlatformUserForm((current) => ({ ...current, name: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('superAdminPage.email')} *</Label>
+                <Input type="email" value={platformUserForm.email} onChange={(event) => setPlatformUserForm((current) => ({ ...current, email: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>{t('superAdminPage.initialPassword')} *</Label>
+                <Input type="password" minLength={8} value={platformUserForm.password} onChange={(event) => setPlatformUserForm((current) => ({ ...current, password: event.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div>
+                <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
+                <p className="text-xs text-muted-foreground">{t('superAdminPage.permissionsDescription')}</p>
+              </div>
+              <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border p-3">
+                {Object.entries(platformPermissionGroups).map(([group, permissions]) => (
+                  <details key={group} className="rounded border border-border/70 px-3 py-2">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      {t(`superAdminPage.permissionGroups.${group}`, { defaultValue: t('superAdminPage.otherPermissions') })} <span className="text-xs font-normal text-muted-foreground">({permissions.length})</span>
+                    </summary>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {permissions.map((permission) => {
+                        const checked = platformUserForm.permissions.includes(permission.name)
+                        const required = permission.name === 'view_any_tenant'
+                        return (
+                          <label key={permission.name} className="flex items-start gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={checked}
+                              disabled={required}
+                              onChange={(event) => setPlatformUserForm((current) => ({
+                                ...current,
+                                permissions: event.target.checked
+                                  ? [...current.permissions, permission.name]
+                                  : current.permissions.filter((name) => name !== permission.name),
+                              }))}
+                            />
+                            <span>{getPermissionLabel(permission.name)}{required ? ` (${t('superAdminPage.required')})` : ''}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPlatformUserDialogOpen(false)}>{t('common.cancel')}</Button>
+              <Button onClick={handlePlatformUserSubmit} disabled={createPlatformUser.isPending}>
+                {createPlatformUser.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                {t('superAdminPage.createUser')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>

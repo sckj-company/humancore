@@ -22,14 +22,14 @@ class EmployeeIdentityOcrController extends BaseController
             'image' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
         ]);
 
-        if (blank(config('services.ocr_space.key'))) {
+        if (blank(config('services.groq.key'))) {
             return $this->error('O serviço de leitura do BI não está configurado.', 503);
         }
 
         try {
             $fields = $ocr->extract($validated['image']);
         } catch (IdentityDocumentOcrException $exception) {
-            Log::warning('OCR.space could not process employee identity document', [
+            Log::warning('Groq could not process employee identity document', [
                 'reason' => $exception->getMessage(),
                 'mime_type' => $validated['image']->getMimeType(),
                 'size_bytes' => $validated['image']->getSize(),
@@ -38,7 +38,7 @@ class EmployeeIdentityOcrController extends BaseController
             $reason = $exception->getMessage() ?: 'O fornecedor não forneceu detalhes.';
 
             return $this->error(
-                'O OCR.space não conseguiu ler este documento. Confirme se o ficheiro é válido e tente novamente. Detalhe: '.$reason,
+                'A leitura inteligente não conseguiu processar este documento. Confirme se o ficheiro é válido e tente novamente. Detalhe: '.$reason,
                 422,
             );
         } catch (RequestException $exception) {
@@ -57,21 +57,36 @@ class EmployeeIdentityOcrController extends BaseController
                         }
                     }
                 }
+                $errorMessage = $providerResponse['error']['message'] ?? null;
+                if (is_string($errorMessage) && trim($errorMessage) !== '') {
+                    $providerMessages[] = trim($errorMessage);
+                }
             }
 
-            Log::warning('OCR.space returned an unsuccessful HTTP response', [
+            Log::warning('Groq returned an unsuccessful HTTP response', [
                 'http_status' => $exception->response->status(),
                 'provider_message' => mb_substr(implode(' | ', array_unique($providerMessages)), 0, 500),
                 'mime_type' => $validated['image']->getMimeType(),
                 'size_bytes' => $validated['image']->getSize(),
             ]);
 
+            if ($exception->response->status() === 429) {
+                $response = $this->error('O serviço de leitura atingiu temporariamente o limite de pedidos. Aguarde e tente novamente.', 429);
+                $retryAfter = $exception->response->header('Retry-After');
+
+                if (is_string($retryAfter) && ctype_digit($retryAfter)) {
+                    $response->header('Retry-After', $retryAfter);
+                }
+
+                return $response;
+            }
+
             return $this->error(
-                'O OCR.space respondeu com erro HTTP '.$exception->response->status().'. Tente novamente mais tarde.',
+                'O serviço de leitura respondeu com erro HTTP '.$exception->response->status().'. Tente novamente mais tarde.',
                 502,
             );
         } catch (ConnectionException $exception) {
-            Log::warning('Could not connect to OCR.space', [
+            Log::warning('Could not connect to Groq OCR service', [
                 'reason' => $exception->getMessage(),
                 'mime_type' => $validated['image']->getMimeType(),
                 'size_bytes' => $validated['image']->getSize(),

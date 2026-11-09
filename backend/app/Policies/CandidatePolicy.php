@@ -14,7 +14,7 @@ class CandidatePolicy
 
     public function view(User $user, Candidate $candidate): bool
     {
-        return $user->can('view_recruitment') && $candidate->tenant_id === $user->tenant_id;
+        return $user->can('view_recruitment') && $user->canAccessTenant($candidate->tenant_id);
     }
 
     public function create(User $user): bool
@@ -24,11 +24,11 @@ class CandidatePolicy
 
     public function update(User $user, Candidate $candidate): bool
     {
-        return $user->can('update_recruitment') && $candidate->tenant_id === $user->tenant_id;
+        return $user->can('update_recruitment') && $user->canAccessTenant($candidate->tenant_id);
     }
 
     public function delete(User $user, Candidate $candidate): bool
     {
-        return $user->can('delete_recruitment') && $candidate->tenant_id === $user->tenant_id;
+        return $user->can('delete_recruitment') && $user->canAccessTenant($candidate->tenant_id);
     }
 }

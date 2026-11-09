@@ -23,7 +23,7 @@ class OnboardingTaskPolicy
 
     public function view(User $user, OnboardingTask $task): bool
     {
-        if ($task->tenant_id !== $user->tenant_id) {
+        if (! $user->canAccessTenant($task->tenant_id)) {
             return false;
         }
         if ($user->can('view_any_training')) {
@@ -46,7 +46,7 @@ class OnboardingTaskPolicy
 
     public function update(User $user, OnboardingTask $task): bool
     {
-        if ($task->tenant_id !== $user->tenant_id) {
+        if (! $user->canAccessTenant($task->tenant_id)) {
             return false;
         }
         if ($user->can('update_training')) {
@@ -61,6 +61,6 @@ class OnboardingTaskPolicy
 
     public function delete(User $user, OnboardingTask $task): bool
     {
-        return $user->can('delete_training') && $task->tenant_id === $user->tenant_id;
+        return $user->can('delete_training') && $user->canAccessTenant($task->tenant_id);
     }
 }

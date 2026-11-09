@@ -23,7 +23,7 @@ class TrainingAssignmentPolicy
 
     public function view(User $user, TrainingAssignment $assignment): bool
     {
-        if ($assignment->tenant_id !== $user->tenant_id) {
+        if (! $user->canAccessTenant($assignment->tenant_id)) {
             return false;
         }
         if ($user->can('view_any_training')) {
@@ -43,7 +43,7 @@ class TrainingAssignmentPolicy
 
     public function update(User $user, TrainingAssignment $assignment): bool
     {
-        if ($assignment->tenant_id !== $user->tenant_id) {
+        if (! $user->canAccessTenant($assignment->tenant_id)) {
             return false;
         }
 
@@ -52,6 +52,6 @@ class TrainingAssignmentPolicy
 
     public function delete(User $user, TrainingAssignment $assignment): bool
     {
-        return $user->can('delete_training') && $assignment->tenant_id === $user->tenant_id;
+        return $user->can('delete_training') && $user->canAccessTenant($assignment->tenant_id);
     }
 }

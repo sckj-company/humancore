@@ -14,7 +14,7 @@ class JobOpeningPolicy
 
     public function view(User $user, JobOpening $job): bool
     {
-        return $user->can('view_recruitment') && $job->tenant_id === $user->tenant_id;
+        return $user->can('view_recruitment') && $user->canAccessTenant($job->tenant_id);
     }
 
     public function create(User $user): bool
@@ -24,11 +24,11 @@ class JobOpeningPolicy
 
     public function update(User $user, JobOpening $job): bool
     {
-        return $user->can('update_recruitment') && $job->tenant_id === $user->tenant_id;
+        return $user->can('update_recruitment') && $user->canAccessTenant($job->tenant_id);
     }
 
     public function delete(User $user, JobOpening $job): bool
     {
-        return $user->can('delete_recruitment') && $job->tenant_id === $user->tenant_id;
+        return $user->can('delete_recruitment') && $user->canAccessTenant($job->tenant_id);
     }
 }

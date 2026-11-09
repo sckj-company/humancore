@@ -301,6 +301,36 @@ class PayrollTest extends TestCase
         $this->assertSame(-3000.0, (float) $secondRecord->items()->where('deduction_id', $deduction->id)->value('amount'));
     }
 
+    public function test_employee_payroll_settings_reserve_monthly_advance_capacity_when_registered(): void
+    {
+        [$tenant, $employee, $user] = $this->setupTenantWithEmployee();
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'advance.monthly_limit'],
+            ['value' => 10000],
+        );
+        Deduction::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'name' => 'Adiantamento de novembro',
+            'deduction_type' => 'advance',
+            'amount_type' => 'fixed',
+            'amount' => 6000,
+            'total_amount' => 12000,
+            'paid_amount' => 0,
+            'installment_count' => 2,
+            'installment_amount' => 6000,
+            'starts_at' => '2026-11-01',
+            'is_recurring' => false,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson("/api/v1/employees/{$employee->id}/payroll-settings?period=2026-11")
+            ->assertOk()
+            ->assertJsonPath('data.advance_monthly_reserved', 6000)
+            ->assertJsonPath('data.advance_monthly_remaining', 4000);
+    }
+
     public function test_deduction_api_saves_starting_payroll_period(): void
     {
         [$tenant, $employee, $user] = $this->setupTenantWithEmployee();

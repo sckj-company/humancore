@@ -60,7 +60,7 @@ export function PayrollTaxRulesPage({
   const locale = i18n.language || 'pt-PT'
   const user = useAuthStore((s) => s.user)
   const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
-  const canConfigure = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'process_payroll')
+  const canConfigure = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'configure_payroll')
   const qc = useQueryClient()
 
   const effectiveTenantId = embeddedTenantId || localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')

@@ -23,7 +23,8 @@ class EmailTemplatePolicy
 
     public function view(User $user, EmailTemplate $template): bool
     {
-        return $template->tenant_id === $user->tenant_id;
+        return $user->canAccessTenant($template->tenant_id)
+            && (! $user->isSuperAdmin() || $user->can('view_email-template'));
     }
 
     public function create(User $user): bool
@@ -34,14 +35,14 @@ class EmailTemplatePolicy
     public function update(User $user, EmailTemplate $template): bool
     {
         return $user->can('update_email-template')
-            && $template->tenant_id === $user->tenant_id
+            && $user->canAccessTenant($template->tenant_id)
             && ! $template->is_system;
     }
 
     public function delete(User $user, EmailTemplate $template): bool
     {
         return $user->can('delete_email-template')
-            && $template->tenant_id === $user->tenant_id
+            && $user->canAccessTenant($template->tenant_id)
             && ! $template->is_system;
     }
 }

@@ -38,6 +38,10 @@ export function hasPermission(user: User | null, permission: string): boolean {
   return user.permissions?.includes(permission) ?? false
 }
 
+export function isPlatformAdmin(user: User | null): boolean {
+  return user?.roles?.some((role) => role === 'super-admin' || role === 'super-admin-limited') ?? false
+}
+
 export function hasAnyRole(user: User | null, roles: string[]): boolean {
   if (!user) return false
   return user.roles?.some((r) => roles.includes(r)) ?? false

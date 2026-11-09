@@ -169,7 +169,12 @@ export function EmployeeCreatePage() {
   })
   const managers = employeesData?.data ?? []
 
-  const { data: documentSettings } = useQuery({
+  const {
+    data: documentSettings,
+    isLoading: isLoadingDocumentSettings,
+    isError: hasDocumentSettingsError,
+    refetch: refetchDocumentSettings,
+  } = useQuery({
     queryKey: ['settings', 'documents'],
     queryFn: () => api.get<SettingGroups>('settings', { group: 'documents' }),
     enabled: canCreate,
@@ -180,6 +185,13 @@ export function EmployeeCreatePage() {
   const documentTypeOptions = [...new Map(
     [...DOCUMENT_TYPE_OPTIONS, ...requiredDocuments].map((document) => [document.type, document]),
   ).values()]
+  const missingRequiredDocuments = requiredDocuments.filter(
+    (requirement) => !documents.some((document) => document.document_type === requirement.type),
+  )
+  const isCreateDisabled = isSubmitting
+    || isLoadingDocumentSettings
+    || hasDocumentSettingsError
+    || missingRequiredDocuments.length > 0
 
   if (!canCreate) {
     return <ErrorState message="Não tem permissão para criar funcionários." />
@@ -341,11 +353,8 @@ export function EmployeeCreatePage() {
       errors.contract_end_date = 'A data de término deve ser posterior ou igual à data de início.'
     }
 
-    const missingDocuments = requiredDocuments.filter(
-      (requirement) => !documents.some((document) => document.document_type === requirement.type),
-    )
-    if (missingDocuments.length > 0) {
-      errors.documents = `Anexe os documentos obrigatórios: ${missingDocuments.map((document) => document.label).join(', ')}.`
+    if (missingRequiredDocuments.length > 0) {
+      errors.documents = `Anexe os documentos obrigatórios: ${missingRequiredDocuments.map((document) => document.label).join(', ')}.`
     }
 
     if (Object.keys(errors).length > 0) {
@@ -1154,6 +1163,24 @@ export function EmployeeCreatePage() {
               </CardHeader>
 
               <CardContent className="space-y-4">
+                {isLoadingDocumentSettings && (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    A carregar a lista de documentos obrigatórios...
+                  </p>
+                )}
+                {hasDocumentSettingsError && (
+                  <div role="alert" className="flex items-center justify-between gap-3 text-sm text-destructive">
+                    <span>Não foi possível carregar os documentos obrigatórios. O registo fica bloqueado até a configuração ser carregada.</span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => void refetchDocumentSettings()}>
+                      Tentar novamente
+                    </Button>
+                  </div>
+                )}
+                {!isLoadingDocumentSettings && !hasDocumentSettingsError && missingRequiredDocuments.length > 0 && (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    Anexe todos os documentos obrigatórios para poder criar o funcionário.
+                  </p>
+                )}
                 {requiredDocuments.length > 0 && (
                   <section className="space-y-3" aria-labelledby="required-documents-heading">
                     <div>
@@ -1354,7 +1381,14 @@ export function EmployeeCreatePage() {
             {/* O ÚNICO BOTÃO DE SAVE */}
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isCreateDisabled}
+              title={hasDocumentSettingsError
+                ? 'Não foi possível carregar os documentos obrigatórios.'
+                : isLoadingDocumentSettings
+                  ? 'A carregar os documentos obrigatórios.'
+                  : missingRequiredDocuments.length > 0
+                    ? `Faltam documentos obrigatórios: ${missingRequiredDocuments.map((document) => document.label).join(', ')}.`
+                    : undefined}
               className="min-w-[160px] shadow-sm bg-primary text-primary-foreground font-medium"
             >
               {isSubmitting ? (

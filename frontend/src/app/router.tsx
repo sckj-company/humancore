@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/app-layout'
 import { ProtectedRoute } from '@/components/layout/protected-route'
-import { useAuthStore } from '@/stores/auth-store'
+import { isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
 import { Loader2 } from 'lucide-react'
 
 const LoginPage = lazy(() => import('@/features/auth/login-page').then((m) => ({ default: m.LoginPage })))
@@ -52,7 +52,7 @@ function PageLoader() {
 
 function DashboardRouter() {
   const user = useAuthStore((s) => s.user)
-  const isSuperAdmin = user?.roles?.includes('super-admin')
+  const isSuperAdmin = isPlatformAdmin(user)
   return (
     <Routes>
       <Route path="superadmin" element={<SuperAdminDashboardPage />} />
@@ -66,7 +66,7 @@ function DashboardRouter() {
 
 function TenantRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
-  const isSuperAdmin = user?.roles?.includes('super-admin')
+  const isSuperAdmin = isPlatformAdmin(user)
   const hasTenantContext = localStorage.getItem('hrms_selected_tenant') || user?.tenant?.id
   if (isSuperAdmin && !hasTenantContext) {
     return <Navigate to="/admin/tenants" replace />
@@ -76,7 +76,7 @@ function TenantRoute({ children }: { children: React.ReactNode }) {
 
 function SuperAdminRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
-  const isSuperAdmin = user?.roles?.includes('super-admin')
+  const isSuperAdmin = isPlatformAdmin(user)
   if (!isSuperAdmin) {
     return <Navigate to="/dashboard" replace />
   }
