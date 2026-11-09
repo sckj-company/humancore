@@ -43,7 +43,7 @@ const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string
   { key: 'advance.monthly_limit', labelKey: 'discounts.advanceMonthlyLimit', descriptionKey: 'discounts.advanceMonthlyLimitDescription' },
   { key: 'discounts.absence_daily_amount', labelKey: 'discounts.absenceDaily', descriptionKey: 'discounts.absenceDailyDescription' },
   { key: 'discounts.lateness_hourly_amount', labelKey: 'discounts.latenessHourly', descriptionKey: 'discounts.latenessHourlyDescription' },
-  { key: 'discounts.lateness_minute_amount', labelKey: 'discounts.latenessMinute', descriptionKey: 'discounts.latenessMinuteDescription' },
+  { key: 'discounts.lateness_accumulation_amount', labelKey: 'discounts.latenessThresholdAmount', descriptionKey: 'discounts.latenessThresholdAmountDescription' },
   { key: 'discounts.lateness_free_occurrences_per_week', labelKey: 'discounts.freeLateness', descriptionKey: 'discounts.freeLatenessDescription' },
   { key: 'discounts.lateness_weekly_accumulation_minutes', labelKey: 'discounts.weeklyAccumulation', descriptionKey: 'discounts.weeklyAccumulationDescription' },
   { key: 'discounts.dayoff_daily_amount', labelKey: 'discounts.dayOffDaily', descriptionKey: 'discounts.dayOffDailyDescription' },
@@ -119,7 +119,7 @@ export function SettingsPage() {
   const payrollDiscountSettings = useMemo(
     () =>
       (data?.payroll ?? [])
-        .filter((s) => s.key.startsWith('discounts.') || s.key === 'advance.monthly_limit')
+        .filter((s) => (s.key.startsWith('discounts.') && s.key !== 'discounts.lateness_minute_amount') || s.key === 'advance.monthly_limit')
         .sort((a, b) => a.key.localeCompare(b.key)),
     [data],
   )

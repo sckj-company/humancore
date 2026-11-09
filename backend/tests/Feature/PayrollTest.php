@@ -7,6 +7,7 @@ use App\Models\EmployeeContract;
 use App\Models\EmployeeSalaryComponent;
 use App\Models\AttendanceRecord;
 use App\Models\Deduction;
+use App\Models\EmployeeLatenessEvent;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\PayrollPeriod;
@@ -501,13 +502,13 @@ class PayrollTest extends TestCase
         $this->assertSame(2500.0, (float) $record->items()->where('code', 'additional_allowance')->value('amount'));
     }
 
-    public function test_lateness_rule_uses_minute_rate_and_weekly_threshold(): void
+    public function test_lateness_rule_applies_a_fixed_amount_per_threshold_and_records_history(): void
     {
         [$tenant, $employee] = $this->setupTenantWithEmployee();
 
         Setting::updateOrCreate(
-            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_minute_amount'],
-            ['value' => 5],
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_accumulation_amount'],
+            ['value' => 1000],
         );
         Setting::updateOrCreate(
             ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_free_occurrences_per_week'],
@@ -544,7 +545,142 @@ class PayrollTest extends TestCase
 
         $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
 
-        $this->assertSame(-200.0, (float) $record->items()->where('code', 'lateness')->value('amount'));
+        $this->assertSame(-2000.0, (float) $record->items()->where('code', 'lateness')->value('amount'));
+
+        $latenessEvents = EmployeeLatenessEvent::query()
+            ->where('employee_id', $employee->id)
+            ->where('event_type', 'discount')
+            ->get();
+        $this->assertCount(2, $latenessEvents);
+        $this->assertSame([1000.0, 1000.0], $latenessEvents->pluck('amount')->map(fn ($amount) => (float) $amount)->all());
+    }
+
+    public function test_lateness_remainder_carries_between_weeks_and_history_is_idempotent(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_accumulation_amount'],
+            ['value' => 1000],
+        );
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_weekly_accumulation_minutes'],
+            ['value' => 20],
+        );
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        foreach ([
+            ['date' => '2026-11-02', 'late_minutes' => 35],
+            ['date' => '2026-11-03', 'late_minutes' => 15],
+            ['date' => '2026-11-09', 'late_minutes' => 19],
+            ['date' => '2026-11-10', 'late_minutes' => 19],
+        ] as $attendance) {
+            AttendanceRecord::create([
+                'tenant_id' => $tenant->id,
+                'employee_id' => $employee->id,
+                'date' => $attendance['date'],
+                'status' => 'late',
+                'late_minutes' => $attendance['late_minutes'],
+                'deduct_from_salary' => true,
+            ]);
+        }
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(-4000.0, (float) $record->items()->where('code', 'lateness')->value('amount'));
+        $this->assertDatabaseHas('employee_lateness_events', [
+            'employee_id' => $employee->id,
+            'event_type' => 'week_carry',
+            'occurred_on' => '2026-11-09',
+            'minutes' => 10,
+        ]);
+        $this->assertSame(5, EmployeeLatenessEvent::query()
+            ->where('employee_id', $employee->id)
+            ->count());
+
+        app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(5, EmployeeLatenessEvent::query()
+            ->where('employee_id', $employee->id)
+            ->count());
+    }
+
+    public function test_lateness_balance_does_not_carry_between_months(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_accumulation_amount'],
+            ['value' => 1000],
+        );
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.lateness_weekly_accumulation_minutes'],
+            ['value' => 30],
+        );
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Dezembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-12-01',
+            'period_end' => '2026-12-31',
+            'status' => 'open',
+        ]);
+
+        foreach ([
+            ['date' => '2026-11-30', 'late_minutes' => 20],
+            ['date' => '2026-12-01', 'late_minutes' => 10],
+        ] as $attendance) {
+            AttendanceRecord::create([
+                'tenant_id' => $tenant->id,
+                'employee_id' => $employee->id,
+                'date' => $attendance['date'],
+                'status' => 'late',
+                'late_minutes' => $attendance['late_minutes'],
+                'deduct_from_salary' => true,
+            ]);
+        }
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(0.0, (float) $record->items()->where('code', 'lateness')->value('amount'));
+        $this->assertDatabaseHas('employee_lateness_events', [
+            'employee_id' => $employee->id,
+            'event_type' => 'month_reset',
+            'occurred_on' => '2026-12-01',
+            'minutes' => 20,
+        ]);
+    }
+
+    public function test_employee_overtime_hourly_rate_overrides_company_calculation(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        $employee->update(['overtime_hourly_rate' => 1250]);
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+        AttendanceRecord::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'date' => '2026-11-03',
+            'status' => 'present',
+            'overtime_minutes' => 120,
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(2500.0, (float) $record->items()->where('code', 'overtime')->value('amount'));
     }
 
     public function test_approved_leaves_adjust_workdays_and_unpaid_leave_deduction(): void

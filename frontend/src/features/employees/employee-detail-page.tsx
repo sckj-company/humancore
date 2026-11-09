@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
@@ -19,11 +19,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
 import { useAuthStore, hasAnyRole, hasPermission } from '@/stores/auth-store'
 import { toast } from 'sonner'
-import type { Employee, EmployeeDocument, AttendanceRecord, LeaveRequest, Paginated } from '@/types'
+import type { Department, Employee, EmployeeContract, EmployeeDocument, AttendanceRecord, LeaveRequest, Paginated, Position } from '@/types'
 import { LeaveDocumentActions } from '@/features/leave/leave-document-actions'
 import { LeaveTypeCreateDialog } from '@/features/leave/leave-type-create-dialog'
 import { EmployeeEditDialog } from '@/features/employees/employee-edit-dialog'
@@ -35,7 +36,21 @@ const leaveStatusColors: Record<string, string> = { pending: 'bg-amber-500/10 te
 
 interface LeaveType { id: number; name: string; code: string; days_per_year?: number; is_paid: boolean }
 interface Shift { id: number; name: string; code?: string | null; start_time: string; end_time: string; break_minutes: number; work_hours: number; late_tolerance_minutes: number; working_days?: number[]; color?: string | null; is_night_shift: boolean; is_active: boolean; notes?: string | null }
-interface EmployeeScheduleRecord { id: number; employee_id: number; shift_id: number; effective_from?: string; effective_to?: string | null; is_active: boolean; notes?: string | null; shift?: { id: number; name: string; code?: string | null; start_time: string; end_time: string; color?: string | null } }
+interface EmployeeScheduleRecord { id: number; employee_id: number; shift_id: number; effective_from?: string; effective_to?: string | null; custom_days?: number[] | null; is_active: boolean; notes?: string | null; shift?: { id: number; name: string; code?: string | null; start_time: string; end_time: string; color?: string | null; working_days?: number[] } }
+
+interface ContractFormState {
+  contract_type: string
+  position_id: string
+  department_id: string
+  manager_id: string
+  base_salary: string
+  salary_frequency: string
+  work_hours_per_week: string
+  start_date: string
+  end_date: string
+  signed_at: string
+  notes: string
+}
 
 export function EmployeeDetailPage() {
   const { t, i18n } = useTranslation()
@@ -80,6 +95,9 @@ export function EmployeeDetailPage() {
   const canViewDeductions = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'view_any_deduction')
   const canManageAllowances = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_employee')
   const canManageDeductions = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'create_deduction')
+  const canCreateContracts = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'create_contract')
+  const canUpdateContracts = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_contract')
+  const canUpdateLeaves = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_leave')
   const locale = i18n.language || 'pt-PT'
   const qc = useQueryClient()
 
@@ -89,9 +107,12 @@ export function EmployeeDetailPage() {
   const [uploadFormData, setUploadFormData] = useState({ name: '', document_type: 'other', expiry_date: '', notes: '' })
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [isManualAttOpen, setIsManualAttOpen] = useState(false)
-  const [manualAttForm, setManualAttForm] = useState({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' })
+  const [manualAttRecordId, setManualAttRecordId] = useState<number | null>(null)
+  const [manualAttForm, setManualAttForm] = useState({ date: new Date().toISOString().slice(0, 10), shift_id: '', clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' })
   const [isLeaveOpen, setIsLeaveOpen] = useState(false)
+  const [editingLeave, setEditingLeave] = useState<LeaveRequest | null>(null)
   const [isEmployeeEditOpen, setIsEmployeeEditOpen] = useState(false)
+  const [attendanceShiftId, setAttendanceShiftId] = useState('')
   const [leaveForm, setLeaveForm] = useState({
     leave_type_id: '',
     occurrence_type: 'absence',
@@ -109,19 +130,57 @@ export function EmployeeDetailPage() {
   const [shiftForm, setShiftForm] = useState({ shift_id: '', effective_from: new Date().toISOString().slice(0, 10), notes: '' })
   const [isDeactivateContractOpen, setIsDeactivateContractOpen] = useState(false)
   const [deactivateContractForm, setDeactivateContractForm] = useState({ reason: '', end_date: new Date().toISOString().slice(0, 10) })
+  const [isContractDialogOpen, setIsContractDialogOpen] = useState(false)
+  const [editingContract, setEditingContract] = useState<EmployeeContract | null>(null)
+  const [contractDocument, setContractDocument] = useState<File | null>(null)
+  const [contractForm, setContractForm] = useState<ContractFormState>({
+    contract_type: 'permanent',
+    position_id: '',
+    department_id: '',
+    manager_id: '',
+    base_salary: '',
+    salary_frequency: 'monthly',
+    work_hours_per_week: '40',
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: '',
+    signed_at: '',
+    notes: '',
+  })
+  const todayStr = new Date().toISOString().slice(0, 10)
 
   const { data, isLoading, isError, refetch } = useQuery<Employee>({ queryKey: ['employees', id], queryFn: () => api.get<Employee>(`employees/${id}`) })
   const { data: timeline } = useQuery({ queryKey: ['employees', id, 'timeline'], queryFn: () => api.get<{ type: string; title: string; date: string; description: string }[]>(`employees/${id}/timeline`) })
+  const { data: contracts = [] } = useQuery<EmployeeContract[]>({ queryKey: ['employee-contracts', id], queryFn: () => api.get<EmployeeContract[]>(`employees/${id}/contracts`), enabled: !!id && activeTab === 'contract' })
+  const { data: contractPositions } = useQuery<Paginated<Position>>({ queryKey: ['contract-positions'], queryFn: () => api.get<Paginated<Position>>('positions', { per_page: 100 }), enabled: isContractDialogOpen })
+  const { data: contractDepartments } = useQuery<Paginated<Department>>({ queryKey: ['contract-departments'], queryFn: () => api.get<Paginated<Department>>('departments', { per_page: 100 }), enabled: isContractDialogOpen })
+  const { data: contractManagers } = useQuery<Paginated<{ id: number; full_name: string; employee_code: string }>>({ queryKey: ['contract-managers'], queryFn: () => api.get<Paginated<{ id: number; full_name: string; employee_code: string }>>('employees', { per_page: 200 }), enabled: isContractDialogOpen })
   const { data: documents } = useQuery<EmployeeDocument[]>({ queryKey: ['employee-documents', id], queryFn: () => api.get<{ data: EmployeeDocument[] }>('documents', { employee_id: id, per_page: 100 }).then((res) => (Array.isArray(res) ? res : (res as any).data ?? [])), enabled: !!id })
   const { data: attendanceData, refetch: refetchAttendance } = useQuery<Paginated<AttendanceRecord>>({ queryKey: ['attendance', id], queryFn: () => api.get<Paginated<AttendanceRecord>>('attendance', { employee_id: id, per_page: 50 }), enabled: !!id && activeTab === 'attendance' })
-  const { data: todayAttendance, refetch: refetchToday } = useQuery<AttendanceRecord | null>({ queryKey: ['attendance-today', id], queryFn: () => api.get<AttendanceRecord | null>('attendance/today', { employee_id: id }), enabled: !!id })
+  const { data: todayAttendance, refetch: refetchToday } = useQuery<AttendanceRecord | null>({ queryKey: ['attendance-today', id, attendanceShiftId], queryFn: () => api.get<AttendanceRecord | null>('attendance/today', { employee_id: id, ...(attendanceShiftId ? { shift_id: Number(attendanceShiftId) } : {}) }), enabled: !!id })
   const { data: leaveBalance, refetch: refetchBalance } = useQuery({ queryKey: ['leave-balance', id], queryFn: () => api.get<{ annual_entitlement: number; days_used: number; days_remaining: number; days_pending: number }>('leaves/balance', { employee_id: id }), enabled: !!id && activeTab === 'leaves' })
   const { data: leavesData, refetch: refetchLeaves } = useQuery<Paginated<LeaveRequest>>({ queryKey: ['leaves', id], queryFn: () => api.get<Paginated<LeaveRequest>>('leaves', { employee_id: id, per_page: 50 }), enabled: !!id && activeTab === 'leaves' })
   const { data: leaveTypes } = useQuery<LeaveType[]>({ queryKey: ['leave-types'], queryFn: () => api.get<LeaveType[]>('leaves/types'), enabled: isLeaveOpen })
   const { data: shiftsData } = useQuery<Paginated<Shift>>({ queryKey: ['shifts-all'], queryFn: () => api.get<Paginated<Shift>>('shifts', { per_page: 100 }), enabled: isShiftOpen })
-  const { data: scheduleHistory, refetch: refetchSchedule } = useQuery<Paginated<EmployeeScheduleRecord>>({ queryKey: ['employee-schedules-history', id], queryFn: () => api.get<Paginated<EmployeeScheduleRecord>>('employee-schedules', { employee_id: id, per_page: 20 }), enabled: !!id && activeTab === 'shift' })
+  const { data: scheduleHistory, refetch: refetchSchedule } = useQuery<Paginated<EmployeeScheduleRecord>>({ queryKey: ['employee-schedules-history', id], queryFn: () => api.get<Paginated<EmployeeScheduleRecord>>('employee-schedules', { employee_id: id, per_page: 100 }), enabled: !!id && (activeTab === 'shift' || activeTab === 'attendance' || isManualAttOpen) })
+  const attendanceSchedules = (scheduleHistory?.data ?? []).filter((schedule) =>
+    schedule.is_active
+    && (!schedule.effective_from || schedule.effective_from <= todayStr)
+    && (!schedule.effective_to || schedule.effective_to >= todayStr)
+    && ((schedule.custom_days ?? schedule.shift?.working_days) == null
+      || (schedule.custom_days ?? schedule.shift?.working_days ?? []).includes(new Date(`${todayStr}T00:00:00Z`).getUTCDay()))
+    && schedule.shift,
+  )
 
-  const todayStr = new Date().toISOString().slice(0, 10)
+  useEffect(() => {
+    if (!attendanceShiftId && attendanceSchedules.length === 1) {
+      setAttendanceShiftId(String(attendanceSchedules[0].shift_id))
+    }
+  }, [scheduleHistory?.data, attendanceShiftId])
+
+  useEffect(() => {
+    setAttendanceShiftId('')
+  }, [id])
+
   const attRecords = attendanceData?.data ?? []
   const attendanceByWeek = useMemo(() => {
     const weeks = new Map<string, { start: string; records: AttendanceRecord[]; lateMinutes: number }>()
@@ -136,9 +195,21 @@ export function EmployeeDetailPage() {
     }
     return [...weeks.values()]
   }, [attRecords])
-  const selectedManualRecord = attRecords.find((r) => r.date === manualAttForm.date) || (todayAttendance?.date === manualAttForm.date ? todayAttendance : null)
+  const manualSchedules = (scheduleHistory?.data ?? []).filter((schedule) =>
+    (schedule.is_active || (manualAttRecordId !== null && schedule.shift_id === Number(manualAttForm.shift_id)))
+    && (!schedule.effective_from || schedule.effective_from <= manualAttForm.date)
+    && (!schedule.effective_to || schedule.effective_to >= manualAttForm.date)
+    && ((schedule.custom_days ?? schedule.shift?.working_days) == null
+      || (schedule.custom_days ?? schedule.shift?.working_days ?? []).includes(new Date(`${manualAttForm.date}T00:00:00Z`).getUTCDay()))
+    && schedule.shift,
+  )
+  const manualShiftId = manualAttForm.shift_id || (manualSchedules.length === 1 ? String(manualSchedules[0].shift_id) : '')
+  const selectedManualRecord = attRecords.find((r) =>
+    r.date === manualAttForm.date
+    && (manualShiftId ? r.shift_id === Number(manualShiftId) : !r.shift_id),
+  ) || (todayAttendance?.date === manualAttForm.date && (!manualShiftId || todayAttendance.shift_id === Number(manualShiftId)) ? todayAttendance : null)
   const isManualDateFuture = manualAttForm.date > todayStr
-  const isManualDateClosed = !!(selectedManualRecord?.clock_in && selectedManualRecord?.clock_out)
+  const isManualDateClosed = !manualAttRecordId && !!(selectedManualRecord?.clock_in && selectedManualRecord?.clock_out)
 
   const deleteDoc = useMutation({ mutationFn: (docId: number) => api.delete(`documents/${docId}`), onSuccess: () => { toast.success(t('employeeDetail.messages.documentDeleted')); setPreviewDoc(null); qc.invalidateQueries({ queryKey: ['employee-documents', id] }) }, onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.deleteError'))) })
   const uploadMutation = useMutation({
@@ -153,28 +224,70 @@ export function EmployeeDetailPage() {
     onSuccess: () => { toast.success(t('employeeDetail.messages.documentUploaded')); setIsUploadOpen(false); setUploadFile(null); setUploadFormData({ name: '', document_type: 'other', expiry_date: '', notes: '' }); qc.invalidateQueries({ queryKey: ['employee-documents', id] }) },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.uploadError')))
   })
-  const toggleAttendance = useMutation({ mutationFn: () => api.post('attendance/toggle', { employee_id: Number(id) }), onSuccess: (res: any) => { toast.success(res?.message ?? t('employeeDetail.messages.attendanceRecorded')); refetchToday(); refetchAttendance() }, onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.recordError'))) })
+  const toggleAttendance = useMutation({ mutationFn: () => api.post('attendance/toggle', { employee_id: Number(id), ...(attendanceShiftId ? { shift_id: Number(attendanceShiftId) } : {}) }), onSuccess: (res: any) => { toast.success(res?.message ?? t('employeeDetail.messages.attendanceRecorded')); refetchToday(); refetchAttendance() }, onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.recordError'))) })
   const manualAttMutation = useMutation({
     mutationFn: () => {
       if (manualAttForm.date > todayStr) {
         throw new Error(t('employeeDetail.messages.futureAttendanceError'))
       }
-      const selected = attRecords.find((r) => r.date === manualAttForm.date) || (todayAttendance?.date === manualAttForm.date ? todayAttendance : null)
-      if (selected?.clock_in && selected?.clock_out) {
+      if (!manualAttRecordId && selectedManualRecord?.clock_in && selectedManualRecord?.clock_out) {
         throw new Error(t('employeeDetail.messages.closedWorkdayError'))
       }
-      return api.post('attendance/manual', {
+      const attendance = {
         employee_id: Number(id),
         date: manualAttForm.date,
+        shift_id: manualShiftId ? Number(manualShiftId) : undefined,
         clock_in: manualAttForm.clock_in || undefined,
         clock_out: manualAttForm.clock_out || undefined,
         status: manualAttForm.status,
         deduct_from_salary: manualAttForm.deduct_from_salary,
         notes: manualAttForm.notes || undefined,
-      })
+      }
+      return manualAttRecordId
+        ? api.put(`attendance/${manualAttRecordId}`, attendance)
+        : api.post('attendance/manual', attendance)
     },
-    onSuccess: () => { toast.success(t('employeeDetail.messages.manualRecordSaved')); setIsManualAttOpen(false); setManualAttForm({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' }); refetchAttendance(); refetchToday() },
+    onSuccess: () => { toast.success(t('employeeDetail.messages.manualRecordSaved')); setIsManualAttOpen(false); setManualAttRecordId(null); setManualAttForm({ date: new Date().toISOString().slice(0, 10), shift_id: '', clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' }); refetchAttendance(); refetchToday() },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.recordError')))
+  })
+  const contractMutation = useMutation({
+    mutationFn: () => {
+      if (!id) throw new Error(t('employeeDetail.messages.contractSaveError'))
+      const payload = {
+        ...contractForm,
+        position_id: contractForm.position_id ? Number(contractForm.position_id) : null,
+        department_id: contractForm.department_id ? Number(contractForm.department_id) : null,
+        manager_id: contractForm.manager_id ? Number(contractForm.manager_id) : null,
+        base_salary: Number(contractForm.base_salary),
+        work_hours_per_week: contractForm.work_hours_per_week ? Number(contractForm.work_hours_per_week) : null,
+        end_date: contractForm.end_date || null,
+        signed_at: contractForm.signed_at || null,
+      }
+      if (contractDocument) {
+        const formData = new FormData()
+        Object.entries(payload).forEach(([key, value]) => formData.append(key, value == null ? '' : String(value)))
+        formData.append('document', contractDocument)
+        if (editingContract) {
+          formData.append('_method', 'PUT')
+          return api.upload(`contracts/${editingContract.id}`, formData)
+        }
+        return api.upload(`employees/${id}/contracts`, formData)
+      }
+      return editingContract
+        ? api.put(`contracts/${editingContract.id}`, payload)
+        : api.post(`employees/${id}/contracts`, payload)
+    },
+    onSuccess: () => {
+      toast.success(t('employeeDetail.messages.contractSaved'))
+      setIsContractDialogOpen(false)
+      setEditingContract(null)
+      setContractDocument(null)
+      qc.invalidateQueries({ queryKey: ['employees', id] })
+      qc.invalidateQueries({ queryKey: ['employee-contracts', id] })
+      qc.invalidateQueries({ queryKey: ['employee-documents', id] })
+      qc.invalidateQueries({ queryKey: ['employees', id, 'timeline'] })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, t('employeeDetail.messages.contractSaveError'))),
   })
   const deactivateContractMutation = useMutation({
     mutationFn: () => {
@@ -196,6 +309,19 @@ export function EmployeeDetailPage() {
   })
   const leaveMutation = useMutation({
     mutationFn: () => {
+      if (editingLeave) {
+        return api.put(`leaves/${editingLeave.id}`, {
+          leave_type_id: Number(leaveForm.leave_type_id),
+          occurrence_type: leaveForm.occurrence_type,
+          notice_type: leaveForm.notice_type,
+          is_justified: leaveForm.is_justified,
+          deduct_from_salary: leaveForm.deduct_from_salary,
+          start_date: leaveForm.start_date,
+          end_date: leaveForm.end_date,
+          reason: leaveForm.reason || null,
+        })
+      }
+
       const fd = new FormData()
       fd.append('employee_id', String(id))
       fd.append('leave_type_id', String(leaveForm.leave_type_id))
@@ -211,7 +337,15 @@ export function EmployeeDetailPage() {
       if (leaveForm.signed_document) fd.append('signed_document', leaveForm.signed_document)
       return api.upload('leaves', fd)
     },
-    onSuccess: () => { toast.success(t('employeeDetail.messages.leaveRecorded')); setIsLeaveOpen(false); setLeaveForm({ leave_type_id: '', occurrence_type: 'absence', notice_type: 'anticipated', is_justified: false, deduct_from_salary: false, start_date: new Date().toISOString().slice(0, 10), end_date: new Date().toISOString().slice(0, 10), reason: '', status: 'approved', justification_document: null, signed_document: null }); refetchLeaves(); refetchBalance() },
+    onSuccess: () => {
+      toast.success(t(editingLeave ? 'employeeDetail.messages.leaveUpdated' : 'employeeDetail.messages.leaveRecorded'))
+      setIsLeaveOpen(false)
+      setEditingLeave(null)
+      setLeaveForm({ leave_type_id: '', occurrence_type: 'absence', notice_type: 'anticipated', is_justified: false, deduct_from_salary: false, start_date: todayStr, end_date: todayStr, reason: '', status: 'approved', justification_document: null, signed_document: null })
+      refetchLeaves()
+      refetchBalance()
+      qc.invalidateQueries({ queryKey: ['leave-requests'] })
+    },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.recordError')))
   })
   const shiftMutation = useMutation({
@@ -259,6 +393,55 @@ export function EmployeeDetailPage() {
   const formatMinutes = (m?: number | null) => { const total = m ?? 0; const h = Math.floor(total / 60); const mn = total % 60; return t('employeeDetail.text.durationHoursMinutes', { hours: h, minutes: String(mn).padStart(2, '0') }) }
   const formatCurrency = (a?: number | null) => { if (a == null) return '—'; return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(a) }
   const calculateAge = (b?: string | null) => { if (!b) return null; try { const diff = Date.now() - new Date(b).getTime(); const a = Math.abs(new Date(diff).getUTCFullYear() - 1970); return isNaN(a) ? null : t('employeeDetail.text.ageYears', { count: a }) } catch { return null } }
+  const openContractDialog = (contract?: EmployeeContract | null, renew = false) => {
+    setEditingContract(renew ? null : contract ?? null)
+    setContractDocument(null)
+    setContractForm({
+      contract_type: contract?.contract_type ?? 'permanent',
+      position_id: String(contract?.position_id ?? data.position_id ?? ''),
+      department_id: String(contract?.department_id ?? data.department_id ?? ''),
+      manager_id: String(contract?.manager_id ?? data.manager_id ?? ''),
+      base_salary: contract?.base_salary != null ? String(contract.base_salary) : '',
+      salary_frequency: contract?.salary_frequency ?? 'monthly',
+      work_hours_per_week: contract?.work_hours_per_week != null ? String(contract.work_hours_per_week) : '40',
+      start_date: renew || !contract ? todayStr : contract.start_date,
+      end_date: renew ? '' : contract?.end_date ?? '',
+      signed_at: renew ? '' : contract?.signed_at ?? '',
+      notes: renew ? '' : contract?.notes ?? '',
+    })
+    setIsContractDialogOpen(true)
+  }
+  const openLeaveDialog = (leave?: LeaveRequest) => {
+    setEditingLeave(leave ?? null)
+    setLeaveForm(leave ? {
+      leave_type_id: String(leave.leave_type_id),
+      occurrence_type: leave.occurrence_type ?? 'absence',
+      notice_type: leave.notice_type ?? 'anticipated',
+      is_justified: leave.is_justified ?? false,
+      deduct_from_salary: leave.deduct_from_salary ?? false,
+      start_date: leave.start_date,
+      end_date: leave.end_date,
+      reason: leave.reason ?? '',
+      status: leave.status === 'approved' ? 'approved' : 'pending',
+      justification_document: null,
+      signed_document: null,
+    } : {
+      leave_type_id: '',
+      occurrence_type: 'absence',
+      notice_type: 'anticipated',
+      is_justified: false,
+      deduct_from_salary: false,
+      start_date: todayStr,
+      end_date: todayStr,
+      reason: '',
+      status: 'approved',
+      justification_document: null,
+      signed_document: null,
+    })
+    setIsLeaveOpen(true)
+  }
+  const contractExpired = !!data.active_contract?.end_date && data.active_contract.end_date < todayStr
+  const contractNeedsRenewal = !!data.active_contract && (!data.active_contract.is_active || contractExpired)
   const isImage = (m?: string | null) => m?.startsWith('image/') ?? false
   const isPdf = (m?: string | null) => m === 'application/pdf'
   const handleDownload = async (url?: string | null, fileName?: string | null, docId?: number) => {
@@ -486,19 +669,31 @@ export function EmployeeDetailPage() {
                   </CardTitle>
                   <CardDescription>{t('employeeDetail.text.contractDescription')}</CardDescription>
                 </div>
-                {data.active_contract?.is_active && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-destructive hover:bg-destructive/10 border-destructive/30 text-xs h-8 gap-1.5"
-                    onClick={() => {
-                      setDeactivateContractForm({ reason: '', end_date: new Date().toISOString().slice(0, 10) })
-                      setIsDeactivateContractOpen(true)
-                    }}
-                  >
-                    <PowerOff className="h-3.5 w-3.5" />{t('employeeDetail.text.deactivateContract')}
-                  </Button>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {canUpdateContracts && data.active_contract && (
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => openContractDialog(data.active_contract)}>
+                      <Pencil className="h-3.5 w-3.5" />{t('employeeDetail.text.editContract')}
+                    </Button>
+                  )}
+                  {canCreateContracts && (contractNeedsRenewal || !data.active_contract) && (
+                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => openContractDialog(contracts[0] ?? data.active_contract, true)}>
+                      <RotateCcw className="h-3.5 w-3.5" />{contractNeedsRenewal ? t('employeeDetail.text.renewContract') : t('employeeDetail.text.newContract')}
+                    </Button>
+                  )}
+                  {data.active_contract?.is_active && !contractExpired && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive hover:bg-destructive/10 border-destructive/30 text-xs h-8 gap-1.5"
+                      onClick={() => {
+                        setDeactivateContractForm({ reason: '', end_date: todayStr })
+                        setIsDeactivateContractOpen(true)
+                      }}
+                    >
+                      <PowerOff className="h-3.5 w-3.5" />{t('employeeDetail.text.deactivateContract')}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {data.active_contract ? (
@@ -564,11 +759,42 @@ export function EmployeeDetailPage() {
               </CardContent>
             </Card>
           </div>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">{t('employeeDetail.text.contractHistory')}</CardTitle>
+              <CardDescription>{t('employeeDetail.text.contractHistoryDescription')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {contracts.length === 0 ? (
+                <p className="py-4 text-sm text-muted-foreground">{t('employeeDetail.text.noContractHistory')}</p>
+              ) : (
+                <div className="space-y-2">
+                  {contracts.map((contract) => (
+                    <div key={contract.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
+                      <div>
+                        <p className="font-medium">{contractTypeLabels[contract.contract_type] ?? contract.contract_type} · {formatCurrency(contract.base_salary)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(contract.start_date)} – {contract.end_date ? formatDate(contract.end_date) : t('employeeDetail.text.indefinite')}
+                          {' · '}{contract.is_active ? t('common.active') : t('common.inactive')}
+                        </p>
+                      </div>
+                      {canUpdateContracts && (
+                        <Button size="sm" variant="outline" onClick={() => openContractDialog(contract)}>
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" />{t('common.edit')}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {canViewPayroll && (
           <TabsContent value="payroll">
             <EmployeePayrollTab
+              employee={data}
               employeeId={Number(id)}
               canManageAllowances={canManageAllowances}
               canManageDeductions={canManageDeductions}
@@ -661,12 +887,24 @@ export function EmployeeDetailPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div><CardTitle className="text-base flex items-center gap-2"><UserCheck className="h-4 w-4 text-primary" />{t('employeeDetail.text.attendanceHistory')}</CardTitle><CardDescription>{t('employeeDetail.text.attendanceHistoryDescription')}</CardDescription></div>
                 <div className="flex items-center gap-2">
+                  {attendanceSchedules.length > 0 && (
+                    <Select value={attendanceShiftId} onValueChange={setAttendanceShiftId}>
+                      <SelectTrigger className="w-48"><SelectValue placeholder={t('attendance.selectShift')} /></SelectTrigger>
+                      <SelectContent>
+                        {attendanceSchedules.map((schedule) => (
+                          <SelectItem key={schedule.id} value={String(schedule.shift_id)}>
+                            {schedule.shift?.name} · {schedule.shift?.start_time}–{schedule.shift?.end_time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button
                     size="sm"
                     variant={isClockedIn ? 'secondary' : isClockedOut ? 'outline' : 'default'}
                     className="h-auto min-h-8 whitespace-normal text-center gap-1.5"
                     onClick={() => toggleAttendance.mutate()}
-                    disabled={toggleAttendance.isPending || isClockedOut}
+                    disabled={toggleAttendance.isPending || isClockedOut || (attendanceSchedules.length > 1 && !attendanceShiftId)}
                   >
                     {toggleAttendance.isPending ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -679,7 +917,11 @@ export function EmployeeDetailPage() {
                     )}
                     {isClockedIn ? t('employeeDetail.text.clockOutAction') : isClockedOut ? t('employeeDetail.text.workdayComplete') : t('employeeDetail.text.clockInAction')}
                   </Button>
-                  <Button size="sm" className="h-auto min-h-8 whitespace-normal text-center gap-1.5" onClick={() => setIsManualAttOpen(true)}><Plus className="h-4 w-4" />{t('employeeDetail.text.manualRecord')}</Button>
+                  <Button size="sm" className="h-auto min-h-8 whitespace-normal text-center gap-1.5" onClick={() => {
+                    setManualAttRecordId(null)
+                    setManualAttForm({ date: todayStr, shift_id: '', clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' })
+                    setIsManualAttOpen(true)
+                  }}><Plus className="h-4 w-4" />{t('employeeDetail.text.manualRecord')}</Button>
                 </div>
               </div>
             </CardHeader>
@@ -689,24 +931,42 @@ export function EmployeeDetailPage() {
               ) : (
                 <div className="rounded-lg border border-border overflow-x-auto">
                   <table className="w-full min-w-[760px] text-sm">
-                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.date')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockIn')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockOut')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.total')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.dailyLateMinutes')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th></tr></thead>
+                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.date')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('attendance.shift')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockIn')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockOut')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.total')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.dailyLateMinutes')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('common.actions')}</th></tr></thead>
                     <tbody className="divide-y divide-border">
                       {attendanceByWeek.map((week) => (
                         <Fragment key={week.start}>
                           {week.records.map((rec) => (
                             <tr key={rec.id} className="hover:bg-muted/30 transition-colors">
                               <td className="px-4 py-3 font-mono text-xs">{formatDate(rec.date)}</td>
+                              <td className="px-4 py-3 text-xs">{rec.shift?.name ?? '—'}</td>
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_in)}</td>
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_out)}</td>
                               <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatMinutes(rec.total_worked)}</td>
                               <td className="px-4 py-3 text-right font-mono text-xs">{rec.late_minutes ?? 0} min</td>
                               <td className="px-4 py-3"><Badge variant="outline" className={`text-[10px] font-medium ${attendanceStatusColors[rec.status] ?? ''}`}>{attendanceStatusLabels[rec.status] ?? rec.status}</Badge></td>
+                              <td className="px-4 py-3 text-right">
+                                <Button size="icon-sm" variant="ghost" aria-label={t('common.edit')} onClick={() => {
+                                  setManualAttRecordId(rec.id)
+                                  setManualAttForm({
+                                    date: rec.date,
+                                    shift_id: rec.shift_id ? String(rec.shift_id) : '',
+                                    clock_in: rec.clock_in ?? '',
+                                    clock_out: rec.clock_out ?? '',
+                                    status: rec.status,
+                                    deduct_from_salary: rec.deduct_from_salary ?? false,
+                                    notes: rec.notes ?? '',
+                                  })
+                                  setIsManualAttOpen(true)
+                                }}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </td>
                             </tr>
                           ))}
                           <tr className="bg-muted/40 font-semibold">
-                            <td colSpan={4} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
+                            <td colSpan={5} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
                             <td className="px-4 py-2 text-right font-mono text-xs">{week.lateMinutes} min</td>
-                            <td />
+                            <td colSpan={2} />
                           </tr>
                         </Fragment>
                       ))}
@@ -732,7 +992,7 @@ export function EmployeeDetailPage() {
             <CardHeader className="pb-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div><CardTitle className="text-base flex items-center gap-2"><BedDouble className="h-4 w-4 text-primary" />{t('employeeDetail.text.leaveRegister')}</CardTitle><CardDescription>{t('employeeDetail.text.angolaLaborLaw')}</CardDescription></div>
-                <Button size="sm" className="h-auto min-h-8 whitespace-normal text-center gap-1.5" onClick={() => setIsLeaveOpen(true)}><Plus className="h-4 w-4" />{t('employeeDetail.text.recordLeave')}</Button>
+                <Button size="sm" className="h-auto min-h-8 whitespace-normal text-center gap-1.5" onClick={() => openLeaveDialog()}><Plus className="h-4 w-4" />{t('employeeDetail.text.recordLeave')}</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -741,7 +1001,7 @@ export function EmployeeDetailPage() {
               ) : (
                 <div className="rounded-lg border border-border overflow-x-auto">
                   <table className="w-full min-w-[980px] text-sm">
-                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.type')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.startDate')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.end')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.days')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.documentsTab')}</th></tr></thead>
+                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.type')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.startDate')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.end')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.days')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.documentsTab')}</th>{canUpdateLeaves && <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('common.actions')}</th>}</tr></thead>
                     <tbody className="divide-y divide-border">
                       {leaves.map((leave) => (
                         <tr key={leave.id} className="hover:bg-muted/30 transition-colors">
@@ -751,6 +1011,7 @@ export function EmployeeDetailPage() {
                           <td className="px-4 py-3 font-bold text-xs">{t('employeeDetail.text.daysCount', { count: leave.total_days })}</td>
                           <td className="px-4 py-3"><Badge variant="outline" className={`text-[10px] font-medium ${leaveStatusColors[leave.status] ?? ''}`}>{leaveStatusLabels[leave.status] ?? leave.status}</Badge></td>
                           <td className="px-4 py-3"><LeaveDocumentActions leave={leave} /></td>
+                          {canUpdateLeaves && <td className="px-4 py-3 text-right"><Button size="icon-sm" variant="ghost" aria-label={t('common.edit')} onClick={() => openLeaveDialog(leave)}><Pencil className="h-4 w-4" /></Button></td>}
                         </tr>
                       ))}
                     </tbody>
@@ -797,7 +1058,12 @@ export function EmployeeDetailPage() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Calendar className="h-4 w-4 text-primary" />{t('employeeDetail.text.shiftHistory')}</CardTitle><CardDescription>{t('employeeDetail.text.allAssignedShifts')}</CardDescription></CardHeader>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><CardTitle className="text-base flex items-center gap-2"><Calendar className="h-4 w-4 text-primary" />{t('employeeDetail.text.shiftHistory')}</CardTitle><CardDescription>{t('employeeDetail.text.allAssignedShifts')}</CardDescription></div>
+                <Button size="sm" variant="outline" className="h-auto min-h-8 whitespace-normal text-center gap-1.5" onClick={() => setIsShiftOpen(true)}><Plus className="h-4 w-4" />{t('employeeDetail.text.addShift')}</Button>
+              </div>
+            </CardHeader>
             <CardContent>
               {!scheduleHistory || scheduleHistory.data.length === 0 ? (<p className="text-sm text-muted-foreground text-center py-6">{t('employeeDetail.text.noShiftHistory')}</p>) : (
                 <div className="space-y-2">
@@ -882,7 +1148,7 @@ export function EmployeeDetailPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserCheck className="h-5 w-5 text-primary" />{t('employeeDetail.text.manualAttendance')}
+              <UserCheck className="h-5 w-5 text-primary" />{manualAttRecordId ? t('employeeDetail.text.editAttendance') : t('employeeDetail.text.manualAttendance')}
             </DialogTitle>
             <DialogDescription>{t('employeeDetail.text.manualAttendanceDescription', { name: data.first_name })}</DialogDescription>
           </DialogHeader>
@@ -897,6 +1163,22 @@ export function EmployeeDetailPage() {
                 onChange={(e) => setManualAttForm((p) => ({ ...p, date: e.target.value }))}
               />
             </div>
+
+            {manualSchedules.length > 0 && (
+              <div>
+                <Label className="text-xs font-semibold">{t('attendance.shift')}</Label>
+                <Select value={manualShiftId} onValueChange={(value) => setManualAttForm((form) => ({ ...form, shift_id: value }))}>
+                  <SelectTrigger className="mt-1.5"><SelectValue placeholder={t('attendance.selectShift')} /></SelectTrigger>
+                  <SelectContent>
+                    {manualSchedules.map((schedule) => (
+                      <SelectItem key={schedule.id} value={String(schedule.shift_id)}>
+                        {schedule.shift?.name} · {schedule.shift?.start_time}–{schedule.shift?.end_time}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {isManualDateFuture && (
               <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400 flex items-start gap-2">
@@ -926,7 +1208,7 @@ export function EmployeeDetailPage() {
                 <Input
                   type="time"
                   className="mt-1.5"
-                  disabled={isManualDateClosed || isManualDateFuture}
+                  disabled={(isManualDateClosed && !manualAttRecordId) || isManualDateFuture}
                   value={manualAttForm.clock_in}
                   onChange={(e) => setManualAttForm((p) => ({ ...p, clock_in: e.target.value }))}
                 />
@@ -936,7 +1218,7 @@ export function EmployeeDetailPage() {
                 <Input
                   type="time"
                   className="mt-1.5"
-                  disabled={isManualDateClosed || isManualDateFuture}
+                  disabled={(isManualDateClosed && !manualAttRecordId) || isManualDateFuture}
                   value={manualAttForm.clock_out}
                   onChange={(e) => setManualAttForm((p) => ({ ...p, clock_out: e.target.value }))}
                 />
@@ -946,7 +1228,7 @@ export function EmployeeDetailPage() {
               <Label className="text-xs font-semibold">{t('employeeDetail.text.status')} <span className="text-destructive">*</span></Label>
               <Select
                 value={manualAttForm.status}
-                disabled={isManualDateClosed || isManualDateFuture}
+                disabled={(isManualDateClosed && !manualAttRecordId) || isManualDateFuture}
                 onValueChange={(v) => setManualAttForm((p) => ({ ...p, status: v }))}
               >
                 <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
@@ -955,11 +1237,11 @@ export function EmployeeDetailPage() {
                   <SelectItem value="late">{t('employeeDetail.text.late')}</SelectItem>
                   <SelectItem value="absent">{t('employeeDetail.text.absent')}</SelectItem>
                   <SelectItem value="half_day">{t('employeeDetail.text.halfDay')}</SelectItem>
-                  <SelectItem value="excused">{t('employeeDetail.text.justified')}</SelectItem>
+                  <SelectItem value="justified">{t('employeeDetail.text.justified')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {(manualAttForm.status === 'absent' || manualAttForm.status === 'excused' || manualAttForm.status === 'late') && (
+            {(manualAttForm.status === 'absent' || manualAttForm.status === 'justified' || manualAttForm.status === 'late') && (
               <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
                 <span>
                   <span className="block text-sm font-medium">{t('employeeDetail.text.deductSalary')}</span>
@@ -977,7 +1259,7 @@ export function EmployeeDetailPage() {
               <Label className="text-xs font-semibold">{t('employeeDetail.text.observations')}</Label>
               <Input
                 className="mt-1.5"
-                disabled={isManualDateClosed || isManualDateFuture}
+                disabled={(isManualDateClosed && !manualAttRecordId) || isManualDateFuture}
                 placeholder={t('employeeDetail.text.reasonOrNotes')}
                 value={manualAttForm.notes}
                 onChange={(e) => setManualAttForm((p) => ({ ...p, notes: e.target.value }))}
@@ -991,7 +1273,7 @@ export function EmployeeDetailPage() {
             <Button
               size="sm"
               onClick={() => manualAttMutation.mutate()}
-              disabled={manualAttMutation.isPending || isManualDateClosed || isManualDateFuture}
+              disabled={manualAttMutation.isPending || (isManualDateClosed && !manualAttRecordId) || isManualDateFuture || (manualSchedules.length > 1 && !manualAttForm.shift_id)}
             >
               {manualAttMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
               {t('employeeDetail.text.save')}
@@ -1001,9 +1283,9 @@ export function EmployeeDetailPage() {
       </Dialog>
 
       {/* Lançar Ausência / Férias */}
-      <Dialog open={isLeaveOpen} onOpenChange={setIsLeaveOpen}>
+      <Dialog open={isLeaveOpen} onOpenChange={(open) => { setIsLeaveOpen(open); if (!open) setEditingLeave(null) }}>
         <DialogContent className="flex h-[90vh] max-h-[90vh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden">
-          <DialogHeader className="shrink-0"><DialogTitle className="flex items-center gap-2"><BedDouble className="h-5 w-5 text-primary" />{t('employeeDetail.text.recordLeaveDialog')}</DialogTitle><DialogDescription>{t('employeeDetail.text.recordLeaveDescription', { name: data.first_name })}</DialogDescription></DialogHeader>
+          <DialogHeader className="shrink-0"><DialogTitle className="flex items-center gap-2"><BedDouble className="h-5 w-5 text-primary" />{t(editingLeave ? 'employeeDetail.text.editLeaveDialog' : 'employeeDetail.text.recordLeaveDialog')}</DialogTitle><DialogDescription>{t('employeeDetail.text.recordLeaveDescription', { name: data.first_name })}</DialogDescription></DialogHeader>
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto py-2 pr-1 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <Label className="text-xs font-semibold">{t('employeeDetail.text.leaveTypeLgt')} <span className="text-destructive">*</span></Label>
@@ -1027,31 +1309,139 @@ export function EmployeeDetailPage() {
               <span><span className="block text-sm font-medium">{t('employeeDetail.text.deductSalary')}</span><span className="block text-xs text-muted-foreground">{t('employeeDetail.text.deductLeaveDescription')}</span></span>
               <input type="checkbox" checked={leaveForm.deduct_from_salary} onChange={(e) => setLeaveForm((p) => ({ ...p, deduct_from_salary: e.target.checked }))} className="h-4 w-4" />
             </label>
-            <div><Label className="text-xs font-semibold">{t('employeeDetail.text.status')}</Label><Select value={leaveForm.status} onValueChange={(v) => setLeaveForm((p) => ({ ...p, status: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="approved">{t('employeeDetail.text.approvedDirect')}</SelectItem><SelectItem value="pending">{t('employeeDetail.text.pendingApproval')}</SelectItem></SelectContent></Select></div>
+            {!editingLeave && <div><Label className="text-xs font-semibold">{t('employeeDetail.text.status')}</Label><Select value={leaveForm.status} onValueChange={(v) => setLeaveForm((p) => ({ ...p, status: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="approved">{t('employeeDetail.text.approvedDirect')}</SelectItem><SelectItem value="pending">{t('employeeDetail.text.pendingApproval')}</SelectItem></SelectContent></Select></div>}
             <div><Label className="text-xs font-semibold">{t('employeeDetail.text.reasonNotes')}</Label><Input className="mt-1.5" placeholder={t('employeeDetail.text.justificationPlaceholder')} value={leaveForm.reason} onChange={(e) => setLeaveForm((p) => ({ ...p, reason: e.target.value }))} /></div>
-            <div className="min-w-0 space-y-2">
+            {!editingLeave && <div className="min-w-0 space-y-2">
               <Label className="text-xs font-semibold">{t('employeeDetail.text.justificationOptional')}</Label>
               <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setLeaveForm((p) => ({ ...p, justification_document: e.target.files?.[0] ?? null }))} />
-            </div>
-            <div className="min-w-0 space-y-2">
+            </div>}
+            {!editingLeave && <div className="min-w-0 space-y-2">
               <Label className="text-xs font-semibold">{t('employeeDetail.text.signedEmployeeDocumentOptional')}</Label>
               <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setLeaveForm((p) => ({ ...p, signed_document: e.target.files?.[0] ?? null }))} />
-            </div>
+            </div>}
           </div>
-          <DialogFooter className="shrink-0 flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center"><Button type="button" variant="outline" size="sm" onClick={() => setIsLeaveOpen(false)} disabled={leaveMutation.isPending}>{t('employeeDetail.text.cancel')}</Button><Button type="button" size="sm" onClick={() => leaveMutation.mutate()} disabled={leaveMutation.isPending || !leaveForm.leave_type_id}>{leaveMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}{t('employeeDetail.text.record')}</Button></DialogFooter>
+          <DialogFooter className="shrink-0 flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center"><Button type="button" variant="outline" size="sm" onClick={() => setIsLeaveOpen(false)} disabled={leaveMutation.isPending}>{t('employeeDetail.text.cancel')}</Button><Button type="button" size="sm" onClick={() => leaveMutation.mutate()} disabled={leaveMutation.isPending || !leaveForm.leave_type_id || !leaveForm.start_date || !leaveForm.end_date}>{leaveMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}{t(editingLeave ? 'employeeDetail.text.save' : 'employeeDetail.text.record')}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Vincular / Alterar Turno */}
       <Dialog open={isShiftOpen} onOpenChange={setIsShiftOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><RotateCcw className="h-5 w-5 text-primary" />{activeShift ? t('employeeDetail.text.changeShift') : t('employeeDetail.text.assignShift')}</DialogTitle><DialogDescription>{t('employeeDetail.text.assignShiftDescription', { name: data.first_name })}</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><RotateCcw className="h-5 w-5 text-primary" />{t('employeeDetail.text.assignShift')}</DialogTitle><DialogDescription>{t('employeeDetail.text.assignShiftDescription', { name: data.first_name })}</DialogDescription></DialogHeader>
           <div className="space-y-4 py-2">
             <div><Label className="text-xs font-semibold">{t('employeeDetail.text.shiftTab')} <span className="text-destructive">*</span></Label><Select value={shiftForm.shift_id} onValueChange={(v) => setShiftForm((p) => ({ ...p, shift_id: v }))}><SelectTrigger className="mt-1.5"><SelectValue placeholder={t('employeeDetail.text.selectShift')} /></SelectTrigger><SelectContent>{(shiftsData?.data ?? []).filter((s) => s.is_active).map((s) => (<SelectItem key={s.id} value={String(s.id)}><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full shrink-0" style={{ background: s.color ?? 'var(--primary)' }} />{s.name} · {s.start_time}–{s.end_time} ({t('employeeDetail.text.hoursCount', { count: s.work_hours })}){s.is_night_shift && ' 🌙'}</div></SelectItem>))}</SelectContent></Select></div>
             <div><Label className="text-xs font-semibold">{t('employeeDetail.text.effectiveFrom')} <span className="text-destructive">*</span></Label><Input type="date" className="mt-1.5" value={shiftForm.effective_from} onChange={(e) => setShiftForm((p) => ({ ...p, effective_from: e.target.value }))} /></div>
             <div><Label className="text-xs font-semibold">{t('employeeDetail.text.notesOptional')}</Label><Input className="mt-1.5" placeholder={t('employeeDetail.text.changeReason')} value={shiftForm.notes} onChange={(e) => setShiftForm((p) => ({ ...p, notes: e.target.value }))} /></div>
           </div>
-          <DialogFooter className="flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center"><Button variant="outline" size="sm" onClick={() => setIsShiftOpen(false)} disabled={shiftMutation.isPending}>{t('employeeDetail.text.cancel')}</Button><Button size="sm" onClick={() => shiftMutation.mutate()} disabled={shiftMutation.isPending || !shiftForm.shift_id}>{shiftMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}{activeShift ? t('employeeDetail.text.change') : t('employeeDetail.text.assign')}</Button></DialogFooter>
+          <DialogFooter className="flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center"><Button variant="outline" size="sm" onClick={() => setIsShiftOpen(false)} disabled={shiftMutation.isPending}>{t('employeeDetail.text.cancel')}</Button><Button size="sm" onClick={() => shiftMutation.mutate()} disabled={shiftMutation.isPending || !shiftForm.shift_id}>{shiftMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}{t('employeeDetail.text.assign')}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isContractDialogOpen} onOpenChange={(open) => { setIsContractDialogOpen(open); if (!open) setContractDocument(null) }}>
+        <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-4xl flex-col overflow-hidden sm:max-w-4xl">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>{editingContract ? t('employeeDetail.text.editContract') : contractNeedsRenewal ? t('employeeDetail.text.renewContract') : t('employeeDetail.text.newContract')}</DialogTitle>
+            <DialogDescription>{t('employeeDetail.text.contractDialogDescription', { name: data.full_name })}</DialogDescription>
+          </DialogHeader>
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto py-2 pr-1 sm:grid-cols-2">
+            <div className="border-b pb-2 sm:col-span-2"><p className="text-sm font-semibold">{t('employeeDetail.text.contractTerms')}</p></div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.contractType')} *</Label>
+              <Select value={contractForm.contract_type} onValueChange={(value) => setContractForm((form) => ({ ...form, contract_type: value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['permanent', 'fixed_term', 'temporary', 'probation', 'internship', 'outsourced'].map((value) => (
+                    <SelectItem key={value} value={value}>{contractTypeLabels[value] ?? value}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.position')}</Label>
+              <Select value={contractForm.position_id || '__none'} onValueChange={(value) => setContractForm((form) => ({ ...form, position_id: value === '__none' ? '' : value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">{t('employeeDetail.text.noPosition')}</SelectItem>
+                  {(contractPositions?.data ?? []).map((position) => (
+                    <SelectItem key={position.id} value={String(position.id)}>{position.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.department')}</Label>
+              <Select value={contractForm.department_id || '__none'} onValueChange={(value) => setContractForm((form) => ({ ...form, department_id: value === '__none' ? '' : value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">{t('employeeDetail.text.noDepartment')}</SelectItem>
+                  {(contractDepartments?.data ?? []).map((department) => (
+                    <SelectItem key={department.id} value={String(department.id)}>{department.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.directManager')}</Label>
+              <Select value={contractForm.manager_id || '__none'} onValueChange={(value) => setContractForm((form) => ({ ...form, manager_id: value === '__none' ? '' : value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">{t('employeeDetail.text.noManager')}</SelectItem>
+                  {(contractManagers?.data ?? []).filter((manager) => manager.id !== Number(id)).map((manager) => (
+                    <SelectItem key={manager.id} value={String(manager.id)}>{manager.full_name} ({manager.employee_code})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="border-b pb-2 pt-2 sm:col-span-2"><p className="text-sm font-semibold">{t('employeeDetail.text.compensationAndDates')}</p></div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.baseSalary')} *</Label>
+              <Input type="number" min="0" step="0.01" value={contractForm.base_salary} onChange={(event) => setContractForm((form) => ({ ...form, base_salary: event.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.salaryFrequency')} *</Label>
+              <Select value={contractForm.salary_frequency} onValueChange={(value) => setContractForm((form) => ({ ...form, salary_frequency: value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['monthly', 'biweekly', 'weekly', 'hourly'].map((value) => (
+                    <SelectItem key={value} value={value}>{salaryFrequencyLabels[value] ?? value}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.weeklyHours')}</Label>
+              <Input type="number" min="1" max="168" step="0.01" value={contractForm.work_hours_per_week} onChange={(event) => setContractForm((form) => ({ ...form, work_hours_per_week: event.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.startDate')} *</Label>
+              <Input type="date" value={contractForm.start_date} onChange={(event) => setContractForm((form) => ({ ...form, start_date: event.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.endDate')}</Label>
+              <Input type="date" min={contractForm.start_date} value={contractForm.end_date} onChange={(event) => setContractForm((form) => ({ ...form, end_date: event.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('employeeDetail.text.signature')}</Label>
+              <Input type="date" value={contractForm.signed_at} onChange={(event) => setContractForm((form) => ({ ...form, signed_at: event.target.value }))} />
+            </div>
+            <div className="border-b pb-2 pt-2 sm:col-span-2"><p className="text-sm font-semibold">{t('employeeDetail.text.contractDocumentsAndNotes')}</p></div>
+            {!editingContract && <div className="space-y-1.5 sm:col-span-2">
+              <Label>{t('employeeDetail.text.signedContractDocument')}</Label>
+              <Input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => setContractDocument(event.target.files?.[0] ?? null)} />
+              <p className="text-xs text-muted-foreground">{t('employeeDetail.text.signedContractDocumentHint')}</p>
+            </div>}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>{t('common.notes')}</Label>
+              <Textarea value={contractForm.notes} onChange={(event) => setContractForm((form) => ({ ...form, notes: event.target.value }))} rows={3} />
+            </div>
+          </div>
+          <DialogFooter className="shrink-0 flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setIsContractDialogOpen(false)} disabled={contractMutation.isPending}>{t('common.cancel')}</Button>
+            <Button onClick={() => contractMutation.mutate()} disabled={contractMutation.isPending || !contractForm.base_salary || !contractForm.start_date}>
+              {contractMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {t('common.save')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

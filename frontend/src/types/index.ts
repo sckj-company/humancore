@@ -96,6 +96,7 @@ export interface Employee {
   id_document_expiry?: string
   tax_id?: string
   social_security_id?: string
+  overtime_hourly_rate?: number | null
   photo_path?: string
   photo_url?: string
   status: EmployeeStatus
@@ -466,6 +467,7 @@ export type AttendanceStatus = 'present' | 'absent' | 'late' | 'half_day' | 'hol
 export interface AttendanceRecord {
   id: number
   employee_id: number
+  shift_id?: number | null
   date: string
   clock_in?: string | null
   clock_out?: string | null
@@ -478,6 +480,7 @@ export interface AttendanceRecord {
   overtime_minutes?: number
   notes?: string | null
   employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'>
+  shift?: { id: number; name: string; start_time: string; end_time: string } | null
 }
 
 export interface LeaveBalance {

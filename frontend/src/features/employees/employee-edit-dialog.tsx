@@ -164,6 +164,7 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
                 <TextField label={t('employeeEdit.probationEnd')} type="date" value={form.probation_end} onChange={(value) => update('probation_end', value)} />
               </div>
             </section>
+
           </div>
         </ScrollArea>
         <DialogFooter className="shrink-0 px-6 pb-6">

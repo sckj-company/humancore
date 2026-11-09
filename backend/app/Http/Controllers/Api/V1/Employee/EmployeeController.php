@@ -12,6 +12,7 @@ use App\Http\Resources\V1\EmployeeResource;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeLatenessEvent;
 use App\Services\CloudinaryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -206,7 +207,9 @@ class EmployeeController extends BaseController
     {
         $this->authorize('viewAny', EmployeeContract::class);
 
-        return $this->success(ContractResource::collection($employee->contracts()->with('position', 'department')->get()));
+        return $this->success(ContractResource::collection(
+            $employee->contracts()->with('position', 'department')->orderByDesc('start_date')->orderByDesc('id')->get()
+        ));
     }
 
     public function storeContract(StoreContractRequest $request, Employee $employee): JsonResponse
@@ -218,22 +221,52 @@ class EmployeeController extends BaseController
         $data['tenant_id'] = $employee->tenant_id;
 
         $documentPath = null;
+        $uploadedDocument = null;
+        $contractFile = null;
         if ($request->hasFile('document')) {
-            $cld = app(CloudinaryService::class)->upload(
-                $request->file('document'),
+            $contractFile = $request->file('document');
+            $uploadedDocument = app(CloudinaryService::class)->upload(
+                $contractFile,
                 'humancore/tenants/'.$employee->tenant_id.'/contracts',
                 'auto'
             );
-            $documentPath = $cld['url'];
+            $documentPath = $uploadedDocument['url'];
         }
+        unset($data['document']);
         $data['document_path'] = $documentPath;
 
-        EmployeeContract::query()
-            ->where('employee_id', $employee->id)
-            ->update(['is_active' => false]);
-        $data['is_active'] = true;
+        $contract = DB::transaction(function () use ($employee, $data, $request, $contractFile, $uploadedDocument) {
+            EmployeeContract::query()
+                ->where('employee_id', $employee->id)
+                ->update(['is_active' => false]);
+            $data['is_active'] = true;
+            $contract = EmployeeContract::query()->create($data);
+            $employee->update([
+                'status' => 'active',
+                'termination_at' => null,
+                'termination_reason' => null,
+                'position_id' => $contract->position_id,
+                'department_id' => $contract->department_id,
+                'manager_id' => $contract->manager_id,
+            ]);
 
-        $contract = EmployeeContract::query()->create($data);
+            if ($contractFile && $uploadedDocument) {
+                EmployeeDocument::query()->create([
+                    'employee_id' => $employee->id,
+                    'tenant_id' => $employee->tenant_id,
+                    'uploader_id' => $request->user()->id,
+                    'name' => 'Contrato de Trabalho - '.$contract->start_date->format('Y-m-d'),
+                    'document_type' => 'contract',
+                    'file_path' => $uploadedDocument['url'],
+                    'original_name' => $contractFile->getClientOriginalName(),
+                    'mime_type' => $contractFile->getMimeType(),
+                    'file_size' => $uploadedDocument['bytes'] ?? $contractFile->getSize(),
+                    'is_confidential' => false,
+                ]);
+            }
+
+            return $contract;
+        });
 
         return $this->success(new ContractResource($contract->load('position', 'department')), 'Contrato criado com sucesso.', 201);
     }
@@ -249,6 +282,37 @@ class EmployeeController extends BaseController
                 'date' => $contract->start_date?->format('Y-m-d'),
                 'description' => 'Salário base: '.number_format((float) $contract->base_salary, 2),
             ]))
+            ->merge(EmployeeLatenessEvent::query()
+                ->where('employee_id', $employee->id)
+                ->get()
+                ->map(fn (EmployeeLatenessEvent $event) => [
+                    'type' => 'lateness_'.$event->event_type,
+                    'title' => match ($event->event_type) {
+                        'discount' => 'Desconto por atraso',
+                        'week_carry' => 'Transição do saldo de atraso',
+                        'month_reset' => 'Reinício mensal do saldo de atraso',
+                        default => 'Evento de atraso',
+                    },
+                    'date' => $event->occurred_on?->format('Y-m-d'),
+                    'description' => match ($event->event_type) {
+                        'discount' => sprintf(
+                            '%d minuto(s) de atraso acumulados; desconto aplicado: %s.',
+                            $event->minutes,
+                            number_format((float) $event->amount, 2),
+                        ),
+                        'week_carry' => sprintf(
+                            '%d minuto(s) restantes transitaram da semana de %s para a semana de %s.',
+                            $event->minutes,
+                            $event->details['from_week'] ?? '',
+                            $event->details['to_week'] ?? '',
+                        ),
+                        'month_reset' => sprintf(
+                            '%d minuto(s) restantes foram reiniciados no início do mês; não transitam para outro mês.',
+                            $event->minutes,
+                        ),
+                        default => sprintf('%d minuto(s) registados.', $event->minutes),
+                    },
+                ]))
             ->sortByDesc('date')
             ->values();
 

@@ -118,6 +118,18 @@ O Compose executa a aplicação React, a API Laravel, MySQL, Redis e o worker de
 
 Para acompanhar os serviços: `docker compose ps` e `docker compose logs -f app caddy`. Faça backup dos volumes `mysql_data` e `app_uploads` antes de atualizações ou manutenção. Não use `docker compose down -v` em produção, pois isso remove os volumes persistentes.
 
+### Atualizações automáticas após `git pull` na VPS
+
+Para que cada `git pull` bem-sucedido reconstrua o frontend e o backend, aplique as migrations pendentes e reinicie os serviços, instale o hook de deploy uma vez na VPS, a partir da raiz do repositório:
+
+```bash
+./scripts/install-vps-deploy-hook.sh
+```
+
+O instalador valida Docker Compose e `.env`, ativa os hooks apenas nesta cópia local do repositório e executa o primeiro deploy. Depois, cada `git pull` que atualize o checkout executa automaticamente `scripts/deploy-vps.sh`, incluindo pull com merge ou rebase. O deploy compila as imagens, mantém a aplicação em manutenção enquanto pára API/worker, executa `php artisan migrate --force` no container atualizado e só então inicia os serviços novos. Se uma migration falhar, o script termina com erro e não reabre a aplicação; consulte a mensagem no terminal e os logs antes de corrigir e executar novamente `./scripts/deploy-vps.sh`.
+
+Antes de cada atualização em produção, faça backup dos dados e confirme que as alterações recebidas são de uma origem confiável: o hook executa o script versionado pelo repositório. Para desativar a automação nesta VPS, execute `git config --local --unset core.hooksPath`; será necessário então executar manualmente `./scripts/deploy-vps.sh` após cada pull.
+
 Não execute `php artisan db:seed` sem `--class` numa instalação de produção: o seeder padrão cria uma conta de superadministrador com credenciais conhecidas. Também não use as contas de demonstração em produção.
 
 O Caddy está configurado para HTTP direto na porta `5173`. Como esta aplicação processa dados pessoais e salariais, use HTTPS antes de disponibilizá-la publicamente: configure um domínio apontado para a VPS, adapte o endereço do site no `Caddyfile` e publique as portas `80` e `443` no firewall e no Compose.

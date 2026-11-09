@@ -43,6 +43,7 @@ class UpdateEmployeeRequest extends FormRequest
             'id_document_expiry' => ['nullable', 'date'],
             'tax_id' => ['nullable', 'string', 'max:100'],
             'social_security_id' => ['nullable', 'string', 'max:100'],
+            'overtime_hourly_rate' => ['nullable', 'numeric', 'min:0'],
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'status' => ['sometimes', Rule::in(['active', 'inactive', 'suspended', 'terminated'])],
             'hired_at' => ['nullable', 'date'],

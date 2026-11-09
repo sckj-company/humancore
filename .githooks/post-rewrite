@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if [[ "${1:-}" == "rebase" ]]; then
+    PROJECT_DIR="$(git rev-parse --show-toplevel)"
+    exec "$PROJECT_DIR/scripts/deploy-vps.sh"
+fi

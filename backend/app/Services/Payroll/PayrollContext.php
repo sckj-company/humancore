@@ -44,6 +44,8 @@ class PayrollContext
 
     public float $irtBase = 0;
 
+    public array $latenessEvents = [];
+
     public array $settings;
 
     public function __construct(

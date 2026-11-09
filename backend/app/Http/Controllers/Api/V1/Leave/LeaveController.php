@@ -182,6 +182,32 @@ class LeaveController extends BaseController
         return $this->success(new LeaveRequestResource($leave->load(['employee', 'leaveType'])), 'Registo de ausência/férias criado com sucesso.', 201);
     }
 
+    public function update(StoreLeaveRequest $request, LeaveRequest $leave): JsonResponse
+    {
+        $this->authorize('update', $leave);
+
+        $validated = $request->validated();
+        $start = Carbon::parse($validated['start_date']);
+        $end = Carbon::parse($validated['end_date']);
+
+        $leave->update([
+            'leave_type_id' => $validated['leave_type_id'],
+            'occurrence_type' => $validated['occurrence_type'] ?? $leave->occurrence_type,
+            'notice_type' => $validated['notice_type'] ?? $leave->notice_type,
+            'is_justified' => $validated['is_justified'] ?? $leave->is_justified,
+            'deduct_from_salary' => $validated['deduct_from_salary'] ?? $leave->deduct_from_salary,
+            'start_date' => $start->format('Y-m-d'),
+            'end_date' => $end->format('Y-m-d'),
+            'total_days' => (int) $start->diffInDays($end) + 1,
+            'reason' => array_key_exists('reason', $validated) ? $validated['reason'] : $leave->reason,
+        ]);
+
+        return $this->success(
+            new LeaveRequestResource($leave->fresh()->load(['employee', 'leaveType', 'approvedBy'])),
+            'Registo de ausência/férias atualizado com sucesso.'
+        );
+    }
+
     public function downloadDocument(LeaveRequest $leave, string $kind, CloudinaryService $cloudinary): StreamedResponse|RedirectResponse|JsonResponse
     {
         $this->authorize('view', $leave);

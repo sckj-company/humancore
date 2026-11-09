@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Plus, Check, X, Loader2 } from 'lucide-react'
+import { Plus, Check, X, Loader2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasAnyRole, hasPermission } from '@/stores/auth-store'
@@ -50,6 +50,8 @@ export function LeavePage() {
   const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const isAdmin = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
+  const canUpdateLeaves = isAdmin || hasPermission(user, 'update_leave')
+  const canManageLeaveActions = isAdmin || canUpdateLeaves
 
   const { data: balance } = useQuery({
     queryKey: ['leave-balance'],
@@ -98,7 +100,7 @@ export function LeavePage() {
                     <th className="px-6 py-3 font-medium text-right">Dias</th>
                     <th className="px-6 py-3 font-medium">Documentos</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.status')}</th>
-                    {isAdmin && <th className="px-6 py-3 font-medium text-right">Ações</th>}
+                    {canManageLeaveActions && <th className="px-6 py-3 font-medium text-right">Ações</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border text-sm">
@@ -121,16 +123,16 @@ export function LeavePage() {
                           {r.status}
                         </Badge>
                       </td>
-                      {isAdmin &&
-                        (r.status === 'pending' ? (
-                          <td className="px-6 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                      {canManageLeaveActions && (
+                        <td className="px-6 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {canUpdateLeaves && <LeaveRequestDialog leave={r} />}
+                            {isAdmin && r.status === 'pending' && (
                               <ApproveButton leave={r} />
-                              <RejectButton leave={r} />
-                            </div>
-                          </td>
-                        ) : (
-                          <td className="px-6 py-3 text-right">
+                              )}
+                            {isAdmin && r.status === 'pending' && <RejectButton leave={r} />}
+                            {isAdmin && r.status !== 'pending' && (
+                              <>
                             {r.status === 'approved' && r.approved_by && (
                               <span className="text-xs text-muted-foreground">{r.approved_by.name}</span>
                             )}
@@ -139,8 +141,11 @@ export function LeavePage() {
                                 Rejeitado
                               </span>
                             )}
-                          </td>
-                        ))}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -190,55 +195,73 @@ function RejectButton({ leave }: { leave: LeaveRequest }) {
   )
 }
 
-function LeaveRequestDialog() {
+function LeaveRequestDialog({ leave }: { leave?: LeaveRequest }) {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const [open, setOpen] = useState(false)
   const canRequest = hasPermission(user, 'create_leave') || hasAnyRole(user, ['employee'])
+  const canUpdate = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_leave')
+  const canOpen = leave ? canUpdate : canRequest
   const canManageTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'manage_leave_types')
+  const queryClient = useQueryClient()
 
   const {
     register,
     handleSubmit,
     setValue,
+    reset,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) as never, defaultValues: { occurrence_type: 'absence' } })
+  } = useForm<FormValues>({ resolver: zodResolver(schema) as never, defaultValues: formDefaults(leave) })
+
+  useEffect(() => {
+    if (open) reset(formDefaults(leave))
+  }, [leave, open, reset])
 
   const { data: types } = useQuery({
     queryKey: ['leave-types'],
     queryFn: () => api.get<LeaveTypeSummary[]>('leave/types'),
-    enabled: canRequest && open,
+    enabled: canOpen && open,
   })
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) =>
-      api.post('leave', {
+    mutationFn: (values: FormValues) => {
+      const payload = {
         leave_type_id: Number(values.leave_type_id),
         occurrence_type: values.occurrence_type,
         start_date: values.start_date,
         end_date: values.end_date,
-        reason: values.reason || undefined,
-      }),
-    onSuccess: () => {
-      toast.success('Pedido de férias criado')
-      setOpen(false)
+        reason: values.reason || null,
+      }
+      return leave ? api.put(`leaves/${leave.id}`, payload) : api.post('leave', payload)
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar pedido')),
+    onSuccess: () => {
+      toast.success(t(leave ? 'leave.updated' : 'leave.requestCreated'))
+      setOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['leave-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['leave-balance'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, t(leave ? 'leave.updateError' : 'leave.createError'))),
   })
 
   const onSubmit = (values: FormValues) => mutation.mutate(values)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button disabled={!canRequest}>
-          <Plus className="mr-2 h-4 w-4" /> {t('leave.newRequest')}
+      {leave ? (
+        <Button variant="ghost" size="icon-sm" title={t('common.edit')} aria-label={t('common.edit')} disabled={!canUpdate} onClick={() => setOpen(true)}>
+          <Pencil className="h-4 w-4" />
         </Button>
-      </DialogTrigger>
+      ) : (
+        <DialogTrigger asChild>
+          <Button disabled={!canRequest}>
+            <Plus className="mr-2 h-4 w-4" /> {t('leave.newRequest')}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('leave.newRequest')}</DialogTitle>
+          <DialogTitle>{t(leave ? 'leave.editRequest' : 'leave.newRequest')}</DialogTitle>
           <DialogDescription>Solicite férias ou uma ausência justificada.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -304,13 +327,23 @@ function LeaveRequestDialog() {
             </Button>
             <Button type="submit" disabled={isSubmitting || mutation.isPending}>
               {isSubmitting || mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Enviar pedido
+              {t(leave ? 'leave.saveChanges' : 'leave.submitRequest')}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
   )
+}
+
+function formDefaults(leave?: LeaveRequest): FormValues {
+  return {
+    leave_type_id: leave ? String(leave.leave_type_id) : '',
+    occurrence_type: leave?.occurrence_type ?? 'absence',
+    start_date: leave?.start_date ?? '',
+    end_date: leave?.end_date ?? '',
+    reason: leave?.reason ?? '',
+  }
 }
 
 function SummaryCard({ label, value, suffix, highlight }: { label: string; value: number | string; suffix?: string; highlight?: boolean }) {

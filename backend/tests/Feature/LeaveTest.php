@@ -102,6 +102,59 @@ class LeaveTest extends TestCase
         $this->assertSame('approved', $leave->fresh()->status);
     }
 
+    public function test_admin_can_edit_leave_details_without_changing_approval_status(): void
+    {
+        [$tenant, $employee, $admin, $vacation] = $this->setupEmployeeUser('admin');
+        $leave = LeaveRequest::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $vacation->id,
+            'start_date' => '2026-09-15',
+            'end_date' => '2026-09-16',
+            'total_days' => 2,
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($admin, 'sanctum');
+        $this->putJson("/api/v1/leaves/{$leave->id}", [
+            'leave_type_id' => $vacation->id,
+            'occurrence_type' => 'medical',
+            'notice_type' => 'unanticipated',
+            'is_justified' => true,
+            'deduct_from_salary' => false,
+            'start_date' => '2026-09-14',
+            'end_date' => '2026-09-18',
+            'reason' => 'Consulta médica',
+        ])->assertOk()
+            ->assertJsonPath('data.total_days', 5)
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.occurrence_type', 'medical');
+
+        $this->assertSame('2026-09-14', $leave->fresh()->start_date->format('Y-m-d'));
+        $this->assertSame('approved', $leave->fresh()->status);
+    }
+
+    public function test_employee_without_update_permission_cannot_edit_leave(): void
+    {
+        [$tenant, $employee, $user, $vacation] = $this->setupEmployeeUser('employee');
+        $leave = LeaveRequest::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $vacation->id,
+            'start_date' => '2026-09-15',
+            'end_date' => '2026-09-16',
+            'total_days' => 2,
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($user, 'sanctum');
+        $this->putJson("/api/v1/leaves/{$leave->id}", [
+            'leave_type_id' => $vacation->id,
+            'start_date' => '2026-09-14',
+            'end_date' => '2026-09-18',
+        ])->assertForbidden();
+    }
+
     public function test_employee_cannot_approve_but_can_cancel_own_pending(): void
     {
         [$tenant, $employee, $user, $vacation] = $this->setupEmployeeUser('employee');

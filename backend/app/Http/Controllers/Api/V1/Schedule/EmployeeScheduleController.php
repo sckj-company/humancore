@@ -66,13 +66,7 @@ class EmployeeScheduleController extends BaseController
         $data['assigned_by'] = $request->user()->id;
 
         $isActive = $data['is_active'] ?? true;
-        if ($isActive) {
-            EmployeeSchedule::query()
-                ->where('employee_id', $data['employee_id'])
-                ->where('is_active', true)
-                ->update(['is_active' => false]);
-            $data['is_active'] = true;
-        }
+        $data['is_active'] = $isActive;
 
         $schedule = EmployeeSchedule::query()->create($data);
 
@@ -136,6 +130,7 @@ class EmployeeScheduleController extends BaseController
             ->with('shift')
             ->where(function ($q) {
                 $q->where('is_active', true)
+                    ->whereDate('effective_from', '<=', now()->toDateString())
                     ->where(function ($q2) {
                         $q2->whereNull('effective_to')
                             ->orWhere('effective_to', '>=', now());
@@ -143,6 +138,11 @@ class EmployeeScheduleController extends BaseController
             })
             ->orderByDesc('effective_from')
             ->get()
+            ->filter(function (EmployeeSchedule $schedule) {
+                $days = $schedule->custom_days ?? $schedule->shift?->working_days;
+
+                return $days === null || in_array(now()->dayOfWeek, array_map('intval', $days), true);
+            })
             ->map(fn ($s) => [
                 'id' => $s->id,
                 'shift' => $s->shift ? [

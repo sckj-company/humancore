@@ -35,6 +35,11 @@ class LeaveRequestPolicy
         return $user->can('create_leave');
     }
 
+    public function update(User $user, LeaveRequest $leave): bool
+    {
+        return $user->can('update_leave');
+    }
+
     public function approve(User $user, LeaveRequest $leave): bool
     {
         return $user->can('approve_leave');

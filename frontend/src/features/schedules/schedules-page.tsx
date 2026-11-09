@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -280,8 +280,8 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
       ? {
           name: shift.name,
           code: shift.code ?? '',
-          start_time: shift.start_time,
-          end_time: shift.end_time,
+          start_time: shift.start_time.slice(0, 5),
+          end_time: shift.end_time.slice(0, 5),
           break_minutes: shift.break_minutes,
           work_hours: shift.work_hours,
           late_tolerance_minutes: shift.late_tolerance_minutes,
@@ -431,11 +431,23 @@ function ShiftDialog({ open, onOpenChange, shift }: { open: boolean; onOpenChang
 
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2">
-              <Switch {...form.register('is_night_shift')} />
+              <Controller
+                control={form.control}
+                name="is_night_shift"
+                render={({ field }) => (
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                )}
+              />
               <span className="text-sm">{t('schedules.nightShift')}</span>
             </label>
             <label className="flex items-center gap-2">
-              <Switch {...form.register('is_active')} />
+              <Controller
+                control={form.control}
+                name="is_active"
+                render={({ field }) => (
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                )}
+              />
               <span className="text-sm">{t('common.active')}</span>
             </label>
           </div>

@@ -35,15 +35,18 @@ class EmployeeUpdateTest extends TestCase
             'last_name' => 'Mendes',
             'phone' => '+244 923 000 111',
             'status' => 'active',
+            'overtime_hourly_rate' => 1250,
         ])->assertOk()
             ->assertJsonPath('data.first_name', 'Ana')
-            ->assertJsonPath('data.last_name', 'Mendes');
+            ->assertJsonPath('data.last_name', 'Mendes')
+            ->assertJsonPath('data.overtime_hourly_rate', 1250);
 
         $this->assertDatabaseHas('employees', [
             'id' => $employee->id,
             'first_name' => 'Ana',
             'last_name' => 'Mendes',
             'phone' => '+244 923 000 111',
+            'overtime_hourly_rate' => 1250,
         ]);
     }
 

@@ -12,6 +12,7 @@ class AttendanceResource extends JsonResource
         return [
             'id' => $this->id,
             'employee_id' => $this->employee_id,
+            'shift_id' => $this->shift_id,
             'date' => $this->date?->format('Y-m-d'),
             'clock_in' => $this->clock_in?->format('H:i'),
             'clock_out' => $this->clock_out?->format('H:i'),
@@ -28,6 +29,12 @@ class AttendanceResource extends JsonResource
                 'full_name' => $this->employee->full_name,
                 'employee_code' => $this->employee->employee_code,
             ]),
+            'shift' => $this->whenLoaded('shift', fn () => $this->shift ? [
+                'id' => $this->shift->id,
+                'name' => $this->shift->name,
+                'start_time' => $this->shift->start_time,
+                'end_time' => $this->shift->end_time,
+            ] : null),
         ];
     }
 }

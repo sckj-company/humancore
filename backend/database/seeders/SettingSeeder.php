@@ -44,7 +44,7 @@ class SettingSeeder extends Seeder
                 ],
                 'discounts.absence_daily_amount' => 0,
                 'discounts.lateness_hourly_amount' => 0,
-                'discounts.lateness_minute_amount' => 0,
+                'discounts.lateness_accumulation_amount' => 0,
                 'discounts.lateness_free_occurrences_per_week' => 0,
                 'discounts.lateness_weekly_accumulation_minutes' => 0,
                 'discounts.dayoff_daily_amount' => 0,

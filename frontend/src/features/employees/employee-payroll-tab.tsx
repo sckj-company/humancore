@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ErrorState, LoadingState } from '@/components/shared/page-header'
-import type { Deduction, Paginated } from '@/types'
+import type { Deduction, Employee, Paginated } from '@/types'
 
 interface AllowanceValue {
   amount: number
@@ -57,11 +57,13 @@ const emptyAllowanceForm: AllowanceForm = {
 }
 
 export function EmployeePayrollTab({
+  employee,
   employeeId,
   canManageAllowances,
   canManageDeductions,
   canViewDeductions,
 }: {
+  employee: Employee
   employeeId: number
   canManageAllowances: boolean
   canManageDeductions: boolean
@@ -70,6 +72,9 @@ export function EmployeePayrollTab({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [allowances, setAllowances] = useState(emptyAllowanceForm)
+  const [overtimeHourlyRate, setOvertimeHourlyRate] = useState(
+    employee.overtime_hourly_rate == null ? '' : String(employee.overtime_hourly_rate),
+  )
   const [deductionName, setDeductionName] = useState('')
   const [deductionType, setDeductionType] = useState<'advance' | 'other'>('advance')
   const [deductionTotal, setDeductionTotal] = useState('')
@@ -120,6 +125,28 @@ export function EmployeePayrollTab({
       queryClient.invalidateQueries({ queryKey: ['employees', employeeId, 'payroll-settings'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('employeeDetail.text.payrollSaveError'))),
+  })
+
+  useEffect(() => {
+    setOvertimeHourlyRate(employee.overtime_hourly_rate == null ? '' : String(employee.overtime_hourly_rate))
+  }, [employee.overtime_hourly_rate])
+
+  const saveOvertimeRate = useMutation({
+    mutationFn: () => {
+      const rate = overtimeHourlyRate.trim() === '' ? null : Number(overtimeHourlyRate)
+      if (rate !== null && (!Number.isFinite(rate) || rate < 0)) {
+        throw new Error(t('employeeDetail.text.invalidOvertimeHourlyRate'))
+      }
+
+      return api.put<Employee>(`employees/${employeeId}`, { overtime_hourly_rate: rate })
+    },
+    onSuccess: (updatedEmployee) => {
+      toast.success(t('employeeDetail.text.overtimeRateSaved'))
+      queryClient.setQueryData(['employees', String(employeeId)], updatedEmployee)
+      queryClient.invalidateQueries({ queryKey: ['employees', String(employeeId)] })
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, t('employeeDetail.text.overtimeRateSaveError'))),
   })
 
   const createDeduction = useMutation({
@@ -200,6 +227,37 @@ export function EmployeePayrollTab({
 
   return (
     <div className="mt-6 space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('employeeDetail.text.overtimeRateTitle')}</CardTitle>
+          <CardDescription>{t('employeeDetail.text.overtimeRateDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="employee-overtime-hourly-rate">{t('employeeDetail.text.overtimeHourlyRate')}</Label>
+              <Input
+                id="employee-overtime-hourly-rate"
+                type="number"
+                min="0"
+                step="0.01"
+                value={overtimeHourlyRate}
+                onChange={(event) => setOvertimeHourlyRate(event.target.value)}
+                disabled={!canManageAllowances}
+              />
+            </div>
+            <p className="self-end pb-2 text-xs text-muted-foreground">{t('employeeDetail.text.overtimeHourlyRateHint')}</p>
+          </div>
+          {canManageAllowances && (
+            <div className="flex justify-end">
+              <Button onClick={() => saveOvertimeRate.mutate()} disabled={saveOvertimeRate.isPending}>
+                <Save className="mr-2 h-4 w-4" />{t('employeeDetail.text.saveOvertimeRate')}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>{t('employeeDetail.text.allowancesTitle')}</CardTitle>

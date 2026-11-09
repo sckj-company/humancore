@@ -5,6 +5,7 @@ namespace App\Services\Payroll;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
+use App\Models\EmployeeLatenessEvent;
 use App\Models\EmployeeSchedule;
 use App\Models\LeaveRequest;
 use App\Models\PayrollInssRule;
@@ -20,6 +21,7 @@ use App\Services\Payroll\Rules\LatenessRule;
 use App\Services\Payroll\Rules\OvertimeRule;
 use App\Services\Payroll\Rules\SubsidyRule;
 use App\Services\Payroll\SalaryComponentFormulaEvaluator;
+use Carbon\Carbon;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -266,6 +268,25 @@ class PayrollEngineService
             }
 
             PayrollRecordItem::query()->insert($itemsToCreate);
+
+            $historyStart = Carbon::parse($period->period_start)
+                ->subMonthNoOverflow()
+                ->startOfMonth()
+                ->toDateString();
+            EmployeeLatenessEvent::query()
+                ->where('employee_id', $employee->id)
+                ->whereBetween('occurred_on', [$historyStart, $period->period_end])
+                ->delete();
+
+            foreach ($context->latenessEvents as $event) {
+                $sequence = $event['details']['sequence'] ?? 1;
+                EmployeeLatenessEvent::query()->create([
+                    'tenant_id' => $period->tenant_id,
+                    'employee_id' => $employee->id,
+                    'event_key' => implode(':', [$event['event_type'], $event['occurred_on'], $sequence]),
+                    ...$event,
+                ]);
+            }
 
             return $record;
         });

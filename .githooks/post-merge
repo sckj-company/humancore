@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+PROJECT_DIR="$(git rev-parse --show-toplevel)"
+exec "$PROJECT_DIR/scripts/deploy-vps.sh"

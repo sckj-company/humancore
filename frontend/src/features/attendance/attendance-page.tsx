@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Clock, LogIn, LogOut, Filter, Loader2 } from 'lucide-react'
+import { Clock, LogIn, LogOut, Filter, Loader2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
@@ -9,8 +9,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/shared/page-header'
-import type { AttendanceRecord, Paginated } from '@/types'
+import type { Paginated } from '@/types'
 
 const statusStyle: Record<string, string> = {
   present: 'bg-success/10 text-success',
@@ -33,15 +36,30 @@ interface AttendanceDTO {
   status: string
   late_minutes: number
   notes: string | null
+  deduct_from_salary?: boolean
+  shift_id?: number | null
+  shift?: { id: number; name: string; start_time: string; end_time: string } | null
   employee?: { id: number; full_name: string; employee_code: string }
+}
+
+interface MySchedule {
+  id: number
+  shift: { id: number; name: string; start_time: string; end_time: string } | null
+}
+
+interface EmployeeSchedule {
+  id: number
+  shift_id: number
+  effective_from: string
+  effective_to: string | null
+  is_active: boolean
+  shift: { id: number; name: string; start_time: string; end_time: string } | null
 }
 
 export function AttendancePage() {
   const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const isAdmin = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
-  const queryClient = useQueryClient()
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -56,10 +74,24 @@ export function AttendancePage() {
 function EmployeeAttendanceView() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const [selectedShiftId, setSelectedShiftId] = useState('')
+
+  const { data: schedules = [] } = useQuery({
+    queryKey: ['my-schedules'],
+    queryFn: () => api.get<MySchedule[]>('my-schedule'),
+  })
+
+  const assignedShifts = schedules.flatMap((schedule) => schedule.shift ? [schedule.shift] : [])
+
+  useEffect(() => {
+    if (!selectedShiftId && assignedShifts.length === 1) {
+      setSelectedShiftId(String(assignedShifts[0].id))
+    }
+  }, [schedules, selectedShiftId])
 
   const { data: today, isLoading, refetch } = useQuery({
-    queryKey: ['attendance-today'],
-    queryFn: () => api.get<AttendanceDTO | null>('attendance/today'),
+    queryKey: ['attendance-today', selectedShiftId],
+    queryFn: () => api.get<AttendanceDTO | null>('attendance/today', selectedShiftId ? { shift_id: Number(selectedShiftId) } : undefined),
   })
 
   const { data: history } = useQuery({
@@ -74,7 +106,7 @@ function EmployeeAttendanceView() {
   }
 
   const toggleMutation = useMutation({
-    mutationFn: () => api.post<AttendanceDTO>('attendance/toggle'),
+    mutationFn: () => api.post<AttendanceDTO>('attendance/toggle', selectedShiftId ? { shift_id: Number(selectedShiftId) } : {}),
     onSuccess: () => {
       toast.success('Registo atualizado com sucesso')
       invalidate()
@@ -95,6 +127,23 @@ function EmployeeAttendanceView() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           ) : (
             <>
+              {assignedShifts.length > 0 && (
+                <div className="w-full max-w-sm text-left">
+                  <Label htmlFor="attendance-shift">{t('attendance.shift')}</Label>
+                  <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
+                    <SelectTrigger id="attendance-shift" className="mt-1">
+                      <SelectValue placeholder={t('attendance.selectShift')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignedShifts.map((shift) => (
+                        <SelectItem key={shift.id} value={String(shift.id)}>
+                          {shift.name} ({shift.start_time}–{shift.end_time})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">{formatDate(today?.date ?? '', i18n.language)}</p>
                 {isClockedIn ? (
@@ -110,7 +159,7 @@ function EmployeeAttendanceView() {
               )}
               <Button
                 size="lg"
-                disabled={toggleMutation.isPending}
+                disabled={toggleMutation.isPending || (assignedShifts.length > 1 && !selectedShiftId)}
                 onClick={() => toggleMutation.mutate()}
                 variant={isClockedIn ? 'outline' : 'default'}
               >
@@ -139,6 +188,7 @@ function EmployeeAttendanceView() {
                 <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
                   <tr>
                     <th className="px-6 py-3 font-medium">{t('common.date')}</th>
+                    <th className="px-6 py-3 font-medium">{t('attendance.shift')}</th>
                     <th className="px-6 py-3 font-medium">Entrada</th>
                     <th className="px-6 py-3 font-medium">Saída</th>
                     <th className="px-6 py-3 font-medium text-right">Horas</th>
@@ -150,6 +200,7 @@ function EmployeeAttendanceView() {
                   {history?.data.map((r) => (
                     <tr key={r.id} className="transition-colors hover:bg-muted/30">
                       <td className="px-6 py-3 text-muted-foreground">{formatDate(r.date, i18n.language)}</td>
+                      <td className="px-6 py-3">{r.shift?.name ?? '—'}</td>
                       <td className="px-6 py-3">{r.clock_in ?? '—'}</td>
                       <td className="px-6 py-3">{r.clock_out ?? '—'}</td>
                       <td className="px-6 py-3 text-right font-mono">
@@ -176,6 +227,8 @@ function EmployeeAttendanceView() {
 function AdminAttendanceView() {
   const { t, i18n } = useTranslation()
   const [status, setStatus] = useState('all')
+  const [editing, setEditing] = useState<AttendanceDTO | null>(null)
+  const [editForm, setEditForm] = useState({ clock_in: '', clock_out: '', status: 'present', notes: '', shift_id: '', deduct_from_salary: false })
   const queryClient = useQueryClient()
 
   const params: Record<string, string | number> = { per_page: 30 }
@@ -185,15 +238,37 @@ function AdminAttendanceView() {
     queryKey: ['attendance', params],
     queryFn: () => api.get<Paginated<AttendanceDTO>>('attendance', params),
   })
+  const { data: scheduleData } = useQuery({
+    queryKey: ['attendance-editor-schedules', editing?.employee_id],
+    queryFn: () => api.get<Paginated<EmployeeSchedule>>('employee-schedules', { employee_id: editing?.employee_id, per_page: 100 }),
+    enabled: !!editing,
+  })
+  const editShifts = (scheduleData?.data ?? []).filter((schedule) =>
+    (schedule.is_active || schedule.shift_id === editing?.shift_id)
+    && schedule.effective_from <= (editing?.date ?? '')
+    && (!schedule.effective_to || schedule.effective_to >= (editing?.date ?? ''))
+    && schedule.shift,
+  )
 
   const editMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
-      api.put(`attendance/${id}`, { status }),
-    onSuccess: () => {
-      toast.success('Presença atualizada')
-      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+    mutationFn: () => {
+      if (!editing) throw new Error(t('attendance.editError'))
+
+      return api.put(`attendance/${editing.id}`, {
+        clock_in: editForm.clock_in || null,
+        clock_out: editForm.clock_out || null,
+        status: editForm.status,
+        notes: editForm.notes || null,
+        shift_id: editForm.shift_id ? Number(editForm.shift_id) : editing.shift_id ?? null,
+        deduct_from_salary: editForm.deduct_from_salary,
+      })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao atualizar')),
+    onSuccess: () => {
+      toast.success(t('attendance.updated'))
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      setEditing(null)
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('attendance.editError'))),
   })
 
   return (
@@ -237,6 +312,7 @@ function AdminAttendanceView() {
                   <tr>
                     <th className="px-6 py-3 font-medium">Funcionário</th>
                     <th className="px-6 py-3 font-medium">{t('common.date')}</th>
+                    <th className="px-6 py-3 font-medium">{t('attendance.shift')}</th>
                     <th className="px-6 py-3 font-medium">Entrada</th>
                     <th className="px-6 py-3 font-medium">Saída</th>
                     <th className="px-6 py-3 font-medium text-right">Horas</th>
@@ -255,6 +331,7 @@ function AdminAttendanceView() {
                         </div>
                       </td>
                       <td className="px-6 py-3 text-muted-foreground">{formatDate(r.date, i18n.language)}</td>
+                      <td className="px-6 py-3">{r.shift?.name ?? '—'}</td>
                       <td className="px-6 py-3">{r.clock_in ?? '—'}</td>
                       <td className="px-6 py-3">{r.clock_out ?? '—'}</td>
                       <td className="px-6 py-3 text-right font-mono">
@@ -267,21 +344,12 @@ function AdminAttendanceView() {
                         </Badge>
                       </td>
                       <td className="px-6 py-3 text-right">
-                        <Select
-                          value={r.status}
-                          onValueChange={(s) => editMutation.mutate({ id: r.id, status: s })}
-                        >
-                          <SelectTrigger size="sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="present">Presente</SelectItem>
-                            <SelectItem value="late">Atrasado</SelectItem>
-                            <SelectItem value="absent">Falta</SelectItem>
-                            <SelectItem value="half_day">Meio-dia</SelectItem>
-                            <SelectItem value="justified">Justificado</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Button size="icon-sm" variant="ghost" aria-label={t('common.edit')} onClick={() => {
+                          setEditing(r)
+                          setEditForm({ clock_in: r.clock_in ?? '', clock_out: r.clock_out ?? '', status: r.status, notes: r.notes ?? '', shift_id: r.shift_id ? String(r.shift_id) : '', deduct_from_salary: r.deduct_from_salary ?? false })
+                        }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -291,6 +359,74 @@ function AdminAttendanceView() {
           </CardContent>
         </Card>
       )}
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('attendance.editTitle')}</DialogTitle>
+            <DialogDescription>
+              {editing?.employee?.full_name} · {editing ? formatDate(editing.date, i18n.language) : ''} · {editing?.shift?.name ?? '—'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('attendance.clockIn')}</Label>
+                <Input type="time" value={editForm.clock_in} onChange={(event) => setEditForm((form) => ({ ...form, clock_in: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('attendance.clockOut')}</Label>
+                <Input type="time" value={editForm.clock_out} onChange={(event) => setEditForm((form) => ({ ...form, clock_out: event.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('common.status')}</Label>
+              <Select value={editForm.status} onValueChange={(value) => setEditForm((form) => ({ ...form, status: value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['present', 'late', 'absent', 'half_day', 'holiday', 'vacation', 'sick', 'justified'].map((value) => (
+                    <SelectItem key={value} value={value}>{t(`employeeDetail.attendanceStatus.${value}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {editShifts.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>{t('attendance.shift')}</Label>
+                <Select value={editForm.shift_id} onValueChange={(value) => setEditForm((form) => ({ ...form, shift_id: value }))}>
+                  <SelectTrigger><SelectValue placeholder={t('attendance.selectShift')} /></SelectTrigger>
+                  <SelectContent>
+                    {editShifts.map((schedule) => (
+                      <SelectItem key={schedule.id} value={String(schedule.shift_id)}>
+                        {schedule.shift?.name} ({schedule.shift?.start_time}–{schedule.shift?.end_time})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>{t('common.notes')}</Label>
+              <Input value={editForm.notes} onChange={(event) => setEditForm((form) => ({ ...form, notes: event.target.value }))} />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={editForm.deduct_from_salary}
+                onChange={(event) => setEditForm((form) => ({ ...form, deduct_from_salary: event.target.checked }))}
+                className="h-4 w-4"
+              />
+              {t('employeeDetail.text.deductSalary')}
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
+            <Button onClick={() => editMutation.mutate()} disabled={editMutation.isPending || (editShifts.length > 1 && !editForm.shift_id)}>
+              {editMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('common.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -42,6 +42,7 @@ class Employee extends Model
         'id_document_expiry',
         'tax_id',
         'social_security_id',
+        'overtime_hourly_rate',
         'photo_path',
         'status',
         'hired_at',
@@ -58,6 +59,7 @@ class Employee extends Model
             'hired_at' => 'date',
             'probation_end' => 'date',
             'termination_at' => 'date',
+            'overtime_hourly_rate' => 'decimal:2',
         ];
     }
 

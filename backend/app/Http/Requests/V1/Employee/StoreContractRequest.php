@@ -9,7 +9,7 @@ class StoreContractRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('create_contract');
+        return $this->user()->can($this->isMethod('POST') ? 'create_contract' : 'update_contract');
     }
 
     public function rules(): array
@@ -26,7 +26,7 @@ class StoreContractRequest extends FormRequest
             'manager_id' => ['nullable', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
             'signed_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
-            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png,webp', 'max:10240'],
         ];
     }
 }

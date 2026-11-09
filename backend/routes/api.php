@@ -169,6 +169,7 @@ Route::prefix('v1')->group(function () {
         Route::get('leave/my-requests', [LeaveController::class, 'myRequests']);
         Route::get('leave', [LeaveController::class, 'index']);
         Route::post('leave', [LeaveController::class, 'store']);
+        Route::put('leave/{leave}', [LeaveController::class, 'update']);
         Route::get('leave/{leave}/documents/{kind}', [LeaveController::class, 'downloadDocument'])->whereIn('kind', ['justification', 'signed']);
         Route::post('leave/{leave}/documents/{kind}', [LeaveController::class, 'uploadDocument'])->whereIn('kind', ['justification', 'signed']);
         Route::post('leave/{leave}/approve', [LeaveController::class, 'approve']);
@@ -179,6 +180,7 @@ Route::prefix('v1')->group(function () {
         Route::get('leaves/balance', [LeaveController::class, 'balance']);
         Route::get('leaves', [LeaveController::class, 'index']);
         Route::post('leaves', [LeaveController::class, 'store']);
+        Route::put('leaves/{leave}', [LeaveController::class, 'update']);
 
         // Settings
         Route::get('settings', [SettingController::class, 'index']);
