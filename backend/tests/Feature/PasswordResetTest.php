@@ -11,18 +11,20 @@ use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
 {
-    private function configureBrevo(): void
+    private function configureMailgun(): void
     {
         config([
-            'services.brevo.api_key' => 'test-api-key',
-            'services.brevo.sender_email' => 'no-reply@example.test',
-            'services.brevo.sender_name' => 'HumanCore',
+            'services.mailgun.api_key' => 'test-api-key',
+            'services.mailgun.domain' => 'mg.example.test',
+            'services.mailgun.region' => 'us',
+            'mail.from.address' => 'no-reply@example.test',
+            'mail.from.name' => 'HumanCore',
         ]);
     }
 
     public function test_user_can_request_verify_and_use_a_single_use_password_reset_code(): void
     {
-        $this->configureBrevo();
+        $this->configureMailgun();
         $user = User::factory()->create([
             'email' => 'recover@example.test',
             'password' => Hash::make('old-password'),
@@ -30,12 +32,13 @@ class PasswordResetTest extends TestCase
         $user->createToken('existing-session');
         $sentCode = null;
         Http::fake(function (ClientRequest $request) use (&$sentCode) {
-            $this->assertSame('https://api.brevo.com/v3/smtp/email', $request->url());
-            $this->assertTrue($request->hasHeader('api-key', 'test-api-key'));
-            preg_match('/\b(\d{6})\b/', $request->data()['htmlContent'], $matches);
+            $this->assertSame('https://api.mailgun.net/v3/mg.example.test/messages', $request->url());
+            $this->assertTrue($request->hasHeader('Authorization', 'Basic '.base64_encode('api:test-api-key')));
+            $this->assertSame('HumanCore <no-reply@example.test>', $request->data()['from']);
+            preg_match('/\b(\d{6})\b/', $request->data()['html'], $matches);
             $sentCode = $matches[1] ?? null;
 
-            return Http::response(['messageId' => 'test-message'], 201);
+            return Http::response(['id' => '<test-message>', 'message' => 'Queued. Thank you.'], 200);
         });
 
         $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])
@@ -80,7 +83,7 @@ class PasswordResetTest extends TestCase
 
     public function test_unknown_email_gets_generic_response_without_sending_email(): void
     {
-        $this->configureBrevo();
+        $this->configureMailgun();
         Http::fake();
 
         $this->postJson('/api/v1/auth/password-reset/request', ['email' => 'missing@example.test'])
@@ -90,11 +93,24 @@ class PasswordResetTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_missing_brevo_configuration_returns_service_unavailable_without_creating_a_code(): void
+    public function test_mailgun_uses_european_endpoint_when_configured(): void
+    {
+        $this->configureMailgun();
+        config(['services.mailgun.region' => 'eu']);
+        $user = User::factory()->create(['email' => 'european-user@example.test']);
+        Http::fake();
+
+        $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])
+            ->assertOk();
+
+        Http::assertSent(fn (ClientRequest $request) => $request->url() === 'https://api.eu.mailgun.net/v3/mg.example.test/messages');
+    }
+
+    public function test_missing_mailgun_configuration_returns_service_unavailable_without_creating_a_code(): void
     {
         config([
-            'services.brevo.api_key' => null,
-            'services.brevo.sender_email' => null,
+            'services.mailgun.api_key' => null,
+            'services.mailgun.domain' => null,
         ]);
         $user = User::factory()->create(['email' => 'no-mail-config@example.test']);
 
@@ -105,12 +121,12 @@ class PasswordResetTest extends TestCase
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
     }
 
-    public function test_brevo_delivery_error_returns_service_unavailable_and_removes_the_code(): void
+    public function test_mailgun_delivery_error_returns_service_unavailable_and_removes_the_code(): void
     {
-        $this->configureBrevo();
-        $user = User::factory()->create(['email' => 'brevo-error@example.test']);
+        $this->configureMailgun();
+        $user = User::factory()->create(['email' => 'mailgun-error@example.test']);
         Http::fake([
-            'api.brevo.com/v3/smtp/email' => Http::response(['message' => 'Invalid API key'], 401),
+            'api.mailgun.net/v3/mg.example.test/messages' => Http::response(['message' => 'Forbidden'], 401),
         ]);
 
         $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])
@@ -121,7 +137,7 @@ class PasswordResetTest extends TestCase
 
     public function test_code_expires_and_is_invalidated_after_too_many_attempts(): void
     {
-        $this->configureBrevo();
+        $this->configureMailgun();
         Http::fake();
         $user = User::factory()->create(['email' => 'expired@example.test']);
 

@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Services\Auth\PasswordResetService;
-use App\Services\Mail\BrevoConfigurationException;
+use App\Services\Mail\MailgunConfigurationException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -21,15 +21,15 @@ class PasswordResetController extends BaseController
 
         try {
             $passwordReset->requestCode($data['email']);
-        } catch (ConnectionException|RequestException|BrevoConfigurationException $exception) {
+        } catch (ConnectionException|RequestException|MailgunConfigurationException $exception) {
             Log::error('password_reset.email_delivery_failed', [
                 'exception' => $exception::class,
                 'reason' => match (true) {
-                    $exception instanceof RequestException => 'brevo_http_rejected',
-                    $exception instanceof BrevoConfigurationException => 'brevo_configuration_incomplete',
-                    default => 'brevo_connection_failed',
+                    $exception instanceof RequestException => 'mailgun_http_rejected',
+                    $exception instanceof MailgunConfigurationException => 'mailgun_configuration_incomplete',
+                    default => 'mailgun_connection_failed',
                 },
-                'brevo_status' => $exception instanceof RequestException
+                'mailgun_status' => $exception instanceof RequestException
                     ? $exception->response->status()
                     : null,
             ]);

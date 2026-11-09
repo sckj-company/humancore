@@ -4,8 +4,8 @@ namespace App\Services\Auth;
 
 use App\Models\User;
 use App\Services\Audit\AuditService;
-use App\Services\Mail\BrevoConfigurationException;
-use App\Services\Mail\BrevoMailer;
+use App\Services\Mail\MailgunConfigurationException;
+use App\Services\Mail\MailgunMailer;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class PasswordResetService
 {
-    public function __construct(private readonly BrevoMailer $mailer) {}
+    public function __construct(private readonly MailgunMailer $mailer) {}
 
     public function requestCode(string $email): void
     {
@@ -44,7 +44,7 @@ class PasswordResetService
 
         try {
             $this->mailer->sendPasswordResetCode($user, $code);
-        } catch (ConnectionException|RequestException|BrevoConfigurationException $exception) {
+        } catch (ConnectionException|RequestException|MailgunConfigurationException $exception) {
             $this->resetTokenRecord($user->email)->delete();
 
             throw $exception;

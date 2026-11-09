@@ -7,19 +7,21 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
-## Redefinição de palavra-passe e Brevo
+## Redefinição de palavra-passe e Mailgun
 
-A recuperação pública está disponível em `/forgot-password`. O sistema envia um código de seis dígitos pelo endpoint transacional da Brevo; o código expira em 15 minutos, aceita no máximo cinco tentativas e é substituído por uma credencial temporária após a confirmação. Para habilitar o envio, configure no ambiente do backend:
+A recuperação pública está disponível em `/forgot-password`. O sistema envia um código de seis dígitos pela API de envio do Mailgun; o código expira em 15 minutos, aceita no máximo cinco tentativas e é substituído por uma credencial temporária após a confirmação. Para habilitar o envio, configure no ambiente do backend:
 
 ```env
-BREVO_API_KEY=chave-da-api
-BREVO_SENDER_EMAIL=email-remetente-verificado
-BREVO_SENDER_NAME=HumanCore
+MAILGUN_API_KEY=chave-da-api
+MAILGUN_DOMAIN=mg.seudominio.com
+MAILGUN_REGION=us
+MAIL_FROM_ADDRESS=no-reply@seudominio.com
+MAIL_FROM_NAME=HumanCore
 PASSWORD_RESET_CODE_TTL=15
 PASSWORD_RESET_MAX_ATTEMPTS=5
 ```
 
-O remetente deve estar validado na conta Brevo. Depois de configurar as variáveis, atualize a configuração em cache, se aplicável, e execute `php artisan migrate --force` para adicionar o contador de tentativas. O super administrador também pode definir diretamente uma nova palavra-passe na gestão de utilizadores; essa ação revoga os tokens existentes do utilizador.
+O domínio deve estar adicionado e validado na conta Mailgun, e o endereço do remetente deve pertencer a esse domínio. Domínios `sandbox` só enviam para destinatários autorizados no Mailgun; para envio geral, use um domínio de envio próprio validado. Use `MAILGUN_REGION=eu` para uma conta/domínio hospedado na região europeia; a região padrão é `us`. Depois de configurar as variáveis, atualize a configuração em cache, se aplicável, e execute `php artisan migrate --force` para adicionar o contador de tentativas. O super administrador também pode definir diretamente uma nova palavra-passe na gestão de utilizadores; essa ação revoga os tokens existentes do utilizador.
 
 ## Logs operacionais e auditoria no terminal
 
