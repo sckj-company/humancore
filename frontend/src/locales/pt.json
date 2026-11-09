@@ -52,6 +52,7 @@
     "passwordDescription": "Escolha uma nova palavra-passe para a sua conta.",
     "requestSuccess": "Se o email estiver registado, receberá um código de verificação.",
     "requestError": "Não foi possível solicitar a redefinição.",
+    "emailUnavailable": "O serviço de email está temporariamente indisponível. Tente novamente mais tarde.",
     "codeConfirmed": "Código confirmado. Defina uma nova palavra-passe.",
     "codeError": "Não foi possível confirmar o código.",
     "passwordMinLength": "A palavra-passe deve ter pelo menos 8 caracteres.",

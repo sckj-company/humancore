@@ -33,6 +33,7 @@
     "passwordDescription": "Choose a new password for your account.",
     "requestSuccess": "If the email is registered, you will receive a verification code.",
     "requestError": "Could not request a password reset.",
+    "emailUnavailable": "The email service is temporarily unavailable. Please try again later.",
     "codeConfirmed": "Code confirmed. Set a new password.",
     "codeError": "Could not verify the code.",
     "passwordMinLength": "The password must be at least 8 characters.",

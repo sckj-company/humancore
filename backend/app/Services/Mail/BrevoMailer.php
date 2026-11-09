@@ -5,14 +5,13 @@ namespace App\Services\Mail;
 use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
 
 class BrevoMailer
 {
     public function assertConfigured(): void
     {
         if (! config('services.brevo.api_key') || ! config('services.brevo.sender_email')) {
-            throw new RuntimeException('A configuração da API Brevo está incompleta.');
+            throw new BrevoConfigurationException('A configuração da API Brevo está incompleta.');
         }
     }
 

@@ -4,6 +4,7 @@ namespace App\Services\Auth;
 
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\Mail\BrevoConfigurationException;
 use App\Services\Mail\BrevoMailer;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Client\ConnectionException;
@@ -13,7 +14,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 class PasswordResetService
 {
@@ -44,7 +44,7 @@ class PasswordResetService
 
         try {
             $this->mailer->sendPasswordResetCode($user, $code);
-        } catch (ConnectionException|RequestException|RuntimeException $exception) {
+        } catch (ConnectionException|RequestException|BrevoConfigurationException $exception) {
             $this->resetTokenRecord($user->email)->delete();
 
             throw $exception;

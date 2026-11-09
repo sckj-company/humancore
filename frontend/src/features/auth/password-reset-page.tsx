@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
+import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,8 +31,12 @@ export function PasswordResetPage() {
       await api.post('auth/password-reset/request', { email })
       setStep('verify')
       toast.success(t('passwordReset.requestSuccess'))
-    } catch {
-      toast.error(t('passwordReset.requestError'))
+    } catch (error) {
+      toast.error(
+        axios.isAxiosError(error) && error.response?.status === 503
+          ? t('passwordReset.emailUnavailable')
+          : t('passwordReset.requestError'),
+      )
     } finally {
       setIsSubmitting(false)
     }

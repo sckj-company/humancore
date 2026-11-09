@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends BaseController
 {
@@ -67,7 +68,14 @@ class AuthController extends BaseController
 
         AuditService::record('logout', $user, ['logout_at' => now()->toDateTimeString()]);
 
-        $user->currentAccessToken()->delete();
+        $accessToken = $user->currentAccessToken();
+        if ($accessToken instanceof PersonalAccessToken) {
+            $accessToken->delete();
+        } elseif ($request->hasSession() && auth('web')->check()) {
+            auth('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return $this->success(null, 'Logout realizado com sucesso.');
     }

@@ -90,6 +90,35 @@ class PasswordResetTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_missing_brevo_configuration_returns_service_unavailable_without_creating_a_code(): void
+    {
+        config([
+            'services.brevo.api_key' => null,
+            'services.brevo.sender_email' => null,
+        ]);
+        $user = User::factory()->create(['email' => 'no-mail-config@example.test']);
+
+        $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('message', 'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.');
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
+    }
+
+    public function test_brevo_delivery_error_returns_service_unavailable_and_removes_the_code(): void
+    {
+        $this->configureBrevo();
+        $user = User::factory()->create(['email' => 'brevo-error@example.test']);
+        Http::fake([
+            'api.brevo.com/v3/smtp/email' => Http::response(['message' => 'Invalid API key'], 401),
+        ]);
+
+        $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])
+            ->assertServiceUnavailable();
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
+    }
+
     public function test_code_expires_and_is_invalidated_after_too_many_attempts(): void
     {
         $this->configureBrevo();

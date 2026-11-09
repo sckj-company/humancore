@@ -118,4 +118,16 @@ class AuthTest extends TestCase
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
+
+    public function test_logout_handles_a_stateful_session_without_deleting_a_transient_token(): void
+    {
+        $user = $this->makeUser();
+        app(TenantManager::class)->set($user->tenant);
+        $user->withAccessToken(new \Laravel\Sanctum\TransientToken);
+
+        $response = $this->actingAs($user)->postJson('/api/v1/auth/logout');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true);
+    }
 }

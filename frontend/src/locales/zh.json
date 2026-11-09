@@ -33,6 +33,7 @@
     "passwordDescription": "为您的账户设置新密码。",
     "requestSuccess": "如果该邮箱已注册，您将收到验证码。",
     "requestError": "无法提交密码重置请求。",
+    "emailUnavailable": "电子邮件服务暂时不可用，请稍后重试。",
     "codeConfirmed": "验证码已确认。请设置新密码。",
     "codeError": "无法验证验证码。",
     "passwordMinLength": "密码至少需要8个字符。",
