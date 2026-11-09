@@ -20,9 +20,16 @@ interface AllowanceValue {
 
 interface EmployeePayrollSettings {
   has_active_contract: boolean
+  advance_monthly_limit: number
+  advance_monthly_used: number
+  advance_monthly_remaining: number
   allowances: {
     meal: AllowanceValue
     transport: AllowanceValue
+    vacation: AllowanceValue
+    christmas: AllowanceValue
+    family: AllowanceValue
+    additional: AllowanceValue
   }
 }
 
@@ -31,6 +38,10 @@ interface AllowanceForm {
   mealPeriod: 'daily' | 'weekly' | 'fixed'
   transportAmount: string
   transportPeriod: 'daily' | 'weekly' | 'fixed'
+  vacationAmount: string
+  christmasAmount: string
+  familyAmount: string
+  additionalAmount: string
 }
 
 const emptyAllowanceForm: AllowanceForm = {
@@ -38,6 +49,10 @@ const emptyAllowanceForm: AllowanceForm = {
   mealPeriod: 'daily',
   transportAmount: '0',
   transportPeriod: 'daily',
+  vacationAmount: '0',
+  christmasAmount: '0',
+  familyAmount: '0',
+  additionalAmount: '0',
 }
 
 export function EmployeePayrollTab({
@@ -59,10 +74,11 @@ export function EmployeePayrollTab({
   const [deductionTotal, setDeductionTotal] = useState('')
   const [installmentCount, setInstallmentCount] = useState('1')
   const [deductionStartPeriod, setDeductionStartPeriod] = useState(() => new Date().toISOString().slice(0, 7))
+  const payrollSettingsQueryKey = ['employees', employeeId, 'payroll-settings', deductionStartPeriod]
 
   const settings = useQuery({
-    queryKey: ['employees', employeeId, 'payroll-settings'],
-    queryFn: () => api.get<EmployeePayrollSettings>(`employees/${employeeId}/payroll-settings`),
+    queryKey: payrollSettingsQueryKey,
+    queryFn: () => api.get<EmployeePayrollSettings>(`employees/${employeeId}/payroll-settings`, { period: deductionStartPeriod }),
   })
   const deductions = useQuery({
     queryKey: ['deductions', 'employee', employeeId],
@@ -79,6 +95,10 @@ export function EmployeePayrollTab({
       mealPeriod: values.meal.period,
       transportAmount: String(values.transport.amount),
       transportPeriod: values.transport.period,
+      vacationAmount: String(values.vacation.amount),
+      christmasAmount: String(values.christmas.amount),
+      familyAmount: String(values.family.amount),
+      additionalAmount: String(values.additional.amount),
     })
   }, [settings.data])
 
@@ -87,11 +107,15 @@ export function EmployeePayrollTab({
       allowances: {
         meal: { amount: Number(allowances.mealAmount), period: allowances.mealPeriod },
         transport: { amount: Number(allowances.transportAmount), period: allowances.transportPeriod },
+        vacation: { amount: Number(allowances.vacationAmount), period: 'fixed' },
+        christmas: { amount: Number(allowances.christmasAmount), period: 'fixed' },
+        family: { amount: Number(allowances.familyAmount), period: 'fixed' },
+        additional: { amount: Number(allowances.additionalAmount), period: 'fixed' },
       },
     }),
     onSuccess: (value) => {
       toast.success(t('employeeDetail.text.payrollSaved'))
-      queryClient.setQueryData(['employees', employeeId, 'payroll-settings'], value)
+      queryClient.setQueryData(payrollSettingsQueryKey, value)
       queryClient.invalidateQueries({ queryKey: ['employees', employeeId, 'payroll-settings'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('employeeDetail.text.payrollSaveError'))),
@@ -147,6 +171,7 @@ export function EmployeePayrollTab({
     period: 'daily' | 'weekly' | 'fixed',
     setAmount: (value: string) => void,
     setPeriod: (value: 'daily' | 'weekly' | 'fixed') => void,
+    periodEditable = true,
   ) => (
     <div className="space-y-3 rounded-lg border border-border p-4">
       <h3 className="font-medium">{title}</h3>
@@ -157,7 +182,7 @@ export function EmployeePayrollTab({
         </div>
         <div className="space-y-1.5">
           <Label>{t('employeeDetail.text.allowancePeriod')}</Label>
-          <Select value={period} onValueChange={(value) => setPeriod(value as 'daily' | 'weekly' | 'fixed')} disabled={!canManageAllowances || !settings.data?.has_active_contract}>
+          <Select value={period} onValueChange={(value) => setPeriod(value as 'daily' | 'weekly' | 'fixed')} disabled={!periodEditable || !canManageAllowances || !settings.data?.has_active_contract}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="daily">{t('employeeDetail.text.daily')}</SelectItem>
@@ -169,6 +194,7 @@ export function EmployeePayrollTab({
       </div>
     </div>
   )
+  const plannedAdvanceInstallment = Number(deductionTotal) / Math.max(1, Number(installmentCount))
 
   return (
     <div className="mt-6 space-y-6">
@@ -189,6 +215,18 @@ export function EmployeePayrollTab({
           {renderAllowance(t('employeeDetail.text.transportAllowance'), allowances.transportAmount, allowances.transportPeriod,
             (value) => setAllowances((current) => ({ ...current, transportAmount: value })),
             (value) => setAllowances((current) => ({ ...current, transportPeriod: value })))}
+          {renderAllowance(t('employeeDetail.text.vacationAllowance'), allowances.vacationAmount, 'fixed',
+            (value) => setAllowances((current) => ({ ...current, vacationAmount: value })),
+            () => undefined, false)}
+          {renderAllowance(t('employeeDetail.text.christmasAllowance'), allowances.christmasAmount, 'fixed',
+            (value) => setAllowances((current) => ({ ...current, christmasAmount: value })),
+            () => undefined, false)}
+          {renderAllowance(t('employeeDetail.text.familyAllowance'), allowances.familyAmount, 'fixed',
+            (value) => setAllowances((current) => ({ ...current, familyAmount: value })),
+            () => undefined, false)}
+          {renderAllowance(t('employeeDetail.text.additionalAllowance'), allowances.additionalAmount, 'fixed',
+            (value) => setAllowances((current) => ({ ...current, additionalAmount: value })),
+            () => undefined, false)}
           {canManageAllowances && (
             <div className="flex justify-end">
               <Button onClick={() => saveAllowances.mutate()} disabled={saveAllowances.isPending || !settings.data.has_active_contract}>
@@ -237,6 +275,27 @@ export function EmployeePayrollTab({
                     <p className="text-xs text-muted-foreground">{t('employeeDetail.text.deductionStartPeriodDescription')}</p>
                   </div>
                 </div>
+                {deductionType === 'advance' && settings.data && (
+                  <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+                    <p className="font-medium">
+                      {t('employeeDetail.text.advanceMonthlyLimit', {
+                        amount: settings.data.advance_monthly_limit.toLocaleString(undefined, { minimumFractionDigits: 2 }),
+                      })}
+                    </p>
+                    <p className="mt-1 text-muted-foreground">
+                      {t('employeeDetail.text.advanceMonthlyRemaining', {
+                        amount: settings.data.advance_monthly_remaining.toLocaleString(undefined, { minimumFractionDigits: 2 }),
+                      })}
+                    </p>
+                    {plannedAdvanceInstallment > settings.data.advance_monthly_remaining && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        {t('employeeDetail.text.advanceInstallmentCapped', {
+                          amount: settings.data.advance_monthly_remaining.toLocaleString(undefined, { minimumFractionDigits: 2 }),
+                        })}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="flex justify-end">
                   <Button onClick={() => createDeduction.mutate()} disabled={createDeduction.isPending || !deductionName.trim() || !deductionTotal}>
                     <Plus className="mr-2 h-4 w-4" />{t('employeeDetail.text.addDeduction')}

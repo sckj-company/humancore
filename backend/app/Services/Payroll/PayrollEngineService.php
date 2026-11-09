@@ -563,6 +563,7 @@ class PayrollEngineService
             ->where('status', 'active')
             ->where(fn ($query) => $query->whereNull('starts_at')
                 ->orWhereDate('starts_at', '<=', $period->period_end))
+            ->orderBy('id')
             ->get();
 
         return $context;
@@ -574,6 +575,26 @@ class PayrollEngineService
     protected function calculateEmployeeDeductions(PayrollContext $context, float $gross): array
     {
         $breakdown = [];
+        $advanceMonthlyLimit = max(0, (float) $context->setting('payroll.advance.monthly_limit', 0));
+        $advanceMonthlyUsed = 0.0;
+
+        if ($advanceMonthlyLimit > 0) {
+            $monthStart = \Carbon\Carbon::parse($context->period->period_start)->startOfMonth()->toDateString();
+            $monthEnd = \Carbon\Carbon::parse($context->period->period_start)->endOfMonth()->toDateString();
+            $advanceMonthlyUsed = (float) PayrollRecordItem::query()
+                ->whereHas('deduction', fn ($query) => $query
+                    ->where('employee_id', $context->employee->id)
+                    ->where('deduction_type', 'advance'))
+                ->whereHas('payrollRecord', fn ($query) => $query
+                    ->where('employee_id', $context->employee->id)
+                    ->where('payroll_period_id', '!=', $context->period->id)
+                    ->whereIn('status', ['calculated', 'approved', 'paid'])
+                    ->whereHas('period', fn ($periodQuery) => $periodQuery
+                        ->whereBetween('period_start', [$monthStart, $monthEnd])))
+                ->get(['amount'])
+                ->sum(fn (PayrollRecordItem $item) => abs((float) $item->amount));
+        }
+        $advanceMonthlyRemaining = max(0, $advanceMonthlyLimit - $advanceMonthlyUsed);
 
         foreach ($context->deductions as $deduction) {
             if (! $deduction->is_recurring && $deduction->total_amount === null && (float) $deduction->paid_amount > 0) {
@@ -599,6 +620,11 @@ class PayrollEngineService
                 } else {
                     $amount = min($amount, $remaining);
                 }
+            }
+
+            if ($deduction->deduction_type === 'advance') {
+                $amount = min($amount, $advanceMonthlyRemaining);
+                $advanceMonthlyRemaining = max(0, $advanceMonthlyRemaining - $amount);
             }
 
             $amount = round($amount, 2);

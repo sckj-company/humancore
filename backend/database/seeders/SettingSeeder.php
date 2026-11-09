@@ -33,7 +33,7 @@ class SettingSeeder extends Seeder
             ],
             'payroll' => [
                 'inss.employee_rate' => 3.0,
-                'inss.employer_rate' => 5.5,
+                'inss.employer_rate' => 8.0,
                 'irt.enabled' => true,
                 'irt.brackets' => [
                     ['min' => 0, 'max' => 100000, 'rate' => 0],
@@ -45,12 +45,13 @@ class SettingSeeder extends Seeder
                 'discounts.absence_daily_amount' => 0,
                 'discounts.lateness_hourly_amount' => 0,
                 'discounts.lateness_minute_amount' => 0,
-                'discounts.lateness_free_occurrences_per_week' => 1,
+                'discounts.lateness_free_occurrences_per_week' => 0,
                 'discounts.lateness_weekly_accumulation_minutes' => 0,
                 'discounts.dayoff_daily_amount' => 0,
                 'discounts.default_amount' => 0,
-                'subsidies.meal.daily' => 5000,
-                'subsidies.transport.monthly' => 30000,
+                'subsidies.meal.daily' => 0,
+                'subsidies.transport.monthly' => 0,
+                'advance.monthly_limit' => 0,
                 'payment_date' => 5,
             ],
             'communication' => [

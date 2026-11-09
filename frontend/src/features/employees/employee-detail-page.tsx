@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
@@ -122,6 +122,19 @@ export function EmployeeDetailPage() {
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const attRecords = attendanceData?.data ?? []
+  const attendanceByWeek = useMemo(() => {
+    const weeks = new Map<string, { start: string; records: AttendanceRecord[]; lateMinutes: number }>()
+    for (const record of [...attRecords].sort((a, b) => b.date.localeCompare(a.date))) {
+      const date = new Date(`${record.date}T00:00:00Z`)
+      date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7))
+      const weekStart = date.toISOString().slice(0, 10)
+      const week = weeks.get(weekStart) ?? { start: weekStart, records: [], lateMinutes: 0 }
+      week.records.push(record)
+      week.lateMinutes += record.late_minutes ?? 0
+      weeks.set(weekStart, week)
+    }
+    return [...weeks.values()]
+  }, [attRecords])
   const selectedManualRecord = attRecords.find((r) => r.date === manualAttForm.date) || (todayAttendance?.date === manualAttForm.date ? todayAttendance : null)
   const isManualDateFuture = manualAttForm.date > todayStr
   const isManualDateClosed = !!(selectedManualRecord?.clock_in && selectedManualRecord?.clock_out)
@@ -674,17 +687,27 @@ export function EmployeeDetailPage() {
                 <div className="py-10 text-center text-muted-foreground text-sm"><UserCheck className="h-10 w-10 mx-auto mb-2 opacity-30" /><p className="font-medium">{t('employeeDetail.text.noAttendance')}</p></div>
               ) : (
                 <div className="rounded-lg border border-border overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-sm">
-                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.date')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockIn')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockOut')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.total')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th></tr></thead>
+                  <table className="w-full min-w-[760px] text-sm">
+                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.date')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockIn')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockOut')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.total')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.dailyLateMinutes')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th></tr></thead>
                     <tbody className="divide-y divide-border">
-                      {attRecords.map((rec) => (
-                        <tr key={rec.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3 font-mono text-xs">{formatDate(rec.date)}</td>
-                          <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_in)}</td>
-                          <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_out)}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatMinutes(rec.total_worked)}</td>
-                          <td className="px-4 py-3"><Badge variant="outline" className={`text-[10px] font-medium ${attendanceStatusColors[rec.status] ?? ''}`}>{attendanceStatusLabels[rec.status] ?? rec.status}</Badge></td>
-                        </tr>
+                      {attendanceByWeek.map((week) => (
+                        <Fragment key={week.start}>
+                          {week.records.map((rec) => (
+                            <tr key={rec.id} className="hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-3 font-mono text-xs">{formatDate(rec.date)}</td>
+                              <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_in)}</td>
+                              <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_out)}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatMinutes(rec.total_worked)}</td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">{rec.late_minutes ?? 0} min</td>
+                              <td className="px-4 py-3"><Badge variant="outline" className={`text-[10px] font-medium ${attendanceStatusColors[rec.status] ?? ''}`}>{attendanceStatusLabels[rec.status] ?? rec.status}</Badge></td>
+                            </tr>
+                          ))}
+                          <tr className="bg-muted/40 font-semibold">
+                            <td colSpan={4} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
+                            <td className="px-4 py-2 text-right font-mono text-xs">{week.lateMinutes} min</td>
+                            <td />
+                          </tr>
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>

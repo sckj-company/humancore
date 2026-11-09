@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Payroll;
 
 use App\Http\Controllers\Api\V1\BaseController;
+use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
 use App\Services\Payroll\PayslipPdfService;
 use Illuminate\Http\Request;
@@ -10,6 +11,22 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class PayslipController extends BaseController
 {
+    public function downloadPeriod(PayrollPeriod $period, PayslipPdfService $payslips): SymfonyResponse
+    {
+        $this->authorize('view', $period);
+
+        $period->load([
+            'tenant',
+            'records.employee',
+            'records.contract.position',
+            'records.items.deduction',
+        ]);
+
+        $filename = 'folha-salarial-'.$period->id.'.pdf';
+
+        return $payslips->renderPeriod($period)->download($filename);
+    }
+
     public function show(PayrollRecord $record, Request $request, PayslipPdfService $payslips): SymfonyResponse
     {
         $this->authorize('view', $record);

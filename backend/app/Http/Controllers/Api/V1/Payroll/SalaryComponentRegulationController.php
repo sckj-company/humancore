@@ -92,6 +92,8 @@ class SalaryComponentRegulationController extends BaseController
             ['code' => 'commission', 'name' => 'Comissões', 'type' => 'earning', 'calculation_type' => 'percentage', 'priority' => 41],
             ['code' => 'vacation_subsidy', 'name' => 'Subsídio de Férias', 'type' => 'benefit', 'calculation_type' => 'fixed', 'priority' => 50],
             ['code' => 'christmas_subsidy', 'name' => 'Subsídio de Natal', 'type' => 'benefit', 'calculation_type' => 'fixed', 'priority' => 51],
+            ['code' => 'family_allowance', 'name' => 'Abono de Família', 'type' => 'benefit', 'calculation_type' => 'fixed', 'priority' => 52],
+            ['code' => 'additional_allowance', 'name' => 'Abono Adicional', 'type' => 'earning', 'calculation_type' => 'fixed', 'priority' => 53],
         ];
 
         $componentsCreated = 0;

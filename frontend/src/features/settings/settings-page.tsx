@@ -40,6 +40,7 @@ const SETTING_GROUP_META: { key: string; icon: typeof Building2; titleKey: strin
   { key: 'communication', icon: Mail, titleKey: 'groups.communication' },
 ]
 const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string }[] = [
+  { key: 'advance.monthly_limit', labelKey: 'discounts.advanceMonthlyLimit', descriptionKey: 'discounts.advanceMonthlyLimitDescription' },
   { key: 'discounts.absence_daily_amount', labelKey: 'discounts.absenceDaily', descriptionKey: 'discounts.absenceDailyDescription' },
   { key: 'discounts.lateness_hourly_amount', labelKey: 'discounts.latenessHourly', descriptionKey: 'discounts.latenessHourlyDescription' },
   { key: 'discounts.lateness_minute_amount', labelKey: 'discounts.latenessMinute', descriptionKey: 'discounts.latenessMinuteDescription' },
@@ -117,7 +118,7 @@ export function SettingsPage() {
   const payrollDiscountSettings = useMemo(
     () =>
       (data?.payroll ?? [])
-        .filter((s) => s.key.startsWith('discounts.'))
+        .filter((s) => s.key.startsWith('discounts.') || s.key === 'advance.monthly_limit')
         .sort((a, b) => a.key.localeCompare(b.key)),
     [data],
   )

@@ -195,8 +195,12 @@ class SuperAdminController extends BaseController
             // Seed default salary components
             $salaryDefaults = [
                 ['code' => 'base_salary',         'name' => 'Salário Base',             'type' => 'earning',   'calculation_type' => 'fixed',      'is_mandatory' => true,  'priority' => 10],
-                ['code' => 'meal_allowance',      'name' => 'Subsídio de Refeição',     'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 5000, 'is_mandatory' => true, 'priority' => 20],
-                ['code' => 'transport_allowance', 'name' => 'Subsídio de Transporte',   'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 30000,'is_mandatory' => true, 'priority' => 21],
+                ['code' => 'meal_allowance',      'name' => 'Subsídio de Refeição',     'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 20],
+                ['code' => 'transport_allowance', 'name' => 'Subsídio de Transporte',   'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 21],
+                ['code' => 'vacation_subsidy',    'name' => 'Subsídio de Férias',       'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 22],
+                ['code' => 'christmas_subsidy',   'name' => 'Subsídio de Natal',        'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 23],
+                ['code' => 'family_allowance',   'name' => 'Abono de Família',         'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 24],
+                ['code' => 'additional_allowance','name' => 'Abono Adicional',          'type' => 'earning',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 25],
                 ['code' => 'overtime',            'name' => 'Horas Extraordinárias',    'type' => 'earning',   'calculation_type' => 'formula',    'is_mandatory' => true,  'priority' => 30],
                 ['code' => 'inss',                'name' => 'INSS (Funcionário)',        'type' => 'deduction', 'calculation_type' => 'percentage', 'default_value' => 3,    'is_mandatory' => true, 'priority' => 100],
                 ['code' => 'irt',                 'name' => 'IRT',                      'type' => 'tax',       'calculation_type' => 'formula',    'is_mandatory' => true,  'priority' => 110],

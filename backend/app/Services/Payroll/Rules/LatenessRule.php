@@ -41,10 +41,10 @@ class LatenessRule extends AbstractPayrollRule
             return 0.0;
         }
 
-        $minuteRate = (float) $context->setting(
-            'payroll.discounts.lateness_minute_amount',
-            ((float) $context->setting('payroll.discounts.lateness_hourly_amount', (float) $context->contract->base_salary / 220)) / 60,
-        );
+        $minuteRate = (float) $context->setting('payroll.discounts.lateness_minute_amount', 0);
+        if ($minuteRate <= 0) {
+            $minuteRate = (float) $context->setting('payroll.discounts.lateness_hourly_amount', 0) / 60;
+        }
 
         $freeOccurrencesPerWeek = (int) $context->setting('payroll.discounts.lateness_free_occurrences_per_week', 0);
         $weeklyAccumulationMinutes = (int) $context->setting('payroll.discounts.lateness_weekly_accumulation_minutes', 0);

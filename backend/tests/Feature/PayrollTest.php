@@ -256,6 +256,51 @@ class PayrollTest extends TestCase
         $this->assertSame(-10000.0, (float) $followingInstallment->items()->where('deduction_id', $deduction->id)->value('amount'));
     }
 
+    public function test_advance_deductions_are_capped_across_payroll_periods_in_same_month(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'advance.monthly_limit'],
+            ['value' => 10000],
+        );
+        $deduction = Deduction::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'name' => 'Adiantamento mensal',
+            'deduction_type' => 'advance',
+            'amount_type' => 'fixed',
+            'amount' => 7000,
+            'total_amount' => 14000,
+            'paid_amount' => 0,
+            'installment_count' => 2,
+            'installment_amount' => 7000,
+            'is_recurring' => false,
+            'status' => 'active',
+        ]);
+        $firstPeriod = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026 — 1.ª quinzena',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-15',
+            'status' => 'open',
+        ]);
+        $secondPeriod = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026 — 2.ª quinzena',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-16',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        $firstRecord = app(PayrollEngineService::class)->calculateForEmployee($firstPeriod, $employee);
+        $secondRecord = app(PayrollEngineService::class)->calculateForEmployee($secondPeriod, $employee);
+
+        $this->assertSame(-7000.0, (float) $firstRecord->items()->where('deduction_id', $deduction->id)->value('amount'));
+        $this->assertSame(-3000.0, (float) $secondRecord->items()->where('deduction_id', $deduction->id)->value('amount'));
+    }
+
     public function test_deduction_api_saves_starting_payroll_period(): void
     {
         [$tenant, $employee, $user] = $this->setupTenantWithEmployee();
@@ -357,6 +402,36 @@ class PayrollTest extends TestCase
         $this->assertSame(56000.0, (float) $record->items()->where('code', 'employer_inss')->value('amount'));
     }
 
+    public function test_absence_deduction_is_zero_without_a_configured_daily_amount(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        Setting::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('group', 'payroll')
+            ->where('key', 'discounts.absence_daily_amount')
+            ->delete();
+
+        AttendanceRecord::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'date' => '2026-11-04',
+            'status' => 'absent',
+            'deduct_from_salary' => true,
+        ]);
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(0.0, (float) $record->items()->where('code', 'absence')->value('amount'));
+    }
+
     public function test_employee_daily_and_weekly_allowances_are_prorated_in_payroll(): void
     {
         [$tenant, $employee, $user] = $this->setupTenantWithEmployee();
@@ -366,6 +441,10 @@ class PayrollTest extends TestCase
                 'allowances' => [
                     'meal' => ['amount' => 1000, 'period' => 'daily'],
                     'transport' => ['amount' => 5000, 'period' => 'weekly'],
+                    'vacation' => ['amount' => 30000, 'period' => 'fixed'],
+                    'christmas' => ['amount' => 15000, 'period' => 'fixed'],
+                    'family' => ['amount' => 5000, 'period' => 'fixed'],
+                    'additional' => ['amount' => 2500, 'period' => 'fixed'],
                 ],
             ])
             ->assertOk()
@@ -386,6 +465,10 @@ class PayrollTest extends TestCase
         $this->assertSame(21.0, (float) $record->work_days);
         $this->assertSame(21000.0, (float) $record->items()->where('code', 'meal_allowance')->value('amount'));
         $this->assertSame(21000.0, (float) $record->items()->where('code', 'transport_allowance')->value('amount'));
+        $this->assertSame(30000.0, (float) $record->items()->where('code', 'vacation_subsidy')->value('amount'));
+        $this->assertSame(15000.0, (float) $record->items()->where('code', 'christmas_subsidy')->value('amount'));
+        $this->assertSame(5000.0, (float) $record->items()->where('code', 'family_allowance')->value('amount'));
+        $this->assertSame(2500.0, (float) $record->items()->where('code', 'additional_allowance')->value('amount'));
     }
 
     public function test_lateness_rule_uses_minute_rate_and_weekly_threshold(): void
@@ -441,6 +524,10 @@ class PayrollTest extends TestCase
             ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'subsidies.meal.daily'],
             ['value' => 1000],
         );
+        Setting::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'discounts.absence_daily_amount'],
+            ['value' => 1000],
+        );
 
         $paidVacation = LeaveType::create([
             'tenant_id' => $tenant->id,
@@ -491,7 +578,7 @@ class PayrollTest extends TestCase
         $this->assertSame(18.0, (float) $record->work_days);
         $this->assertSame(1.0, (float) $record->absent_days);
         $this->assertSame(18000.0, (float) $record->items()->where('code', 'meal_subsidy')->value('amount'));
-        $this->assertSame(-round(700000 / 30, 2), (float) $record->items()->where('code', 'absence')->value('amount'));
+        $this->assertSame(-1000.0, (float) $record->items()->where('code', 'absence')->value('amount'));
     }
 
     public function test_salary_components_affect_gross_and_tax_bases(): void

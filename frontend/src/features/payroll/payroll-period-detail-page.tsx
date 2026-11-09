@@ -237,6 +237,16 @@ export function PayrollPeriodDetailPage() {
     }
   }
 
+  const downloadPeriodPayroll = async (filename: string) => {
+    const tid = toast.loading(t('payroll.detail.periodPdfGenerating'))
+    try {
+      await api.downloadFile(`payroll/periods/${id}/payslip.pdf`, filename)
+      toast.success(t('payroll.detail.periodPdfDownloaded'), { id: tid })
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, t('payroll.detail.periodPdfError')), { id: tid })
+    }
+  }
+
   if (isLoading) return <LoadingState />
   if (isError) return <ErrorState message="Não foi possível carregar o período." onRetry={refetch} />
   if (!data) return null
@@ -496,6 +506,8 @@ export function PayrollPeriodDetailPage() {
           <SummaryTab
             records={records}
             periodStatus={data.status}
+            periodId={data.id}
+            onDownloadPeriod={downloadPeriodPayroll}
             onDownloadPayslip={downloadPayslip}
           />
         </TabsContent>
@@ -695,10 +707,14 @@ function KpiCard({
 function SummaryTab({
   records,
   periodStatus,
+  periodId,
+  onDownloadPeriod,
   onDownloadPayslip,
 }: {
   records: PayrollRecord[]
   periodStatus: string
+  periodId: number
+  onDownloadPeriod: (filename: string) => void
   onDownloadPayslip: (id: number, filename: string) => void
 }) {
   const { t } = useTranslation()
@@ -717,6 +733,10 @@ function SummaryTab({
   const totalsGross = records.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
   const totalsNet = records.reduce((s, r) => s + (r.net_salary ?? 0), 0)
   const totalsInss = records.reduce((sum, record) => sum + (getPayrollComponent(record, 'inss')?.amount ?? 0), 0)
+  const totalsEmployerInss = records.reduce(
+    (sum, record) => sum + (getPayrollComponent(record, 'employer_inss')?.amount ?? Number(record.employer_inss ?? 0)),
+    0,
+  )
   const totalsIrt = records.reduce((sum, record) => sum + (getPayrollComponent(record, 'irt')?.amount ?? Math.abs(record.total_taxes ?? 0)), 0)
   const totalsOtherDeductions = records.reduce((sum, record) => {
     const inssAmount = getPayrollComponent(record, 'inss')?.amount ?? 0
@@ -725,8 +745,20 @@ function SummaryTab({
   const totalsCost = records.reduce((s, r) => s + (r.employer_cost ?? r.gross_salary ?? 0), 0)
 
   return (
-    <Card>
-      <CardContent className="p-0">
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+            <p className="text-sm font-semibold text-foreground">{t('payroll.detail.summaryTab')}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onDownloadPeriod(`folha-salarial-${periodId}.pdf`)}
+            >
+              <FileDown className="mr-1.5 h-4 w-4" />
+              {t('payroll.detail.downloadPeriodPdf')}
+            </Button>
+          </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
@@ -812,6 +844,23 @@ function SummaryTab({
             </tfoot>
           </table>
         </div>
+        </CardContent>
+      </Card>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <InssTotalCard label={t('payroll.detail.inssEmployeeTotal')} value={totalsInss} />
+        <InssTotalCard label={t('payroll.detail.inssEmployerTotal')} value={totalsEmployerInss} />
+        <InssTotalCard label={t('payroll.detail.inssCombinedTotal')} value={totalsInss + totalsEmployerInss} />
+      </div>
+    </div>
+  )
+}
+
+function InssTotalCard({ label, value }: { label: string; value: number }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <p className="mt-1 font-mono text-lg font-semibold text-foreground">{fmtCurrency(value)} AOA</p>
       </CardContent>
     </Card>
   )
