@@ -37,8 +37,13 @@ class OvertimeRule extends AbstractPayrollRule
             return 0.0;
         }
 
+        $amount = $context->overtimeAmount;
+        if ($context->unpricedOvertimeHours <= 0) {
+            return round($amount, 2);
+        }
+
         if ($context->employee->overtime_hourly_rate !== null) {
-            return round((float) $context->employee->overtime_hourly_rate * $context->overtimeHours, 2);
+            return round($amount + ((float) $context->employee->overtime_hourly_rate * $context->unpricedOvertimeHours), 2);
         }
 
         $overtimeComponent = $context->salaryComponents->first(
@@ -46,12 +51,12 @@ class OvertimeRule extends AbstractPayrollRule
         );
         $configuredHourlyRate = (float) ($overtimeComponent?->custom_value ?? $overtimeComponent?->component?->default_value ?? 0);
         if ($configuredHourlyRate > 0) {
-            return round($configuredHourlyRate * $context->overtimeHours, 2);
+            return round($amount + ($configuredHourlyRate * $context->unpricedOvertimeHours), 2);
         }
 
         $hourlyRate = (float) $context->contract->base_salary / 220;
         $rate = (float) $this->setting($context, 'payroll.overtime.rate', 1.5);
 
-        return round($hourlyRate * $context->overtimeHours * $rate, 2);
+        return round($amount + ($hourlyRate * $context->unpricedOvertimeHours * $rate), 2);
     }
 }

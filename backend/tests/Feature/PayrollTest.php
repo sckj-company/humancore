@@ -683,6 +683,33 @@ class PayrollTest extends TestCase
         $this->assertSame(2500.0, (float) $record->items()->where('code', 'overtime')->value('amount'));
     }
 
+    public function test_payroll_uses_overtime_amount_calculated_when_attendance_was_closed(): void
+    {
+        [$tenant, $employee] = $this->setupTenantWithEmployee();
+        $employee->update(['overtime_hourly_rate' => 1500]);
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+        AttendanceRecord::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'date' => '2026-11-03',
+            'status' => 'present',
+            'overtime_minutes' => 120,
+            'overtime_amount' => 2500,
+        ]);
+
+        $record = app(PayrollEngineService::class)->calculateForEmployee($period, $employee);
+
+        $this->assertSame(2500.0, (float) $record->items()->where('code', 'overtime')->value('amount'));
+        $this->assertSame(2500.0, (float) $record->overtime_amount);
+    }
+
     public function test_approved_leaves_adjust_workdays_and_unpaid_leave_deduction(): void
     {
         [$tenant, $employee] = $this->setupTenantWithEmployee();

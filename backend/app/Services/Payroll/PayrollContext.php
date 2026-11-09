@@ -36,6 +36,10 @@ class PayrollContext
 
     public float $overtimeHours = 0;
 
+    public float $overtimeAmount = 0;
+
+    public float $unpricedOvertimeHours = 0;
+
     public float $inssAmount = 0;
 
     public float $inssBase = 0;

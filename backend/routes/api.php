@@ -249,6 +249,8 @@ Route::prefix('v1')->group(function () {
         Route::delete('superadmin/tenants/{tenant}/users/{user}', [SuperAdminController::class, 'destroyUser']);
         Route::get('superadmin/platform-users', [SuperAdminController::class, 'platformUsers']);
         Route::post('superadmin/platform-users', [SuperAdminController::class, 'storePlatformUser']);
+        Route::put('superadmin/platform-users/{user}', [SuperAdminController::class, 'updatePlatformUser']);
+        Route::delete('superadmin/platform-users/{user}', [SuperAdminController::class, 'destroyPlatformUser']);
 
         // Benefícios e Descontos
         Route::apiResource('benefits', BenefitController::class);

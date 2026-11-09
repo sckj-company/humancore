@@ -6,7 +6,9 @@ use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\AttendanceResource;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
+use App\Models\Shift;
 use App\Models\Setting;
+use App\Services\Attendance\OvertimePayCalculator;
 use App\Services\Attendance\QrCodeService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -100,7 +102,9 @@ class AttendanceQrController extends BaseController
 
             $record->clock_out = now();
             $record->total_worked = (int) Carbon::parse($record->clock_in)->diffInMinutes($record->clock_out);
-            $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee);
+            $record->loadMissing('shift');
+            $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee, $record->shift);
+            $record->overtime_amount = app(OvertimePayCalculator::class)->amount($employee, $record->overtime_minutes);
             $record->save();
         }
 
@@ -112,16 +116,16 @@ class AttendanceQrController extends BaseController
         );
     }
 
-    protected function overtimeMinutes(string $date, \DateTimeInterface $clockOut, Employee $employee): int
+    protected function overtimeMinutes(string $date, \DateTimeInterface $clockOut, Employee $employee, ?Shift $shift = null): int
     {
-        $schedule = $employee->schedules()
+        $schedule = $shift ? null : $employee->schedules()
             ->with('shift')
             ->where('is_active', true)
             ->whereDate('effective_from', '<=', $date)
             ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date))
             ->orderByDesc('effective_from')
             ->first();
-        $shift = $schedule?->shift;
+        $shift ??= $schedule?->shift;
         $endTime = $shift?->end_time ?: (string) Setting::where('tenant_id', tenant_id())
             ->where('group', 'hr')
             ->where('key', 'work_end_time')

@@ -559,6 +559,10 @@ class PayrollEngineService
         $context->absentDays = array_sum($deductibleAbsences);
         $context->lateMinutes = $attendance->sum('late_minutes');
         $context->overtimeHours = $attendance->sum('overtime_minutes') / 60;
+        $context->overtimeAmount = $attendance
+            ->sum(fn ($record) => $record->overtime_amount !== null ? (float) $record->overtime_amount : 0);
+        $context->unpricedOvertimeHours = $attendance
+            ->sum(fn ($record) => $record->overtime_amount === null ? (int) $record->overtime_minutes : 0) / 60;
 
         $context->attendance = $attendance;
         $context->leaves = $leaves;

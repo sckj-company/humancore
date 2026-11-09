@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class SuperAdminController extends BaseController
 {
@@ -139,20 +140,17 @@ class SuperAdminController extends BaseController
             'permissions' => ['required', 'array'],
             'permissions.*' => ['required', 'string', 'distinct', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
         ]);
+        $this->validateAssignablePlatformUserPermissions($request, $data['permissions']);
 
-        $assignablePermissions = $request->user()->getAllPermissions()
-            ->reject(fn (Permission $permission) => $permission->name === 'manage_platform')
-            ->pluck('name')
-            ->all();
-        $requestedPermissions = $data['permissions'];
-        if (array_diff($requestedPermissions, $assignablePermissions)) {
-            return $this->error('Não pode atribuir permissões que não possui.', 403);
-        }
-        if (! in_array('view_any_tenant', $requestedPermissions, true)) {
-            return $this->error('O acesso global requer a permissão de consultar empresas.', 422);
-        }
+        $user = DB::transaction(function () use ($data): User {
+            $restrictedRole = Role::query()->firstOrCreate(
+                ['name' => 'super-admin-limited', 'guard_name' => 'web'],
+                [
+                    'description' => 'Acesso global limitado às permissões atribuídas',
+                    'is_system' => true,
+                ],
+            );
 
-        $user = DB::transaction(function () use ($data, $requestedPermissions): User {
             $user = User::query()->create([
                 'tenant_id' => null,
                 'name' => $data['name'],
@@ -163,8 +161,8 @@ class SuperAdminController extends BaseController
                 'email_verified_at' => now(),
                 'is_active' => true,
             ]);
-            $user->assignRole('super-admin-limited');
-            $user->syncPermissions($requestedPermissions);
+            $user->assignRole($restrictedRole);
+            $user->syncPermissions($data['permissions']);
 
             return $user;
         });
@@ -177,6 +175,71 @@ class SuperAdminController extends BaseController
             'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name')->values(),
         ], 'Super-admin limitado criado com sucesso.', 201);
+    }
+
+    public function updatePlatformUser(Request $request, User $user): JsonResponse
+    {
+        $this->authorizePlatformUserManagement($request);
+
+        if ($request->user()->is($user)) {
+            return $this->error('Não é possível alterar as permissões da própria conta nesta página.', 403);
+        }
+        if (! $user->hasRole('super-admin-limited')) {
+            return $this->error('Só é possível gerir super-admins limitados.', 403);
+        }
+
+        $data = $request->validate([
+            'permissions' => ['required', 'array'],
+            'permissions.*' => ['required', 'string', 'distinct', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+        ]);
+        $this->validateAssignablePlatformUserPermissions($request, $data['permissions']);
+        $user->syncPermissions($data['permissions']);
+
+        return $this->success([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'is_active' => $user->is_active,
+            'roles' => $user->getRoleNames(),
+            'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+        ], 'Permissões do super-admin atualizadas com sucesso.');
+    }
+
+    public function destroyPlatformUser(Request $request, User $user): JsonResponse
+    {
+        $this->authorizePlatformUserManagement($request);
+
+        if ($request->user()->is($user)) {
+            return $this->error('Não é possível eliminar a própria conta nesta página.', 403);
+        }
+        if (! $user->hasRole('super-admin-limited')) {
+            return $this->error('Só é possível eliminar super-admins limitados.', 403);
+        }
+
+        DB::transaction(function () use ($user): void {
+            $user->tokens()->delete();
+            $user->delete();
+        });
+
+        return $this->success(null, 'Super-admin limitado eliminado com sucesso.');
+    }
+
+    /**
+     * @param  array<int, string>  $requestedPermissions
+     */
+    private function validateAssignablePlatformUserPermissions(Request $request, array $requestedPermissions): void
+    {
+        $assignablePermissions = $request->user()->getAllPermissions()
+            ->reject(fn (Permission $permission) => $permission->name === 'manage_platform')
+            ->pluck('name')
+            ->all();
+
+        if (array_diff($requestedPermissions, $assignablePermissions)) {
+            abort(403, 'Não pode atribuir permissões que não possui.');
+        }
+        if (! in_array('view_any_tenant', $requestedPermissions, true)) {
+            abort(422, 'O acesso global requer a permissão de consultar empresas.');
+        }
     }
 
     private function authorizePlatformUserManagement(Request $request): void

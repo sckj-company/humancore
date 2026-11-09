@@ -478,6 +478,7 @@ export interface AttendanceRecord {
   deduct_from_salary?: boolean
   late_minutes: number
   overtime_minutes?: number
+  overtime_amount?: number | null
   notes?: string | null
   employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'>
   shift?: { id: number; name: string; start_time: string; end_time: string } | null

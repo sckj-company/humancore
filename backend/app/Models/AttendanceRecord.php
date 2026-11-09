@@ -27,6 +27,7 @@ class AttendanceRecord extends Model
         'deduct_from_salary',
         'late_minutes',
         'overtime_minutes',
+        'overtime_amount',
         'qr_code_hash',
         'ip_address',
         'device_info',
@@ -38,6 +39,7 @@ class AttendanceRecord extends Model
         return [
             'date' => 'date',
             'deduct_from_salary' => 'boolean',
+            'overtime_amount' => 'decimal:2',
             'clock_in' => 'datetime',
             'clock_out' => 'datetime',
             'break_start' => 'datetime',

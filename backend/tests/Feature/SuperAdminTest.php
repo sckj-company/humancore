@@ -146,6 +146,7 @@ class SuperAdminTest extends TestCase
         $creator = User::factory()->create(['is_active' => true]);
         $creator->assignRole('super-admin');
         $tenant = Tenant::factory()->create();
+        Role::query()->where('name', 'super-admin-limited')->where('guard_name', 'web')->delete();
 
         $created = $this->actingAs($creator, 'sanctum')
             ->postJson('/api/v1/superadmin/platform-users', [
@@ -175,6 +176,63 @@ class SuperAdminTest extends TestCase
             ['view_any_employee', 'view_any_tenant'],
             $restrictedAdmin->getAllPermissions()->pluck('name')->sort()->values()->all(),
         );
+    }
+
+    public function test_super_admin_can_add_and_remove_permissions_from_a_restricted_platform_admin(): void
+    {
+        $creator = User::factory()->create(['is_active' => true]);
+        $creator->assignRole('super-admin');
+        $limitedAdmin = User::factory()->create(['tenant_id' => null, 'is_active' => true]);
+        $limitedAdmin->assignRole('super-admin-limited');
+        $limitedAdmin->syncPermissions(['view_any_tenant', 'view_any_employee']);
+
+        $response = $this->actingAs($creator, 'sanctum')
+            ->putJson("/api/v1/superadmin/platform-users/{$limitedAdmin->id}", [
+                'permissions' => ['view_any_tenant', 'view_any_department'],
+            ])
+            ->assertOk();
+        $this->assertEqualsCanonicalizing(
+            ['view_any_tenant', 'view_any_department'],
+            $response->json('data.permissions'),
+        );
+
+        $this->assertEqualsCanonicalizing(
+            ['view_any_tenant', 'view_any_department'],
+            $limitedAdmin->fresh()->getAllPermissions()->pluck('name')->all(),
+        );
+    }
+
+    public function test_super_admin_can_delete_a_restricted_platform_admin_but_not_a_full_super_admin(): void
+    {
+        $creator = User::factory()->create(['is_active' => true]);
+        $creator->assignRole('super-admin');
+        $limitedAdmin = User::factory()->create(['tenant_id' => null, 'is_active' => true]);
+        $limitedAdmin->assignRole('super-admin-limited');
+
+        $this->actingAs($creator, 'sanctum')
+            ->deleteJson("/api/v1/superadmin/platform-users/{$limitedAdmin->id}")
+            ->assertOk();
+        $this->assertDatabaseMissing('users', ['id' => $limitedAdmin->id]);
+
+        $this->deleteJson("/api/v1/superadmin/platform-users/{$creator->id}")
+            ->assertForbidden();
+        $this->assertDatabaseHas('users', ['id' => $creator->id]);
+    }
+
+    public function test_limited_platform_admin_cannot_grant_permissions_they_do_not_have(): void
+    {
+        $creator = User::factory()->create(['tenant_id' => null, 'is_active' => true]);
+        $creator->assignRole('super-admin-limited');
+        $creator->givePermissionTo(['manage_super_admins', 'view_any_tenant']);
+        $target = User::factory()->create(['tenant_id' => null, 'is_active' => true]);
+        $target->assignRole('super-admin-limited');
+        $target->givePermissionTo('view_any_tenant');
+
+        $this->actingAs($creator, 'sanctum')
+            ->putJson("/api/v1/superadmin/platform-users/{$target->id}", [
+                'permissions' => ['view_any_tenant', 'create_employee'],
+            ])
+            ->assertForbidden();
     }
 
     public function test_restricted_platform_admin_cannot_assign_permissions_the_creator_does_not_have(): void

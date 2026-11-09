@@ -23,6 +23,7 @@ class AttendanceResource extends JsonResource
             'deduct_from_salary' => (bool) $this->deduct_from_salary,
             'late_minutes' => $this->late_minutes,
             'overtime_minutes' => $this->overtime_minutes,
+            'overtime_amount' => $this->overtime_amount === null ? null : (float) $this->overtime_amount,
             'notes' => $this->notes,
             'employee' => $this->whenLoaded('employee', fn () => [
                 'id' => $this->employee->id,

@@ -70,9 +70,46 @@ class AttendanceTest extends TestCase
         $this->assertNotNull($record->clock_out);
     }
 
+    public function test_employee_overtime_amount_is_calculated_when_clocking_out(): void
+    {
+        [$tenant, $employee, $user] = $this->setupEmployeeUser('employee');
+        $employee->update(['overtime_hourly_rate' => 1250]);
+        $date = now()->toDateString();
+        $shift = Shift::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno com hora extra',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+        ]);
+        EmployeeSchedule::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'effective_from' => $date,
+            'is_active' => true,
+        ]);
+        $this->actingAs($user, 'sanctum');
+
+        Carbon::setTestNow(Carbon::parse($date.' 09:00', $tenant->timezone));
+        $this->postJson('/api/v1/attendance/toggle', ['shift_id' => $shift->id])->assertOk();
+
+        Carbon::setTestNow(Carbon::parse($date.' 18:30', $tenant->timezone));
+        $this->postJson('/api/v1/attendance/toggle', ['shift_id' => $shift->id])
+            ->assertOk()
+            ->assertJsonPath('data.overtime_minutes', 90)
+            ->assertJsonPath('data.overtime_amount', 1875);
+
+        $this->assertSame(1875.0, (float) AttendanceRecord::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('date', $date)
+            ->value('overtime_amount'));
+        Carbon::setTestNow();
+    }
+
     public function test_manual_attendance_calculates_overtime_from_shift_end(): void
     {
         [$tenant, $employee, $admin] = $this->setupEmployeeUser('admin');
+        $employee->update(['overtime_hourly_rate' => 1250]);
         $shift = Shift::create([
             'tenant_id' => $tenant->id,
             'name' => 'Turno normal',
@@ -97,7 +134,8 @@ class AttendanceTest extends TestCase
                 'status' => 'present',
             ])
             ->assertCreated()
-            ->assertJsonPath('data.overtime_minutes', 75);
+            ->assertJsonPath('data.overtime_minutes', 75)
+            ->assertJsonPath('data.overtime_amount', 1562.5);
     }
 
     public function test_manual_attendance_applies_selected_shift_late_tolerance(): void
@@ -136,6 +174,7 @@ class AttendanceTest extends TestCase
     public function test_qr_clock_out_calculates_overtime_from_shift_end(): void
     {
         [$tenant, $employee, $user] = $this->setupEmployeeUser('employee');
+        $employee->update(['overtime_hourly_rate' => 1250]);
         Carbon::setTestNow(now()->copy()->setTimezone($tenant->timezone)->setTime(18, 15));
 
         $shift = Shift::create([
@@ -167,7 +206,8 @@ class AttendanceTest extends TestCase
 
         $this->postJson('/api/v1/attendance/qr/scan', ['hash' => $code])
             ->assertOk()
-            ->assertJsonPath('data.overtime_minutes', 75);
+            ->assertJsonPath('data.overtime_minutes', 75)
+            ->assertJsonPath('data.overtime_amount', 1562.5);
 
         Carbon::setTestNow();
     }

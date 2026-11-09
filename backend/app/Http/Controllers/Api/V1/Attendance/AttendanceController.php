@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\Shift;
 use App\Models\Setting;
+use App\Services\Attendance\OvertimePayCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -56,6 +57,7 @@ class AttendanceController extends BaseController
             $record->clock_out = now();
             $record->total_worked = (int) Carbon::parse($record->clock_in)->diffInMinutes($record->clock_out);
             $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee, $schedule?->shift);
+            $record->overtime_amount = app(OvertimePayCalculator::class)->amount($employee, $record->overtime_minutes);
             $record->status = $this->resolveStatus($record);
             $record->save();
 
@@ -152,6 +154,7 @@ class AttendanceController extends BaseController
                 'total_worked' => $totalMinutes,
                 'late_minutes' => $lateMinutes,
                 'overtime_minutes' => $overtimeMinutes,
+                'overtime_amount' => app(OvertimePayCalculator::class)->amount($employee, $overtimeMinutes),
                 'status' => $validated['status'] === 'late' || $lateMinutes > 0 ? 'late' : $validated['status'],
                 'deduct_from_salary' => $request->boolean('deduct_from_salary', false),
                 'notes' => $validated['notes'] ?? null,
@@ -254,6 +257,7 @@ class AttendanceController extends BaseController
             $validated['overtime_minutes'] = $outDateTime
                 ? $this->overtimeMinutes($date, $outDateTime, $employee, $schedule?->shift)
                 : 0;
+            $validated['overtime_amount'] = app(OvertimePayCalculator::class)->amount($employee, $validated['overtime_minutes']);
         }
 
         $record->update($validated);

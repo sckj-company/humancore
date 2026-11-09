@@ -35,6 +35,7 @@ interface AttendanceDTO {
   total_worked: number | null
   status: string
   late_minutes: number
+  overtime_amount?: number | null
   notes: string | null
   deduct_from_salary?: boolean
   shift_id?: number | null
@@ -192,6 +193,7 @@ function EmployeeAttendanceView() {
                     <th className="px-6 py-3 font-medium">Entrada</th>
                     <th className="px-6 py-3 font-medium">Saída</th>
                     <th className="px-6 py-3 font-medium text-right">Horas</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('attendance.overtimeAmount')}</th>
                     <th className="px-6 py-3 font-medium text-right">Atraso (min)</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.status')}</th>
                   </tr>
@@ -205,6 +207,9 @@ function EmployeeAttendanceView() {
                       <td className="px-6 py-3">{r.clock_out ?? '—'}</td>
                       <td className="px-6 py-3 text-right font-mono">
                         {r.total_worked != null ? (r.total_worked / 60).toFixed(1) : '—'}
+                      </td>
+                      <td className="px-6 py-3 text-right font-mono">
+                        {r.overtime_amount != null ? r.overtime_amount.toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                       </td>
                       <td className="px-6 py-3 text-right text-muted-foreground">{r.late_minutes || 0}</td>
                       <td className="px-6 py-3 text-right">
@@ -316,6 +321,7 @@ function AdminAttendanceView() {
                     <th className="px-6 py-3 font-medium">Entrada</th>
                     <th className="px-6 py-3 font-medium">Saída</th>
                     <th className="px-6 py-3 font-medium text-right">Horas</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('attendance.overtimeAmount')}</th>
                     <th className="px-6 py-3 font-medium text-right">Atraso</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.status')}</th>
                     <th className="px-6 py-3 font-medium text-right">Ajustar</th>
@@ -336,6 +342,9 @@ function AdminAttendanceView() {
                       <td className="px-6 py-3">{r.clock_out ?? '—'}</td>
                       <td className="px-6 py-3 text-right font-mono">
                         {r.total_worked != null ? (r.total_worked / 60).toFixed(1) : '—'}
+                      </td>
+                      <td className="px-6 py-3 text-right font-mono">
+                        {r.overtime_amount != null ? r.overtime_amount.toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                       </td>
                       <td className="px-6 py-3 text-right text-muted-foreground">{r.late_minutes || 0}</td>
                       <td className="px-6 py-3 text-right">
