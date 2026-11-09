@@ -22,10 +22,11 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
-    'mailgun' => [
-        'api_key' => env('MAILGUN_API_KEY'),
-        'domain' => env('MAILGUN_DOMAIN'),
-        'region' => env('MAILGUN_REGION', 'us'),
+    'brevo' => [
+        'smtp_username' => env('BREVO_SMTP_LOGIN', env('BREVO_SMTP_USERNAME', env('MAIL_USERNAME'))),
+        'smtp_key' => env('BREVO_SMTP_KEY', env('MAIL_PASSWORD')),
+        'sender_email' => env('BREVO_SENDER_EMAIL', env('MAIL_FROM_ADDRESS')),
+        'sender_name' => env('BREVO_SENDER_NAME', env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel'))),
     ],
 
     'ses' => [

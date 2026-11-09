@@ -4,20 +4,19 @@ namespace App\Services\Auth;
 
 use App\Models\User;
 use App\Services\Audit\AuditService;
-use App\Services\Mail\MailgunConfigurationException;
-use App\Services\Mail\MailgunMailer;
+use App\Services\Mail\BrevoSmtpConfigurationException;
+use App\Services\Mail\BrevoSmtpMailer;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class PasswordResetService
 {
-    public function __construct(private readonly MailgunMailer $mailer) {}
+    public function __construct(private readonly BrevoSmtpMailer $mailer) {}
 
     public function requestCode(string $email): void
     {
@@ -44,7 +43,7 @@ class PasswordResetService
 
         try {
             $this->mailer->sendPasswordResetCode($user, $code);
-        } catch (ConnectionException|RequestException|MailgunConfigurationException $exception) {
+        } catch (TransportExceptionInterface|BrevoSmtpConfigurationException $exception) {
             $this->resetTokenRecord($user->email)->delete();
 
             throw $exception;

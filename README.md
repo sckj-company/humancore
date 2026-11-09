@@ -83,7 +83,7 @@ O Compose executa a aplicação React, a API Laravel, MySQL, Redis e o worker de
    nano .env
    ```
 
-   Configure também `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` e `CLOUDINARY_API_SECRET` no `.env` da raiz para uploads no Cloudinary; `GROQ_API_KEY` é opcional e ativa a leitura assistida de BI. Para recuperação de palavra-passe por email, configure `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAIL_FROM_ADDRESS` e `MAIL_FROM_NAME`; use `MAILGUN_REGION=eu` se o domínio estiver na região europeia do Mailgun. O domínio e remetente precisam estar validados no Mailgun. Domínios sandbox só enviam a destinatários autorizados, portanto use um domínio próprio validado para envio geral. O Compose passa o `.env` da raiz ao backend e ao worker; `backend/.env` não é usado pelo Compose.
+   Configure também `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` e `CLOUDINARY_API_SECRET` no `.env` da raiz para uploads no Cloudinary; `GROQ_API_KEY` é opcional e ativa a leitura assistida de BI. Para recuperação de palavra-passe por email, configure `BREVO_SMTP_LOGIN`, `BREVO_SMTP_KEY`, `BREVO_SENDER_EMAIL` e `BREVO_SENDER_NAME`; `BREVO_SMTP_KEY` deve ser uma chave SMTP da Brevo, não uma chave de API. O Compose passa o `.env` da raiz ao backend e ao worker; `backend/.env` não é usado pelo Compose.
 
 3. Gere a chave Laravel e copie o valor impresso para `APP_KEY` no `.env`:
 

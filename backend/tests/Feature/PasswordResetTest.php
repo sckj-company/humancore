@@ -3,20 +3,26 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use Illuminate\Http\Client\Request as ClientRequest;
+use App\Mail\PasswordResetCodeMail;
+use App\Services\Mail\BrevoSmtpMailer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
 {
-    private function configureMailgun(): void
+    private function configureBrevoSmtp(): void
     {
         config([
-            'services.mailgun.api_key' => 'test-api-key',
-            'services.mailgun.domain' => 'mg.example.test',
-            'services.mailgun.region' => 'us',
+            'services.brevo.smtp_username' => 'test-smtp-login',
+            'services.brevo.smtp_key' => 'test-smtp-key',
+            'services.brevo.sender_email' => 'no-reply@example.test',
+            'services.brevo.sender_name' => 'HumanCore',
+            'mail.mailers.brevo_smtp.host' => 'smtp-relay.brevo.com',
+            'mail.mailers.brevo_smtp.username' => 'test-smtp-login',
+            'mail.mailers.brevo_smtp.password' => 'test-smtp-key',
             'mail.from.address' => 'no-reply@example.test',
             'mail.from.name' => 'HumanCore',
         ]);
@@ -24,26 +30,24 @@ class PasswordResetTest extends TestCase
 
     public function test_user_can_request_verify_and_use_a_single_use_password_reset_code(): void
     {
-        $this->configureMailgun();
+        $this->configureBrevoSmtp();
         $user = User::factory()->create([
             'email' => 'recover@example.test',
             'password' => Hash::make('old-password'),
         ]);
         $user->createToken('existing-session');
+        Mail::fake();
         $sentCode = null;
-        Http::fake(function (ClientRequest $request) use (&$sentCode) {
-            $this->assertSame('https://api.mailgun.net/v3/mg.example.test/messages', $request->url());
-            $this->assertTrue($request->hasHeader('Authorization', 'Basic '.base64_encode('api:test-api-key')));
-            $this->assertSame('HumanCore <no-reply@example.test>', $request->data()['from']);
-            preg_match('/\b(\d{6})\b/', $request->data()['html'], $matches);
-            $sentCode = $matches[1] ?? null;
-
-            return Http::response(['id' => '<test-message>', 'message' => 'Queued. Thank you.'], 200);
-        });
 
         $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])
             ->assertOk()
             ->assertJsonPath('success', true);
+        Mail::assertSent(PasswordResetCodeMail::class, function (PasswordResetCodeMail $mail) use ($user, &$sentCode): bool {
+            $sentCode = $mail->code;
+
+            return $mail->hasTo($user->email)
+                && $mail->envelope()->from->address === 'no-reply@example.test';
+        });
         $this->assertMatchesRegularExpression('/^\d{6}$/', $sentCode);
         $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
 
@@ -83,34 +87,22 @@ class PasswordResetTest extends TestCase
 
     public function test_unknown_email_gets_generic_response_without_sending_email(): void
     {
-        $this->configureMailgun();
-        Http::fake();
+        $this->configureBrevoSmtp();
+        Mail::fake();
 
         $this->postJson('/api/v1/auth/password-reset/request', ['email' => 'missing@example.test'])
             ->assertOk()
             ->assertJsonPath('message', 'Se o email estiver registado, será enviado um código de verificação.');
 
-        Http::assertNothingSent();
+        Mail::assertNothingSent();
     }
 
-    public function test_mailgun_uses_european_endpoint_when_configured(): void
-    {
-        $this->configureMailgun();
-        config(['services.mailgun.region' => 'eu']);
-        $user = User::factory()->create(['email' => 'european-user@example.test']);
-        Http::fake();
-
-        $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])
-            ->assertOk();
-
-        Http::assertSent(fn (ClientRequest $request) => $request->url() === 'https://api.eu.mailgun.net/v3/mg.example.test/messages');
-    }
-
-    public function test_missing_mailgun_configuration_returns_service_unavailable_without_creating_a_code(): void
+    public function test_missing_brevo_smtp_configuration_returns_service_unavailable_without_creating_a_code(): void
     {
         config([
-            'services.mailgun.api_key' => null,
-            'services.mailgun.domain' => null,
+            'services.brevo.smtp_username' => null,
+            'services.brevo.smtp_key' => null,
+            'services.brevo.sender_email' => null,
         ]);
         $user = User::factory()->create(['email' => 'no-mail-config@example.test']);
 
@@ -121,13 +113,15 @@ class PasswordResetTest extends TestCase
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
     }
 
-    public function test_mailgun_delivery_error_returns_service_unavailable_and_removes_the_code(): void
+    public function test_brevo_smtp_delivery_error_returns_service_unavailable_and_removes_the_code(): void
     {
-        $this->configureMailgun();
-        $user = User::factory()->create(['email' => 'mailgun-error@example.test']);
-        Http::fake([
-            'api.mailgun.net/v3/mg.example.test/messages' => Http::response(['message' => 'Forbidden'], 401),
-        ]);
+        $this->configureBrevoSmtp();
+        $user = User::factory()->create(['email' => 'brevo-smtp-error@example.test']);
+        $mailer = $this->mock(BrevoSmtpMailer::class);
+        $mailer->shouldReceive('assertConfigured')->once();
+        $mailer->shouldReceive('sendPasswordResetCode')
+            ->once()
+            ->andThrow(new TransportException('SMTP server unavailable'));
 
         $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])
             ->assertServiceUnavailable();
@@ -137,8 +131,8 @@ class PasswordResetTest extends TestCase
 
     public function test_code_expires_and_is_invalidated_after_too_many_attempts(): void
     {
-        $this->configureMailgun();
-        Http::fake();
+        $this->configureBrevoSmtp();
+        Mail::fake();
         $user = User::factory()->create(['email' => 'expired@example.test']);
 
         $this->postJson('/api/v1/auth/password-reset/request', ['email' => $user->email])->assertOk();

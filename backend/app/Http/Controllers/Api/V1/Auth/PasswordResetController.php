@@ -4,12 +4,11 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Services\Auth\PasswordResetService;
-use App\Services\Mail\MailgunConfigurationException;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\RequestException;
+use App\Services\Mail\BrevoSmtpConfigurationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class PasswordResetController extends BaseController
 {
@@ -21,17 +20,13 @@ class PasswordResetController extends BaseController
 
         try {
             $passwordReset->requestCode($data['email']);
-        } catch (ConnectionException|RequestException|MailgunConfigurationException $exception) {
+        } catch (TransportExceptionInterface|BrevoSmtpConfigurationException $exception) {
             Log::error('password_reset.email_delivery_failed', [
                 'exception' => $exception::class,
                 'reason' => match (true) {
-                    $exception instanceof RequestException => 'mailgun_http_rejected',
-                    $exception instanceof MailgunConfigurationException => 'mailgun_configuration_incomplete',
-                    default => 'mailgun_connection_failed',
+                    $exception instanceof BrevoSmtpConfigurationException => 'brevo_smtp_configuration_incomplete',
+                    default => 'brevo_smtp_delivery_failed',
                 },
-                'mailgun_status' => $exception instanceof RequestException
-                    ? $exception->response->status()
-                    : null,
             ]);
 
             return $this->error('O serviço de email está temporariamente indisponível. Tente novamente mais tarde.', 503);
