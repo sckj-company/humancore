@@ -64,6 +64,44 @@ class SuperAdminTest extends TestCase
             ]);
     }
 
+    public function test_super_admin_can_change_any_users_password_and_revoke_their_tokens(): void
+    {
+        $superAdmin = User::factory()->create(['is_active' => true]);
+        $superAdmin->assignRole('super-admin');
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'password' => Hash::make('old-password'),
+        ]);
+        $user->createToken('active-session');
+
+        $this->actingAs($superAdmin, 'sanctum')
+            ->putJson("/api/v1/superadmin/users/{$user->id}/password", [
+                'password' => 'admin-set-password',
+                'password_confirmation' => 'admin-set-password',
+            ])
+            ->assertOk();
+
+        $this->assertTrue(Hash::check('admin-set-password', $user->fresh()->password));
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_limited_platform_admin_cannot_change_another_users_password(): void
+    {
+        $limitedAdmin = User::factory()->create(['is_active' => true]);
+        $limitedAdmin->assignRole('super-admin-limited');
+        $user = User::factory()->create(['password' => Hash::make('old-password')]);
+
+        $this->actingAs($limitedAdmin, 'sanctum')
+            ->putJson("/api/v1/superadmin/users/{$user->id}/password", [
+                'password' => 'admin-set-password',
+                'password_confirmation' => 'admin-set-password',
+            ])
+            ->assertForbidden();
+
+        $this->assertTrue(Hash::check('old-password', $user->fresh()->password));
+    }
+
     public function test_existing_super_admin_can_load_platform_users_without_the_new_management_permission(): void
     {
         $user = User::factory()->create(['is_active' => true]);

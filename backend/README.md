@@ -7,6 +7,24 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Redefinição de palavra-passe e Brevo
+
+A recuperação pública está disponível em `/forgot-password`. O sistema envia um código de seis dígitos pelo endpoint transacional da Brevo; o código expira em 15 minutos, aceita no máximo cinco tentativas e é substituído por uma credencial temporária após a confirmação. Para habilitar o envio, configure no ambiente do backend:
+
+```env
+BREVO_API_KEY=chave-da-api
+BREVO_SENDER_EMAIL=email-remetente-verificado
+BREVO_SENDER_NAME=HumanCore
+PASSWORD_RESET_CODE_TTL=15
+PASSWORD_RESET_MAX_ATTEMPTS=5
+```
+
+O remetente deve estar validado na conta Brevo. Depois de configurar as variáveis, atualize a configuração em cache, se aplicável, e execute `php artisan migrate --force` para adicionar o contador de tentativas. O super administrador também pode definir diretamente uma nova palavra-passe na gestão de utilizadores; essa ação revoga os tokens existentes do utilizador.
+
+## Logs operacionais e auditoria no terminal
+
+O canal padrão (`LOG_STACK=stderr,single`) envia os logs para o `stderr` do processo e também para `storage/logs/laravel.log`. As operações HTTP são registadas com identificador de pedido, método, rota, resultado, duração, utilizador, empresa e IP; eventos de auditoria de modelos e de negócio também são enviados ao canal `audit`. Os corpos das requisições e as credenciais não são registados. Comandos de servidor devem manter o `stderr` visível ou recolhido pelo gestor de processos para consultar os eventos em tempo real.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

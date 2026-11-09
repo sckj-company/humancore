@@ -6,6 +6,7 @@ import { isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
 import { Loader2 } from 'lucide-react'
 
 const LoginPage = lazy(() => import('@/features/auth/login-page').then((m) => ({ default: m.LoginPage })))
+const PasswordResetPage = lazy(() => import('@/features/auth/password-reset-page').then((m) => ({ default: m.PasswordResetPage })))
 const HrDashboardPage = lazy(() => import('@/features/dashboard/hr-dashboard-page').then((m) => ({ default: m.HrDashboardPage })))
 const ManagerDashboardPage = lazy(() => import('@/features/dashboard/manager-dashboard-page').then((m) => ({ default: m.ManagerDashboardPage })))
 const EmployeeDashboardPage = lazy(() => import('@/features/dashboard/employee-dashboard-page').then((m) => ({ default: m.EmployeeDashboardPage })))
@@ -88,6 +89,7 @@ export function AppRouter() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<PasswordResetPage />} />
         <Route
           element={
             <ProtectedRoute>

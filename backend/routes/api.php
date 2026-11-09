@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Attendance\AttendanceController;
 use App\Http\Controllers\Api\V1\Attendance\AttendanceQrController;
 use App\Http\Controllers\Api\V1\Audit\AuditController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
 use App\Http\Controllers\Api\V1\Compensation\BenefitController;
 use App\Http\Controllers\Api\V1\Compensation\DeductionController;
 use App\Http\Controllers\Api\V1\Contract\ContractController;
@@ -44,6 +45,9 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     // Rotas públicas
     Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
+    Route::post('auth/password-reset/request', [PasswordResetController::class, 'requestCode'])->middleware('throttle:password-reset-request');
+    Route::post('auth/password-reset/verify', [PasswordResetController::class, 'verifyCode'])->middleware('throttle:password-reset');
+    Route::post('auth/password-reset/reset', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:password-reset');
 
     // Rotas autenticadas
     Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
@@ -247,6 +251,7 @@ Route::prefix('v1')->group(function () {
         Route::get('superadmin/tenants/{tenant}/users', [SuperAdminController::class, 'listTenantUsers']);
         Route::post('superadmin/tenants/{tenant}/users', [SuperAdminController::class, 'storeUser']);
         Route::delete('superadmin/tenants/{tenant}/users/{user}', [SuperAdminController::class, 'destroyUser']);
+        Route::put('superadmin/users/{user}/password', [SuperAdminController::class, 'updateUserPassword']);
         Route::get('superadmin/platform-users', [SuperAdminController::class, 'platformUsers']);
         Route::post('superadmin/platform-users', [SuperAdminController::class, 'storePlatformUser']);
         Route::put('superadmin/platform-users/{user}', [SuperAdminController::class, 'updatePlatformUser']);

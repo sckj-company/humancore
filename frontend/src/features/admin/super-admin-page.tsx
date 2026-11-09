@@ -22,6 +22,7 @@ import {
   Mail,
   Hash,
   Factory,
+  KeyRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -162,6 +163,11 @@ interface PlatformUser {
   permissions: string[]
 }
 
+interface PasswordTarget {
+  id: number
+  name: string
+}
+
 interface PlatformUsersResponse {
   users: PlatformUser[]
   permissions: PlatformPermission[]
@@ -211,11 +217,12 @@ export function SuperAdminPage() {
   const qc = useQueryClient()
   const { t } = useTranslation()
   const currentUser = useAuthStore((state) => state.user)
-  const canManagePlatformUsers = hasPermission(currentUser, 'manage_super_admins')
+  const canManagePlatformUsers = currentUser?.roles.includes('super-admin') || hasPermission(currentUser, 'manage_super_admins')
   const canCreateTenant = hasPermission(currentUser, 'create_tenant')
   const canUpdateTenant = hasPermission(currentUser, 'update_tenant')
   const canDeleteTenant = hasPermission(currentUser, 'delete_tenant')
   const canViewTenantUsers = canUpdateTenant && hasPermission(currentUser, 'view_tenant')
+  const canSetUserPassword = currentUser?.roles.includes('super-admin') ?? false
   const getPermissionLabel = (name: string) => {
     const globalLabel = t(`superAdminPage.permissionLabels.${name}`, { defaultValue: '' }).trim()
     if (globalLabel) return globalLabel
@@ -255,6 +262,9 @@ export function SuperAdminPage() {
   const [platformUserForm, setPlatformUserForm] = useState<NewPlatformUser>(emptyPlatformUser)
   const [editingPlatformUser, setEditingPlatformUser] = useState<PlatformUser | null>(null)
   const [platformUserPermissions, setPlatformUserPermissions] = useState<string[]>([])
+  const [passwordTarget, setPasswordTarget] = useState<PasswordTarget | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordConfirmation, setPasswordConfirmation] = useState('')
 
   const { data: tenants, isLoading: loadingTenants } = useQuery({
     queryKey: ['superadmin', 'tenants', search, statusFilter],
@@ -375,6 +385,18 @@ export function SuperAdminPage() {
       qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro')),
+  })
+
+  const updateUserPassword = useMutation({
+    mutationFn: ({ userId, password, password_confirmation }: { userId: number; password: string; password_confirmation: string }) =>
+      api.put(`superadmin/users/${userId}/password`, { password, password_confirmation }),
+    onSuccess: () => {
+      toast.success('Palavra-passe atualizada com sucesso')
+      setPasswordTarget(null)
+      setNewPassword('')
+      setPasswordConfirmation('')
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Erro ao atualizar palavra-passe')),
   })
 
   const createPlatformUser = useMutation({
@@ -526,34 +548,47 @@ export function SuperAdminPage() {
                         <td className="px-3 py-2.5">{platformUser.permissions.length}</td>
                         <td className="px-3 py-2.5">{platformUser.is_active ? t('superAdminPage.active') : t('superAdminPage.inactive')}</td>
                         <td className="px-3 py-2.5 text-right">
-                          {platformUser.roles.includes('super-admin-limited') && platformUser.id !== currentUser?.id && (
-                            <div className="flex justify-end gap-1">
+                          <div className="flex justify-end gap-1">
+                            {canSetUserPassword && platformUser.id !== currentUser?.id && (
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                aria-label={t('superAdminPage.editPermissions')}
-                                title={t('superAdminPage.editPermissions')}
-                                onClick={() => openPlatformUserEdit(platformUser)}
+                                aria-label={t('passwordReset.changePasswordFor', { name: platformUser.name })}
+                                title={t('passwordReset.changePassword')}
+                                onClick={() => setPasswordTarget(platformUser)}
                               >
-                                <Pencil className="h-3.5 w-3.5" />
+                                <KeyRound className="h-3.5 w-3.5" />
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive"
-                                aria-label={t('superAdminPage.deleteUser')}
-                                title={t('superAdminPage.deleteUser')}
-                                disabled={deletePlatformUser.isPending}
-                                onClick={() => {
-                                  if (window.confirm(t('superAdminPage.confirmDelete', { name: platformUser.name }))) {
-                                    deletePlatformUser.mutate(platformUser.id)
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          )}
+                            )}
+                            {platformUser.roles.includes('super-admin-limited') && platformUser.id !== currentUser?.id && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={t('superAdminPage.editPermissions')}
+                                  title={t('superAdminPage.editPermissions')}
+                                  onClick={() => openPlatformUserEdit(platformUser)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                  aria-label={t('superAdminPage.deleteUser')}
+                                  title={t('superAdminPage.deleteUser')}
+                                  disabled={deletePlatformUser.isPending}
+                                  onClick={() => {
+                                    if (window.confirm(t('superAdminPage.confirmDelete', { name: platformUser.name }))) {
+                                      deletePlatformUser.mutate(platformUser.id)
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1089,6 +1124,17 @@ export function SuperAdminPage() {
                         <Badge variant={u.is_active ? 'success' : 'secondary'}>{u.is_active ? 'Ativo' : 'Inativo'}</Badge>
                       </td>
                       <td className="px-3 py-2.5 text-right">
+                        {canSetUserPassword && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={t('passwordReset.changePasswordFor', { name: u.name })}
+                            title={t('passwordReset.changePassword')}
+                            onClick={() => setPasswordTarget(u)}
+                          >
+                            <KeyRound className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         <Button
                           size="sm" variant="ghost" className="text-destructive hover:text-destructive"
                           disabled={deleteUser.isPending}
@@ -1309,6 +1355,77 @@ export function SuperAdminPage() {
               <Button onClick={handleUserSubmit} disabled={createUser.isPending}>
                 {createUser.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                 Criar utilizador
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!passwordTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPasswordTarget(null)
+            setNewPassword('')
+            setPasswordConfirmation('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('passwordReset.changePassword')}</DialogTitle>
+            <DialogDescription>
+              {t('passwordReset.adminChangeDescription', { name: passwordTarget?.name ?? '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-new-password">{t('passwordReset.newPassword')}</Label>
+              <Input
+                id="admin-new-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-confirm-password">{t('passwordReset.confirmPassword')}</Label>
+              <Input
+                id="admin-confirm-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={passwordConfirmation}
+                onChange={(event) => setPasswordConfirmation(event.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPasswordTarget(null)
+                  setNewPassword('')
+                  setPasswordConfirmation('')
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                disabled={updateUserPassword.isPending || newPassword.length < 8 || newPassword !== passwordConfirmation}
+                onClick={() => {
+                  if (passwordTarget) {
+                    updateUserPassword.mutate({
+                      userId: passwordTarget.id,
+                      password: newPassword,
+                      password_confirmation: passwordConfirmation,
+                    })
+                  }
+                }}
+              >
+                {updateUserPassword.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                {t('passwordReset.savePassword')}
               </Button>
             </div>
           </div>

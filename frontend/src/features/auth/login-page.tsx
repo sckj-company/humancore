@@ -1,9 +1,9 @@
-import { useEffect } from 'react'
-import { useNavigate, useLocation, Navigate } from 'react-router-dom'
+import { useLocation, Navigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import axios from 'axios'
 import { Building2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,19 +13,18 @@ import { useAuthStore } from '@/stores/auth-store'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { toast } from 'sonner'
 import type { User } from '@/types'
+import { LanguageSwitcher } from '@/components/shared/language-switcher'
 
-const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-})
-
-type FormValues = z.infer<typeof schema>
+type FormValues = { email: string; password: string }
 
 export function LoginPage() {
   const { t } = useTranslation()
+  const schema = z.object({
+    email: z.string().email(t('auth.invalidEmail')),
+    password: z.string().min(1, t('auth.passwordRequired')),
+  })
   const setAuth = useAuthStore((s) => s.setAuth)
   const user = useAuthStore((s) => s.user)
-  const navigate = useNavigate()
   const location = useLocation()
 
   const from = (location.state as { from?: Location } | null)?.from?.pathname ?? '/dashboard'
@@ -36,10 +35,6 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) })
 
-  useEffect(() => {
-    if (user) navigate(from, { replace: true })
-  }, [user, from, navigate])
-
   if (user) return <Navigate to={from} replace />
 
   const onSubmit = handleSubmit(async (values) => {
@@ -47,14 +42,20 @@ export function LoginPage() {
       const data = await api.post<{ access_token: string; user: User }>('auth/login', values)
       setAuth(data.user, data.access_token)
       toast.success(t('auth.logged_in'))
-      navigate(from, { replace: true })
     } catch (error) {
-      toast.error(getApiErrorMessage(error, t('auth.invalid')))
+      if (axios.isAxiosError(error) && error.response?.status === 422) {
+        toast.error(t('auth.invalid'))
+      } else {
+        toast.error(getApiErrorMessage(error, t('auth.loginError')))
+      }
     }
   })
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-sidebar/20 p-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-sidebar/20 p-4">
+      <div className="absolute right-4 top-4">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-md border-border/50 shadow-xl">
         <CardHeader className="space-y-3 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
@@ -80,19 +81,15 @@ export function LoginPage() {
               />
               {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
             </div>
+            <div className="text-right">
+              <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+                {t('auth.forgot')}
+              </Link>
+            </div>
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? t('common.loading') : t('auth.login')}
             </Button>
           </form>
-          <div className="mt-6 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-            <p className="mb-1 font-medium">Contas de demonstração</p>
-            <p className="mb-0.5 font-semibold text-primary">Super Admin (plataforma):</p>
-            <p>Super Admin: <code>superadmin@hrms.local</code> / <code>password</code></p>
-            <p className="mt-1.5 mb-0.5 font-semibold">Empresa Demo:</p>
-            <p>Admin: <code>admin@empresa-demo.local</code> / <code>password</code></p>
-            <p>HR: <code>joao.silva@empresa-demo.local</code> / <code>password</code></p>
-            <p>Funcionário: <code>ana.costa@empresa-demo.local</code> / <code>password</code></p>
-          </div>
         </CardContent>
       </Card>
     </div>

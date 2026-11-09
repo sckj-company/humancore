@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\LogHttpOperations;
 use App\Http\Middleware\SetTenantContext;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             EnsureFrontendRequestsAreStateful::class,
         ]);
+        $middleware->append(LogHttpOperations::class);
 
         $middleware->alias([
             'tenant' => SetTenantContext::class,

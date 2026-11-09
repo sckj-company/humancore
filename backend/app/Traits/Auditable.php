@@ -3,6 +3,7 @@
 namespace App\Traits;
 
 use App\Models\Audit;
+use Illuminate\Support\Facades\Log;
 
 trait Auditable
 {
@@ -13,10 +14,6 @@ trait Auditable
         foreach ($events as $event) {
             if (method_exists(static::class, $event)) {
                 static::{$event}(function ($model) use ($event) {
-                    if (! $model->shouldAudit($event)) {
-                        return;
-                    }
-
                     $model->recordAudit($event);
                 });
             } else {
@@ -30,21 +27,8 @@ trait Auditable
         $dispatcher = static::getEventDispatcher();
 
         $dispatcher->listen("eloquent.{$event}: ".static::class, function ($model) use ($event) {
-            if (! $model->shouldAudit($event)) {
-                return;
-            }
-
             $model->recordAudit($event);
         });
-    }
-
-    protected function shouldAudit(string $event): bool
-    {
-        if (app()->runningInConsole() && ! app()->runningUnitTests()) {
-            return false;
-        }
-
-        return true;
     }
 
     protected function recordAudit(string $event): void
@@ -63,7 +47,7 @@ trait Auditable
         $tenantId = $this->tenant_id
             ?? (app()->bound('currentTenant') ? app('currentTenant')?->id : null);
 
-        Audit::query()->withoutGlobalScopes()->create([
+        $audit = Audit::query()->withoutGlobalScopes()->create([
             'user_id' => auth()->id(),
             'tenant_id' => $tenantId,
             'event' => $event,
@@ -73,6 +57,15 @@ trait Auditable
             'new_values' => $new,
             'ip_address' => request()->ip(),
             'user_agent' => substr((string) request()->userAgent(), 0, 1000),
+        ]);
+
+        Log::channel('audit')->info('audit.model_event', [
+            'audit_id' => $audit->id,
+            'event' => $event,
+            'user_id' => $audit->user_id,
+            'tenant_id' => $audit->tenant_id,
+            'auditable_type' => $audit->auditable_type,
+            'auditable_id' => $audit->auditable_id,
         ]);
     }
 

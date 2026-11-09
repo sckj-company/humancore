@@ -113,6 +113,12 @@ return [
             'processors' => [PsrLogMessageProcessor::class],
         ],
 
+        'audit' => [
+            'driver' => 'stack',
+            'channels' => ['stderr', 'single'],
+            'ignore_exceptions' => false,
+        ],
+
         'syslog' => [
             'driver' => 'syslog',
             'level' => env('LOG_LEVEL', 'debug'),

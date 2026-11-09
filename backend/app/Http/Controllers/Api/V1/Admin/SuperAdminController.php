@@ -9,6 +9,7 @@ use App\Models\LeaveType;
 use App\Models\SalaryComponent;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use App\Services\Tenant\TenantManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -449,6 +450,24 @@ class SuperAdminController extends BaseController
         $user->delete();
 
         return $this->success(null, 'Utilizador eliminado com sucesso.');
+    }
+
+    public function updateUserPassword(Request $request, User $user): JsonResponse
+    {
+        if (! $request->user()->hasRole('super-admin')) {
+            return $this->error('Só o super administrador pode alterar palavras-passe de outros utilizadores.', 403);
+        }
+
+        $data = $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user->forceFill(['password' => Hash::make($data['password'])])->save();
+        $user->tokens()->delete();
+        DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+        AuditService::record('password_changed_by_super_admin', $user);
+
+        return $this->success(null, 'Palavra-passe do utilizador atualizada com sucesso.');
     }
 
     public function showTenant(Tenant $tenant): JsonResponse

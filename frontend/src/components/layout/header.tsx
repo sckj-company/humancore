@@ -1,14 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
-import { Building2, Check, ChevronsUpDown, Globe, Search } from 'lucide-react'
+import { Building2, Check, ChevronsUpDown, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -19,8 +13,8 @@ import {
 } from '@/components/ui/dialog'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
-import i18n from '@/lib/i18n'
 import { NotificationBell } from '@/components/layout/notification-bell'
+import { LanguageSwitcher } from '@/components/shared/language-switcher'
 import type { Paginated, Tenant } from '@/types'
 
 export function Header() {
@@ -51,20 +45,6 @@ export function Header() {
     `${tenant.name} ${tenant.slug}`.toLocaleLowerCase().includes(companySearch.trim().toLocaleLowerCase()),
   )
 
-  const switchLang = (lng: 'pt' | 'en' | 'zh') => {
-    localStorage.setItem('hrms_bilingual', 'false')
-    document.documentElement.classList.remove('bilingual')
-    void i18n.changeLanguage(lng)
-    localStorage.setItem('hrms_locale', lng)
-  }
-
-  const switchToBilingual = () => {
-    localStorage.setItem('hrms_bilingual', 'true')
-    localStorage.setItem('hrms_locale', 'pt')
-    document.documentElement.classList.add('bilingual')
-    void i18n.changeLanguage('pt')
-  }
-
   return (
     <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-card px-3 md:px-6">
       {isSuperAdmin ? (
@@ -92,20 +72,7 @@ export function Header() {
       )}
 
       <div className="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm">
-              <Globe className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => switchLang('pt')}>Português</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => switchLang('en')}>English</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => switchLang('zh')}>中文</DropdownMenuItem>
-            <DropdownMenuItem onClick={switchToBilingual}>Português + 中文</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
+        <LanguageSwitcher />
         <NotificationBell />
       </div>
 
