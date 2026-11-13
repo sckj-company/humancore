@@ -14,21 +14,18 @@ import {
   Settings,
   ChevronsLeft,
   ChevronsRight,
-  Sparkles,
   Briefcase,
   Clock,
   Activity,
-  HelpCircle,
-  User,
-  ShieldCheck,
   Mail,
   Globe2,
-  Shield,
   CalendarCheck,
   Gift,
   CircleDollarSign,
   LogOut,
   UserRound,
+  Receipt,
+  ClipboardCheck,
 } from 'lucide-react'
 import { useUiStore } from '@/stores/ui-store'
 import { hasAnyRole, hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
@@ -45,7 +42,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Separator } from '@/components/ui/separator'
 
 interface NavItem {
   titleKey: string
@@ -60,27 +56,27 @@ interface NavSection {
   items: NavItem[]
 }
 
-// Menus exclusivos do super-admin (plataforma)
-const superAdminSections: NavSection[] = [
-  {
-    items: [
-      { titleKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_any_tenant' },
-    ],
-  },
-  {
-    titleKey: 'nav.section_platform',
-    items: [
-      { titleKey: 'nav.tenants', href: '/admin/tenants', icon: Globe2, permission: 'view_any_tenant' },
-      { titleKey: 'nav.audits', href: '/audits', icon: Activity, permission: 'view_any_audit' },
-    ],
-  },
-]
+const platformDashboardSection: NavSection = {
+  items: [
+    { titleKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_any_tenant' },
+  ],
+}
 
-const superAdminFooterItems: NavItem[] = [
-  { titleKey: 'nav.settings', href: '/settings', icon: Settings, permission: 'view_any_setting' },
-]
+const platformSection: NavSection = {
+  titleKey: 'nav.section_platform',
+  items: [
+    { titleKey: 'nav.tenants', href: '/admin/tenants', icon: Globe2, permission: 'view_any_tenant' },
+  ],
+}
 
-// Menus normais dos utilizadores de tenant
+const platformGlobalSection: NavSection = {
+  titleKey: 'nav.section_platform',
+  items: [
+    { titleKey: 'nav.tenants', href: '/admin/tenants', icon: Globe2, permission: 'view_any_tenant' },
+    { titleKey: 'nav.audits', href: '/audits', icon: Activity, permission: 'view_any_audit' },
+  ],
+}
+
 const sections: NavSection[] = [
   {
     items: [
@@ -109,10 +105,10 @@ const sections: NavSection[] = [
       { titleKey: 'nav.salaryComponents', href: '/settings/payroll-components', icon: CircleDollarSign, roles: ['admin', 'hr-manager'], permission: 'view_any_salary-component' },
       { titleKey: 'nav.documents', href: '/documents', icon: FileText, permission: 'view_any_document' },
       { titleKey: 'nav.performance', href: '/performance', icon: TrendingUp, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_performance' },
-      { titleKey: 'nav.training', href: '/training', icon: GraduationCap, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_training' },
+      { titleKey: 'nav.training', href: '/training', icon: ClipboardCheck, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_training' },
       { titleKey: 'nav.trainings', href: '/trainings', icon: GraduationCap, roles: ['admin', 'hr-manager'], permission: 'view_any_training' },
       { titleKey: 'nav.benefits', href: '/benefits', icon: Gift, roles: ['admin', 'hr-manager'], permission: 'view_any_benefit' },
-      { titleKey: 'nav.deductions', href: '/deductions', icon: CircleDollarSign, roles: ['admin', 'hr-manager'], permission: 'view_any_deduction' },
+      { titleKey: 'nav.deductions', href: '/deductions', icon: Receipt, roles: ['admin', 'hr-manager'], permission: 'view_any_deduction' },
     ],
   },
   {
@@ -127,7 +123,6 @@ const sections: NavSection[] = [
 
 const footerItems: NavItem[] = [
   { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin'], permission: 'view_any_setting' },
-  { titleKey: 'nav.help', href: '/help', icon: HelpCircle },
 ]
 
 function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
@@ -140,25 +135,16 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
     <Link
       to={item.href}
       className={cn(
-        'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+        'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors',
         active
-          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm shadow-sidebar-primary/30'
-          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+          ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+          : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         collapsed && 'justify-center px-2',
       )}
       aria-current={active ? 'page' : undefined}
     >
-      <Icon
-        className={cn(
-          'h-4 w-4 shrink-0 transition-transform',
-          active && 'scale-110',
-          !active && 'group-hover:scale-105',
-        )}
-      />
+      <Icon className="h-4 w-4 shrink-0" />
       {!collapsed && <span className="truncate">{t(item.titleKey)}</span>}
-      {active && !collapsed && (
-        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-sidebar-primary-foreground shadow-sm" />
-      )}
     </Link>
   )
 
@@ -185,6 +171,7 @@ export function Sidebar() {
   const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
   const hasPlatformRole = isPlatformAdmin(user)
   const enforceAssignedPermissions = hasPlatformRole && !isSuperAdmin
+  const hasSelectedTenant = Boolean(localStorage.getItem('hrms_selected_tenant') || user?.tenant?.id)
 
   const logout = async () => {
     try {
@@ -196,54 +183,37 @@ export function Sidebar() {
   }
 
   const activeSections = hasPlatformRole
-    ? [superAdminSections[0], ...sections.slice(1), superAdminSections[1]]
+    ? (hasSelectedTenant
+        ? [platformDashboardSection, ...sections.slice(1), platformSection]
+        : [platformDashboardSection, platformGlobalSection])
     : sections
-  const activeFooterItems = hasPlatformRole ? superAdminFooterItems : footerItems
 
   return (
     <TooltipProvider delayDuration={200}>
       <aside
         className={cn(
-          'relative flex h-screen flex-col border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'w-64' : 'w-16',
+          'relative flex h-screen flex-col border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground transition-all duration-200',
+          sidebarOpen ? 'w-60' : 'w-16',
         )}
       >
-        {/* Logo */}
+        {/* Marca */}
         <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30">
-            <Briefcase className="h-5 w-5 text-primary-foreground" />
-            <div className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-success ring-2 ring-sidebar-background" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Briefcase className="h-4 w-4" />
           </div>
           {sidebarOpen && (
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold tracking-tight truncate">{t('app.name')}</span>
-                <Sparkles className="h-3 w-3 shrink-0 text-warning" />
-              </div>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/50 truncate">
-                {t('app.tagline_short', { defaultValue: 'Enterprise' })}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-semibold tracking-tight">{t('app.name')}</span>
+              <span className="truncate text-[11px] text-sidebar-foreground/55">
+                {t('app.tagline_short', { defaultValue: 'Gestão de RH' })}
               </span>
             </div>
           )}
         </div>
 
-        {/* Navigation & all items housed inside sidebar scroll */}
+        {/* Navegação */}
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-4 scrollbar-thin">
-          {/* Badge de super-admin */}
-          {hasPlatformRole && sidebarOpen && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
-              <Shield className="h-3.5 w-3.5 shrink-0 text-primary" />
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                Super Admin
-              </span>
-            </div>
-          )}
-          {hasPlatformRole && !sidebarOpen && (
-            <div className="mb-4 flex justify-center">
-              <Shield className="h-4 w-4 text-primary" />
-            </div>
-          )}
-          <nav className="space-y-5">
+          <nav className="space-y-4">
             {activeSections.map((section, idx) => {
               const visibleItems = section.items.filter(
                 (item) => (isSuperAdmin || enforceAssignedPermissions || !item.roles || hasAnyRole(user, item.roles))
@@ -252,14 +222,11 @@ export function Sidebar() {
               if (visibleItems.length === 0) return null
 
               return (
-                <div key={idx} className="space-y-1">
+                <div key={idx} className="space-y-0.5">
                   {section.titleKey && sidebarOpen && (
-                    <h3 className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                    <h3 className="mb-1.5 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
                       {t(section.titleKey)}
                     </h3>
-                  )}
-                  {sidebarOpen && idx > 0 && visibleItems.length > 0 && (
-                    <Separator className="my-2 bg-sidebar-border/50" />
                   )}
                   {visibleItems.map((item) => (
                     <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
@@ -269,28 +236,14 @@ export function Sidebar() {
             })}
           </nav>
 
-          {/* Separator before footer items */}
-          <div className="my-4 border-t border-sidebar-border/50" />
-
-          {/* Footer items housed inside the scroll */}
-          <div className="space-y-1">
-            {activeFooterItems
+          <div className="mt-4 border-t border-sidebar-border/60 pt-3 space-y-0.5">
+            {footerItems
               .filter((item) => isSuperAdmin || enforceAssignedPermissions || !item.roles || hasAnyRole(user, item.roles))
               .filter((item) => !enforceAssignedPermissions || !item.permission || hasPermission(user, item.permission))
               .map((item) => (
                 <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
               ))}
           </div>
-
-          {sidebarOpen && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg bg-sidebar-accent/40 px-3 py-2">
-              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-success" />
-              <span className="text-[10px] font-medium text-sidebar-foreground/70 truncate">
-                {t('app.system_status', { defaultValue: 'Sistema operacional' })}
-              </span>
-              <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-success" />
-            </div>
-          )}
         </div>
 
         <div className="shrink-0 border-t border-sidebar-border p-3">

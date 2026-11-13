@@ -183,14 +183,15 @@ export function EmployeeDetailPage() {
 
   const attRecords = attendanceData?.data ?? []
   const attendanceByWeek = useMemo(() => {
-    const weeks = new Map<string, { start: string; records: AttendanceRecord[]; lateMinutes: number }>()
+    const weeks = new Map<string, { start: string; records: AttendanceRecord[]; lateMinutes: number; overtimeMinutes: number }>()
     for (const record of [...attRecords].sort((a, b) => b.date.localeCompare(a.date))) {
       const date = new Date(`${record.date}T00:00:00Z`)
       date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7))
       const weekStart = date.toISOString().slice(0, 10)
-      const week = weeks.get(weekStart) ?? { start: weekStart, records: [], lateMinutes: 0 }
+      const week = weeks.get(weekStart) ?? { start: weekStart, records: [], lateMinutes: 0, overtimeMinutes: 0 }
       week.records.push(record)
       week.lateMinutes += record.late_minutes ?? 0
+      week.overtimeMinutes += record.overtime_minutes ?? 0
       weeks.set(weekStart, week)
     }
     return [...weeks.values()]
@@ -475,6 +476,12 @@ export function EmployeeDetailPage() {
   const lateDurationLabel = totalLateMinutes >= 60
     ? t('employeeDetail.text.accumulatedMinutesWithHours', { duration: formatMinutes(totalLateMinutes), count: totalLateMinutes })
     : t('employeeDetail.text.accumulatedMinutes', { count: totalLateMinutes })
+  const overtimeCount = attRecords.filter((r) => (r.overtime_minutes ?? 0) > 0).length
+  const totalOvertimeMinutes = attRecords.reduce((acc, r) => acc + (r.overtime_minutes ?? 0), 0)
+  const totalOvertimeAmount = attRecords.reduce((acc, r) => acc + (r.overtime_amount ?? 0), 0)
+  const overtimeDurationLabel = totalOvertimeMinutes >= 60
+    ? t('employeeDetail.text.accumulatedMinutesWithHours', { duration: formatMinutes(totalOvertimeMinutes), count: totalOvertimeMinutes })
+    : t('employeeDetail.text.accumulatedMinutes', { count: totalOvertimeMinutes })
   const absent = attRecords.filter((r) => r.status === 'absent').length
   const totalMins = attRecords.reduce((acc, r) => acc + (r.total_worked ?? 0), 0)
   const vacationUsed = leaves.filter((leave) => leave.leave_type?.code === 'vacation' && leave.status === 'approved').reduce((acc, leave) => acc + (leave.total_days ?? 0), 0)
@@ -866,7 +873,7 @@ export function EmployeeDetailPage() {
 
         {/* Tab: Presença */}
         <TabsContent value="attendance" className="mt-6 space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <Card className={`p-4 flex items-center gap-3 border-2 ${isClockedIn ? 'border-emerald-500/40 bg-emerald-500/5' : isClockedOut ? 'border-blue-500/40 bg-blue-500/5' : 'border-border'}`}>
               <div className={`rounded-lg p-2.5 ${isClockedIn ? 'bg-emerald-500/15 text-emerald-600' : isClockedOut ? 'bg-blue-500/15 text-blue-600' : 'bg-muted text-muted-foreground'}`}>
                 {isClockedOut ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <Activity className="h-5 w-5" />}
@@ -879,6 +886,7 @@ export function EmployeeDetailPage() {
             </Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-600"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">{t('employeeDetail.text.daysWorked')}</p><p className="text-2xl font-bold text-foreground">{worked}</p></div></Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-amber-500/10 p-2.5 text-amber-600"><Clock className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">{t('employeeDetail.text.lateArrivals')}</p><p className="text-2xl font-bold text-foreground">{lateCount}</p><p className="text-[11px] text-muted-foreground">{lateDurationLabel}</p></div></Card>
+            <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-indigo-500/10 p-2.5 text-indigo-600"><Clock className="h-5 w-5" /></div><div className="min-w-0"><p className="text-xs text-muted-foreground font-medium">{t('employeeDetail.text.overtime')}</p><p className="text-2xl font-bold text-foreground">{overtimeCount}</p><p className="text-[11px] text-muted-foreground">{overtimeDurationLabel}{totalOvertimeAmount > 0 ? ` · ${totalOvertimeAmount.toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kz` : ''}</p></div></Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-red-500/10 p-2.5 text-red-600"><AlertCircle className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">{t('employeeDetail.text.absences')}</p><p className="text-2xl font-bold text-foreground">{absent}</p><p className="text-[11px] text-muted-foreground">{t('employeeDetail.text.totalDuration', { duration: formatMinutes(totalMins) })}</p></div></Card>
             <Card className="p-4 flex items-center gap-3"><div className="rounded-lg bg-sky-500/10 p-2.5 text-sky-600"><Calendar className="h-5 w-5" /></div><div><p className="text-xs text-muted-foreground font-medium">{t('employeeDetail.text.vacationUsed')}</p><p className="text-2xl font-bold text-foreground">{vacationUsed}</p><p className="text-[11px] text-muted-foreground">{t('employeeDetail.text.approvedDays')}</p></div></Card>
           </div>
@@ -931,7 +939,7 @@ export function EmployeeDetailPage() {
               ) : (
                 <div className="rounded-lg border border-border overflow-x-auto">
                   <table className="w-full min-w-[760px] text-sm">
-                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.date')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('attendance.shift')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockIn')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockOut')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.total')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.dailyLateMinutes')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('common.actions')}</th></tr></thead>
+                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.date')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('attendance.shift')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockIn')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockOut')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.total')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.dailyLateMinutes')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.overtime')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('common.actions')}</th></tr></thead>
                     <tbody className="divide-y divide-border">
                       {attendanceByWeek.map((week) => (
                         <Fragment key={week.start}>
@@ -943,6 +951,7 @@ export function EmployeeDetailPage() {
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_out)}</td>
                               <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatMinutes(rec.total_worked)}</td>
                               <td className="px-4 py-3 text-right font-mono text-xs">{rec.late_minutes ?? 0} min</td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">{rec.overtime_minutes ?? 0} min</td>
                               <td className="px-4 py-3"><Badge variant="outline" className={`text-[10px] font-medium ${attendanceStatusColors[rec.status] ?? ''}`}>{attendanceStatusLabels[rec.status] ?? rec.status}</Badge></td>
                               <td className="px-4 py-3 text-right">
                                 <Button size="icon-sm" variant="ghost" aria-label={t('common.edit')} onClick={() => {
@@ -966,6 +975,7 @@ export function EmployeeDetailPage() {
                           <tr className="bg-muted/40 font-semibold">
                             <td colSpan={5} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
                             <td className="px-4 py-2 text-right font-mono text-xs">{week.lateMinutes} min</td>
+                            <td className="px-4 py-2 text-right font-mono text-xs">{week.overtimeMinutes} min</td>
                             <td colSpan={2} />
                           </tr>
                         </Fragment>

@@ -397,6 +397,7 @@
       "lastName": "姓",
       "late": "迟到",
       "lateArrivals": "迟到次数",
+      "overtime": "加班",
       "dailyLateMinutes": "每日迟到（分钟）",
       "weeklyLateSummary": "每周迟到合计（{{date}}所在周）",
       "advanceMonthlyLimit": "每月工资预支扣款上限：{{amount}}",

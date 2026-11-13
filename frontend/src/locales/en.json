@@ -416,6 +416,7 @@
       "lastName": "Last Name",
       "late": "Late",
       "lateArrivals": "Late Arrivals",
+      "overtime": "Overtime",
       "dailyLateMinutes": "Daily lateness (min)",
       "weeklyLateSummary": "Weekly lateness total (week of {{date}})",
       "leaveRegister": "Absence, Days Off & Vacation Records",

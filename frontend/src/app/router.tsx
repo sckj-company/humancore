@@ -54,13 +54,15 @@ function PageLoader() {
 function DashboardRouter() {
   const user = useAuthStore((s) => s.user)
   const isSuperAdmin = isPlatformAdmin(user)
+  const selectedTenantId = localStorage.getItem('hrms_selected_tenant') ?? (user?.tenant?.id ? String(user.tenant.id) : '')
+  const showPlatformDashboard = isSuperAdmin && !selectedTenantId
   return (
     <Routes>
       <Route path="superadmin" element={<SuperAdminDashboardPage />} />
       <Route path="hr" element={<HrDashboardPage />} />
       <Route path="manager" element={<ManagerDashboardPage />} />
       <Route path="employee" element={<EmployeeDashboardPage />} />
-      <Route index element={isSuperAdmin ? <SuperAdminDashboardPage /> : <HrDashboardPage />} />
+      <Route index element={showPlatformDashboard ? <SuperAdminDashboardPage /> : <HrDashboardPage />} />
     </Routes>
   )
 }

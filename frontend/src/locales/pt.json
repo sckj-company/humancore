@@ -506,6 +506,7 @@
       "lastName": "Apelido",
       "late": "Atrasado",
       "lateArrivals": "Atrasos",
+      "overtime": "Horas extras",
       "dailyLateMinutes": "Atraso do dia (min)",
       "weeklyLateSummary": "Total semanal de atrasos (semana de {{date}})",
       "leaveRegister": "Registo de Ausências, Folgas & Férias",

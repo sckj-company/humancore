@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
 import { Building2, Check, ChevronsUpDown, Search } from 'lucide-react'
@@ -30,13 +30,6 @@ export function Header() {
     queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
     enabled: isSuperAdmin && canListTenants,
   })
-
-  useEffect(() => {
-    if (!isSuperAdmin || selectedTenantId || !tenantPage?.data?.length) return
-    const defaultTenant = tenantPage.data.find((tenant) => tenant.status === 'active') ?? tenantPage.data[0]
-    localStorage.setItem('hrms_selected_tenant', String(defaultTenant.id))
-    window.location.reload()
-  }, [isSuperAdmin, selectedTenantId, tenantPage])
 
   const activeTenant = isSuperAdmin
     ? tenantPage?.data?.find((tenant) => String(tenant.id) === selectedTenantId) ?? user?.tenant
@@ -93,6 +86,24 @@ export function Header() {
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
+            {!user?.tenant?.id && (
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem('hrms_selected_tenant')
+                  setCompanyDialogOpen(false)
+                  window.location.reload()
+                }}
+                className="flex w-full items-center gap-3 border-b border-border px-2 py-3 text-left hover:bg-accent"
+              >
+                <Building2 className="h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">Visão global da plataforma</span>
+                  <span className="block truncate text-xs text-muted-foreground">Dados genéricos sem empresa selecionada</span>
+                </span>
+                {!selectedTenantId && <Check className="h-4 w-4 shrink-0 text-primary" />}
+              </button>
+            )}
             {filteredTenants.length ? filteredTenants.map((tenant) => {
               const isSelected = String(tenant.id) === selectedTenantId
               return (

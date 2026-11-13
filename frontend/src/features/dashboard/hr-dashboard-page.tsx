@@ -11,6 +11,7 @@ import { PageHeader, LoadingState, ErrorState } from '@/components/shared/page-h
 import { useAuthStore } from '@/stores/auth-store'
 
 interface HrDashboardData {
+  tenant?: { id: number; name: string; currency: string } | null
   kpis: {
     total_employees: number
     total_active: number
@@ -33,16 +34,17 @@ export function HrDashboardPage() {
   const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const tenant = user?.tenant
+  const selectedTenantId = localStorage.getItem('hrms_selected_tenant') ?? String(tenant?.id ?? '')
 
   const { data, isLoading, isError, refetch } = useQuery<HrDashboardData>({
-    queryKey: ['dashboard', 'hr'],
+    queryKey: ['dashboard', 'hr', selectedTenantId],
     queryFn: () => api.get<HrDashboardData>('dashboard/hr'),
   })
 
   if (isLoading) return <LoadingState />
   if (isError || !data) return <ErrorState message="Não foi possível carregar o dashboard." onRetry={refetch} />
 
-  const currency = tenant?.currency ?? 'AOA'
+  const currency = data.tenant?.currency ?? tenant?.currency ?? 'AOA'
   const locale = i18n.language
 
   const trendOption: EChartsOption = {

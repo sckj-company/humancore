@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
+import type { EChartsOption } from 'echarts'
 import {
   Building2,
   Users,
@@ -23,17 +25,25 @@ import {
   Hash,
   Factory,
   KeyRound,
+  ShieldCheck,
+  Activity,
+  UserCog,
+  AlertTriangle,
+  ArrowUpRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { hasPermission, useAuthStore } from '@/stores/auth-store'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { PageHeader, LoadingState } from '@/components/shared/page-header'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/shared/page-header'
+import { KpiCard } from '@/components/shared/kpi-card'
+import { Chart } from '@/components/charts/chart'
 import type { Paginated, Tenant } from '@/types'
 
 // ── Constantes Angola ─────────────────────────────────────────────────────────
@@ -146,7 +156,29 @@ interface TenantUser {
   email: string
   is_active: boolean
   roles: string[]
+  permissions?: string[]
+  direct_permissions?: string[]
   created_at?: string
+}
+
+interface TenantPermissionsResponse {
+  permissions: PlatformPermission[]
+  role_permissions: Record<string, string[]>
+}
+
+interface SuperAdminDashboardData {
+  kpis: {
+    total_tenants: number
+    active_tenants: number
+    suspended_tenants: number
+    total_employees: number
+    active_employees: number
+    total_users: number
+    super_admins: number
+  }
+  tenant_trend: { month: string; label: string; count: number }[]
+  by_status: Record<string, number>
+  segments: { small: number; medium: number; large: number }
 }
 
 interface PlatformPermission {
@@ -207,14 +239,29 @@ const userSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(8, 'Mínimo 8 caracteres'),
   role: z.enum(['admin', 'hr-manager', 'manager', 'employee']),
+  permissions: z.array(z.string()).default([]),
 })
 type UserForm = z.infer<typeof userSchema>
-const emptyUserForm: UserForm = { name: '', email: '', password: '', role: 'admin' }
+const emptyUserForm: UserForm = { name: '', email: '', password: '', role: 'admin', permissions: [] }
+
+function toggleTenantPermissionGroup(
+  currentPermissions: string[],
+  groupPermissions: PlatformPermission[],
+  selected: boolean,
+): string[] {
+  const permissions = new Set(currentPermissions)
+  for (const { name } of groupPermissions) {
+    if (selected) permissions.add(name)
+    else permissions.delete(name)
+  }
+  return [...permissions]
+}
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function SuperAdminPage() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const currentUser = useAuthStore((state) => state.user)
   const canManagePlatformUsers = currentUser?.roles.includes('super-admin') || hasPermission(currentUser, 'manage_super_admins')
@@ -258,6 +305,10 @@ export function SuperAdminPage() {
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [userForm, setUserForm] = useState<UserForm>(emptyUserForm)
   const [userErrors, setUserErrors] = useState<Record<string, string>>({})
+  const [editingTenantUser, setEditingTenantUser] = useState<TenantUser | null>(null)
+  const [tenantUserRole, setTenantUserRole] = useState<UserForm['role']>('employee')
+  const [tenantUserActive, setTenantUserActive] = useState(true)
+  const [tenantUserPermissions, setTenantUserPermissions] = useState<string[]>([])
   const [platformUserDialogOpen, setPlatformUserDialogOpen] = useState(false)
   const [platformUserForm, setPlatformUserForm] = useState<NewPlatformUser>(emptyPlatformUser)
   const [editingPlatformUser, setEditingPlatformUser] = useState<PlatformUser | null>(null)
@@ -265,6 +316,11 @@ export function SuperAdminPage() {
   const [passwordTarget, setPasswordTarget] = useState<PasswordTarget | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
+
+  const dashboardQuery = useQuery<SuperAdminDashboardData>({
+    queryKey: ['superadmin', 'dashboard'],
+    queryFn: () => api.get<SuperAdminDashboardData>('superadmin/dashboard'),
+  })
 
   const { data: tenants, isLoading: loadingTenants } = useQuery({
     queryKey: ['superadmin', 'tenants', search, statusFilter],
@@ -280,6 +336,12 @@ export function SuperAdminPage() {
     queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'],
     queryFn: () => api.get<TenantUser[]>(`superadmin/tenants/${selectedTenant!.id}/users`),
     enabled: !!selectedTenant,
+  })
+
+  const tenantPermissionsQuery = useQuery<TenantPermissionsResponse>({
+    queryKey: ['superadmin', 'tenant-permissions'],
+    queryFn: () => api.get<TenantPermissionsResponse>('superadmin/tenant-permissions'),
+    enabled: usersDialogOpen || userDialogOpen || !!editingTenantUser,
   })
 
   const platformUsersQuery = useQuery({
@@ -375,6 +437,17 @@ export function SuperAdminPage() {
       qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar utilizador')),
+  })
+
+  const updateTenantUser = useMutation({
+    mutationFn: ({ userId, role, is_active, permissions }: { userId: number; role: UserForm['role']; is_active: boolean; permissions: string[] }) =>
+      api.put<TenantUser>(`superadmin/tenants/${selectedTenant!.id}/users/${userId}`, { role, is_active, permissions }),
+    onSuccess: () => {
+      toast.success('Utilizador e permissões atualizados com sucesso')
+      setEditingTenantUser(null)
+      qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao atualizar utilizador')),
   })
 
   const deleteUser = useMutation({
@@ -480,6 +553,105 @@ export function SuperAdminPage() {
     updatePlatformUser.mutate({ id: editingPlatformUser.id, permissions: platformUserPermissions })
   }
 
+  const openTenantUserEdit = (u: TenantUser) => {
+    const currentRole = (u.roles[0] as UserForm['role']) ?? 'employee'
+    setEditingTenantUser(u)
+    setTenantUserRole(currentRole)
+    setTenantUserActive(u.is_active)
+    setTenantUserPermissions([...(u.permissions ?? [])])
+  }
+
+  const handleTenantUserRoleChange = (role: UserForm['role']) => {
+    setTenantUserRole(role)
+    const defaults = tenantPermissionsQuery.data?.role_permissions?.[role] ?? []
+    setTenantUserPermissions(defaults)
+  }
+
+  const handleNewUserRoleChange = (role: UserForm['role']) => {
+    const defaults = tenantPermissionsQuery.data?.role_permissions?.[role] ?? []
+    setUserForm((prev) => ({ ...prev, role, permissions: defaults }))
+  }
+
+  const tenantPermissionGroups = (tenantPermissionsQuery.data?.permissions ?? []).reduce<Record<string, PlatformPermission[]>>(
+    (groups, permission) => {
+      const group = permission.group_name ?? 'outros'
+      groups[group] ??= []
+      groups[group].push(permission)
+      return groups
+    },
+    {},
+  )
+
+  const dashboardData = dashboardQuery.data
+  const trendOption: EChartsOption = useMemo(() => {
+    const labels = (dashboardData?.tenant_trend ?? []).map((d) => d.label)
+    const values = (dashboardData?.tenant_trend ?? []).map((d) => d.count)
+    return {
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'var(--popover)',
+        borderColor: 'var(--border)',
+        textStyle: { color: 'var(--popover-foreground)', fontSize: 12 },
+        padding: [8, 12],
+      },
+      grid: { left: 0, right: 0, top: 12, bottom: 0, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: 'var(--muted-foreground)', fontSize: 11, margin: 12 },
+      },
+      yAxis: {
+        type: 'value',
+        minInterval: 1,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: 'var(--border)', type: 'dashed' } },
+        axisLabel: { color: 'var(--muted-foreground)', fontSize: 11 },
+      },
+      series: [
+        {
+          name: 'Empresas',
+          type: 'bar',
+          barWidth: '45%',
+          data: values,
+          itemStyle: { color: 'var(--primary)', borderRadius: [4, 4, 0, 0] },
+        },
+      ],
+    }
+  }, [dashboardData])
+
+  const statusOption: EChartsOption = useMemo(() => ({
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'var(--popover)',
+      borderColor: 'var(--border)',
+      textStyle: { color: 'var(--popover-foreground)' },
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { fontSize: 11, color: 'var(--muted-foreground)' },
+      itemWidth: 8,
+      itemHeight: 8,
+    },
+    color: ['#10b981', '#94a3b8', '#ef4444'],
+    series: [
+      {
+        name: 'Estado',
+        type: 'pie',
+        radius: ['52%', '74%'],
+        center: ['50%', '44%'],
+        itemStyle: { borderRadius: 4, borderColor: 'var(--card)', borderWidth: 2 },
+        label: { show: false },
+        data: Object.entries(dashboardData?.by_status ?? {}).map(([k, v]) => ({
+          name: k === 'active' ? 'Ativas' : k === 'suspended' ? 'Suspensas' : 'Inativas',
+          value: v,
+        })),
+      },
+    ],
+  }), [dashboardData])
+
   const platformPermissionGroups = (platformUsersQuery.data?.permissions ?? []).reduce<Record<string, PlatformPermission[]>>(
     (groups, permission) => {
       const group = permission.group_name ?? 'outros'
@@ -501,251 +673,371 @@ export function SuperAdminPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="SUPER ADMIN"
-        title="Gestão de Empresas"
-        description="Registe e gira as empresas (tenants) da plataforma"
+        title="Gestão de Empresas & Painel Global"
+        description="Monitorize a plataforma, gira empresas (tenants), utilizadores e permissões"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {canManagePlatformUsers && (
+              <Button size="sm" variant="outline" onClick={() => setPlatformUserDialogOpen(true)}>
+                <UserPlus className="mr-1.5 h-4 w-4" />
+                {t('superAdminPage.createButton')}
+              </Button>
+            )}
+            {canCreateTenant && (
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Nova empresa
+              </Button>
+            )}
+          </div>
+        }
       />
 
-      {canManagePlatformUsers && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-base">{t('superAdminPage.title')}</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">{t('superAdminPage.description')}</p>
-            </div>
-            <Button size="sm" onClick={() => setPlatformUserDialogOpen(true)}>
-              <UserPlus className="mr-1.5 h-4 w-4" />
-              {t('superAdminPage.createButton')}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {platformUsersQuery.isLoading ? (
-              <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-            ) : platformUsersQuery.isError ? (
-              <div className="flex items-center justify-between gap-3 text-sm text-destructive">
-                <span>{getApiErrorMessage(platformUsersQuery.error, t('superAdminPage.loadError'))}</span>
-                <Button size="sm" variant="outline" onClick={() => platformUsersQuery.refetch()}>{t('superAdminPage.retry')}</Button>
+      {/* ── Dashboard do Super Admin ─────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label={`Total de Empresas (${dashboardData?.kpis.active_tenants ?? 0} ativas)`}
+          value={dashboardData?.kpis.total_tenants ?? tenants?.meta?.total ?? 0}
+          icon={Building2}
+          accent="primary"
+        />
+        <KpiCard
+          label={`Funcionários (${dashboardData?.kpis.active_employees ?? 0} ativos)`}
+          value={dashboardData?.kpis.total_employees ?? 0}
+          icon={Users}
+          accent="success"
+        />
+        <KpiCard
+          label={`Utilizadores (${dashboardData?.kpis.super_admins ?? 0} super-admins)`}
+          value={dashboardData?.kpis.total_users ?? 0}
+          icon={UserCog}
+          accent="info"
+        />
+        <KpiCard
+          label="Empresas Suspensas"
+          value={dashboardData?.kpis.suspended_tenants ?? 0}
+          icon={AlertTriangle}
+          accent={(dashboardData?.kpis.suspended_tenants ?? 0) > 0 ? 'warning' : 'neutral'}
+        />
+      </div>
+
+      {dashboardData && (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="h-4 w-4 text-primary" />
+                Crescimento de Empresas (12 meses)
+              </CardTitle>
+              <CardDescription>Novas empresas registadas por mês</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Chart option={trendOption} className="h-[220px]" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Globe2 className="h-4 w-4 text-primary" />
+                Estado & Porte
+              </CardTitle>
+              <CardDescription>Distribuição atual das empresas</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Chart option={statusOption} className="h-[155px]" />
+              <div className="grid grid-cols-3 gap-2 border-t pt-3 text-center text-xs">
+                <div>
+                  <p className="text-muted-foreground">Pequenas</p>
+                  <p className="font-semibold tabular-nums">{dashboardData.segments.small}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Médias</p>
+                  <p className="font-semibold tabular-nums">{dashboardData.segments.medium}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Grandes</p>
+                  <p className="font-semibold tabular-nums">{dashboardData.segments.large}</p>
+                </div>
               </div>
-            ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2.5 font-medium">{t('superAdminPage.user')}</th>
-                      <th className="px-3 py-2.5 font-medium">{t('superAdminPage.type')}</th>
-                      <th className="px-3 py-2.5 font-medium">{t('superAdminPage.assignedPermissions')}</th>
-                      <th className="px-3 py-2.5 font-medium">{t('superAdminPage.status')}</th>
-                      <th className="px-3 py-2.5 text-right font-medium">{t('superAdminPage.actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {(platformUsersQuery.data?.users ?? []).map((platformUser) => (
-                      <tr key={platformUser.id}>
-                        <td className="px-3 py-2.5">
-                          <p className="font-medium">{platformUser.name}</p>
-                          <p className="text-xs text-muted-foreground">{platformUser.email}</p>
-                        </td>
-                        <td className="px-3 py-2.5">{platformUser.roles.includes('super-admin') ? t('superAdminPage.fullAdmin') : t('superAdminPage.restrictedAdmin')}</td>
-                        <td className="px-3 py-2.5">{platformUser.permissions.length}</td>
-                        <td className="px-3 py-2.5">{platformUser.is_active ? t('superAdminPage.active') : t('superAdminPage.inactive')}</td>
-                        <td className="px-3 py-2.5 text-right">
-                          <div className="flex justify-end gap-1">
-                            {canSetUserPassword && platformUser.id !== currentUser?.id && (
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Abas de Gestão ───────────────────────────────────────────── */}
+      <Tabs defaultValue="tenants" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="tenants" className="gap-2">
+            <Building2 className="h-4 w-4" />
+            Empresas registadas
+          </TabsTrigger>
+          {canManagePlatformUsers && (
+            <TabsTrigger value="platform-users" className="gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              {t('superAdminPage.title')}
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="tenants">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base">Empresas registadas</CardTitle>
+                <CardDescription>Selecione uma empresa para abrir o painel operacional ou gerir os seus utilizadores e permissões</CardDescription>
+              </div>
+              {canCreateTenant && (
+                <Button size="sm" onClick={openCreate}>
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Nova empresa
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Filtros */}
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Pesquisar por nome, NIF ou email..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                <select
+                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm sm:w-44"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="all">Todos os estados</option>
+                  <option value="active">Ativa</option>
+                  <option value="inactive">Inativa</option>
+                  <option value="suspended">Suspensa</option>
+                </select>
+              </div>
+
+              {/* Tabela */}
+              {loadingTenants ? (
+                <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 text-left">
+                      <tr className="text-xs text-muted-foreground">
+                        <th className="px-3 py-2.5 font-medium">Empresa</th>
+                        <th className="px-3 py-2.5 font-medium">NIF</th>
+                        <th className="px-3 py-2.5 font-medium">Localização</th>
+                        <th className="px-3 py-2.5 font-medium">Estado</th>
+                        <th className="px-3 py-2.5 font-medium">Funcionários</th>
+                        <th className="px-3 py-2.5 font-medium">Departamentos</th>
+                        <th className="px-3 py-2.5 font-medium">Criada em</th>
+                        <th className="px-3 py-2.5 text-right font-medium">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(tenants?.data ?? []).map((tenantItem) => (
+                        <tr key={tenantItem.id} className="hover:bg-muted/40">
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                <Building2 className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{tenantItem.name}</p>
+                                <p className="text-xs text-muted-foreground">{tenantItem.slug} · {(tenantItem as any).legal_entity_type?.toUpperCase() ?? '—'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">
+                            {tenantItem.tax_id ?? '—'}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <MapPin className="h-3 w-3" />
+                              {(tenantItem as any).province ?? (tenantItem as any).city ?? '—'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <Badge variant={STATUS_VARIANT[tenantItem.status] ?? 'secondary'}>
+                              {tenantItem.status === 'active' ? 'Ativa' : tenantItem.status === 'suspended' ? 'Suspensa' : 'Inativa'}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="inline-flex items-center gap-1.5">
+                              <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
+                              {tenantItem.stats?.employees ?? 0}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                              <Layers className="h-3.5 w-3.5" />
+                              {tenantItem.stats?.departments ?? 0}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-muted-foreground">
+                            {tenantItem.created_at ? new Date(tenantItem.created_at).toLocaleDateString('pt') : '—'}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex justify-end gap-1">
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                aria-label={t('passwordReset.changePasswordFor', { name: platformUser.name })}
-                                title={t('passwordReset.changePassword')}
-                                onClick={() => setPasswordTarget(platformUser)}
+                                title="Abrir painel desta empresa"
+                                onClick={() => {
+                                  localStorage.setItem('hrms_selected_tenant', String(tenantItem.id))
+                                  navigate('/')
+                                  window.location.reload()
+                                }}
                               >
-                                <KeyRound className="h-3.5 w-3.5" />
+                                <ArrowUpRight className="h-3.5 w-3.5" />
                               </Button>
-                            )}
-                            {platformUser.roles.includes('super-admin-limited') && platformUser.id !== currentUser?.id && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  aria-label={t('superAdminPage.editPermissions')}
-                                  title={t('superAdminPage.editPermissions')}
-                                  onClick={() => openPlatformUserEdit(platformUser)}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
+                              {canViewTenantUsers && (
+                                <Button size="sm" variant="ghost" title="Gerir utilizadores e permissões" onClick={() => openUsers(tenantItem)}>
+                                  <Users className="h-3.5 w-3.5" />
                                 </Button>
+                              )}
+                              {canUpdateTenant && (
+                                <>
+                                  <Button size="sm" variant="ghost" title="Editar empresa" onClick={() => openEdit(tenantItem)}>
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="sm" variant="ghost"
+                                    title={tenantItem.status === 'suspended' ? 'Reativar empresa' : 'Suspender empresa'}
+                                    disabled={setStatus.isPending}
+                                    onClick={() => setStatus.mutate({ id: tenantItem.id, status: tenantItem.status === 'suspended' ? 'active' : 'suspended' })}
+                                  >
+                                    <Power className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                              {canDeleteTenant && (
                                 <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive"
-                                  aria-label={t('superAdminPage.deleteUser')}
-                                  title={t('superAdminPage.deleteUser')}
-                                  disabled={deletePlatformUser.isPending}
-                                  onClick={() => {
-                                    if (window.confirm(t('superAdminPage.confirmDelete', { name: platformUser.name }))) {
-                                      deletePlatformUser.mutate(platformUser.id)
-                                    }
-                                  }}
+                                  size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+                                  disabled={deleteTenant.isPending}
+                                  onClick={() => { if (window.confirm(`Eliminar a empresa "${tenantItem.name}"?`)) deleteTenant.mutate(tenantItem.id) }}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {!loadingTenants && (tenants?.data ?? []).length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
+                            Nenhuma empresa encontrada.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* ── Listagem de empresas ─────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Empresas registadas</CardTitle>
-          {canCreateTenant && (
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Nova empresa
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Filtros */}
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Pesquisar por nome, NIF ou email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <select
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm sm:w-44"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">Todos os estados</option>
-              <option value="active">Ativa</option>
-              <option value="inactive">Inativa</option>
-              <option value="suspended">Suspensa</option>
-            </select>
-          </div>
-
-          {/* Tabela */}
-          {loadingTenants ? (
-            <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-left">
-                  <tr className="text-xs text-muted-foreground">
-                    <th className="px-3 py-2.5 font-medium">Empresa</th>
-                    <th className="px-3 py-2.5 font-medium">NIF</th>
-                    <th className="px-3 py-2.5 font-medium">Localização</th>
-                    <th className="px-3 py-2.5 font-medium">Estado</th>
-                    <th className="px-3 py-2.5 font-medium">Funcionários</th>
-                    <th className="px-3 py-2.5 font-medium">Departamentos</th>
-                    <th className="px-3 py-2.5 font-medium">Criada em</th>
-                    <th className="px-3 py-2.5 text-right font-medium">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {(tenants?.data ?? []).map((t) => (
-                    <tr key={t.id} className="hover:bg-muted/40">
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-                            <Building2 className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{t.name}</p>
-                            <p className="text-xs text-muted-foreground">{t.slug} · {(t as any).legal_entity_type?.toUpperCase() ?? '—'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">
-                        {t.tax_id ?? '—'}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          {(t as any).province ?? (t as any).city ?? '—'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <Badge variant={STATUS_VARIANT[t.status] ?? 'secondary'}>
-                          {t.status === 'active' ? 'Ativa' : t.status === 'suspended' ? 'Suspensa' : 'Inativa'}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="inline-flex items-center gap-1.5">
-                          <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
-                          {t.stats?.employees ?? 0}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                          <Layers className="h-3.5 w-3.5" />
-                          {t.stats?.departments ?? 0}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground">
-                        {t.created_at ? new Date(t.created_at).toLocaleDateString('pt') : '—'}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex justify-end gap-1">
-                          {canViewTenantUsers && (
-                            <>
-                              <Button size="sm" variant="ghost" title="Gerir utilizadores" onClick={() => openUsers(t)}>
-                                <Users className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
-                          )}
-                          {canUpdateTenant && (
-                            <>
-                              <Button size="sm" variant="ghost" onClick={() => openEdit(t)}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                size="sm" variant="ghost"
-                                title={t.status === 'suspended' ? 'Reativar empresa' : 'Suspender empresa'}
-                                disabled={setStatus.isPending}
-                                onClick={() => setStatus.mutate({ id: t.id, status: t.status === 'suspended' ? 'active' : 'suspended' })}
-                              >
-                                <Power className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
-                          )}
-                          {canDeleteTenant && (
-                            <Button
-                              size="sm" variant="ghost" className="text-destructive hover:text-destructive"
-                              disabled={deleteTenant.isPending}
-                              onClick={() => { if (window.confirm(`Eliminar a empresa "${t.name}"?`)) deleteTenant.mutate(t.id) }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {!loadingTenants && (tenants?.data ?? []).length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
-                        Nenhuma empresa encontrada.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {canManagePlatformUsers && (
+          <TabsContent value="platform-users">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div>
+                  <CardTitle className="text-base">{t('superAdminPage.title')}</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">{t('superAdminPage.description')}</p>
+                </div>
+                <Button size="sm" onClick={() => setPlatformUserDialogOpen(true)}>
+                  <UserPlus className="mr-1.5 h-4 w-4" />
+                  {t('superAdminPage.createButton')}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {platformUsersQuery.isLoading ? (
+                  <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : platformUsersQuery.isError ? (
+                  <div className="flex items-center justify-between gap-3 text-sm text-destructive">
+                    <span>{getApiErrorMessage(platformUsersQuery.error, t('superAdminPage.loadError'))}</span>
+                    <Button size="sm" variant="outline" onClick={() => platformUsersQuery.refetch()}>{t('superAdminPage.retry')}</Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2.5 font-medium">{t('superAdminPage.user')}</th>
+                          <th className="px-3 py-2.5 font-medium">{t('superAdminPage.type')}</th>
+                          <th className="px-3 py-2.5 font-medium">{t('superAdminPage.assignedPermissions')}</th>
+                          <th className="px-3 py-2.5 font-medium">{t('superAdminPage.status')}</th>
+                          <th className="px-3 py-2.5 text-right font-medium">{t('superAdminPage.actions')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {(platformUsersQuery.data?.users ?? []).map((platformUser) => (
+                          <tr key={platformUser.id}>
+                            <td className="px-3 py-2.5">
+                              <p className="font-medium">{platformUser.name}</p>
+                              <p className="text-xs text-muted-foreground">{platformUser.email}</p>
+                            </td>
+                            <td className="px-3 py-2.5">{platformUser.roles.includes('super-admin') ? t('superAdminPage.fullAdmin') : t('superAdminPage.restrictedAdmin')}</td>
+                            <td className="px-3 py-2.5">{platformUser.permissions.length}</td>
+                            <td className="px-3 py-2.5">{platformUser.is_active ? t('superAdminPage.active') : t('superAdminPage.inactive')}</td>
+                            <td className="px-3 py-2.5 text-right">
+                              <div className="flex justify-end gap-1">
+                                {canSetUserPassword && platformUser.id !== currentUser?.id && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    aria-label={t('passwordReset.changePasswordFor', { name: platformUser.name })}
+                                    title={t('passwordReset.changePassword')}
+                                    onClick={() => setPasswordTarget(platformUser)}
+                                  >
+                                    <KeyRound className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {platformUser.roles.includes('super-admin-limited') && platformUser.id !== currentUser?.id && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      aria-label={t('superAdminPage.editPermissions')}
+                                      title={t('superAdminPage.editPermissions')}
+                                      onClick={() => openPlatformUserEdit(platformUser)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-destructive hover:text-destructive"
+                                      aria-label={t('superAdminPage.deleteUser')}
+                                      title={t('superAdminPage.deleteUser')}
+                                      disabled={deletePlatformUser.isPending}
+                                      onClick={() => {
+                                        if (window.confirm(t('superAdminPage.confirmDelete', { name: platformUser.name }))) {
+                                          deletePlatformUser.mutate(platformUser.id)
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* ── Dialog: Criar / Editar Empresa ──────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -1084,28 +1376,38 @@ export function SuperAdminPage() {
 
       {/* ── Dialog: Utilizadores da Empresa ──────────────────────────── */}
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
               Utilizadores — {selectedTenant?.name}
             </DialogTitle>
-            <DialogDescription>Gerir os utilizadores desta empresa.</DialogDescription>
+            <DialogDescription>Gerir os utilizadores, papéis e permissões desta empresa.</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end">
-            <Button size="sm" onClick={() => { setUserForm(emptyUserForm); setUserErrors({}); setUserDialogOpen(true) }}>
+            <Button
+              size="sm"
+              onClick={() => {
+                const defaultRole: UserForm['role'] = 'admin'
+                const defaultPerms = tenantPermissionsQuery.data?.role_permissions?.[defaultRole] ?? []
+                setUserForm({ ...emptyUserForm, role: defaultRole, permissions: defaultPerms })
+                setUserErrors({})
+                setUserDialogOpen(true)
+              }}
+            >
               <UserPlus className="mr-1.5 h-4 w-4" /> Novo utilizador
             </Button>
           </div>
           {loadingUsers ? (
             <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           ) : (
-            <div className="rounded-md border">
+            <div className="max-h-[60vh] overflow-auto rounded-md border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr className="text-left text-xs text-muted-foreground">
                     <th className="px-3 py-2.5 font-medium">Nome</th>
                     <th className="px-3 py-2.5 font-medium">Papel</th>
+                    <th className="px-3 py-2.5 font-medium">Permissões</th>
                     <th className="px-3 py-2.5 font-medium">Estado</th>
                     <th className="px-3 py-2.5 text-right font-medium">Ações</th>
                   </tr>
@@ -1121,32 +1423,47 @@ export function SuperAdminPage() {
                         {u.roles.map((r) => <Badge key={r} variant="secondary" className="text-xs">{r}</Badge>)}
                       </td>
                       <td className="px-3 py-2.5">
+                        <Badge variant="outline" className="text-xs">
+                          {(u.permissions ?? []).length} permissões
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2.5">
                         <Badge variant={u.is_active ? 'success' : 'secondary'}>{u.is_active ? 'Ativo' : 'Inativo'}</Badge>
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        {canSetUserPassword && (
+                        <div className="flex justify-end gap-1">
                           <Button
                             size="sm"
                             variant="ghost"
-                            aria-label={t('passwordReset.changePasswordFor', { name: u.name })}
-                            title={t('passwordReset.changePassword')}
-                            onClick={() => setPasswordTarget(u)}
+                            title="Editar papel e permissões"
+                            onClick={() => openTenantUserEdit(u)}
                           >
-                            <KeyRound className="h-3.5 w-3.5" />
+                            <ShieldCheck className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                        <Button
-                          size="sm" variant="ghost" className="text-destructive hover:text-destructive"
-                          disabled={deleteUser.isPending}
-                          onClick={() => { if (window.confirm(`Eliminar utilizador "${u.name}"?`)) deleteUser.mutate({ userId: u.id }) }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                          {canSetUserPassword && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              aria-label={t('passwordReset.changePasswordFor', { name: u.name })}
+                              title={t('passwordReset.changePassword')}
+                              onClick={() => setPasswordTarget(u)}
+                            >
+                              <KeyRound className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+                            disabled={deleteUser.isPending}
+                            onClick={() => { if (window.confirm(`Eliminar utilizador "${u.name}"?`)) deleteUser.mutate({ userId: u.id }) }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                   {(tenantUsers ?? []).length === 0 && (
-                    <tr><td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">Nenhum utilizador encontrado.</td></tr>
+                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Nenhum utilizador encontrado.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1316,45 +1633,229 @@ export function SuperAdminPage() {
       </Dialog>
 
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Novo utilizador — {selectedTenant?.name}</DialogTitle>
-            <DialogDescription>Criar um novo utilizador para esta empresa.</DialogDescription>
+            <DialogDescription>Criar um novo utilizador e definir o papel e permissões para esta empresa.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Nome *</Label>
-              <Input value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
-              {userErrors.name && <p className="text-xs text-destructive">{userErrors.name}</p>}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Nome *</Label>
+                <Input value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
+                {userErrors.name && <p className="text-xs text-destructive">{userErrors.name}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email *</Label>
+                <Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
+                {userErrors.email && <p className="text-xs text-destructive">{userErrors.email}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Palavra-passe *</Label>
+                <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
+                {userErrors.password && <p className="text-xs text-destructive">{userErrors.password}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Papel *</Label>
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={userForm.role}
+                  onChange={(e) => handleNewUserRoleChange(e.target.value as UserForm['role'])}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="hr-manager">HR Manager</option>
+                  <option value="manager">Manager</option>
+                  <option value="employee">Employee</option>
+                </select>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Email *</Label>
-              <Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
-              {userErrors.email && <p className="text-xs text-destructive">{userErrors.email}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Palavra-passe *</Label>
-              <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
-              {userErrors.password && <p className="text-xs text-destructive">{userErrors.password}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Papel *</Label>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                value={userForm.role}
-                onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserForm['role'] })}
-              >
-                <option value="admin">Admin</option>
-                <option value="hr-manager">HR Manager</option>
-                <option value="manager">Manager</option>
-                <option value="employee">Employee</option>
-              </select>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold">Permissões</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Pré-selecionadas pelo papel; pode personalizar livremente ({userForm.permissions.length} selecionadas).
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleNewUserRoleChange(userForm.role)}
+                >
+                  Restaurar do papel
+                </Button>
+              </div>
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border p-3">
+                {Object.entries(tenantPermissionGroups).map(([group, permissions]) => (
+                  <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
+                    <details className="min-w-0 flex-1">
+                      <summary className="cursor-pointer text-sm font-medium">
+                        {t(`superAdminPage.permissionGroups.${group}`, { defaultValue: group })}{' '}
+                        <span className="text-xs font-normal text-muted-foreground">({permissions.length})</span>
+                      </summary>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {permissions.map((permission) => (
+                          <label key={permission.name} className="flex items-start gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={userForm.permissions.includes(permission.name)}
+                              onChange={(event) => setUserForm((current) => ({
+                                ...current,
+                                permissions: event.target.checked
+                                  ? [...current.permissions, permission.name]
+                                  : current.permissions.filter((name) => name !== permission.name),
+                              }))}
+                            />
+                            <span>{getPermissionLabel(permission.name)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </details>
+                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={permissions.every(({ name }) => userForm.permissions.includes(name))}
+                        onChange={(event) => setUserForm((current) => ({
+                          ...current,
+                          permissions: toggleTenantPermissionGroup(current.permissions, permissions, event.target.checked),
+                        }))}
+                      />
+                      {t('superAdminPage.selectAllGroup')}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setUserDialogOpen(false)}>Cancelar</Button>
               <Button onClick={handleUserSubmit} disabled={createUser.isPending}>
                 {createUser.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                 Criar utilizador
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Editar Papel & Permissões do Utilizador da Empresa ── */}
+      <Dialog
+        open={!!editingTenantUser}
+        onOpenChange={(open) => {
+          if (!open) setEditingTenantUser(null)
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              Permissões — {editingTenantUser?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Gerir papel, estado e permissões de {editingTenantUser?.email} em {selectedTenant?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Papel</Label>
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={tenantUserRole}
+                  onChange={(e) => handleTenantUserRoleChange(e.target.value as UserForm['role'])}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="hr-manager">HR Manager</option>
+                  <option value="manager">Manager</option>
+                  <option value="employee">Employee</option>
+                </select>
+              </div>
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={tenantUserActive}
+                    onChange={(e) => setTenantUserActive(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Utilizador ativo
+                </label>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold">Permissões</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {tenantUserPermissions.length} permissões selecionadas
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleTenantUserRoleChange(tenantUserRole)}
+                >
+                  Aplicar permissões do papel
+                </Button>
+              </div>
+              <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-md border p-3">
+                {Object.entries(tenantPermissionGroups).map(([group, permissions]) => (
+                  <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
+                    <details className="min-w-0 flex-1">
+                      <summary className="cursor-pointer text-sm font-medium">
+                        {t(`superAdminPage.permissionGroups.${group}`, { defaultValue: group })}{' '}
+                        <span className="text-xs font-normal text-muted-foreground">({permissions.length})</span>
+                      </summary>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {permissions.map((permission) => (
+                          <label key={permission.name} className="flex items-start gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={tenantUserPermissions.includes(permission.name)}
+                              onChange={(event) => setTenantUserPermissions((current) => (
+                                event.target.checked
+                                  ? [...current, permission.name]
+                                  : current.filter((name) => name !== permission.name)
+                              ))}
+                            />
+                            <span>{getPermissionLabel(permission.name)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </details>
+                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={permissions.every(({ name }) => tenantUserPermissions.includes(name))}
+                        onChange={(event) => setTenantUserPermissions((current) => (
+                          toggleTenantPermissionGroup(current, permissions, event.target.checked)
+                        ))}
+                      />
+                      {t('superAdminPage.selectAllGroup')}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingTenantUser(null)}>Cancelar</Button>
+              <Button
+                onClick={() => {
+                  if (!editingTenantUser) return
+                  updateTenantUser.mutate({
+                    userId: editingTenantUser.id,
+                    role: tenantUserRole,
+                    is_active: tenantUserActive,
+                    permissions: tenantUserPermissions,
+                  })
+                }}
+                disabled={updateTenantUser.isPending}
+              >
+                {updateTenantUser.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Guardar permissões
               </Button>
             </div>
           </div>
