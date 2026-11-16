@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api\V1\Import;
 
 use App\Http\Controllers\Api\V1\BaseController;
+use App\Models\Employee;
 use App\Services\Import\LegacyRhImportService;
+use App\Services\Tenant\TenantManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -15,7 +17,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class EmployeeImportController extends BaseController
 {
     public function __construct(
-        protected LegacyRhImportService $importService
+        protected LegacyRhImportService $importService,
+        protected TenantManager $tenantManager
     ) {}
 
     /**
@@ -23,19 +26,29 @@ class EmployeeImportController extends BaseController
      */
     public function preview(Request $request): JsonResponse
     {
+        $this->authorize('create', Employee::class);
+
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:51200'], // max 50MB
         ]);
 
         $file = $request->file('file');
         $tempPath = $file->getRealPath();
+        $activeTenant = $this->tenantManager->get();
+        $allowCrossTenant = $request->user()?->hasRole('super-admin') ?? false;
 
         try {
             $result = $this->importService->execute(
                 filePath: $tempPath,
                 dryRun: true,
-                dispatchUploadJobs: false
+                dispatchUploadJobs: false,
+                activeTenant: $activeTenant,
+                allowCrossTenant: $allowCrossTenant
             );
+
+            if (($result['total_records'] ?? 0) === 0) {
+                return $this->error('Nenhum registo de funcionário encontrado no ficheiro. Verifique o modelo e preencha pelo menos uma linha de dados.', 422);
+            }
 
             return $this->success($result, 'Ficheiro analisado com sucesso.');
         } catch (\Throwable $e) {
@@ -48,6 +61,8 @@ class EmployeeImportController extends BaseController
      */
     public function process(Request $request): JsonResponse
     {
+        $this->authorize('create', Employee::class);
+
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:51200'],
             'upload_cloudinary' => ['nullable', 'boolean'],
@@ -56,13 +71,21 @@ class EmployeeImportController extends BaseController
         $file = $request->file('file');
         $tempPath = $file->getRealPath();
         $uploadCloudinary = $request->boolean('upload_cloudinary', true);
+        $activeTenant = $this->tenantManager->get();
+        $allowCrossTenant = $request->user()?->hasRole('super-admin') ?? false;
 
         try {
             $result = $this->importService->execute(
                 filePath: $tempPath,
                 dryRun: false,
-                dispatchUploadJobs: $uploadCloudinary
+                dispatchUploadJobs: $uploadCloudinary,
+                activeTenant: $activeTenant,
+                allowCrossTenant: $allowCrossTenant
             );
+
+            if (($result['total_records'] ?? 0) === 0) {
+                return $this->error('Nenhum registo de funcionário encontrado no ficheiro.', 422);
+            }
 
             return $this->success($result, 'Importação de colaboradores concluída com sucesso.');
         } catch (\Throwable $e) {
@@ -75,6 +98,9 @@ class EmployeeImportController extends BaseController
      */
     public function downloadTemplate(): StreamedResponse
     {
+        $this->authorize('viewAny', Employee::class);
+
+        $activeTenant = $this->tenantManager->get();
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Modelo Funcionários');
@@ -133,7 +159,7 @@ class EmployeeImportController extends BaseController
             'O2' => '150000.00',
             'P2' => '30000.00',
             'Q2' => '25000.00',
-            'R2' => 'Empresa Exemplo Lda',
+            'R2' => $activeTenant?->name ?? 'Empresa Exemplo Lda',
         ];
 
         foreach ($sampleData as $cell => $text) {

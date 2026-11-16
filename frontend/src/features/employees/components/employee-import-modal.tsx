@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent } from '@/components/ui/card'
-import { api } from '@/lib/api'
+import { api, getApiErrorMessage } from '@/lib/api'
 import {
   FileSpreadsheet,
   UploadCloud,
@@ -76,6 +76,8 @@ export function EmployeeImportModal({ onSuccess }: Props) {
   const [result, setResult] = useState<ImportResultStats | null>(null)
   const [uploadCloudinary, setUploadCloudinary] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -104,8 +106,7 @@ export function EmployeeImportModal({ onSuccess }: Props) {
       setPreview(data)
       setStep('preview')
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } }; message?: string }
-      setErrorMessage(error.response?.data?.message || error.message || t('employeeImport.analysisError'))
+      setErrorMessage(getApiErrorMessage(err, t('employeeImport.analysisError')))
     } finally {
       setLoading(false)
     }
@@ -129,14 +130,21 @@ export function EmployeeImportModal({ onSuccess }: Props) {
         onSuccess()
       }
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } }; message?: string }
-      setErrorMessage(error.response?.data?.message || error.message || t('employeeImport.processError'))
+      setErrorMessage(getApiErrorMessage(err, t('employeeImport.processError')))
       setStep('preview')
     }
   }
 
-  const handleDownloadTemplate = () => {
-    window.open('/api/v1/imports/employees/template', '_blank')
+  const handleDownloadTemplate = async () => {
+    setErrorMessage(null)
+    setDownloadingTemplate(true)
+    try {
+      await api.downloadFile('imports/employees/template', 'Modelo_Importacao_Funcionarios_HumaCore.xlsx')
+    } catch (err: unknown) {
+      setErrorMessage(getApiErrorMessage(err, t('employeeImport.analysisError')))
+    } finally {
+      setDownloadingTemplate(false)
+    }
   }
 
   return (
@@ -172,8 +180,23 @@ export function EmployeeImportModal({ onSuccess }: Props) {
         {step === 'upload' && (
           <div className="space-y-6 py-4">
             <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-muted-foreground/30 hover:border-primary/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-muted/20 hover:bg-muted/40"
+              onClick={() => !loading && fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setIsDragging(true)
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setIsDragging(false)
+                const dropped = e.dataTransfer.files?.[0]
+                if (dropped && !loading) handleFileChange(dropped)
+              }}
+              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+                isDragging
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted-foreground/30 hover:border-primary/60 bg-muted/20 hover:bg-muted/40'
+              }`}
             >
               <input
                 ref={fileInputRef}
@@ -205,8 +228,15 @@ export function EmployeeImportModal({ onSuccess }: Props) {
                 <h4 className="text-sm font-medium">{t('employeeImport.needTemplate')}</h4>
                 <p className="text-xs text-muted-foreground">{t('employeeImport.templateDescription')}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="h-auto min-h-8 whitespace-normal text-center">
-                <Download className="h-4 w-4 shrink-0" /> {t('employeeImport.downloadTemplate')}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadTemplate}
+                disabled={downloadingTemplate}
+                className="h-auto min-h-8 whitespace-normal text-center"
+              >
+                {downloadingTemplate ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Download className="h-4 w-4 shrink-0" />}
+                {t('employeeImport.downloadTemplate')}
               </Button>
             </div>
           </div>
@@ -243,7 +273,9 @@ export function EmployeeImportModal({ onSuccess }: Props) {
                   <div>
                     <p className="text-xs text-muted-foreground">{t('employeeImport.basePayroll')}</p>
                     <p className="text-lg font-bold">
-                      {(preview.salaries.total_base_payroll / 1_000_000).toFixed(1)}M Kz
+                      {preview.salaries.total_base_payroll >= 1_000_000
+                        ? `${(preview.salaries.total_base_payroll / 1_000_000).toFixed(1)}M Kz`
+                        : `${new Intl.NumberFormat('pt-AO', { maximumFractionDigits: 0 }).format(preview.salaries.total_base_payroll)} Kz`}
                     </p>
                   </div>
                 </CardContent>
@@ -344,7 +376,14 @@ export function EmployeeImportModal({ onSuccess }: Props) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-left">
               <div className="p-3 border rounded-lg bg-card">
                 <p className="text-xs text-muted-foreground">{t('employeeImport.newEmployees')}</p>
-                <p className="text-lg font-bold text-emerald-600">+{result.imported.employees_created}</p>
+                <p className="text-lg font-bold text-emerald-600">
+                  +{result.imported.employees_created}
+                  {result.imported.employees_updated > 0 && (
+                    <span className="ml-1.5 text-xs font-medium text-muted-foreground">
+                      ({result.imported.employees_updated} atual.)
+                    </span>
+                  )}
+                </p>
               </div>
               <div className="p-3 border rounded-lg bg-card">
                 <p className="text-xs text-muted-foreground">{t('employeeImport.contractsCreated')}</p>

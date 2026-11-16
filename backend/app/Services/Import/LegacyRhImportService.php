@@ -7,6 +7,7 @@ use App\Jobs\ProcessAndUploadEmployeeDocumentJob;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
 use App\Models\EmployeeSalaryComponent;
+use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -25,8 +26,13 @@ class LegacyRhImportService
      * @param bool $dispatchUploadJobs If true, dispatches background jobs for Cloudinary upload
      * @return array Summary of the operation
      */
-    public function execute(string $filePath, bool $dryRun = true, bool $dispatchUploadJobs = false): array
-    {
+    public function execute(
+        string $filePath,
+        bool $dryRun = true,
+        bool $dispatchUploadJobs = false,
+        ?Tenant $activeTenant = null,
+        bool $allowCrossTenant = true
+    ): array {
         $startTime = microtime(true);
         $records = $this->parser->parseFile($filePath);
 
@@ -72,7 +78,11 @@ class LegacyRhImportService
             $stats['status_breakdown'][$st] = ($stats['status_breakdown'][$st] ?? 0) + 1;
 
             // Company
-            $comp = $rec->companyName ?: ($rec->clientName ?: 'A Designar (Pendente)');
+            if (! $allowCrossTenant && $activeTenant !== null) {
+                $comp = $activeTenant->name;
+            } else {
+                $comp = $rec->companyName ?: ($rec->clientName ?: ($activeTenant?->name ?? 'A Designar (Pendente)'));
+            }
             $stats['tenants_detected'][$comp] = ($stats['tenants_detected'][$comp] ?? 0) + 1;
 
             // Salary
@@ -99,7 +109,7 @@ class LegacyRhImportService
                 $biOccurrences[$rec->idDocumentNumber][] = $rec->employeeCode;
             }
 
-            if (empty($rec->companyName)) {
+            if ($activeTenant === null && empty($rec->companyName)) {
                 $stats['anomalies']['missing_company'][] = [
                     'code' => $rec->employeeCode,
                     'name' => $rec->fullName,
@@ -139,13 +149,17 @@ class LegacyRhImportService
 
             foreach ($records as $rec) {
                 // Resolve tenant
-                $tenant = $this->tenantResolver->resolveTenant(
-                    companyName: $rec->companyName,
-                    clientName: $rec->clientName,
-                    taxId: $rec->companyTaxId,
-                    companyType: $rec->companyType,
-                    inssPassword: $rec->inssPassword
-                );
+                if ($activeTenant !== null && (! $allowCrossTenant || (empty($rec->companyName) && empty($rec->clientName)) || strcasecmp(trim((string) $rec->companyName), $activeTenant->name) === 0)) {
+                    $tenant = $activeTenant;
+                } else {
+                    $tenant = $this->tenantResolver->resolveTenant(
+                        companyName: $rec->companyName,
+                        clientName: $rec->clientName,
+                        taxId: $rec->companyTaxId,
+                        companyType: $rec->companyType,
+                        inssPassword: $rec->inssPassword
+                    );
+                }
                 $tenantsSeen[$tenant->id] = true;
 
                 // Resolve department and position
@@ -161,13 +175,18 @@ class LegacyRhImportService
                     $idDoc = "PROV-{$rec->employeeCode}";
                 }
 
-                // Upsert Employee
-                $employee = Employee::withoutGlobalScopes()->where('tenant_id', $tenant->id)
-                    ->where(function ($q) use ($rec, $idDoc) {
-                        $q->where('employee_code', $rec->employeeCode)
-                            ->orWhere('id_document_number', $idDoc);
-                    })
+                // Upsert Employee (match by employee_code first, then id_document_number)
+                $employee = Employee::withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->where('employee_code', $rec->employeeCode)
                     ->first();
+
+                if (! $employee && ! empty($rec->idDocumentNumber)) {
+                    $employee = Employee::withoutGlobalScopes()
+                        ->where('tenant_id', $tenant->id)
+                        ->where('id_document_number', $idDoc)
+                        ->first();
+                }
 
                 $employeeData = [
                     'tenant_id' => $tenant->id,
@@ -185,6 +204,7 @@ class LegacyRhImportService
                     'id_document_type' => $rec->idDocumentType,
                     'id_document_number' => $idDoc,
                     'id_document_expiry' => $rec->idDocumentExpiry,
+                    'tax_id' => $rec->taxId,
                     'status' => $rec->status,
                     'hired_at' => $rec->hiredAt,
                     'termination_at' => $rec->terminationAt,
@@ -225,7 +245,7 @@ class LegacyRhImportService
                     $stats['imported']['contracts_created']++;
                 }
 
-                // Create Salary Components if values > 0
+                // Create or update Salary Components if values > 0
                 $allowances = [
                     'meal_allowance' => $rec->mealAllowance,
                     'transport_allowance' => $rec->transportAllowance,
@@ -235,17 +255,19 @@ class LegacyRhImportService
 
                 foreach ($allowances as $compKey => $amount) {
                     if ($amount > 0 && isset($salaryComponents[$compKey])) {
-                        EmployeeSalaryComponent::firstOrCreate([
-                            'tenant_id' => $tenant->id,
+                        $componentAssignment = EmployeeSalaryComponent::withoutGlobalScopes()->updateOrCreate([
                             'employee_id' => $employee->id,
                             'contract_id' => $contract->id,
                             'salary_component_id' => $salaryComponents[$compKey]->id,
                         ], [
+                            'tenant_id' => $tenant->id,
                             'custom_value' => $amount,
                             'start_date' => $contract->start_date,
                             'is_active' => true,
                         ]);
-                        $stats['imported']['salary_components_created']++;
+                        if ($componentAssignment->wasRecentlyCreated) {
+                            $stats['imported']['salary_components_created']++;
+                        }
                     }
                 }
 

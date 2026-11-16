@@ -43,6 +43,10 @@ class LegacyExcelParserService
      */
     public function parseRows(array $rows): array
     {
+        if ($this->isStandardTemplate($rows)) {
+            return $this->parseStandardRows($rows);
+        }
+
         $employees = [];
         $currentRecord = null;
 
@@ -76,6 +80,129 @@ class LegacyExcelParserService
         }
 
         return $employees;
+    }
+
+    protected function isStandardTemplate(array $rows): bool
+    {
+        $row1 = $rows[1] ?? null;
+        if (! is_array($row1)) {
+            return false;
+        }
+
+        $colA = mb_strtolower(trim((string) ($row1['A'] ?? '')));
+        $colB = mb_strtolower(trim((string) ($row1['B'] ?? '')));
+        $colAC = trim((string) ($row1['AC'] ?? ''));
+        $colAD = trim((string) ($row1['AD'] ?? ''));
+
+        if ($colAC !== '' || $colAD !== '') {
+            return false;
+        }
+
+        $hasCodeHeader = str_contains($colA, 'código') || str_contains($colA, 'codigo') || str_contains($colA, 'code');
+        $hasNameHeader = str_contains($colB, 'nome') || str_contains($colB, 'name');
+
+        return $hasCodeHeader && $hasNameHeader;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<string, LegacyEmployeeRecordDTO>
+     */
+    protected function parseStandardRows(array $rows): array
+    {
+        $employees = [];
+        $seq = 1;
+
+        foreach ($rows as $rowIndex => $row) {
+            if ($rowIndex < 2) {
+                continue;
+            }
+
+            $code = trim((string) ($row['A'] ?? ''));
+            $rawName = trim((string) ($row['B'] ?? ''));
+
+            if ($code === '' && $rawName === '') {
+                continue;
+            }
+
+            $record = $this->buildStandardRecord($row, $rowIndex, $seq++);
+            $employees[$record->employeeCode] = $record;
+        }
+
+        return $employees;
+    }
+
+    protected function buildStandardRecord(array $row, int $rowIndex, int $seq): LegacyEmployeeRecordDTO
+    {
+        $employeeCode = trim((string) ($row['A'] ?? ''));
+        if ($employeeCode === '') {
+            $employeeCode = 'EMP-'.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        }
+
+        $rawName = trim((string) ($row['B'] ?? ''));
+        [$firstName, $lastName] = $this->splitName($rawName);
+
+        $nationality = $this->normalizeNationality(trim((string) ($row['C'] ?? '')));
+        $idDocumentType = $this->normalizeIdDocumentType(trim((string) ($row['D'] ?? '')));
+        $idDocumentNumber = trim((string) ($row['E'] ?? ''));
+        $idDocumentExpiry = $this->parseDate($row['F'] ?? null);
+        $taxId = trim((string) ($row['G'] ?? ''));
+        $phone = $this->normalizePhone(trim((string) ($row['H'] ?? '')));
+        $emergencyContact = trim((string) ($row['I'] ?? ''));
+        $address = trim((string) ($row['J'] ?? ''));
+        $departmentName = $this->cleanDepartment(trim((string) ($row['K'] ?? '')));
+        $positionTitle = $this->cleanPosition(trim((string) ($row['L'] ?? '')));
+        $hiredAt = $this->parseDate($row['M'] ?? null);
+        $contractType = $this->normalizeContractType(trim((string) ($row['N'] ?? '')));
+        $baseSalary = $this->parseFloat($row['O'] ?? 0);
+        $mealAllowance = $this->parseFloat($row['P'] ?? 0);
+        $transportAllowance = $this->parseFloat($row['Q'] ?? 0);
+        $companyName = trim((string) ($row['R'] ?? ''));
+        $rawStatus = trim((string) ($row['S'] ?? ''));
+        $status = $rawStatus !== '' ? $this->normalizeStatus($rawStatus) : 'active';
+
+        return new LegacyEmployeeRecordDTO(
+            dataId: (string) $rowIndex,
+            employeeCode: $employeeCode,
+            fullName: $rawName ?: "{$firstName} {$lastName}",
+            firstName: $firstName,
+            lastName: $lastName,
+            companyName: $companyName !== '' ? $companyName : null,
+            departmentName: $departmentName,
+            positionTitle: $positionTitle,
+            nationality: $nationality,
+            idDocumentType: $idDocumentType,
+            idDocumentNumber: $idDocumentNumber !== '' ? $idDocumentNumber : null,
+            idDocumentExpiry: $idDocumentExpiry,
+            phone: $phone !== '' ? $phone : null,
+            emergencyContact: $emergencyContact !== '' ? $emergencyContact : null,
+            address: $address !== '' ? $address : null,
+            status: $status,
+            hiredAt: $hiredAt,
+            taxId: $taxId !== '' ? $taxId : null,
+            contractType: $contractType,
+            baseSalary: $baseSalary,
+            contractStartDate: $hiredAt,
+            mealAllowance: $mealAllowance,
+            transportAllowance: $transportAllowance,
+            rowNumbers: [$rowIndex],
+        );
+    }
+
+    public function normalizeIdDocumentType(string $type): string
+    {
+        $lower = mb_strtolower(trim($type));
+        if (str_contains($lower, 'passaport') || str_contains($lower, 'passport')) {
+            return 'passport';
+        }
+        if (str_contains($lower, 'resid')) {
+            return 'residence_permit';
+        }
+        if (str_contains($lower, 'carta') || str_contains($lower, 'driver')) {
+            return 'driver_license';
+        }
+
+        return 'bi';
     }
 
     protected function buildParentRecord(array $row, int $rowIndex): LegacyEmployeeRecordDTO
@@ -310,6 +437,16 @@ class LegacyExcelParserService
             return null;
         }
 
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'Y/m/d'] as $format) {
+            try {
+                $parsed = Carbon::createFromFormat($format, $str);
+                if ($parsed !== false && $parsed->format($format) === $str) {
+                    return $parsed->format('Y-m-d');
+                }
+            } catch (\Throwable) {
+            }
+        }
+
         try {
             return Carbon::parse($str)->format('Y-m-d');
         } catch (\Throwable) {
@@ -432,7 +569,25 @@ class LegacyExcelParserService
             return (float) $val;
         }
         $str = preg_replace('/[^\d,.]/', '', (string) $val);
-        $str = str_replace(',', '.', $str);
+        if ($str === '' || $str === null) {
+            return 0.0;
+        }
+
+        $lastComma = strrpos($str, ',');
+        $lastDot = strrpos($str, '.');
+
+        if ($lastComma !== false && $lastDot !== false) {
+            if ($lastComma > $lastDot) {
+                $str = str_replace('.', '', $str);
+                $str = str_replace(',', '.', $str);
+            } else {
+                $str = str_replace(',', '', $str);
+            }
+        } elseif ($lastComma !== false) {
+            $decimals = strlen($str) - $lastComma - 1;
+            $str = ($decimals <= 2) ? str_replace(',', '.', $str) : str_replace(',', '', $str);
+        }
+
         return (float) $str;
     }
 

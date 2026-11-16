@@ -133,7 +133,7 @@ class TenantResolutionService
             'name' => $clean,
         ], [
             'description' => "Departamento de {$clean}",
-            'is_active' => true,
+            'status' => 'active',
         ]);
     }
 
@@ -150,7 +150,6 @@ class TenantResolutionService
             'title' => $clean,
         ], [
             'description' => "Função de {$clean}",
-            'is_active' => true,
         ]);
     }
 
@@ -163,45 +162,58 @@ class TenantResolutionService
     {
         $components = [
             'meal_allowance' => [
-                'name' => 'Subsídio de Alimentação',
-                'code' => 'SUB_ALIM',
-                'type' => 'earning',
+                'code' => 'meal_allowance',
+                'legacy_code' => 'SUB_ALIM',
+                'name' => 'Subsídio de Refeição',
+                'type' => 'benefit',
                 'calculation_type' => 'fixed',
                 'is_taxable' => false,
+                'priority' => 20,
             ],
             'transport_allowance' => [
+                'code' => 'transport_allowance',
+                'legacy_code' => 'SUB_TRANSP',
                 'name' => 'Subsídio de Transporte',
-                'code' => 'SUB_TRANSP',
-                'type' => 'earning',
+                'type' => 'benefit',
                 'calculation_type' => 'fixed',
                 'is_taxable' => false,
+                'priority' => 21,
             ],
             'overtime' => [
+                'code' => 'overtime',
+                'legacy_code' => 'HORAS_EXTRA',
                 'name' => 'Horas Extraordinárias',
-                'code' => 'HORAS_EXTRA',
                 'type' => 'earning',
-                'calculation_type' => 'fixed',
+                'calculation_type' => 'formula',
                 'is_taxable' => true,
+                'priority' => 30,
             ],
             'other_allowance' => [
-                'name' => 'Outros Adicionais',
-                'code' => 'OUTROS_ADIC',
+                'code' => 'additional_allowance',
+                'legacy_code' => 'OUTROS_ADIC',
+                'name' => 'Abono Adicional',
                 'type' => 'earning',
                 'calculation_type' => 'fixed',
                 'is_taxable' => true,
+                'priority' => 25,
             ],
         ];
 
         $result = [];
         foreach ($components as $key => $data) {
-            $result[$key] = SalaryComponent::withoutGlobalScopes()->firstOrCreate([
+            $existing = SalaryComponent::withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)
+                ->whereIn('code', [$data['code'], $data['legacy_code']])
+                ->first();
+
+            $result[$key] = $existing ?? SalaryComponent::withoutGlobalScopes()->create([
                 'tenant_id' => $tenant->id,
                 'code' => $data['code'],
-            ], [
                 'name' => $data['name'],
                 'type' => $data['type'],
                 'calculation_type' => $data['calculation_type'],
                 'is_taxable' => $data['is_taxable'],
+                'priority' => $data['priority'],
                 'is_active' => true,
             ]);
         }
@@ -212,21 +224,24 @@ class TenantResolutionService
     protected function seedDefaultLeaveTypes(Tenant $tenant): void
     {
         $types = [
-            ['name' => 'Férias Anuais', 'days_allowed' => 22, 'is_paid' => true],
-            ['name' => 'Doença Comprovada', 'days_allowed' => 30, 'is_paid' => true],
-            ['name' => 'Maternidade / Paternidade', 'days_allowed' => 90, 'is_paid' => true],
-            ['name' => 'Casamento', 'days_allowed' => 8, 'is_paid' => true],
-            ['name' => 'Luto Familiar', 'days_allowed' => 8, 'is_paid' => true],
+            ['name' => 'Férias Anuais', 'code' => 'vacation', 'category' => 'vacation', 'days_per_year' => 22, 'is_paid' => true],
+            ['name' => 'Doença', 'code' => 'sick', 'category' => 'sick', 'days_per_year' => 30, 'is_paid' => true],
+            ['name' => 'Casamento', 'code' => 'marriage', 'category' => 'family', 'days_per_year' => 3, 'is_paid' => true],
+            ['name' => 'Falecimento', 'code' => 'bereavement', 'category' => 'family', 'days_per_year' => 5, 'is_paid' => true],
+            ['name' => 'Licença sem Vencimento', 'code' => 'unpaid', 'category' => 'unpaid', 'days_per_year' => 30, 'is_paid' => false],
+            ['name' => 'Maternidade', 'code' => 'maternity', 'category' => 'maternity', 'days_per_year' => 90, 'is_paid' => true],
         ];
 
         foreach ($types as $type) {
             LeaveType::withoutGlobalScopes()->firstOrCreate([
                 'tenant_id' => $tenant->id,
-                'name' => $type['name'],
+                'code' => $type['code'],
             ], [
-                'days_allowed' => $type['days_allowed'],
+                'name' => $type['name'],
+                'category' => $type['category'],
+                'days_per_year' => $type['days_per_year'],
                 'is_paid' => $type['is_paid'],
-                'requires_attachment' => false,
+                'requires_document' => false,
             ]);
         }
     }
