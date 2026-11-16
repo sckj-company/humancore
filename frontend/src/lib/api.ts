@@ -75,8 +75,8 @@ class ApiClient {
     return this.request<T>({ method: 'PATCH', url, data })
   }
 
-  async delete<T>(url: string): Promise<T> {
-    return this.request<T>({ method: 'DELETE', url })
+  async delete<T>(url: string, data?: unknown): Promise<T> {
+    return this.request<T>({ method: 'DELETE', url, data })
   }
 
   async downloadFile(url: string, filename?: string): Promise<void> {

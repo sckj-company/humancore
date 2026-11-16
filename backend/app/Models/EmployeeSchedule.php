@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Payroll\PayrollSyncService;
 use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,6 +11,12 @@ use Illuminate\Database\Eloquent\Model;
 class EmployeeSchedule extends Model
 {
     use Auditable, HasFactory, HasTenant;
+
+    protected static function booted(): void
+    {
+        static::saved(fn (self $schedule) => app(PayrollSyncService::class)->syncOnScheduleChanged($schedule));
+        static::deleted(fn (self $schedule) => app(PayrollSyncService::class)->syncOnScheduleChanged($schedule));
+    }
 
     protected $fillable = [
         'tenant_id',

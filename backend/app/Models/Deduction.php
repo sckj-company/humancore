@@ -58,6 +58,10 @@ class Deduction extends Model
         'approved_by',
         'approved_at',
         'notes',
+        'cancellation_reason',
+        'cancelled_at',
+        'cancelled_by',
+        'deletion_reason',
     ];
 
     protected function casts(): array
@@ -72,6 +76,7 @@ class Deduction extends Model
             'is_recurring' => 'boolean',
             'is_mandatory' => 'boolean',
             'approved_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -83,6 +88,11 @@ class Deduction extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function cancelledBy()
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function getTypeLabelAttribute(): string

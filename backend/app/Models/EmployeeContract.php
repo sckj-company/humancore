@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Payroll\PayrollSyncService;
 use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +16,15 @@ class EmployeeContract extends Model
     use HasFactory;
     use HasTenant;
     use SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $contract): void {
+            if ($contract->wasChanged('base_salary') || ($contract->wasRecentlyCreated && $contract->is_active)) {
+                app(PayrollSyncService::class)->syncOnContractSalaryChanged($contract);
+            }
+        });
+    }
 
     protected $fillable = [
         'employee_id',

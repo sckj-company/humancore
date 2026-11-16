@@ -936,7 +936,8 @@ class PayrollTest extends TestCase
         $this->assertStringContainsString('attachment', $pdfResponse->headers->get('content-disposition'));
         $pdfContent = $pdfResponse->getContent();
         $this->assertStringStartsWith('%PDF', $pdfContent);
-        $this->assertMatchesRegularExpression('/\/MediaBox\s*\[\s*0\s+0\s+841\.89\s+595\.28\s*\]/', $pdfContent);
+        $this->assertMatchesRegularExpression('/\/MediaBox\s*\[\s*0(?:\.0+)?\s+0(?:\.0+)?\s+595\.280?\s+841\.890?\s*\]/', $pdfContent);
+        $this->assertMatchesRegularExpression('/\/Count\s+1\b/', $pdfContent);
         $this->assertStringContainsString('/FontFile2', $pdfContent);
         $this->assertStringContainsString('/ToUnicode', $pdfContent);
         // Other tenant's record is hidden by the tenant scope (404) - not exposed

@@ -151,13 +151,52 @@ class DeductionController extends BaseController
         );
     }
 
-    public function destroy(Deduction $deduction): JsonResponse
+    public function destroy(Request $request, Deduction $deduction): JsonResponse
     {
         $this->authorize('delete', $deduction);
+
+        $data = $request->validate([
+            'reason' => ['sometimes', 'nullable', 'string', 'max:1000'],
+        ]);
+
+        if (filled($data['reason'] ?? null)) {
+            $deduction->update([
+                'deletion_reason' => trim((string) $data['reason']),
+            ]);
+        }
 
         $deduction->delete();
 
         return $this->success(null, 'Desconto removido com sucesso.');
+    }
+
+    public function cancel(Request $request, Deduction $deduction): JsonResponse
+    {
+        $this->authorize('update', $deduction);
+
+        if ($deduction->status === 'cancelled') {
+            return $this->error('Este desconto/adiantamento já está cancelado.', 422);
+        }
+
+        if ($deduction->status === 'completed') {
+            return $this->error('Não é possível cancelar um desconto/adiantamento já concluído.', 422);
+        }
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+
+        $deduction->update([
+            'status' => 'cancelled',
+            'cancellation_reason' => trim((string) $data['reason']),
+            'cancelled_at' => now(),
+            'cancelled_by' => $request->user()?->id,
+        ]);
+
+        return $this->success(
+            new DeductionResource($deduction->fresh()->load('employee', 'approver')),
+            'Adiantamento/desconto cancelado com sucesso.',
+        );
     }
 
     public function approve(Request $request, Deduction $deduction): JsonResponse

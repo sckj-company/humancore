@@ -39,6 +39,21 @@ class LatenessRule extends AbstractPayrollRule
         $weeklyAccumulationMinutes = (int) $context->setting('payroll.discounts.lateness_weekly_accumulation_minutes', 0);
         $amountPerThreshold = (float) $context->setting('payroll.discounts.lateness_accumulation_amount', 0);
 
+        if (isset($context->manualAdjustments['late_minutes']) && $context->manualAdjustments['late_minutes'] !== null) {
+            $manualMinutes = max(0, (int) $context->manualAdjustments['late_minutes']);
+            if ($manualMinutes <= 0) {
+                return 0.0;
+            }
+            if ($weeklyAccumulationMinutes > 0 && $amountPerThreshold > 0) {
+                $thresholds = intdiv($manualMinutes, $weeklyAccumulationMinutes);
+                return $thresholds > 0 ? -1 * round($thresholds * $amountPerThreshold, 2) : 0.0;
+            }
+            $hourlyRate = (float) $context->setting('payroll.discounts.lateness_hourly_amount', 0);
+            $discount = round(($manualMinutes / 60) * $hourlyRate, 2);
+
+            return $discount > 0 ? -1 * $discount : 0.0;
+        }
+
         $periodStart = Carbon::parse($context->period->period_start)->startOfDay();
         $periodEnd = Carbon::parse($context->period->period_end)->startOfDay();
         $historyStart = $periodStart->copy()->subMonthNoOverflow()->startOfMonth();

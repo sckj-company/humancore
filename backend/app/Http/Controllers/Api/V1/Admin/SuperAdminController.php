@@ -21,6 +21,18 @@ use Spatie\Permission\Models\Role;
 
 class SuperAdminController extends BaseController
 {
+    private const PLATFORM_ONLY_PERMISSIONS = [
+        'manage_platform',
+        'manage_super_admins',
+        'view_any_tenant',
+        'view_tenant',
+        'create_tenant',
+        'update_tenant',
+        'delete_tenant',
+        'restore_tenant',
+        'force_delete_tenant',
+    ];
+
     public function dashboard(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Tenant::class);
@@ -380,22 +392,53 @@ class SuperAdminController extends BaseController
         );
     }
 
+    public function tenantPermissions(): JsonResponse
+    {
+        $this->authorize('viewAny', Tenant::class);
+
+        $permissions = Permission::query()
+            ->where('guard_name', 'web')
+            ->whereNotIn('name', self::PLATFORM_ONLY_PERMISSIONS)
+            ->orderBy('group_name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'group_name']);
+
+        $rolePermissions = Role::query()
+            ->where('guard_name', 'web')
+            ->whereIn('name', ['admin', 'hr-manager', 'manager', 'employee'])
+            ->with('permissions:id,name')
+            ->get()
+            ->mapWithKeys(fn (Role $role) => [
+                $role->name => $role->permissions
+                    ->pluck('name')
+                    ->reject(fn (string $name) => in_array($name, self::PLATFORM_ONLY_PERMISSIONS, true))
+                    ->values(),
+            ]);
+
+        return $this->success([
+            'permissions' => $permissions,
+            'role_permissions' => $rolePermissions,
+        ]);
+    }
+
     public function listTenantUsers(Tenant $tenant): JsonResponse
     {
         $this->authorize('view', $tenant);
 
         $users = User::query()
             ->where('tenant_id', $tenant->id)
-            ->with('roles')
+            ->with(['roles', 'permissions'])
             ->orderBy('name')
             ->get()
             ->map(fn (User $u) => [
-                'id'         => $u->id,
-                'name'       => $u->name,
-                'email'      => $u->email,
-                'is_active'  => $u->is_active,
-                'roles'      => $u->roles->pluck('name'),
-                'created_at' => $u->created_at?->toIso8601String(),
+                'id'                 => $u->id,
+                'name'               => $u->name,
+                'email'              => $u->email,
+                'is_active'          => $u->is_active,
+                'roles'              => $u->roles->pluck('name')->values(),
+                'permissions'        => $u->getAllPermissions()->pluck('name')->values(),
+                'direct_permissions' => $u->getDirectPermissions()->pluck('name')->values(),
+                'created_at'         => $u->created_at?->toIso8601String(),
             ]);
 
         return $this->success($users);
@@ -406,32 +449,108 @@ class SuperAdminController extends BaseController
         $this->authorize('update', $tenant);
 
         $data = $request->validate([
-            'name'     => ['required', 'string', 'max:255'],
-            'email'    => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8'],
-            'role'     => ['required', 'string', 'in:admin,hr-manager,manager,employee'],
-            'is_active'=> ['sometimes', 'boolean'],
+            'name'          => ['required', 'string', 'max:255'],
+            'email'         => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password'      => ['required', 'string', 'min:8'],
+            'role'          => ['required', 'string', 'in:admin,hr-manager,manager,employee'],
+            'is_active'     => ['sometimes', 'boolean'],
+            'permissions'   => ['sometimes', 'array'],
+            'permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
         ]);
 
-        $user = User::query()->create([
-            'tenant_id'         => $tenant->id,
-            'name'              => $data['name'],
-            'email'             => $data['email'],
-            'password'          => Hash::make($data['password']),
-            'locale'            => $tenant->locale ?? 'pt',
-            'timezone'          => $tenant->timezone ?? 'Africa/Luanda',
-            'email_verified_at' => now(),
-            'is_active'         => $data['is_active'] ?? true,
-        ]);
-        $user->assignRole($data['role']);
+        if (isset($data['permissions'])) {
+            $this->validateTenantAssignablePermissions($data['permissions']);
+        }
+
+        $user = DB::transaction(function () use ($tenant, $data) {
+            $user = User::query()->create([
+                'tenant_id'         => $tenant->id,
+                'name'              => $data['name'],
+                'email'             => $data['email'],
+                'password'          => Hash::make($data['password']),
+                'locale'            => $tenant->locale ?? 'pt',
+                'timezone'          => $tenant->timezone ?? 'Africa/Luanda',
+                'email_verified_at' => now(),
+                'is_active'         => $data['is_active'] ?? true,
+            ]);
+            $user->assignRole($data['role']);
+
+            if (array_key_exists('permissions', $data)) {
+                $user->syncPermissions($data['permissions']);
+            }
+
+            return $user;
+        });
 
         return $this->success([
-            'id'        => $user->id,
-            'name'      => $user->name,
-            'email'     => $user->email,
-            'is_active' => $user->is_active,
-            'roles'     => $user->roles->pluck('name'),
+            'id'                 => $user->id,
+            'name'               => $user->name,
+            'email'              => $user->email,
+            'is_active'          => $user->is_active,
+            'roles'              => $user->roles->pluck('name')->values(),
+            'permissions'        => $user->getAllPermissions()->pluck('name')->values(),
+            'direct_permissions' => $user->getDirectPermissions()->pluck('name')->values(),
         ], 'Utilizador criado com sucesso.', 201);
+    }
+
+    public function updateUser(Request $request, Tenant $tenant, User $user): JsonResponse
+    {
+        $this->authorize('update', $tenant);
+
+        if ($user->tenant_id !== $tenant->id) {
+            return $this->error('Utilizador não pertence a esta empresa.', 403);
+        }
+
+        if ($user->isSuperAdmin()) {
+            return $this->error('Não é possível editar um super-admin.', 403);
+        }
+
+        $data = $request->validate([
+            'role'          => ['sometimes', 'string', 'in:admin,hr-manager,manager,employee'],
+            'is_active'     => ['sometimes', 'boolean'],
+            'permissions'   => ['sometimes', 'array'],
+            'permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+        ]);
+
+        if (isset($data['permissions'])) {
+            $this->validateTenantAssignablePermissions($data['permissions']);
+        }
+
+        DB::transaction(function () use ($user, $data): void {
+            if (array_key_exists('is_active', $data)) {
+                $user->update(['is_active' => $data['is_active']]);
+            }
+
+            if (array_key_exists('role', $data)) {
+                $user->syncRoles([$data['role']]);
+            }
+
+            if (array_key_exists('permissions', $data)) {
+                $user->syncPermissions($data['permissions']);
+            }
+        });
+
+        $user->refresh();
+
+        return $this->success([
+            'id'                 => $user->id,
+            'name'               => $user->name,
+            'email'              => $user->email,
+            'is_active'          => $user->is_active,
+            'roles'              => $user->roles->pluck('name')->values(),
+            'permissions'        => $user->getAllPermissions()->pluck('name')->values(),
+            'direct_permissions' => $user->getDirectPermissions()->pluck('name')->values(),
+        ], 'Utilizador atualizado com sucesso.');
+    }
+
+    /**
+     * @param  array<int, string>  $requestedPermissions
+     */
+    private function validateTenantAssignablePermissions(array $requestedPermissions): void
+    {
+        if (array_intersect($requestedPermissions, self::PLATFORM_ONLY_PERMISSIONS)) {
+            abort(403, 'Não é possível atribuir permissões globais da plataforma a utilizadores de empresa.');
+        }
     }
 
     public function destroyUser(Tenant $tenant, User $user): JsonResponse

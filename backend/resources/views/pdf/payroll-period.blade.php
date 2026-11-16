@@ -20,7 +20,8 @@
             if (str_contains($text, 'refeicao') || str_contains($text, 'refeição') || str_contains($text, 'meal') || str_contains($text, 'aliment')) return 'meal';
             if (str_contains($text, 'transporte') || str_contains($text, 'transport')) return 'transport';
             if (str_contains($text, 'extra') || str_contains($text, 'overtime')) return 'overtime';
-            if (str_contains($text, 'adicional') || str_contains($text, 'bonus') || str_contains($text, 'bónus')) return 'additional';
+            if ($item->code === 'bonus' || str_contains($text, 'bonus') || str_contains($text, 'bónus')) return 'bonus';
+            if (str_contains($text, 'adicional') || str_contains($text, 'additional')) return 'additional';
 
             return in_array($item->category, ['deduction', 'tax'], true) ? 'other_deduction' : 'other_earning';
         };
@@ -126,7 +127,7 @@
                 <th class="employee" rowspan="2">{!! $bilingualLabel('Nome', '姓名') !!}</th>
                 <th class="category" rowspan="2">{!! $bilingualLabel('Categoria', '类别') !!}</th>
                 <th class="absent-days" rowspan="2">{!! $bilingualLabel('Faltas (dias)', '缺勤（天）') !!}</th>
-                <th colspan="9">{!! $bilingualLabel('PROVEITOS', '收入') !!}</th>
+                <th colspan="10">{!! $bilingualLabel('PROVEITOS', '收入') !!}</th>
                 <th colspan="6">{!! $bilingualLabel('DESCONTOS', '扣款') !!}</th>
                 <th class="net" rowspan="2">{!! $bilingualLabel('Salário líquido', '实发工资') !!}</th>
             </tr>
@@ -138,6 +139,7 @@
                 <th class="earning">{!! $bilingualLabel('Subs. alimentação', '餐饮补贴') !!}</th>
                 <th class="earning">{!! $bilingualLabel('Subs. transporte', '交通补贴') !!}</th>
                 <th class="earning">{!! $bilingualLabel('Horas extra', '加班费') !!}</th>
+                <th class="earning">{!! $bilingualLabel('Bónus', '奖金') !!}</th>
                 <th class="earning">{!! $bilingualLabel('A. adicional', '其他补贴') !!}</th>
                 <th class="total-earnings">{!! $bilingualLabel('Salário ilíquido', '税前工资') !!}</th>
                 <th class="deduction">{!! $bilingualLabel('Falta', '缺勤扣款') !!}</th>
@@ -172,6 +174,7 @@
                     <td class="amount">{{ number_format($value('meal'), 2) }}</td>
                     <td class="amount">{{ number_format($value('transport'), 2) }}</td>
                     <td class="amount">{{ number_format($value('overtime'), 2) }}</td>
+                    <td class="amount">{{ number_format($value('bonus'), 2) }}</td>
                     <td class="amount">{{ number_format($value('additional') + $value('other_earning'), 2) }}</td>
                     <td class="amount">{{ number_format((float) $record->total_earnings, 2) }}</td>
                     <td class="amount">{{ number_format($absenceAmount, 2) }}</td>
@@ -192,6 +195,7 @@
                 <td class="amount">{{ number_format($period->records->sum(fn ($record) => $itemTotal($recordItems($record), 'meal')), 2) }}</td>
                 <td class="amount">{{ number_format($period->records->sum(fn ($record) => $itemTotal($recordItems($record), 'transport')), 2) }}</td>
                 <td class="amount">{{ number_format($period->records->sum(fn ($record) => $itemTotal($recordItems($record), 'overtime')), 2) }}</td>
+                <td class="amount">{{ number_format($period->records->sum(fn ($record) => $itemTotal($recordItems($record), 'bonus')), 2) }}</td>
                 <td class="amount">{{ number_format($period->records->sum(fn ($record) => $itemTotal($recordItems($record), 'additional') + $itemTotal($recordItems($record), 'other_earning')), 2) }}</td>
                 <td class="amount">{{ number_format((float) $period->records->sum('total_earnings'), 2) }}</td>
                 <td class="amount">{{ number_format($period->records->sum(fn ($record) => $itemTotal($recordItems($record), 'absence')), 2) }}</td>

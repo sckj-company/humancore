@@ -14,6 +14,7 @@ import {
   ListChecks,
   FileCheck,
   Plus,
+  DollarSign,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -24,6 +25,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader, LoadingState, ErrorState } from '@/components/shared/page-header'
 import { SalaryComponentRegulationsPage } from '@/features/settings/salary-component-regulations-page'
@@ -92,6 +94,19 @@ export function SettingsPage() {
   const [dirtyGroups, setDirtyGroups] = useState<Set<string>>(new Set())
   const [requiredDocuments, setRequiredDocuments] = useState<DocumentRequirement[]>([])
   const [newDocumentName, setNewDocumentName] = useState('')
+  const [affectedPeriods, setAffectedPeriods] = useState<Array<{ id: number; name: string; status: string; records_count: number }>>([])
+  const [globalRemuneration, setGlobalRemuneration] = useState({
+    overtimeHourlyRate: '0',
+    mealAmount: '0',
+    mealPeriod: 'daily' as 'daily' | 'weekly' | 'fixed',
+    transportAmount: '0',
+    transportPeriod: 'daily' as 'daily' | 'weekly' | 'fixed',
+    vacationAmount: '0',
+    christmasAmount: '0',
+    familyAmount: '0',
+    additionalAmount: '0',
+    bonusAmount: '0',
+  })
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['settings'],
@@ -135,6 +150,24 @@ export function SettingsPage() {
       }
     })
     setEdits(next)
+
+    const payrollMap = new Map((data.payroll ?? []).map((item) => [item.key, item.value]))
+    const strOrZero = (val: unknown) => (val === undefined || val === null || val === '' ? '0' : String(val))
+    const validPeriod = (val: unknown, fallback: 'daily' | 'weekly' | 'fixed') =>
+      val === 'daily' || val === 'weekly' || val === 'fixed' ? val : fallback
+
+    setGlobalRemuneration({
+      overtimeHourlyRate: strOrZero(payrollMap.get('remuneration.overtime_hourly_rate')),
+      mealAmount: strOrZero(payrollMap.get('remuneration.meal.amount') ?? payrollMap.get('subsidies.meal.daily')),
+      mealPeriod: validPeriod(payrollMap.get('remuneration.meal.period'), 'daily'),
+      transportAmount: strOrZero(payrollMap.get('remuneration.transport.amount') ?? payrollMap.get('subsidies.transport.monthly')),
+      transportPeriod: validPeriod(payrollMap.get('remuneration.transport.period'), 'daily'),
+      vacationAmount: strOrZero(payrollMap.get('remuneration.vacation.amount')),
+      christmasAmount: strOrZero(payrollMap.get('remuneration.christmas.amount')),
+      familyAmount: strOrZero(payrollMap.get('remuneration.family.amount')),
+      additionalAmount: strOrZero(payrollMap.get('remuneration.additional.amount')),
+      bonusAmount: strOrZero(payrollMap.get('remuneration.bonus.amount')),
+    })
   }, [data])
 
   const save = useMutation({
@@ -145,11 +178,14 @@ export function SettingsPage() {
         const field = `${s.group}.${s.key}`
         values[s.key] = coerce(s, edits[field])
       })
-      return api.put('settings/bulk', { group: groupKey, values })
+      return api.put<{ affected_periods?: Array<{ id: number; name: string; status: string; records_count: number }> }>('settings/bulk', { group: groupKey, values })
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       toast.success(t('settingsPage.saved'))
       setDirtyGroups(new Set())
+      if (res?.affected_periods?.length) {
+        setAffectedPeriods(res.affected_periods)
+      }
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('settingsPage.saveError'))),
@@ -174,6 +210,54 @@ export function SettingsPage() {
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('settingsPage.documentsSaveError'))),
   })
+  const saveGlobalRemuneration = useMutation({
+    mutationFn: () => {
+      const num = (val: string) => {
+        const parsed = Number(val)
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+      }
+      return api.put<{ affected_periods?: Array<{ id: number; name: string; status: string; records_count: number }> }>('settings/bulk', {
+        group: 'payroll',
+        values: {
+          'remuneration.overtime_hourly_rate': num(globalRemuneration.overtimeHourlyRate),
+          'remuneration.meal.amount': num(globalRemuneration.mealAmount),
+          'remuneration.meal.period': globalRemuneration.mealPeriod,
+          'subsidies.meal.daily': globalRemuneration.mealPeriod === 'daily' ? num(globalRemuneration.mealAmount) : 0,
+          'remuneration.transport.amount': num(globalRemuneration.transportAmount),
+          'remuneration.transport.period': globalRemuneration.transportPeriod,
+          'remuneration.vacation.amount': num(globalRemuneration.vacationAmount),
+          'remuneration.christmas.amount': num(globalRemuneration.christmasAmount),
+          'remuneration.family.amount': num(globalRemuneration.familyAmount),
+          'remuneration.additional.amount': num(globalRemuneration.additionalAmount),
+          'remuneration.bonus.amount': num(globalRemuneration.bonusAmount),
+        },
+      })
+    },
+    onSuccess: (res) => {
+      toast.success(t('settingsPage.remunerationSaved'))
+      if (res?.affected_periods?.length) {
+        setAffectedPeriods(res.affected_periods)
+      }
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, t('settingsPage.remunerationSaveError'))),
+  })
+
+  const recalculateOpenPeriods = useMutation({
+    mutationFn: async (periods: Array<{ id: number }>) => {
+      for (const period of periods) {
+        await api.post(`payroll/periods/${period.id}/process`)
+      }
+    },
+    onSuccess: () => {
+      toast.success(t('settingsPage.openPeriodsRecalculated'))
+      setAffectedPeriods([])
+      queryClient.invalidateQueries({ queryKey: ['payroll-periods'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, t('settingsPage.remunerationSaveError'))),
+  })
 
   if (!isAdmin) {
     return <ErrorState message={t('settingsPage.noPermission')} onRetry={() => {}} />
@@ -197,12 +281,37 @@ export function SettingsPage() {
         <SuperAdminTenantBanner />
       )}
 
+      {affectedPeriods.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <div className="space-y-1">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              {t('settingsPage.affectedPeriodsNotice', { count: affectedPeriods.length })}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {affectedPeriods.map((p) => `${p.name} (${p.records_count})`).join(', ')}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => recalculateOpenPeriods.mutate(affectedPeriods)}
+            disabled={recalculateOpenPeriods.isPending}
+          >
+            {recalculateOpenPeriods.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {t('settingsPage.recalculateOpenPeriods')}
+          </Button>
+        </div>
+      )}
+
       {/* Master Tabs */}
       <Tabs defaultValue="general">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="general" className="gap-2">
             <Building2 className="h-4 w-4" />
             {t('settingsPage.tabs.general')}
+          </TabsTrigger>
+          <TabsTrigger value="remuneration" className="gap-2">
+            <DollarSign className="h-4 w-4" />
+            {t('settingsPage.tabs.remuneration')}
           </TabsTrigger>
           <TabsTrigger value="discounts" className="gap-2">
             <Wallet className="h-4 w-4" />
@@ -266,7 +375,7 @@ export function SettingsPage() {
                     </CardHeader>
                     <CardContent className="grid gap-6 sm:grid-cols-2">
                       {items
-                        .filter((s) => isEditable(s))
+                        .filter((s) => isEditable(s) && !(s.group === 'payroll' && (s.key.startsWith('remuneration.') || s.key.startsWith('subsidies.'))))
                         .map((s) => (
                           <SettingField
                             key={s.key}
@@ -294,6 +403,143 @@ export function SettingsPage() {
               ))}
             </Tabs>
           )}
+        </TabsContent>
+
+        {/* ── Tab: Remuneração Global ── */}
+        <TabsContent value="remuneration" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('settingsPage.remunerationTitle')}</CardTitle>
+              <CardDescription>{t('settingsPage.remunerationDescription')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border border-border p-4 space-y-2">
+                <Label htmlFor="global-overtime-hourly-rate">{t('settingsPage.remunerationOvertimeHourlyRate')}</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input
+                    id="global-overtime-hourly-rate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={globalRemuneration.overtimeHourlyRate}
+                    onChange={(e) => setGlobalRemuneration((c) => ({ ...c, overtimeHourlyRate: e.target.value }))}
+                  />
+                  <p className="self-center text-xs text-muted-foreground">
+                    {t('settingsPage.remunerationOvertimeHourlyRateHint')}
+                  </p>
+                </div>
+              </div>
+
+              {(
+                [
+                  {
+                    key: 'meal',
+                    title: t('employeeDetail.text.mealAllowance'),
+                    amount: globalRemuneration.mealAmount,
+                    period: globalRemuneration.mealPeriod,
+                    periodEditable: true,
+                    onAmount: (v: string) => setGlobalRemuneration((c) => ({ ...c, mealAmount: v })),
+                    onPeriod: (v: 'daily' | 'weekly' | 'fixed') => setGlobalRemuneration((c) => ({ ...c, mealPeriod: v })),
+                  },
+                  {
+                    key: 'transport',
+                    title: t('employeeDetail.text.transportAllowance'),
+                    amount: globalRemuneration.transportAmount,
+                    period: globalRemuneration.transportPeriod,
+                    periodEditable: true,
+                    onAmount: (v: string) => setGlobalRemuneration((c) => ({ ...c, transportAmount: v })),
+                    onPeriod: (v: 'daily' | 'weekly' | 'fixed') => setGlobalRemuneration((c) => ({ ...c, transportPeriod: v })),
+                  },
+                  {
+                    key: 'vacation',
+                    title: t('employeeDetail.text.vacationAllowance'),
+                    amount: globalRemuneration.vacationAmount,
+                    period: 'fixed' as const,
+                    periodEditable: false,
+                    onAmount: (v: string) => setGlobalRemuneration((c) => ({ ...c, vacationAmount: v })),
+                    onPeriod: () => undefined,
+                  },
+                  {
+                    key: 'christmas',
+                    title: t('employeeDetail.text.christmasAllowance'),
+                    amount: globalRemuneration.christmasAmount,
+                    period: 'fixed' as const,
+                    periodEditable: false,
+                    onAmount: (v: string) => setGlobalRemuneration((c) => ({ ...c, christmasAmount: v })),
+                    onPeriod: () => undefined,
+                  },
+                  {
+                    key: 'family',
+                    title: t('employeeDetail.text.familyAllowance'),
+                    amount: globalRemuneration.familyAmount,
+                    period: 'fixed' as const,
+                    periodEditable: false,
+                    onAmount: (v: string) => setGlobalRemuneration((c) => ({ ...c, familyAmount: v })),
+                    onPeriod: () => undefined,
+                  },
+                  {
+                    key: 'additional',
+                    title: t('employeeDetail.text.additionalAllowance'),
+                    amount: globalRemuneration.additionalAmount,
+                    period: 'fixed' as const,
+                    periodEditable: false,
+                    onAmount: (v: string) => setGlobalRemuneration((c) => ({ ...c, additionalAmount: v })),
+                    onPeriod: () => undefined,
+                  },
+                  {
+                    key: 'bonus',
+                    title: t('employeeDetail.text.bonusAllowance'),
+                    amount: globalRemuneration.bonusAmount,
+                    period: 'fixed' as const,
+                    periodEditable: false,
+                    onAmount: (v: string) => setGlobalRemuneration((c) => ({ ...c, bonusAmount: v })),
+                    onPeriod: () => undefined,
+                  },
+                ]
+              ).map((item) => (
+                <div key={item.key} className="space-y-3 rounded-lg border border-border p-4">
+                  <h3 className="font-medium">{item.title}</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>{t('employeeDetail.text.allowanceAmount')}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.amount}
+                        onChange={(e) => item.onAmount(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>{t('employeeDetail.text.allowancePeriod')}</Label>
+                      <Select
+                        value={item.period}
+                        onValueChange={(v) => item.onPeriod(v as 'daily' | 'weekly' | 'fixed')}
+                        disabled={!item.periodEditable}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">{t('employeeDetail.text.daily')}</SelectItem>
+                          <SelectItem value="weekly">{t('employeeDetail.text.weekly')}</SelectItem>
+                          <SelectItem value="fixed">{t('employeeDetail.text.fixedPerPayroll')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+            <CardFooter className="justify-end border-t px-6 py-4">
+              <Button onClick={() => saveGlobalRemuneration.mutate()} disabled={saveGlobalRemuneration.isPending}>
+                {saveGlobalRemuneration.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                {t('settingsPage.remunerationSave')}
+              </Button>
+            </CardFooter>
+          </Card>
         </TabsContent>
 
         {/* ── Tab: Descontos ── */}

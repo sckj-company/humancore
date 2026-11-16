@@ -35,6 +35,10 @@ class DeductionResource extends JsonResource
             'approved_by' => $this->approved_by,
             'approved_at' => $this->approved_at?->toIso8601String(),
             'notes' => $this->notes,
+            'cancellation_reason' => $this->cancellation_reason,
+            'cancelled_at' => $this->cancelled_at?->toIso8601String(),
+            'cancelled_by' => $this->cancelled_by,
+            'deletion_reason' => $this->deletion_reason,
             'employee' => $this->whenLoaded('employee', fn () => $this->employee ? [
                 'id' => $this->employee->id,
                 'full_name' => $this->employee->full_name,

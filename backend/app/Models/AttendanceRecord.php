@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Payroll\PayrollSyncService;
 use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,6 +13,12 @@ class AttendanceRecord extends Model
     use Auditable;
     use HasFactory;
     use HasTenant;
+
+    protected static function booted(): void
+    {
+        static::saved(fn (self $record) => app(PayrollSyncService::class)->markOutdatedForAttendance($record));
+        static::deleted(fn (self $record) => app(PayrollSyncService::class)->markOutdatedForAttendance($record));
+    }
 
     protected $fillable = [
         'employee_id',

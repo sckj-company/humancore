@@ -424,4 +424,79 @@ class AttendanceTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data.data');
     }
+
+    public function test_manual_and_edit_attendance_without_shift_uses_work_end_time_setting_for_overtime(): void
+    {
+        [$tenant, $employee, $admin] = $this->setupEmployeeUser('admin');
+        $this->seed(SettingSeeder::class);
+        $employee->update(['overtime_hourly_rate' => 1000]);
+        $date = now()->toDateString();
+
+        $this->actingAs($admin, 'sanctum');
+
+        $recordId = $this->postJson('/api/v1/attendance/manual', [
+            'employee_id' => $employee->id,
+            'date' => $date,
+            'clock_in' => '08:00',
+            'clock_out' => '18:30',
+            'status' => 'present',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.overtime_minutes', 90)
+            ->assertJsonPath('data.overtime_amount', 1500)
+            ->json('data.id');
+
+        $this->putJson("/api/v1/attendance/{$recordId}", [
+            'clock_out' => '19:00',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.overtime_minutes', 120)
+            ->assertJsonPath('data.overtime_amount', 2000);
+    }
+
+    public function test_manual_and_edit_night_shift_calculates_overtime_past_shift_end(): void
+    {
+        [$tenant, $employee, $admin] = $this->setupEmployeeUser('admin');
+        $employee->update(['overtime_hourly_rate' => 1200]);
+        $date = now()->toDateString();
+
+        $shift = Shift::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno nocturno',
+            'start_time' => '22:00',
+            'end_time' => '06:00',
+            'is_night_shift' => true,
+        ]);
+        EmployeeSchedule::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'effective_from' => $date,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin, 'sanctum');
+
+        $recordId = $this->postJson('/api/v1/attendance/manual', [
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'date' => $date,
+            'clock_in' => '22:00',
+            'clock_out' => '07:30',
+            'status' => 'present',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.overtime_minutes', 90)
+            ->assertJsonPath('data.overtime_amount', 1800)
+            ->assertJsonPath('data.total_worked', 570)
+            ->json('data.id');
+
+        $this->putJson("/api/v1/attendance/{$recordId}", [
+            'clock_out' => '08:00',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.overtime_minutes', 120)
+            ->assertJsonPath('data.overtime_amount', 2400)
+            ->assertJsonPath('data.total_worked', 600);
+    }
 }

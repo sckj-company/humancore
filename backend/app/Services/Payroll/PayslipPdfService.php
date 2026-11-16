@@ -12,7 +12,9 @@ class PayslipPdfService
 {
     public function render(PayrollRecord $record): DomPdfDocument
     {
-        return $this->pdf()->loadView('pdf.payslip', ['record' => $record]);
+        return $this->pdf()
+            ->loadView('pdf.payslip', ['record' => $record])
+            ->setPaper('a4', 'portrait');
     }
 
     public function renderPeriod(PayrollPeriod $period): DomPdfDocument

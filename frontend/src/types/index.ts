@@ -359,12 +359,23 @@ export interface PayrollRecord {
   engine_version?: string | null
   validation_errors?: Array<{ code: string; message: string; severity: string }> | null
   snapshot?: Record<string, unknown> | null
+  manual_adjustments?: {
+    work_days?: number | null
+    absent_days?: number | null
+    overtime_hours?: number | null
+    late_minutes?: number | null
+    components?: Record<string, number | null>
+    extra_items?: Array<{ name: string; type: 'earning' | 'deduction'; amount: number }>
+  } | null
   status: PayrollRecordStatus
+  is_outdated?: boolean
+  outdated_reason?: string | null
   approved_at?: string
   paid_at?: string
   details?: {
     breakdown?: PayrollBreakdownItem[]
     work_days?: number
+    scheduled_work_days?: number
     absent_days?: number
     late_minutes?: number
     overtime_hours?: number
@@ -915,6 +926,8 @@ export interface Deduction {
   approved_by?: number | null
   approved_at?: string | null
   notes?: string | null
+  cancellation_reason?: string | null
+  cancelled_at?: string | null
   employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'> | null
   approver?: { id: number; name: string } | null
   created_at?: string

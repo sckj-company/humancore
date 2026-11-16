@@ -13,6 +13,8 @@ use App\Models\PayrollIrtTable;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
 use App\Models\PayrollRecordItem;
+use App\Models\SalaryComponent;
+use App\Services\Payroll\RemunerationDefaultsService;
 use App\Services\Payroll\Rules\AbsenceRule;
 use App\Services\Payroll\Rules\BaseSalaryRule;
 use App\Services\Payroll\Rules\INSSRule;
@@ -65,7 +67,7 @@ class PayrollEngineService
      * Calculate a single employee's payroll for a period.
      * Returns the PayrollRecord (created in DB if it doesn't exist).
      */
-    public function calculateForEmployee(PayrollPeriod $period, Employee $employee): PayrollRecord
+    public function calculateForEmployee(PayrollPeriod $period, Employee $employee, ?array $manualAdjustments = null): PayrollRecord
     {
         $contract = $this->resolveContract($period, $employee);
 
@@ -82,28 +84,90 @@ class PayrollEngineService
             throw new \RuntimeException("Funcionário {$employee->full_name} sem contrato ativo.");
         }
 
-        $context = $this->buildContext($employee, $contract, $period);
+        if ($manualAdjustments === null) {
+            $manualAdjustments = PayrollRecord::query()
+                ->where('payroll_period_id', $period->id)
+                ->where('employee_id', $employee->id)
+                ->value('manual_adjustments') ?? [];
+        }
+
+        $context = $this->buildContext($employee, $contract, $period, $manualAdjustments);
         $componentBreakdown = $this->calculateSalaryComponents($context);
+        $manualComponents = $context->manualAdjustments['components'] ?? [];
 
         $breakdown = [];
 
         foreach ($this->rules as $rule) {
-            if (! $rule->applies($context)) {
+            $ruleCode = $rule->getCode();
+            $hasManualOverride = array_key_exists($ruleCode, $manualComponents) && $manualComponents[$ruleCode] !== null;
+
+            if (! $hasManualOverride && ! $rule->applies($context)) {
                 continue;
             }
 
-            $amount = $rule->calculate($context);
+            if ($hasManualOverride) {
+                $raw = abs((float) $manualComponents[$ruleCode]);
+                $amount = in_array($rule->getType(), ['deduction', 'tax'], true) ? -$raw : $raw;
+            } else {
+                $amount = $rule->calculate($context);
+            }
             $amount = round((float) $amount, 2);
 
+            $ruleQuantity = match ($ruleCode) {
+                'meal_subsidy' => match ((string) ($context->setting('payroll.remuneration.meal.period', 'daily') ?: 'daily')) {
+                    'fixed' => null,
+                    'weekly' => round($context->workDays / 5, 2),
+                    default => $context->workDays,
+                },
+                'overtime' => $context->overtimeHours,
+                'absence' => $context->absentDays,
+                'lateness' => $context->lateMinutes,
+                default => null,
+            };
+
+            $ruleBaseAmount = match ($ruleCode) {
+                'meal_subsidy' => (function () use ($context): ?float {
+                    $period = (string) ($context->setting('payroll.remuneration.meal.period', 'daily') ?: 'daily');
+                    if ($period === 'fixed') {
+                        return null;
+                    }
+                    $val = $context->setting('payroll.remuneration.meal.amount') ?? $context->setting('payroll.subsidies.meal.daily', 0);
+
+                    return max(0, (float) $val);
+                })(),
+                'absence' => max(0, (float) $context->setting('payroll.discounts.absence_daily_amount', 0)),
+                'lateness' => (int) $context->setting('payroll.discounts.lateness_weekly_accumulation_minutes', 0) === 0
+                    ? max(0, (float) $context->setting('payroll.discounts.lateness_hourly_amount', 0))
+                    : null,
+                'overtime' => (function () use ($context, $amount): ?float {
+                    if ($context->overtimeHours > 0 && $amount > 0) {
+                        return round(abs($amount) / $context->overtimeHours, 2);
+                    }
+                    if ($context->employee->overtime_hourly_rate !== null) {
+                        return (float) $context->employee->overtime_hourly_rate;
+                    }
+                    $globalRate = (float) $context->setting('payroll.remuneration.overtime_hourly_rate', 0);
+                    if ($globalRate > 0) {
+                        return $globalRate;
+                    }
+                    $rate = (float) $context->setting('payroll.overtime.rate', 1.5);
+
+                    return round(((float) $context->contract->base_salary / 220) * $rate, 2);
+                })(),
+                default => null,
+            };
+
             $breakdown[] = [
-                'code' => $rule->getCode(),
+                'code' => $ruleCode,
                 'name' => $rule->getName(),
                 'type' => $rule->getType(),
                 'priority' => $rule->getPriority(),
                 'amount' => $amount,
+                'quantity' => $ruleQuantity,
+                'base_amount' => $ruleBaseAmount,
             ];
 
-            if ($rule->getCode() === 'inss') {
+            if ($ruleCode === 'inss') {
                 $context->inssAmount = abs($amount);
             }
         }
@@ -132,6 +196,14 @@ class PayrollEngineService
 
         $gross = $totalEarnings;
         $net = $gross - $totalDeductions - $totalTaxes;
+
+        if ($net < 0) {
+            $context->validationWarnings[] = [
+                'code' => 'net_negative',
+                'severity' => 'warning',
+                'message' => 'O total de descontos e impostos ultrapassa o salário ilíquido.',
+            ];
+        }
 
         $inssEmployeeAmount = $context->inssAmount;
         $inssBase = $context->inssBase ?: (float) $contract->base_salary;
@@ -185,10 +257,12 @@ class PayrollEngineService
                     'details' => [
                         'breakdown' => $breakdown,
                         'work_days' => $context->workDays,
+                        'scheduled_work_days' => $context->scheduledWorkDays,
                         'absent_days' => $context->absentDays,
                         'late_minutes' => $context->lateMinutes,
                         'overtime_hours' => $context->overtimeHours,
                     ],
+                    'manual_adjustments' => $context->manualAdjustments ?: null,
                     'snapshot' => [
                         'contract_id' => $contract->id,
                         'inss_rule_id' => $context->inssRule?->id,
@@ -200,8 +274,10 @@ class PayrollEngineService
                         'calculated_at' => now()->toIso8601String(),
                     ],
                     'engine_version' => '2.0.0',
-                    'validation_errors' => null,
+                    'validation_errors' => $context->validationWarnings ?: null,
                     'status' => 'calculated',
+                    'is_outdated' => false,
+                    'outdated_reason' => null,
                 ],
             );
 
@@ -290,6 +366,88 @@ class PayrollEngineService
 
             return $record;
         });
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $recordsPayload
+     * @return array{recalculated: int}
+     */
+    public function recalculatePeriodRecords(PayrollPeriod $period, array $recordsPayload): array
+    {
+        if ($period->isClosed()) {
+            throw new \RuntimeException('Não é possível recalcular um período fechado.');
+        }
+
+        $recalculated = 0;
+
+        DB::transaction(function () use ($period, $recordsPayload, &$recalculated): void {
+            foreach ($recordsPayload as $entry) {
+                $employee = Employee::query()->findOrFail((int) $entry['employee_id']);
+                $adjustments = [];
+
+                foreach (['work_days', 'absent_days', 'overtime_hours'] as $numericField) {
+                    if (array_key_exists($numericField, $entry) && $entry[$numericField] !== null) {
+                        $adjustments[$numericField] = max(0, (float) $entry[$numericField]);
+                    }
+                }
+                if (array_key_exists('late_minutes', $entry) && $entry['late_minutes'] !== null) {
+                    $adjustments['late_minutes'] = max(0, (int) $entry['late_minutes']);
+                }
+                if (! empty($entry['components']) && is_array($entry['components'])) {
+                    $components = [];
+                    foreach ($entry['components'] as $code => $val) {
+                        if ($val !== null) {
+                            $components[(string) $code] = max(0, (float) $val);
+                        }
+                    }
+                    if ($components !== []) {
+                        $adjustments['components'] = $components;
+                    }
+                }
+                if (! empty($entry['extra_items']) && is_array($entry['extra_items'])) {
+                    $extraItems = [];
+                    foreach ($entry['extra_items'] as $item) {
+                        if (! empty($item['name']) && isset($item['amount'])) {
+                            $extraItems[] = [
+                                'name' => trim((string) $item['name']),
+                                'type' => ($item['type'] ?? 'earning') === 'deduction' ? 'deduction' : 'earning',
+                                'amount' => max(0, (float) $item['amount']),
+                            ];
+                        }
+                    }
+                    if ($extraItems !== []) {
+                        $adjustments['extra_items'] = $extraItems;
+                    }
+                }
+
+                $this->calculateForEmployee($period, $employee, $adjustments);
+                $recalculated++;
+            }
+
+            $this->refreshPeriodTotals($period);
+        });
+
+        return ['recalculated' => $recalculated];
+    }
+
+    public function refreshPeriodTotals(PayrollPeriod $period): void
+    {
+        $records = $period->records()->get();
+        $totalGross = (float) $records->sum('gross_salary');
+        $totalNet = (float) $records->sum('net_salary');
+        $totalEmployerCost = (float) $records->sum('employer_cost');
+
+        $period->update([
+            'employee_count' => $records->count(),
+            'total_gross' => $totalGross,
+            'total_net' => $totalNet,
+            'totals_snapshot' => [
+                'total_gross' => $totalGross,
+                'total_net' => $totalNet,
+                'total_employer_cost' => $totalEmployerCost,
+                'employee_count' => $records->count(),
+            ],
+        ]);
     }
 
     /**
@@ -486,9 +644,10 @@ class PayrollEngineService
         return null;
     }
 
-    protected function buildContext(Employee $employee, EmployeeContract $contract, PayrollPeriod $period): PayrollContext
+    protected function buildContext(Employee $employee, EmployeeContract $contract, PayrollPeriod $period, array $manualAdjustments = []): PayrollContext
     {
         $context = new PayrollContext($employee, $contract, $period);
+        $context->manualAdjustments = $manualAdjustments;
 
         $periodStart = new DateTimeImmutable($period->period_start->toDateString());
         $periodEnd = new DateTimeImmutable($period->period_end->toDateString());
@@ -555,6 +714,7 @@ class PayrollEngineService
         }
 
         $halfDays = array_diff_key($halfDays, $nonWorkedDates);
+        $context->scheduledWorkDays = count($scheduledDates);
         $context->workDays = max(0, count($scheduledDates) - count($nonWorkedDates) - (count($halfDays) * 0.5));
         $context->absentDays = array_sum($deductibleAbsences);
         $context->lateMinutes = $attendance->sum('late_minutes');
@@ -590,6 +750,30 @@ class PayrollEngineService
                 ->orWhereDate('starts_at', '<=', $period->period_end))
             ->orderBy('id')
             ->get();
+
+        $hasManualWorkDays = array_key_exists('work_days', $manualAdjustments) && $manualAdjustments['work_days'] !== null;
+        $hasManualAbsentDays = array_key_exists('absent_days', $manualAdjustments) && $manualAdjustments['absent_days'] !== null;
+
+        if ($hasManualWorkDays) {
+            $context->workDays = max(0, (float) $manualAdjustments['work_days']);
+            if (! $hasManualAbsentDays) {
+                $context->absentDays = max(0, $context->scheduledWorkDays - $context->workDays);
+            }
+        }
+        if ($hasManualAbsentDays) {
+            $context->absentDays = max(0, (float) $manualAdjustments['absent_days']);
+            if (! $hasManualWorkDays) {
+                $context->workDays = max(0, $context->scheduledWorkDays - $context->absentDays);
+            }
+        }
+        if (array_key_exists('overtime_hours', $manualAdjustments) && $manualAdjustments['overtime_hours'] !== null) {
+            $context->overtimeHours = max(0, (float) $manualAdjustments['overtime_hours']);
+            $context->unpricedOvertimeHours = $context->overtimeHours;
+            $context->overtimeAmount = 0.0;
+        }
+        if (array_key_exists('late_minutes', $manualAdjustments) && $manualAdjustments['late_minutes'] !== null) {
+            $context->lateMinutes = max(0, (int) $manualAdjustments['late_minutes']);
+        }
 
         return $context;
     }
@@ -648,23 +832,56 @@ class PayrollEngineService
             }
 
             if ($deduction->deduction_type === 'advance') {
+                $requestedAmount = $amount;
                 $amount = min($amount, $advanceMonthlyRemaining);
+                if ($requestedAmount > $advanceMonthlyRemaining) {
+                    $context->validationWarnings[] = [
+                        'code' => 'advance_monthly_limit_capped',
+                        'severity' => 'warning',
+                        'message' => "Adiantamento '{$deduction->name}' limitado pelo teto mensal disponível.",
+                    ];
+                }
                 $advanceMonthlyRemaining = max(0, $advanceMonthlyRemaining - $amount);
             }
 
             $amount = round($amount, 2);
+            $manualComponents = $context->manualAdjustments['components'] ?? [];
+            $deductionCode = 'deduction_'.$deduction->id;
+            if (array_key_exists($deductionCode, $manualComponents) && $manualComponents[$deductionCode] !== null) {
+                $amount = round(abs((float) $manualComponents[$deductionCode]), 2);
+            }
+
             if ($amount <= 0) {
                 continue;
             }
 
             $breakdown[] = [
-                'code' => 'deduction_'.$deduction->id,
+                'code' => $deductionCode,
                 'name' => $deduction->name,
                 'type' => 'deduction',
                 'amount' => -$amount,
                 'deduction_id' => $deduction->id,
                 'base_amount' => $baseAmount,
                 'rate' => $rate,
+            ];
+        }
+
+        foreach (($context->manualAdjustments['extra_items'] ?? []) as $idx => $extraItem) {
+            if (($extraItem['type'] ?? 'earning') !== 'deduction') {
+                continue;
+            }
+            $extraAmount = round(abs((float) ($extraItem['amount'] ?? 0)), 2);
+            if ($extraAmount <= 0) {
+                continue;
+            }
+            $breakdown[] = [
+                'code' => 'manual_deduction_'.$idx,
+                'name' => (string) ($extraItem['name'] ?? 'Desconto manual'),
+                'type' => 'deduction',
+                'amount' => -$extraAmount,
+                'deduction_id' => null,
+                'base_amount' => null,
+                'rate' => null,
             ];
         }
 
@@ -699,11 +916,19 @@ class PayrollEngineService
             $unitRate = (float) ($assignment->custom_value ?? $component->default_value);
             $quantity = null;
             $rate = null;
+            $itemBaseAmount = null;
 
             $amount = match (true) {
                 in_array($component->code, ['meal_allowance', 'meal_subsidy', 'transport_allowance'], true)
                     && in_array($assignment->calculation_period, ['daily', 'weekly'], true)
-                    => $unitRate * $context->workDays / ($assignment->calculation_period === 'weekly' ? 5 : 1),
+                    => (function () use ($unitRate, $context, $assignment, &$quantity, &$itemBaseAmount): float {
+                        $quantity = $assignment->calculation_period === 'weekly'
+                            ? round($context->workDays / 5, 2)
+                            : $context->workDays;
+                        $itemBaseAmount = $unitRate;
+
+                        return $unitRate * $context->workDays / ($assignment->calculation_period === 'weekly' ? 5 : 1);
+                    })(),
                 $component->calculation_type === 'percentage'
                     => ($rate = $percentage) > 0 ? $baseAmount * ($percentage / 100) : 0,
                 $component->calculation_type === 'hours'
@@ -717,6 +942,12 @@ class PayrollEngineService
                 'deduction', 'tax' => -abs($amount),
                 default => abs($amount),
             };
+
+            $manualComponents = $context->manualAdjustments['components'] ?? [];
+            if (array_key_exists($component->code, $manualComponents) && $manualComponents[$component->code] !== null) {
+                $manualVal = abs((float) $manualComponents[$component->code]);
+                $amount = in_array($component->type, ['deduction', 'tax'], true) ? -$manualVal : $manualVal;
+            }
 
             $regulation = $component->regulations->first();
             $employeeInssApplicable = (bool) ($regulation?->employee_inss_applicable ?? false);
@@ -741,7 +972,7 @@ class PayrollEngineService
                 'amount' => round($amount, 2),
                 'salary_component_id' => $component->id,
                 'regulation_id' => $regulation?->id,
-                'base_amount' => $component->calculation_type === 'percentage' ? $baseAmount : null,
+                'base_amount' => $component->calculation_type === 'percentage' ? $baseAmount : $itemBaseAmount,
                 'quantity' => $quantity,
                 'rate' => $rate,
             ];
@@ -752,6 +983,118 @@ class PayrollEngineService
             }
         }
 
+        $assignedCodes = $context->salaryComponents
+            ->map(fn ($assignment) => $assignment->component?->code)
+            ->filter()
+            ->values()
+            ->all();
+
+        $globalDefaults = RemunerationDefaultsService::forTenant((int) $context->period->tenant_id);
+        $manualComponents = $context->manualAdjustments['components'] ?? [];
+        foreach (RemunerationDefaultsService::ALLOWANCES as $key => $definition) {
+            if (in_array($definition['code'], $assignedCodes, true)) {
+                continue;
+            }
+
+            if ($key === 'meal' && ! (array_key_exists('meal_allowance', $manualComponents) && $manualComponents['meal_allowance'] !== null)) {
+                continue;
+            }
+
+            $globalQuantity = null;
+            $globalBaseAmount = null;
+            if (array_key_exists($definition['code'], $manualComponents) && $manualComponents[$definition['code']] !== null) {
+                $amount = round(abs((float) $manualComponents[$definition['code']]), 2);
+            } else {
+                $global = $globalDefaults['allowances'][$key] ?? null;
+                if (! $global || $global['amount'] <= 0) {
+                    continue;
+                }
+
+                if ($definition['code'] === 'transport_allowance' && in_array($global['period'], ['daily', 'weekly'], true)) {
+                    $globalQuantity = $global['period'] === 'weekly' ? round($context->workDays / 5, 2) : $context->workDays;
+                    $globalBaseAmount = (float) $global['amount'];
+                    $amount = $global['amount'] * $context->workDays / ($global['period'] === 'weekly' ? 5 : 1);
+                } else {
+                    $amount = $global['amount'];
+                }
+                $amount = round(abs((float) $amount), 2);
+            }
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $component = SalaryComponent::query()
+                ->where('tenant_id', $context->period->tenant_id)
+                ->where('code', $definition['code'])
+                ->with(['regulations' => function ($query) use ($context): void {
+                    $query->where('status', 'active')
+                        ->where('country_code', 'AO')
+                        ->where('regime_code', 'standard')
+                        ->whereDate('effective_from', '<=', $context->period->period_start)
+                        ->where(fn ($regulations) => $regulations->whereNull('effective_to')->orWhereDate('effective_to', '>=', $context->period->period_end))
+                        ->whereNotNull('validated_at')
+                        ->whereNotNull('validated_by')
+                        ->orderByDesc('version');
+                }])
+                ->first();
+
+            $regulation = $component?->regulations->first();
+            $employeeInssApplicable = (bool) ($regulation?->employee_inss_applicable ?? false);
+            $employerInssApplicable = (bool) ($regulation?->employer_inss_applicable ?? false);
+            $irtApplicable = (bool) ($regulation?->irt_applicable ?? ($component?->is_taxable ?? false));
+
+            if ($employeeInssApplicable) {
+                $inssBase += $amount;
+            }
+            if ($employerInssApplicable) {
+                $employerInssBase += $amount;
+            }
+            if ($irtApplicable) {
+                $irtBase += $amount;
+            }
+
+            $breakdown[] = [
+                'code' => $definition['code'],
+                'name' => $component?->name ?? $definition['name'],
+                'type' => $component?->type ?? 'benefit',
+                'priority' => (int) ($component?->priority ?? 0),
+                'amount' => $amount,
+                'salary_component_id' => $component?->id,
+                'regulation_id' => $regulation?->id,
+                'base_amount' => $globalBaseAmount,
+                'quantity' => $globalQuantity,
+                'rate' => null,
+            ];
+
+            $componentAmounts[$definition['code']] = $amount;
+            $componentAmounts['gross_salary'] += $amount;
+        }
+
+        foreach (($context->manualAdjustments['extra_items'] ?? []) as $idx => $extraItem) {
+            if (($extraItem['type'] ?? 'earning') !== 'earning') {
+                continue;
+            }
+            $extraAmount = round(abs((float) ($extraItem['amount'] ?? 0)), 2);
+            if ($extraAmount <= 0) {
+                continue;
+            }
+            $breakdown[] = [
+                'code' => 'manual_earning_'.$idx,
+                'name' => (string) ($extraItem['name'] ?? 'Rendimento manual'),
+                'type' => 'earning',
+                'priority' => 90,
+                'amount' => $extraAmount,
+                'salary_component_id' => null,
+                'regulation_id' => null,
+                'base_amount' => null,
+                'quantity' => null,
+                'rate' => null,
+            ];
+            $irtBase += $extraAmount;
+            $componentAmounts['gross_salary'] += $extraAmount;
+        }
+
         $context->inssBase = $inssBase;
         $context->employerInssBase = $employerInssBase;
         $context->irtBase = $irtBase;
@@ -759,7 +1102,7 @@ class PayrollEngineService
         return $breakdown;
     }
 
-    protected function scheduledWorkDates(Employee $employee, PayrollPeriod $period): array
+    public function scheduledWorkDates(Employee $employee, PayrollPeriod $period): array
     {
         $schedules = EmployeeSchedule::query()
             ->where('employee_id', $employee->id)

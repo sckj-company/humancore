@@ -126,18 +126,18 @@ class AttendanceQrController extends BaseController
             ->orderByDesc('effective_from')
             ->first();
         $shift ??= $schedule?->shift;
-        $endTime = $shift?->end_time ?: (string) Setting::where('tenant_id', tenant_id())
+        $endTime = $shift?->end_time ?: (string) (Setting::where('tenant_id', tenant_id())
             ->where('group', 'hr')
             ->where('key', 'work_end_time')
-            ->value('value');
+            ->first()?->value ?? '');
 
         if (! $endTime) {
             return 0;
         }
 
-        $timezone = tenant()->timezone ?? 'Africa/Luanda';
+        $timezone = tenant()?->timezone ?? config('app.timezone', 'Africa/Luanda');
         $expected = Carbon::parse($date.' '.$endTime, $timezone);
-        if ($shift?->is_night_shift || ($shift?->start_time && $endTime <= $shift->start_time)) {
+        if ($shift?->is_night_shift || ($shift?->start_time && Carbon::parse($date.' '.$endTime, $timezone)->lessThanOrEqualTo(Carbon::parse($date.' '.$shift->start_time, $timezone)))) {
             $expected->addDay();
         }
 

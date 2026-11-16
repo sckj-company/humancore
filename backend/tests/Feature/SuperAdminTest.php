@@ -329,4 +329,48 @@ class SuperAdminTest extends TestCase
             ->deleteJson("/api/v1/superadmin/tenants/{$tenant->id}")
             ->assertStatus(422);
     }
+
+    public function test_super_admin_can_assign_and_update_tenant_user_permissions(): void
+    {
+        $superAdmin = User::factory()->create(['is_active' => true]);
+        $superAdmin->assignRole('super-admin');
+
+        $tenant = Tenant::factory()->create();
+
+        $this->actingAs($superAdmin, 'sanctum')
+            ->getJson('/api/v1/superadmin/tenant-permissions')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['permissions', 'role_permissions']]);
+
+        $created = $this->actingAs($superAdmin, 'sanctum')
+            ->postJson("/api/v1/superadmin/tenants/{$tenant->id}/users", [
+                'name' => 'Gestor Empresa',
+                'email' => 'gestor@empresa.test',
+                'password' => 'password123',
+                'role' => 'manager',
+                'permissions' => ['view_any_employee', 'create_employee'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.roles.0', 'manager');
+
+        $userId = $created->json('data.id');
+        $this->assertTrue(in_array('create_employee', $created->json('data.direct_permissions'), true));
+
+        $this->actingAs($superAdmin, 'sanctum')
+            ->putJson("/api/v1/superadmin/tenants/{$tenant->id}/users/{$userId}", [
+                'role' => 'hr-manager',
+                'is_active' => false,
+                'permissions' => ['view_any_payroll'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.roles.0', 'hr-manager')
+            ->assertJsonPath('data.is_active', false)
+            ->assertJsonPath('data.direct_permissions.0', 'view_any_payroll');
+
+        $this->actingAs($superAdmin, 'sanctum')
+            ->putJson("/api/v1/superadmin/tenants/{$tenant->id}/users/{$userId}", [
+                'permissions' => ['manage_platform'],
+            ])
+            ->assertForbidden();
+    }
 }

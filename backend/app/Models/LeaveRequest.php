@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Payroll\PayrollSyncService;
 use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,6 +14,15 @@ class LeaveRequest extends Model
     use Auditable;
     use HasFactory;
     use HasTenant;
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $leave): void {
+            if ($leave->status === 'approved' && ($leave->wasRecentlyCreated || $leave->wasChanged('status'))) {
+                app(PayrollSyncService::class)->syncOnLeaveApproved($leave);
+            }
+        });
+    }
 
     protected $fillable = [
         'employee_id',

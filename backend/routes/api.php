@@ -91,6 +91,7 @@ Route::prefix('v1')->group(function () {
         Route::post('payroll/periods', [PayrollController::class, 'store']);
         Route::get('payroll/periods/{period}', [PayrollController::class, 'show']);
         Route::post('payroll/periods/{period}/process', [PayrollController::class, 'process']);
+        Route::post('payroll/periods/{period}/recalculate', [PayrollController::class, 'recalculate']);
         Route::get('payroll/periods/{period}/progress', [PayrollController::class, 'progress']);
         Route::get('payroll/periods/{period}/processable-employees', [PayrollController::class, 'processableEmployees']);
         Route::get('payroll/periods/{period}/validations', [PayrollController::class, 'validations']);
@@ -248,8 +249,10 @@ Route::prefix('v1')->group(function () {
         Route::get('superadmin/tenants/{tenant}', [SuperAdminController::class, 'showTenant']);
         Route::put('superadmin/tenants/{tenant}', [SuperAdminController::class, 'updateTenant']);
         Route::delete('superadmin/tenants/{tenant}', [SuperAdminController::class, 'destroyTenant']);
+        Route::get('superadmin/tenant-permissions', [SuperAdminController::class, 'tenantPermissions']);
         Route::get('superadmin/tenants/{tenant}/users', [SuperAdminController::class, 'listTenantUsers']);
         Route::post('superadmin/tenants/{tenant}/users', [SuperAdminController::class, 'storeUser']);
+        Route::put('superadmin/tenants/{tenant}/users/{user}', [SuperAdminController::class, 'updateUser']);
         Route::delete('superadmin/tenants/{tenant}/users/{user}', [SuperAdminController::class, 'destroyUser']);
         Route::put('superadmin/users/{user}/password', [SuperAdminController::class, 'updateUserPassword']);
         Route::get('superadmin/platform-users', [SuperAdminController::class, 'platformUsers']);
@@ -261,6 +264,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('benefits', BenefitController::class);
         Route::apiResource('deductions', DeductionController::class);
         Route::post('deductions/{deduction}/approve', [DeductionController::class, 'approve']);
+        Route::post('deductions/{deduction}/cancel', [DeductionController::class, 'cancel']);
 
         // Templates de Email
         Route::apiResource('email-templates', EmailTemplateController::class);

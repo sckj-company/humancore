@@ -9,6 +9,7 @@ use App\Models\EmployeeSalaryComponent;
 use App\Models\PayrollRecordItem;
 use App\Models\SalaryComponent;
 use App\Models\Setting;
+use App\Services\Payroll\RemunerationDefaultsService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,39 +17,6 @@ use Illuminate\Support\Facades\DB;
 
 class EmployeePayrollSettingsController extends BaseController
 {
-    private const ALLOWANCES = [
-        'meal' => [
-            'code' => 'meal_allowance',
-            'name' => 'Subsídio de Alimentação',
-            'period' => 'daily',
-        ],
-        'transport' => [
-            'code' => 'transport_allowance',
-            'name' => 'Subsídio de Transporte',
-            'period' => 'daily',
-        ],
-        'vacation' => [
-            'code' => 'vacation_subsidy',
-            'name' => 'Subsídio de Férias',
-            'period' => 'fixed',
-        ],
-        'christmas' => [
-            'code' => 'christmas_subsidy',
-            'name' => 'Subsídio de Natal',
-            'period' => 'fixed',
-        ],
-        'family' => [
-            'code' => 'family_allowance',
-            'name' => 'Abono de Família',
-            'period' => 'fixed',
-        ],
-        'additional' => [
-            'code' => 'additional_allowance',
-            'name' => 'Abono Adicional',
-            'period' => 'fixed',
-        ],
-    ];
-
     public function show(Request $request, Employee $employee): JsonResponse
     {
         $this->authorize('view', $employee);
@@ -66,14 +34,22 @@ class EmployeePayrollSettingsController extends BaseController
 
         $validated = $request->validate([
             'allowances' => ['required', 'array'],
-            'allowances.meal.amount' => ['required', 'numeric', 'min:0'],
+            'allowances.meal.amount' => ['nullable', 'numeric', 'min:0'],
             'allowances.meal.period' => ['required', 'in:daily,weekly,fixed'],
-            'allowances.transport.amount' => ['required', 'numeric', 'min:0'],
+            'allowances.meal.use_global' => ['sometimes', 'boolean'],
+            'allowances.transport.amount' => ['nullable', 'numeric', 'min:0'],
             'allowances.transport.period' => ['required', 'in:daily,weekly,fixed'],
-            'allowances.vacation.amount' => ['sometimes', 'required', 'numeric', 'min:0'],
-            'allowances.christmas.amount' => ['sometimes', 'required', 'numeric', 'min:0'],
-            'allowances.family.amount' => ['sometimes', 'required', 'numeric', 'min:0'],
-            'allowances.additional.amount' => ['sometimes', 'required', 'numeric', 'min:0'],
+            'allowances.transport.use_global' => ['sometimes', 'boolean'],
+            'allowances.vacation.amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'allowances.vacation.use_global' => ['sometimes', 'boolean'],
+            'allowances.christmas.amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'allowances.christmas.use_global' => ['sometimes', 'boolean'],
+            'allowances.family.amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'allowances.family.use_global' => ['sometimes', 'boolean'],
+            'allowances.additional.amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'allowances.additional.use_global' => ['sometimes', 'boolean'],
+            'allowances.bonus.amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'allowances.bonus.use_global' => ['sometimes', 'boolean'],
         ]);
 
         $contract = $employee->activeContract()->first();
@@ -82,26 +58,43 @@ class EmployeePayrollSettingsController extends BaseController
         }
 
         DB::transaction(function () use ($employee, $contract, $validated): void {
-            foreach (self::ALLOWANCES as $key => $definition) {
+            foreach (RemunerationDefaultsService::ALLOWANCES as $key => $definition) {
                 if (! array_key_exists($key, $validated['allowances'])) {
                     continue;
                 }
 
-                $component = SalaryComponent::query()->firstOrCreate(
-                    [
-                        'tenant_id' => $employee->tenant_id,
-                        'code' => $definition['code'],
-                    ],
-                    [
-                        'name' => $definition['name'],
-                        'type' => 'benefit',
-                        'calculation_type' => 'fixed',
-                        'default_value' => 0,
-                        'is_taxable' => false,
-                        'is_mandatory' => false,
-                        'is_active' => true,
-                    ],
-                );
+                $entry = $validated['allowances'][$key];
+                $useGlobal = (bool) ($entry['use_global'] ?? false) || ($entry['amount'] ?? null) === null;
+
+                $component = SalaryComponent::query()
+                    ->where('tenant_id', $employee->tenant_id)
+                    ->where('code', $definition['code'])
+                    ->first();
+
+                if ($useGlobal) {
+                    if ($component) {
+                        EmployeeSalaryComponent::query()
+                            ->where('employee_id', $employee->id)
+                            ->where('contract_id', $contract->id)
+                            ->where('salary_component_id', $component->id)
+                            ->delete();
+                    }
+
+                    continue;
+                }
+
+                $component ??= SalaryComponent::query()->create([
+                    'tenant_id' => $employee->tenant_id,
+                    'code' => $definition['code'],
+                    'name' => $definition['name'],
+                    'type' => 'benefit',
+                    'calculation_type' => 'fixed',
+                    'default_value' => 0,
+                    'is_taxable' => false,
+                    'is_mandatory' => false,
+                    'is_active' => true,
+                ]);
+
                 if (! $component->is_active) {
                     $component->update(['is_active' => true]);
                 }
@@ -114,8 +107,8 @@ class EmployeePayrollSettingsController extends BaseController
                     ],
                     [
                         'tenant_id' => $employee->tenant_id,
-                        'custom_value' => $validated['allowances'][$key]['amount'],
-                        'calculation_period' => $validated['allowances'][$key]['period'] ?? $definition['period'],
+                        'custom_value' => $entry['amount'],
+                        'calculation_period' => $entry['period'] ?? $definition['period'],
                         'start_date' => $contract->start_date,
                         'end_date' => $contract->end_date,
                         'is_active' => true,
@@ -189,29 +182,29 @@ class EmployeePayrollSettingsController extends BaseController
                 ->keyBy(fn (EmployeeSalaryComponent $assignment) => $assignment->component?->code)
             : collect();
 
-        $mealDefault = Setting::query()
-            ->where('tenant_id', $employee->tenant_id)
-            ->where('group', 'payroll')
-            ->where('key', 'subsidies.meal.daily')
-            ->value('value');
+        $globalDefaults = RemunerationDefaultsService::forTenant($employee->tenant_id);
 
         $allowances = [];
-        foreach (self::ALLOWANCES as $key => $definition) {
+        foreach (RemunerationDefaultsService::ALLOWANCES as $key => $definition) {
             $assignment = $assignments->get($definition['code']);
+            $global = $globalDefaults['allowances'][$key] ?? ['amount' => 0.0, 'period' => $definition['period']];
             $allowances[$key] = [
                 'amount' => $assignment
                     ? (float) ($assignment->custom_value ?? $assignment->component?->default_value ?? 0)
-                    : ($key === 'meal' ? (float) ($mealDefault ?? 0) : 0),
+                    : (float) $global['amount'],
                 'period' => $assignment
                     ? ($assignment->calculation_period ?? $definition['period'])
-                    : ($key === 'meal' ? 'daily' : $definition['period']),
+                    : $global['period'],
                 'configured' => $assignment !== null,
+                'global_amount' => (float) $global['amount'],
+                'global_period' => $global['period'],
             ];
         }
 
         return [
             'has_active_contract' => $contract !== null,
             'allowances' => $allowances,
+            'global_overtime_hourly_rate' => $globalDefaults['overtime_hourly_rate'],
             'advance_month' => $monthStart->format('Y-m'),
             'advance_monthly_limit' => $advanceMonthlyLimit,
             'advance_monthly_used' => $advanceMonthlyUsed,

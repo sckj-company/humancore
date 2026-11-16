@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Setting;
 
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Models\Setting;
+use App\Services\Payroll\PayrollSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -69,6 +70,17 @@ class SettingController extends BaseController
             $saved[$key] = $setting->value;
         }
 
-        return $this->success(['group' => $groupId, 'values' => $saved], 'Configurações atualizadas com sucesso.');
+        $affectedPeriods = $groupId === 'payroll' && $tid
+            ? app(PayrollSyncService::class)->markOpenPeriodsOutdatedForTenant(
+                (int) $tid,
+                'Configurações globais de remuneração/descontos atualizadas.',
+            )
+            : [];
+
+        return $this->success([
+            'group' => $groupId,
+            'values' => $saved,
+            'affected_periods' => $affectedPeriods,
+        ], 'Configurações atualizadas com sucesso.');
     }
 }

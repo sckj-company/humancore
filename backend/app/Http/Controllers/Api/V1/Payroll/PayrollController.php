@@ -109,6 +109,50 @@ class PayrollController extends BaseController
         return $this->success($result, 'Processamento concluído.');
     }
 
+    public function recalculate(Request $request, PayrollPeriod $period, PayrollEngineService $engine): JsonResponse
+    {
+        $this->authorize('process', $period);
+
+        if ($period->isClosed()) {
+            return $this->error('Não é possível recalcular um período fechado.', 422);
+        }
+
+        $data = $request->validate([
+            'records' => ['required', 'array', 'min:1'],
+            'records.*.employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'records.*.work_days' => ['nullable', 'numeric', 'min:0', 'max:31'],
+            'records.*.absent_days' => ['nullable', 'numeric', 'min:0', 'max:31'],
+            'records.*.overtime_hours' => ['nullable', 'numeric', 'min:0', 'max:500'],
+            'records.*.late_minutes' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'records.*.components' => ['sometimes', 'array'],
+            'records.*.components.*' => ['nullable', 'numeric', 'min:0'],
+            'records.*.extra_items' => ['sometimes', 'array'],
+            'records.*.extra_items.*.name' => ['required', 'string', 'max:120'],
+            'records.*.extra_items.*.type' => ['required', 'in:earning,deduction'],
+            'records.*.extra_items.*.amount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        try {
+            $result = $engine->recalculatePeriodRecords($period, $data['records']);
+        } catch (\Throwable $e) {
+            return $this->error('Não foi possível recalcular os registos: '.$e->getMessage(), 422);
+        }
+
+        $period->recordEvent('processed', auth()->id(), 'Recálculo manual de registos executado.', [
+            'employee_ids' => collect($data['records'])->pluck('employee_id')->values()->all(),
+            'recalculated' => $result['recalculated'],
+        ]);
+
+        $period->refresh()->load([
+            'records.employee.department',
+            'records.employee.position',
+            'records.items',
+            'events.actor:id,name',
+        ])->loadCount('records');
+
+        return $this->success(new PayrollPeriodResource($period), 'Folha recalculada com sucesso.');
+    }
+
     public function progress(PayrollPeriod $period): JsonResponse
     {
         $this->authorize('view', $period);

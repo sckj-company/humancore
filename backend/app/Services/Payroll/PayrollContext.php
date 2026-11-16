@@ -30,6 +30,8 @@ class PayrollContext
 
     public float $workDays = 0;
 
+    public int $scheduledWorkDays = 0;
+
     public float $absentDays = 0;
 
     public float $lateMinutes = 0;
@@ -43,6 +45,10 @@ class PayrollContext
     public float $inssAmount = 0;
 
     public float $inssBase = 0;
+
+    public array $manualAdjustments = [];
+
+    public array $validationWarnings = [];
 
     public float $employerInssBase = 0;
 

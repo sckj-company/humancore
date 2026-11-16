@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ArrowLeft, ChevronRight, Play, CheckCircle2, Lock, FileDown, Users,
+  ArrowLeft, ChevronDown, ChevronRight, Play, CheckCircle2, Lock, FileDown, Users,
   TrendingUp, Wallet, Building2, AlertTriangle, AlertCircle, Info,
   Loader2, Clock, Calendar, FileText, BarChart3, XCircle, Send,
-  Banknote, RotateCcw, History, X,
+  Banknote, RotateCcw, History, X, ExternalLink, Settings2, Calculator, Plus, Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -16,7 +16,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
@@ -129,12 +131,12 @@ export function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { t, i18n } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const activeTab = searchParams.get('tab') || 'summary'
+  const rawTab = searchParams.get('tab') || 'summary'
+  const activeTab = rawTab === 'detail' ? 'summary' : rawTab
   const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const locale = i18n.language || 'pt-AO'
 
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null)
   const [approveOpen, setApproveOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
@@ -227,6 +229,17 @@ export function PayrollPeriodDetailPage() {
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar pagamento')),
   })
 
+  const recalculateMutation = useMutation({
+    mutationFn: (recordsPayload: Array<Record<string, unknown>>) =>
+      api.post<PayrollPeriod>(`payroll/periods/${id}/recalculate`, { records: recordsPayload }),
+    onSuccess: (updatedPeriod) => {
+      toast.success(t('payroll.detail.recalculatedSuccess'))
+      qc.setQueryData(['payroll-period', id], updatedPeriod)
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.recalculateError'))),
+  })
+
   const downloadPayslip = async (recordId: number, filename: string) => {
     const tid = toast.loading(t('payroll.detail.payslipGenerating'))
     try {
@@ -285,10 +298,6 @@ export function PayrollPeriodDetailPage() {
   const warnings = recordsWithErrors.filter((r) =>
     r.validation_errors?.every((e) => e.severity !== 'error' && e.severity !== 'blocking'),
   )
-
-  const selectedRecord = selectedEmployeeId
-    ? records.find((r) => r.employee_id === selectedEmployeeId)
-    : records[0] ?? null
 
   const events = data.events ?? []
 
@@ -484,9 +493,6 @@ export function PayrollPeriodDetailPage() {
           <TabsTrigger value="summary" className="gap-1.5 px-3 py-1.5 text-xs">
             <BarChart3 className="h-3.5 w-3.5" />{t('payroll.detail.summaryTab')}
           </TabsTrigger>
-          <TabsTrigger value="detail" className="gap-1.5 px-3 py-1.5 text-xs">
-            <FileText className="h-3.5 w-3.5" />{t('payroll.detail.employeeDetailTab')}
-          </TabsTrigger>
           <TabsTrigger value="validations" className="gap-1.5 px-3 py-1.5 text-xs">
             <AlertTriangle className="h-3.5 w-3.5" />
             {t('payroll.detail.validationsTab')}
@@ -507,17 +513,13 @@ export function PayrollPeriodDetailPage() {
             records={records}
             periodStatus={data.status}
             periodId={data.id}
+            canEditRecords={!['closed', 'paid', 'cancelled'].includes(data.status) && hasPermission(user, 'process_payroll')}
+            isRecalculating={recalculateMutation.isPending}
+            onRecalculate={async (payload) => {
+              await recalculateMutation.mutateAsync(payload)
+            }}
             onDownloadPeriod={downloadPeriodPayroll}
             onDownloadPayslip={downloadPayslip}
-          />
-        </TabsContent>
-
-        {/* ── Tab: Detalhe por Funcionário ── */}
-        <TabsContent value="detail" className="mt-4">
-          <EmployeeDetailTab
-            records={records}
-            selectedEmployeeId={selectedEmployeeId ?? selectedRecord?.employee_id ?? null}
-            onSelectEmployee={setSelectedEmployeeId}
           />
         </TabsContent>
 
@@ -704,20 +706,131 @@ function KpiCard({
 
 // ─── Tab: Resumo ─────────────────────────────────────────────────────────────
 
+interface RecordDraft {
+  work_days: string
+  absent_days: string
+  overtime_hours: string
+  late_minutes: string
+  components: Record<string, string>
+  extra_items: Array<{ name: string; type: 'earning' | 'deduction'; amount: string }>
+}
+
+const STANDARD_COMPONENTS = [
+  { code: 'meal_allowance', label: 'Subsídio de Alimentação' },
+  { code: 'transport_allowance', label: 'Subsídio de Transporte' },
+  { code: 'vacation_subsidy', label: 'Subsídio de Férias' },
+  { code: 'christmas_subsidy', label: 'Subsídio de Natal' },
+  { code: 'family_allowance', label: 'Abono de Família' },
+  { code: 'additional_allowance', label: 'Abono Adicional' },
+  { code: 'bonus', label: 'Bónus' },
+]
+
+const NON_EDITABLE_CODES = new Set(['base_salary', 'inss', 'irt', 'employer_inss'])
+
+function buildDraftFromRecord(record: PayrollRecord): RecordDraft {
+  const existingComponents: Record<string, string> = {}
+  if (record.manual_adjustments?.components) {
+    for (const [k, v] of Object.entries(record.manual_adjustments.components)) {
+      if (v != null) existingComponents[k] = String(v)
+    }
+  }
+  const existingExtra = (record.manual_adjustments?.extra_items ?? []).map((item) => ({
+    name: item.name,
+    type: item.type,
+    amount: String(item.amount),
+  }))
+
+  return {
+    work_days: String(record.manual_adjustments?.work_days ?? record.work_days ?? 0),
+    absent_days: String(record.manual_adjustments?.absent_days ?? record.absent_days ?? 0),
+    overtime_hours: String(record.manual_adjustments?.overtime_hours ?? record.overtime_hours ?? 0),
+    late_minutes: String(record.manual_adjustments?.late_minutes ?? record.details?.late_minutes ?? 0),
+    components: existingComponents,
+    extra_items: existingExtra,
+  }
+}
+
+function resolveLiveItemMetrics(
+  item: NonNullable<PayrollRecord['items']>[number],
+  record: PayrollRecord,
+  draft: RecordDraft,
+): { quantity: number | null; amount: number } {
+  const rawQty = item.quantity == null ? null : Number(item.quantity)
+  const rawAmount = Math.abs(Number(item.amount))
+  const rawBase = item.base_amount == null ? null : Number(item.base_amount)
+  const parseDraftNum = (val: string, fallback: number) => {
+    const parsed = Number(val)
+    return val.trim() !== '' && Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+  }
+
+  const draftWorkDays = parseDraftNum(draft.work_days, record.work_days ?? 0)
+  const draftAbsentDays = parseDraftNum(draft.absent_days, record.absent_days ?? 0)
+  const draftOvertimeHours = parseDraftNum(draft.overtime_hours, record.overtime_hours ?? 0)
+  const draftLateMinutes = parseDraftNum(draft.late_minutes, record.details?.late_minutes ?? 0)
+
+  let liveQty = rawQty
+  let unitRate: number | null = rawBase
+
+  if (['meal_subsidy', 'meal_allowance', 'transport_allowance'].includes(item.code) && rawQty != null) {
+    const isWeekly = (record.work_days ?? 0) > 0 && Math.abs(rawQty - (record.work_days ?? 0) / 5) < 0.05
+    liveQty = isWeekly ? Number((draftWorkDays / 5).toFixed(2)) : draftWorkDays
+    if (unitRate == null && rawQty > 0) {
+      unitRate = rawAmount / rawQty
+    }
+  } else if (item.code === 'absence') {
+    liveQty = draftAbsentDays
+    if (unitRate == null && rawQty != null && rawQty > 0) {
+      unitRate = rawAmount / rawQty
+    }
+  } else if (item.code === 'overtime') {
+    liveQty = draftOvertimeHours
+    if (unitRate == null && rawQty != null && rawQty > 0) {
+      unitRate = rawAmount / rawQty
+    }
+  } else if (item.code === 'lateness') {
+    liveQty = draftLateMinutes
+    if (unitRate != null && unitRate > 0) {
+      return {
+        quantity: liveQty,
+        amount: Number(((liveQty / 60) * unitRate).toFixed(2)),
+      }
+    }
+    return { quantity: liveQty, amount: rawAmount }
+  }
+
+  if (liveQty !== rawQty && unitRate != null && liveQty != null) {
+    return {
+      quantity: liveQty,
+      amount: Number((unitRate * liveQty).toFixed(2)),
+    }
+  }
+
+  return { quantity: liveQty, amount: rawAmount }
+}
+
 function SummaryTab({
   records,
   periodStatus,
   periodId,
+  canEditRecords,
+  isRecalculating,
+  onRecalculate,
   onDownloadPeriod,
   onDownloadPayslip,
 }: {
   records: PayrollRecord[]
   periodStatus: string
   periodId: number
+  canEditRecords: boolean
+  isRecalculating: boolean
+  onRecalculate: (payload: Array<Record<string, unknown>>) => Promise<void>
   onDownloadPeriod: (filename: string) => void
   onDownloadPayslip: (id: number, filename: string) => void
 }) {
   const { t } = useTranslation()
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const [drafts, setDrafts] = useState<Record<number, RecordDraft>>({})
+
   if (records.length === 0) {
     return (
       <Card>
@@ -729,6 +842,74 @@ function SummaryTab({
       </Card>
     )
   }
+
+  const allExpanded = expandedIds.size === records.length
+  const dirtyCount = Object.keys(drafts).length
+  const outdatedRecords = records.filter((r) => r.is_outdated)
+  const handleRecalculateOutdated = async () => {
+    const payload = outdatedRecords.map((r) => ({
+      employee_id: r.employee_id,
+      ...(r.manual_adjustments ?? {}),
+    }))
+    await onRecalculate(payload)
+  }
+  const toggleRow = (recordId: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(recordId)) {
+        next.delete(recordId)
+      } else {
+        next.add(recordId)
+      }
+      return next
+    })
+  }
+  const toggleAll = () => {
+    if (allExpanded) {
+      setExpandedIds(new Set())
+    } else {
+      setExpandedIds(new Set(records.map((r) => r.id)))
+    }
+  }
+  const updateDraft = (record: PayrollRecord, updater: (prev: RecordDraft) => RecordDraft) => {
+    setDrafts((prev) => {
+      const base = prev[record.employee_id] ?? buildDraftFromRecord(record)
+      return { ...prev, [record.employee_id]: updater(base) }
+    })
+  }
+  const handleRecalculateBatch = async () => {
+    const payload = Object.entries(drafts).map(([employeeId, draft]) => {
+      const components: Record<string, number> = {}
+      for (const [code, val] of Object.entries(draft.components)) {
+        if (val.trim() !== '') {
+          const parsed = Number(val)
+          if (Number.isFinite(parsed) && parsed >= 0) {
+            components[code] = parsed
+          }
+        }
+      }
+      const extra_items = draft.extra_items
+        .filter((item) => item.name.trim() !== '' && Number.isFinite(Number(item.amount)) && Number(item.amount) >= 0)
+        .map((item) => ({
+          name: item.name.trim(),
+          type: item.type,
+          amount: Number(item.amount),
+        }))
+
+      return {
+        employee_id: Number(employeeId),
+        work_days: draft.work_days.trim() === '' ? null : Math.max(0, Number(draft.work_days)),
+        absent_days: draft.absent_days.trim() === '' ? null : Math.max(0, Number(draft.absent_days)),
+        overtime_hours: draft.overtime_hours.trim() === '' ? null : Math.max(0, Number(draft.overtime_hours)),
+        late_minutes: draft.late_minutes.trim() === '' ? null : Math.max(0, Math.round(Number(draft.late_minutes))),
+        components,
+        extra_items,
+      }
+    })
+    await onRecalculate(payload)
+    setDrafts({})
+  }
+  const canDownloadPayslip = periodStatus === 'approved' || periodStatus === 'paid' || periodStatus === 'closed'
 
   const totalsGross = records.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
   const totalsNet = records.reduce((s, r) => s + (r.net_salary ?? 0), 0)
@@ -750,14 +931,65 @@ function SummaryTab({
         <CardContent className="p-0">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
             <p className="text-sm font-semibold text-foreground">{t('payroll.detail.summaryTab')}</p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onDownloadPeriod(`folha-salarial-${periodId}.pdf`)}
-            >
-              <FileDown className="mr-1.5 h-4 w-4" />
-              {t('payroll.detail.downloadPeriodPdf')}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {canEditRecords && outdatedRecords.length > 0 && dirtyCount === 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-orange-500/40 text-orange-700 hover:bg-orange-500/10"
+                  onClick={handleRecalculateOutdated}
+                  disabled={isRecalculating}
+                >
+                  {isRecalculating ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="mr-1.5 h-4 w-4" />
+                  )}
+                  {t('payroll.detail.recalculateOutdated', { count: outdatedRecords.length })}
+                </Button>
+              )}
+              {canEditRecords && dirtyCount > 0 && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDrafts({})}
+                    disabled={isRecalculating}
+                  >
+                    <X className="mr-1.5 h-4 w-4" />
+                    {t('payroll.detail.discardChanges')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleRecalculateBatch}
+                    disabled={isRecalculating}
+                  >
+                    {isRecalculating ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Calculator className="mr-1.5 h-4 w-4" />
+                    )}
+                    {t('payroll.detail.recalculateBatch', { count: dirtyCount })}
+                  </Button>
+                </>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={toggleAll}
+              >
+                {allExpanded ? <ChevronDown className="mr-1.5 h-4 w-4" /> : <ChevronRight className="mr-1.5 h-4 w-4" />}
+                {allExpanded ? t('payroll.detail.collapseAll') : t('payroll.detail.expandAll')}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onDownloadPeriod(`folha-salarial-${periodId}.pdf`)}
+              >
+                <FileDown className="mr-1.5 h-4 w-4" />
+                {t('payroll.detail.downloadPeriodPdf')}
+              </Button>
+            </div>
           </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -780,51 +1012,324 @@ function SummaryTab({
                 const inssAmount = getPayrollComponent(r, 'inss')?.amount ?? null
                 const irtAmount = getPayrollComponent(r, 'irt')?.amount ?? Math.abs(r.total_taxes ?? 0)
                 const otherDeductions = Math.max(0, (r.total_deductions ?? 0) - (inssAmount ?? 0))
-                const hasErrors = r.validation_errors && r.validation_errors.length > 0
+                const hasErrors = Boolean(r.validation_errors && r.validation_errors.length > 0)
+                const isExpanded = expandedIds.has(r.id)
+                const lateMinutes = r.details?.late_minutes ?? 0
+                const draft = drafts[r.employee_id]
+                const isDirty = Boolean(draft)
+                const activeDraft = draft ?? buildDraftFromRecord(r)
+
                 return (
-                  <tr key={r.id} className="transition-colors hover:bg-muted/30">
-                    <td className="px-5 py-3">
-                      <div>
-                        <p className="font-medium">{r.employee?.full_name ?? `#${r.employee_id}`}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{r.employee?.employee_code}</p>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono text-muted-foreground">{fmtCurrency(r.base_salary)}</td>
-                    <td className="px-5 py-3 text-right font-mono font-medium">{fmtCurrency(r.gross_salary)}</td>
-                    <td className="px-5 py-3 text-right font-mono text-orange-600">
-                      {inssAmount != null ? formatSignedAmount(-inssAmount) : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono text-orange-600">
-                      {formatSignedAmount(-irtAmount)}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono text-destructive">
-                      {otherDeductions > 0 ? formatSignedAmount(-otherDeductions) : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono font-semibold text-emerald-700">{fmtCurrency(r.net_salary)}</td>
-                    <td className="px-5 py-3 text-right font-mono text-blue-700">
-                      {r.employer_cost != null ? fmtCurrency(r.employer_cost) : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {hasErrors && <AlertCircle className="h-3.5 w-3.5 text-destructive" />}
-                        <Badge variant="outline" className="capitalize text-xs">
-                          {t(`payroll.recordStatuses.${r.status}`, { defaultValue: r.status })}
-                        </Badge>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      {(periodStatus === 'approved' || periodStatus === 'paid' || periodStatus === 'closed') && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title={t('payroll.detail.downloadPayslip')}
-                          onClick={() => onDownloadPayslip(r.id, `recibo-${r.employee?.employee_code ?? r.id}.pdf`)}
-                        >
-                          <FileDown className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
+                  <Fragment key={r.id}>
+                    <tr
+                      onClick={() => toggleRow(r.id)}
+                      aria-expanded={isExpanded}
+                      className={`cursor-pointer transition-colors hover:bg-muted/40 ${isExpanded ? 'bg-muted/30' : ''}`}
+                    >
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-muted-foreground shrink-0">
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{r.employee?.full_name ?? `#${r.employee_id}`}</p>
+                              {r.is_outdated && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1.5 bg-orange-500/15 text-orange-700 border-orange-500/30">
+                                  {t('payroll.detail.outdatedRecord')}
+                                </Badge>
+                              )}
+                              {isDirty && (
+                                <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-amber-500/15 text-amber-700 border-amber-500/30">
+                                  {t('payroll.detail.pendingRecalculation')}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground font-mono">{r.employee?.employee_code}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-right font-mono text-muted-foreground">{fmtCurrency(r.base_salary)}</td>
+                      <td className="px-5 py-3 text-right font-mono font-medium">{fmtCurrency(r.gross_salary)}</td>
+                      <td className="px-5 py-3 text-right font-mono text-orange-600">
+                        {inssAmount != null ? formatSignedAmount(-inssAmount) : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-right font-mono text-orange-600">
+                        {formatSignedAmount(-irtAmount)}
+                      </td>
+                      <td className="px-5 py-3 text-right font-mono text-destructive">
+                        {otherDeductions > 0 ? formatSignedAmount(-otherDeductions) : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-right font-mono font-semibold text-emerald-700">{fmtCurrency(r.net_salary)}</td>
+                      <td className="px-5 py-3 text-right font-mono text-blue-700">
+                        {r.employer_cost != null ? fmtCurrency(r.employer_cost) : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {hasErrors && <AlertCircle className="h-3.5 w-3.5 text-destructive" />}
+                          <Badge variant="outline" className="capitalize text-xs">
+                            {t(`payroll.recordStatuses.${r.status}`, { defaultValue: r.status })}
+                          </Badge>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        {canDownloadPayslip && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title={t('payroll.detail.downloadPayslip')}
+                            onClick={() => onDownloadPayslip(r.id, `recibo-${r.employee?.employee_code ?? r.id}.pdf`)}
+                          >
+                            <FileDown className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-muted/15">
+                        <td colSpan={10} className="p-4 sm:p-5">
+                          <div className="space-y-4">
+                            {/* Accordion Header & Quick Actions */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                                <span>
+                                  <strong className="text-foreground">{t('payroll.detail.workDays')}:</strong>{' '}
+                                  <span className="font-mono">{r.work_days ?? 0}</span>
+                                </span>
+                                <span>
+                                  <strong className="text-foreground">{t('payroll.detail.absentDays')}:</strong>{' '}
+                                  <span className="font-mono">{r.absent_days ?? 0}</span>
+                                </span>
+                                <span>
+                                  <strong className="text-foreground">{t('payroll.detail.overtimeHours')}:</strong>{' '}
+                                  <span className="font-mono">{r.overtime_hours ?? 0}h</span>
+                                </span>
+                                <span>
+                                  <strong className="text-foreground">{t('payroll.detail.lateMinutes')}:</strong>{' '}
+                                  <span className="font-mono">{lateMinutes}</span>
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link to={`/employees/${r.employee_id}`}>
+                                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                                    {t('payroll.detail.viewEmployee')}
+                                  </Link>
+                                </Button>
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link to={`/employees/${r.employee_id}?tab=payroll`}>
+                                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                                    {t('payroll.detail.manageRemuneration')}
+                                  </Link>
+                                </Button>
+                                {canDownloadPayslip && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => onDownloadPayslip(r.id, `recibo-${r.employee?.employee_code ?? r.id}.pdf`)}
+                                  >
+                                    <FileDown className="mr-1.5 h-3.5 w-3.5" />
+                                    {t('payroll.detail.downloadPayslip')}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+
+                            {r.is_outdated && r.outdated_reason && (
+                              <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-800 flex items-center gap-2">
+                                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                <span>{r.outdated_reason}</span>
+                              </div>
+                            )}
+
+                            {(() => {
+                              if (!isDirty) return null
+                              let estGross = r.gross_salary ?? 0
+                              let estDedAndTax = (r.total_deductions ?? 0) + (r.total_taxes ?? 0)
+                              for (const item of r.items ?? []) {
+                                const overrideRaw = activeDraft.components[item.code]
+                                const nextAbs = overrideRaw != null && overrideRaw.trim() !== '' && Number.isFinite(Number(overrideRaw))
+                                  ? Math.max(0, Number(overrideRaw))
+                                  : resolveLiveItemMetrics(item, r, activeDraft).amount
+                                const oldAbs = Math.abs(Number(item.amount))
+                                if (item.category === 'deduction' || item.category === 'tax') {
+                                  estDedAndTax += nextAbs - oldAbs
+                                } else if (item.category === 'earning') {
+                                  estGross += nextAbs - oldAbs
+                                }
+                              }
+                              for (const [code, val] of Object.entries(activeDraft.components)) {
+                                if (r.items?.some((it) => it.code === code)) continue
+                                const parsed = Number(val)
+                                if (!Number.isFinite(parsed) || parsed < 0) continue
+                                estGross += parsed
+                              }
+                              for (const extra of activeDraft.extra_items) {
+                                const parsed = Number(extra.amount)
+                                if (!Number.isFinite(parsed) || parsed < 0) continue
+                                if (extra.type === 'deduction') estDedAndTax += parsed
+                                else estGross += parsed
+                              }
+                              if (estGross - estDedAndTax >= 0) return null
+                              return (
+                                <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-center gap-2">
+                                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                                  <span>
+                                    {t('payroll.detail.netNegativeRealtimeWarning', {
+                                      deductions: fmtCurrency(estDedAndTax),
+                                      gross: fmtCurrency(estGross),
+                                    })}
+                                  </span>
+                                </div>
+                              )
+                            })()}
+
+                            {hasErrors && (
+                              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1.5">
+                                <p className="text-xs font-semibold text-destructive flex items-center gap-1.5">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  {t('payroll.detail.validationAlerts')}
+                                </p>
+                                <ul className="space-y-1 text-xs text-muted-foreground">
+                                  {r.validation_errors?.map((err, idx) => (
+                                    <li key={idx} className="flex items-center gap-2">
+                                      <Badge variant={err.severity === 'error' || err.severity === 'blocking' ? 'destructive' : 'outline'} className="text-[10px] h-4 px-1">
+                                        {err.severity}
+                                      </Badge>
+                                      <span>{err.message}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {canEditRecords && (
+                              <Card className="border-primary/20 bg-primary/[0.02]">
+                                <CardHeader className="pb-2 pt-4 px-4">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                      <CardTitle className="text-sm font-semibold">{t('payroll.detail.editQuantitiesTitle')}</CardTitle>
+                                      <p className="text-xs text-muted-foreground mt-0.5">{t('payroll.detail.editQuantitiesHint')}</p>
+                                    </div>
+                                    {dirtyCount > 0 && (
+                                      <Button size="sm" onClick={handleRecalculateBatch} disabled={isRecalculating}>
+                                        {isRecalculating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Calculator className="mr-1.5 h-3.5 w-3.5" />}
+                                        {t('payroll.detail.recalculateBatch', { count: dirtyCount })}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </CardHeader>
+                                <CardContent className="px-4 pb-4">
+                                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">{t('payroll.detail.workDays')}</Label>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        max="31"
+                                        step="0.5"
+                                        className="h-8 font-mono text-xs"
+                                        value={activeDraft.work_days}
+                                        onChange={(e) => {
+                                          const raw = e.target.value
+                                          const expectedDays = r.details?.scheduled_work_days ?? ((r.work_days ?? 0) + (r.absent_days ?? 0))
+                                          const parsedWork = Number(raw)
+                                          updateDraft(r, (d) => {
+                                            const nextComponents = { ...d.components }
+                                            delete nextComponents.absence
+                                            delete nextComponents.meal_allowance
+                                            delete nextComponents.meal_subsidy
+                                            delete nextComponents.transport_allowance
+                                            return {
+                                              ...d,
+                                              work_days: raw,
+                                              absent_days: raw.trim() !== '' && Number.isFinite(parsedWork)
+                                                ? String(Math.max(0, expectedDays - Math.max(0, parsedWork)))
+                                                : d.absent_days,
+                                              components: nextComponents,
+                                            }
+                                          })
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">{t('payroll.detail.absentDays')}</Label>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        max="31"
+                                        step="0.5"
+                                        className="h-8 font-mono text-xs"
+                                        value={activeDraft.absent_days}
+                                        onChange={(e) => {
+                                          const raw = e.target.value
+                                          const expectedDays = r.details?.scheduled_work_days ?? ((r.work_days ?? 0) + (r.absent_days ?? 0))
+                                          const parsedAbsent = Number(raw)
+                                          updateDraft(r, (d) => {
+                                            const nextComponents = { ...d.components }
+                                            delete nextComponents.absence
+                                            delete nextComponents.meal_allowance
+                                            delete nextComponents.meal_subsidy
+                                            delete nextComponents.transport_allowance
+                                            return {
+                                              ...d,
+                                              absent_days: raw,
+                                              work_days: raw.trim() !== '' && Number.isFinite(parsedAbsent)
+                                                ? String(Math.max(0, expectedDays - Math.max(0, parsedAbsent)))
+                                                : d.work_days,
+                                              components: nextComponents,
+                                            }
+                                          })
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">{t('payroll.detail.overtimeHours')}</Label>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        max="500"
+                                        step="0.5"
+                                        className="h-8 font-mono text-xs"
+                                        value={activeDraft.overtime_hours}
+                                        onChange={(e) => updateDraft(r, (d) => {
+                                          const nextComponents = { ...d.components }
+                                          delete nextComponents.overtime
+                                          return { ...d, overtime_hours: e.target.value, components: nextComponents }
+                                        })}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">{t('payroll.detail.lateMinutes')}</Label>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        max="10000"
+                                        step="1"
+                                        className="h-8 font-mono text-xs"
+                                        value={activeDraft.late_minutes}
+                                        onChange={(e) => updateDraft(r, (d) => {
+                                          const nextComponents = { ...d.components }
+                                          delete nextComponents.lateness
+                                          return { ...d, late_minutes: e.target.value, components: nextComponents }
+                                        })}
+                                      />
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
+                            <EmployeeRecordDetail
+                              record={r}
+                              canEdit={canEditRecords}
+                              draft={activeDraft}
+                              onUpdateDraft={(updater) => updateDraft(r, updater)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -866,64 +1371,26 @@ function InssTotalCard({ label, value }: { label: string; value: number }) {
   )
 }
 
-// ─── Tab: Detalhe por Funcionário ────────────────────────────────────────────
+// ─── Detalhe por Funcionário (Accordion Content) ─────────────────────────────
 
-function EmployeeDetailTab({
-  records,
-  selectedEmployeeId,
-  onSelectEmployee,
+function EmployeeRecordDetail({
+  record,
+  canEdit,
+  draft,
+  onUpdateDraft,
 }: {
-  records: PayrollRecord[]
-  selectedEmployeeId: number | null
-  onSelectEmployee: (id: number) => void
+  record: PayrollRecord
+  canEdit: boolean
+  draft: RecordDraft
+  onUpdateDraft: (updater: (prev: RecordDraft) => RecordDraft) => void
 }) {
-  const { t } = useTranslation()
-  const record = records.find((r) => r.employee_id === selectedEmployeeId) ?? records[0] ?? null
-
-  if (records.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-16 text-center">
-          <Users className="mx-auto h-10 w-10 text-muted-foreground/40 mb-3" />
-          <p className="text-muted-foreground">{t('payroll.detail.noEmployeeRecord')}</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Employee selector */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm font-medium text-muted-foreground shrink-0">{t('payroll.detail.employeeSelector')}</span>
-            <div className="flex flex-wrap gap-2">
-              {records.map((r) => (
-                <button
-                  key={r.employee_id}
-                  onClick={() => onSelectEmployee(r.employee_id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    r.employee_id === (record?.employee_id)
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border hover:bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {r.employee?.full_name ?? `Funcionário #${r.employee_id}`}
-                </button>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {record && <EmployeeRecordDetail record={record} />}
-    </div>
-  )
-}
-
-function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
   const { t, i18n } = useTranslation()
+  const [selectedStdCode, setSelectedStdCode] = useState('')
+  const [selectedStdAmount, setSelectedStdAmount] = useState('')
+  const [extraName, setExtraName] = useState('')
+  const [extraType, setExtraType] = useState<'earning' | 'deduction'>('earning')
+  const [extraAmount, setExtraAmount] = useState('')
+
   const inssComponent = getPayrollComponent(record, 'inss')
   const employerInssComponent = getPayrollComponent(record, 'employer_inss')
   const inssEmployee = inssComponent?.amount ?? null
@@ -1007,6 +1474,9 @@ function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
                   {record.items!.map((item) => {
                     const catCfg = categoryConfig[item.category] ?? { label: item.category, color: '' }
                     const isNeg = item.category === 'deduction' || item.category === 'tax'
+                    const isEditableItem = canEdit && !NON_EDITABLE_CODES.has(item.code) && !item.code.startsWith('manual_')
+                    const overriddenValue = draft.components[item.code]
+                    const liveMetrics = resolveLiveItemMetrics(item, record, draft)
                     return (
                       <tr key={item.id} className="hover:bg-muted/30">
                         <td className="px-5 py-3 font-medium">{item.name}</td>
@@ -1017,19 +1487,237 @@ function EmployeeRecordDetail({ record }: { record: PayrollRecord }) {
                           {item.base_amount != null ? fmtCurrency(item.base_amount) : '—'}
                         </td>
                         <td className="px-5 py-3 text-right font-mono text-muted-foreground">
-                          {item.quantity != null ? item.quantity : '—'}
+                          {liveMetrics.quantity != null ? liveMetrics.quantity : '—'}
                         </td>
                         <td className="px-5 py-3 text-right font-mono text-muted-foreground">
                           {item.rate != null ? `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 }).format(Number(item.rate))}%` : '—'}
                         </td>
                         <td className={`px-5 py-3 text-right font-mono font-semibold ${isNeg ? 'text-destructive' : catCfg.color}`}>
-                          {isNeg ? '-' : ''}{fmtCurrency(Math.abs(item.amount))}
+                          {isEditableItem ? (
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className="ml-auto h-8 w-32 text-right font-mono text-xs"
+                              value={overriddenValue ?? String(liveMetrics.amount)}
+                              onChange={(e) => onUpdateDraft((d) => ({
+                                ...d,
+                                components: { ...d.components, [item.code]: e.target.value },
+                              }))}
+                            />
+                          ) : (
+                            <>{isNeg ? '-' : ''}{fmtCurrency(liveMetrics.amount)}</>
+                          )}
                         </td>
                       </tr>
                     )
                   })}
+                  {canEdit && Object.entries(draft.components)
+                    .filter(([code]) => !record.items?.some((item) => item.code === code))
+                    .map(([code, value]) => {
+                      const std = STANDARD_COMPONENTS.find((c) => c.code === code)
+                      return (
+                        <tr key={`pending-${code}`} className="bg-amber-500/5">
+                          <td className="px-5 py-3 font-medium">{std?.label ?? code}</td>
+                          <td className="px-5 py-3">
+                            <Badge variant="outline" className="text-[10px]">{t('payroll.detail.pendingRecalculation')}</Badge>
+                          </td>
+                          <td className="px-5 py-3 text-right text-muted-foreground">—</td>
+                          <td className="px-5 py-3 text-right text-muted-foreground">—</td>
+                          <td className="px-5 py-3 text-right text-muted-foreground">—</td>
+                          <td className="px-5 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="h-8 w-32 text-right font-mono text-xs"
+                                value={value}
+                                onChange={(e) => onUpdateDraft((d) => ({
+                                  ...d,
+                                  components: { ...d.components, [code]: e.target.value },
+                                }))}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => onUpdateDraft((d) => {
+                                  const next = { ...d.components }
+                                  delete next[code]
+                                  return { ...d, components: next }
+                                })}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  {canEdit && draft.extra_items.map((extra, idx) => (
+                    <tr key={`extra-${idx}`} className="bg-amber-500/5">
+                      <td className="px-5 py-3 font-medium">{extra.name}</td>
+                      <td className="px-5 py-3">
+                        <span className={`text-xs font-medium ${extra.type === 'deduction' ? 'text-destructive' : 'text-emerald-600'}`}>
+                          {extra.type === 'deduction' ? t('payroll.detail.deduction') : t('payroll.detail.earning')}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">—</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">—</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">—</td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="h-8 w-32 text-right font-mono text-xs"
+                            value={extra.amount}
+                            onChange={(e) => onUpdateDraft((d) => ({
+                              ...d,
+                              extra_items: d.extra_items.map((it, i) => (i === idx ? { ...it, amount: e.target.value } : it)),
+                            }))}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onUpdateDraft((d) => ({
+                              ...d,
+                              extra_items: d.extra_items.filter((_, i) => i !== idx),
+                            }))}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {canEdit && (
+            <div className="border-t border-border bg-muted/20 p-4 space-y-4">
+              {/* Bloco 1: Componente padrão */}
+              <div className="rounded-lg border border-border bg-card p-3.5 space-y-2.5">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">{t('payroll.detail.addStandardComponentTitle')}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('payroll.detail.addStandardComponentHint')}</p>
+                </div>
+                <div className="flex flex-wrap sm:flex-nowrap items-end gap-2">
+                  <div className="flex-1 min-w-[180px] space-y-1">
+                    <Label className="text-xs">{t('payroll.detail.selectAllowanceToAdd')}</Label>
+                    <Select value={selectedStdCode} onValueChange={setSelectedStdCode}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('payroll.detail.selectAllowanceToAdd')} /></SelectTrigger>
+                      <SelectContent>
+                        {STANDARD_COMPONENTS.filter((c) => !record.items?.some((item) => item.code === c.code)).map((c) => (
+                          <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-36 space-y-1">
+                    <Label className="text-xs">{t('payroll.detail.extraItemAmount')}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="h-8 font-mono text-xs"
+                      value={selectedStdAmount}
+                      onChange={(e) => setSelectedStdAmount(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 shrink-0"
+                    onClick={() => {
+                      const val = Number(selectedStdAmount)
+                      if (!selectedStdCode || selectedStdAmount.trim() === '' || !Number.isFinite(val) || val < 0) {
+                        toast.error(t('payroll.detail.standardComponentValidation'))
+                        return
+                      }
+                      onUpdateDraft((d) => ({
+                        ...d,
+                        components: { ...d.components, [selectedStdCode]: selectedStdAmount },
+                      }))
+                      setSelectedStdCode('')
+                      setSelectedStdAmount('')
+                    }}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    {t('settingsPage.add')}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Bloco 2: Item avulso personalizado */}
+              <div className="rounded-lg border border-border bg-card p-3.5 space-y-2.5">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">{t('payroll.detail.addCustomItemTitle')}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('payroll.detail.addCustomItemHint')}</p>
+                </div>
+                <div className="flex flex-wrap sm:flex-nowrap items-end gap-2">
+                  <div className="flex-1 min-w-[180px] space-y-1">
+                    <Label className="text-xs">{t('payroll.detail.extraItemName')}</Label>
+                    <Input
+                      className="h-8 text-xs"
+                      value={extraName}
+                      onChange={(e) => setExtraName(e.target.value)}
+                      placeholder={t('payroll.detail.extraItemName')}
+                    />
+                  </div>
+                  <div className="w-36 space-y-1">
+                    <Label className="text-xs">{t('payroll.detail.extraItemType')}</Label>
+                    <Select value={extraType} onValueChange={(v) => setExtraType(v as 'earning' | 'deduction')}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="earning">{t('payroll.detail.earning')}</SelectItem>
+                        <SelectItem value="deduction">{t('payroll.detail.deduction')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-36 space-y-1">
+                    <Label className="text-xs">{t('payroll.detail.extraItemAmount')}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="h-8 font-mono text-xs"
+                      value={extraAmount}
+                      onChange={(e) => setExtraAmount(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 shrink-0"
+                    onClick={() => {
+                      const val = Number(extraAmount)
+                      if (!extraName.trim() || extraAmount.trim() === '' || !Number.isFinite(val) || val <= 0) {
+                        toast.error(t('payroll.detail.customItemValidation'))
+                        return
+                      }
+                      onUpdateDraft((d) => ({
+                        ...d,
+                        extra_items: [...d.extra_items, { name: extraName.trim(), type: extraType, amount: extraAmount }],
+                      }))
+                      setExtraName('')
+                      setExtraAmount('')
+                    }}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    {t('settingsPage.add')}
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

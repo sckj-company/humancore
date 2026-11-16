@@ -157,7 +157,14 @@ class DashboardController extends BaseController
             ->orderByDesc('period_end')
             ->first();
 
+        $tenant = $this->tenantManager->get();
+
         return $this->success([
+            'tenant' => $tenant ? [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'currency' => $tenant->currency ?? 'AOA',
+            ] : null,
             'kpis' => [
                 'total_employees' => $totalEmployees,
                 'total_active' => $totalActive,

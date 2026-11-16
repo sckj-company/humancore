@@ -126,14 +126,15 @@ class AttendanceController extends BaseController
         $lateMinutes = 0;
         $overtimeMinutes = 0;
 
+        $timezone = $this->tenantTimezone();
         $inDateTime = null;
         $outDateTime = null;
         if (! empty($validated['clock_in'])) {
-            $inDateTime = Carbon::parse($validated['date'] . ' ' . $validated['clock_in']);
+            $inDateTime = Carbon::parse($validated['date'].' '.$validated['clock_in'], $timezone);
             $lateMinutes = $this->lateMinutes($validated['date'], $inDateTime, $employee, $schedule?->shift);
         }
         if (! empty($validated['clock_out'])) {
-            $outDateTime = Carbon::parse($validated['date'] . ' ' . $validated['clock_out']);
+            $outDateTime = $this->parseClockOut($validated['date'], $validated['clock_out'], $inDateTime, $schedule?->shift, $timezone);
             $overtimeMinutes = $this->overtimeMinutes($validated['date'], $outDateTime, $employee, $schedule?->shift);
         }
         if ($inDateTime && $outDateTime) {
@@ -235,14 +236,15 @@ class AttendanceController extends BaseController
                 ]);
             }
 
+            $timezone = $this->tenantTimezone();
             $clockIn = array_key_exists('clock_in', $validated)
                 ? $validated['clock_in']
                 : $record->clock_in?->format('H:i');
             $clockOut = array_key_exists('clock_out', $validated)
                 ? $validated['clock_out']
                 : $record->clock_out?->format('H:i');
-            $inDateTime = $clockIn ? Carbon::parse($date.' '.$clockIn) : null;
-            $outDateTime = $clockOut ? Carbon::parse($date.' '.$clockOut) : null;
+            $inDateTime = $clockIn ? Carbon::parse($date.' '.$clockIn, $timezone) : null;
+            $outDateTime = $clockOut ? $this->parseClockOut($date, $clockOut, $inDateTime, $schedule?->shift, $timezone) : null;
 
             $validated['date'] = $date;
             $validated['shift_id'] = $shiftId;
@@ -274,7 +276,7 @@ class AttendanceController extends BaseController
             return 0;
         }
 
-        $timezone = tenant()->timezone ?? 'Africa/Luanda';
+        $timezone = $this->tenantTimezone();
         $expected = Carbon::parse($date.' '.$time, $timezone);
         $actual = Carbon::parse($clockIn)->setTimezone($timezone);
 
@@ -293,9 +295,9 @@ class AttendanceController extends BaseController
             return 0;
         }
 
-        $timezone = tenant()->timezone ?? 'Africa/Luanda';
+        $timezone = $this->tenantTimezone();
         $expected = Carbon::parse($date.' '.$endTime, $timezone);
-        if ($shift?->is_night_shift || ($shift?->start_time && $endTime <= $shift->start_time)) {
+        if ($this->isNightShift($date, $endTime, $shift, $timezone)) {
             $expected->addDay();
         }
 
@@ -326,16 +328,52 @@ class AttendanceController extends BaseController
         return Setting::where('tenant_id', tenant_id())
             ->where('group', $group)
             ->where('key', $k)
-            ->value('value');
+            ->first()?->value;
+    }
+
+    private function tenantTimezone(): string
+    {
+        return tenant()?->timezone ?? config('app.timezone', 'Africa/Luanda');
+    }
+
+    private function isNightShift(string $date, string $endTime, ?Shift $shift, string $timezone): bool
+    {
+        if ($shift?->is_night_shift) {
+            return true;
+        }
+
+        if (! $shift?->start_time) {
+            return false;
+        }
+
+        return Carbon::parse($date.' '.$endTime, $timezone)
+            ->lessThanOrEqualTo(Carbon::parse($date.' '.$shift->start_time, $timezone));
+    }
+
+    private function parseClockOut(string $date, string $clockOut, ?Carbon $inDateTime, ?Shift $shift, string $timezone): Carbon
+    {
+        $outDateTime = Carbon::parse($date.' '.$clockOut, $timezone);
+
+        if ($inDateTime && $outDateTime->lessThanOrEqualTo($inDateTime)) {
+            $outDateTime->addDay();
+        } elseif (! $inDateTime && $shift?->end_time && $this->isNightShift($date, $shift->end_time, $shift, $timezone)) {
+            $startRef = $shift->start_time ? Carbon::parse($date.' '.$shift->start_time, $timezone) : null;
+            if ($startRef && $outDateTime->lessThanOrEqualTo($startRef)) {
+                $outDateTime->addDay();
+            }
+        }
+
+        return $outDateTime;
     }
 
     private function workedMinutes(Carbon $clockIn, Carbon $clockOut, ?Shift $shift): int
     {
-        if ($clockOut->lessThanOrEqualTo($clockIn) && ($shift?->is_night_shift || ($shift?->start_time && $shift->end_time <= $shift->start_time))) {
-            $clockOut->addDay();
+        $end = $clockOut->copy();
+        if ($end->lessThanOrEqualTo($clockIn) && ($shift?->is_night_shift || ($shift?->start_time && $shift->end_time <= $shift->start_time))) {
+            $end->addDay();
         }
 
-        return max(0, (int) $clockIn->diffInMinutes($clockOut));
+        return max(0, (int) $clockIn->diffInMinutes($end));
     }
 
     private function recordForShift(int $employeeId, string $date, ?int $shiftId)
