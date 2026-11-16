@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
@@ -6,7 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Briefcase, Trash2, Eye,
   Download, Plus, Upload, ExternalLink, FileCheck, AlertCircle, Building2, User,
   CreditCard, Clock, CheckCircle2, DollarSign, Loader2, Sun, Moon, UserCheck,
-  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil,
+  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil, UploadCloud, X,
 } from 'lucide-react'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { formatMinutesToHours } from '@/lib/format'
@@ -107,6 +107,34 @@ export function EmployeeDetailPage() {
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [uploadFormData, setUploadFormData] = useState({ name: '', document_type: 'other', expiry_date: '', notes: '' })
   const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [isDraggingDoc, setIsDraggingDoc] = useState(false)
+  const docFileInputRef = useRef<HTMLInputElement>(null)
+  const uploadFilePreviewUrl = useMemo(() => {
+    if (!uploadFile || !uploadFile.type.startsWith('image/')) return null
+    return URL.createObjectURL(uploadFile)
+  }, [uploadFile])
+
+  useEffect(() => {
+    return () => {
+      if (uploadFilePreviewUrl) URL.revokeObjectURL(uploadFilePreviewUrl)
+    }
+  }, [uploadFilePreviewUrl])
+
+  const selectDocumentFile = (file: File | null) => {
+    setUploadFile(file)
+    if (file && !uploadFormData.name.trim()) {
+      setUploadFormData((p) => ({ ...p, name: file.name.replace(/\.[^/.]+$/, '') }))
+    }
+    if (!file && docFileInputRef.current) {
+      docFileInputRef.current.value = ''
+    }
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  }
   const [isManualAttOpen, setIsManualAttOpen] = useState(false)
   const [manualAttRecordId, setManualAttRecordId] = useState<number | null>(null)
   const [manualAttForm, setManualAttForm] = useState({ date: new Date().toISOString().slice(0, 10), shift_id: '', clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' })
@@ -1123,16 +1151,220 @@ export function EmployeeDetailPage() {
       />
 
       {/* Upload Documento */}
-      <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary" />{t('employeeDetail.text.addDocument')}</DialogTitle><DialogDescription>{t('employeeDetail.text.uploadDocumentDescription', { name: data.full_name })}</DialogDescription></DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); uploadMutation.mutate() }} className="space-y-4 py-2">
-            <div><Label className="text-xs font-semibold">{t('employeeDetail.text.file')} <span className="text-destructive">*</span></Label><Input type="file" required accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" className="mt-1.5" onChange={(e) => { const f = e.target.files?.[0] || null; setUploadFile(f); if (f && !uploadFormData.name) setUploadFormData((p) => ({ ...p, name: f.name.replace(/\.[^/.]+$/, '') })) }} /></div>
-            <div><Label className="text-xs font-semibold">{t('employeeDetail.text.name')} <span className="text-destructive">*</span></Label><Input required value={uploadFormData.name} onChange={(e) => setUploadFormData((p) => ({ ...p, name: e.target.value }))} placeholder={t('employeeDetail.text.documentName')} className="mt-1.5" /></div>
-            <div><Label className="text-xs font-semibold">{t('employeeDetail.text.type')} <span className="text-destructive">*</span></Label><Select value={uploadFormData.document_type} onValueChange={(v) => setUploadFormData((p) => ({ ...p, document_type: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(docTypeLabels).map(([k, l]) => (<SelectItem key={k} value={k}>{l}</SelectItem>))}</SelectContent></Select></div>
-            <div><Label className="text-xs font-semibold">{t('employeeDetail.text.expiryOptional')}</Label><Input type="date" value={uploadFormData.expiry_date} onChange={(e) => setUploadFormData((p) => ({ ...p, expiry_date: e.target.value }))} className="mt-1.5" /></div>
-            <div><Label className="text-xs font-semibold">{t('employeeDetail.text.notesOptional')}</Label><Input value={uploadFormData.notes} onChange={(e) => setUploadFormData((p) => ({ ...p, notes: e.target.value }))} placeholder={t('employeeDetail.text.notesPlaceholder')} className="mt-1.5" /></div>
-            <DialogFooter className="flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center"><Button type="button" variant="outline" size="sm" onClick={() => setIsUploadOpen(false)} disabled={uploadMutation.isPending}>{t('employeeDetail.text.cancel')}</Button><Button type="submit" size="sm" disabled={uploadMutation.isPending || !uploadFile}>{uploadMutation.isPending ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />{t('employeeDetail.text.uploading')}</> : <><Upload className="mr-1.5 h-4 w-4" />{t('employeeDetail.text.save')}</>}</Button></DialogFooter>
+      <Dialog
+        open={isUploadOpen}
+        onOpenChange={(open) => {
+          setIsUploadOpen(open)
+          if (!open) {
+            setUploadFile(null)
+            setUploadFormData({ name: '', document_type: 'other', expiry_date: '', notes: '' })
+            setIsDraggingDoc(false)
+            if (docFileInputRef.current) docFileInputRef.current.value = ''
+          }
+        }}
+      >
+        <DialogContent className="flex max-h-[90vh] w-[95vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+          <div className="shrink-0 border-b border-border bg-muted/20 px-6 pt-6 pb-4">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2.5 text-lg">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Upload className="h-4 w-4" />
+                </span>
+                {t('employeeDetail.text.addDocument')}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                {t('employeeDetail.text.uploadDocumentDescription', { name: data.full_name })}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              uploadMutation.mutate()
+            }}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+              <div>
+                <Label className="text-xs font-semibold">
+                  {t('employeeDetail.text.file')} <span className="text-destructive">*</span>
+                </Label>
+                <input
+                  ref={docFileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                  className="hidden"
+                  onChange={(e) => selectDocumentFile(e.target.files?.[0] || null)}
+                />
+
+                {!uploadFile ? (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => docFileInputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        docFileInputRef.current?.click()
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setIsDraggingDoc(true)
+                    }}
+                    onDragLeave={() => setIsDraggingDoc(false)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setIsDraggingDoc(false)
+                      const dropped = e.dataTransfer.files?.[0] ?? null
+                      if (dropped) selectDocumentFile(dropped)
+                    }}
+                    className={`mt-2 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-7 text-center transition-colors ${
+                      isDraggingDoc
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border bg-muted/20 hover:border-primary/50 hover:bg-muted/40'
+                    }`}
+                  >
+                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <UploadCloud className="h-6 w-6" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      {t('employeeDetail.text.dropDocumentHere')}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('employeeDetail.text.acceptedDocumentFormats')}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 p-3.5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {uploadFilePreviewUrl ? (
+                        <img
+                          src={uploadFilePreviewUrl}
+                          alt={uploadFile.name}
+                          className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <FileText className="h-6 w-6" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">{uploadFile.name}</p>
+                        <p className="text-xs text-muted-foreground">{formatFileSize(uploadFile.size)}</p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => docFileInputRef.current?.click()}
+                      >
+                        {t('employeeDetail.text.changeFile')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('employeeDetail.text.removeFile')}
+                        onClick={() => selectDocumentFile(null)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs font-semibold">
+                    {t('employeeDetail.text.name')} <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    required
+                    value={uploadFormData.name}
+                    onChange={(e) => setUploadFormData((p) => ({ ...p, name: e.target.value }))}
+                    placeholder={t('employeeDetail.text.documentName')}
+                    className="mt-1.5"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold">
+                    {t('employeeDetail.text.type')} <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={uploadFormData.document_type}
+                    onValueChange={(v) => setUploadFormData((p) => ({ ...p, document_type: v }))}
+                  >
+                    <SelectTrigger className="mt-1.5 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(docTypeLabels).map(([k, l]) => (
+                        <SelectItem key={k} value={k}>
+                          {l}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold">{t('employeeDetail.text.expiryOptional')}</Label>
+                  <Input
+                    type="date"
+                    value={uploadFormData.expiry_date}
+                    onChange={(e) => setUploadFormData((p) => ({ ...p, expiry_date: e.target.value }))}
+                    className="mt-1.5"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <Label className="text-xs font-semibold">{t('employeeDetail.text.notesOptional')}</Label>
+                  <Textarea
+                    rows={2}
+                    value={uploadFormData.notes}
+                    onChange={(e) => setUploadFormData((p) => ({ ...p, notes: e.target.value }))}
+                    placeholder={t('employeeDetail.text.notesPlaceholder')}
+                    className="mt-1.5 resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/20 px-6 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsUploadOpen(false)}
+                disabled={uploadMutation.isPending}
+              >
+                {t('employeeDetail.text.cancel')}
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={uploadMutation.isPending || !uploadFile || !uploadFormData.name.trim()}
+              >
+                {uploadMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    {t('employeeDetail.text.uploading')}
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-1.5 h-4 w-4" />
+                    {t('employeeDetail.text.save')}
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>

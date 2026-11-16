@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Search, Eye, Filter, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
@@ -39,6 +39,7 @@ function getDisplayStatus(e: EmployeeSummary): string {
 
 export function EmployeesPage() {
   const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const tenantKey = localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id ?? '')
   const { search, status, page, setSearch, setStatus, setPage, syncTenant, resetFilters } = useEmployeesFilterStore()
@@ -153,7 +154,11 @@ export function EmployeesPage() {
                     const displayStatus = getDisplayStatus(e)
 
                     return (
-                    <tr key={e.id} className="transition-colors hover:bg-muted/30">
+                    <tr
+                      key={e.id}
+                      onClick={() => navigate(`/employees/${e.id}`)}
+                      className="cursor-pointer transition-colors hover:bg-muted/40"
+                    >
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
@@ -163,7 +168,13 @@ export function EmployeesPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{e.full_name}</p>
+                            <Link
+                              to={`/employees/${e.id}`}
+                              onClick={(ev) => ev.stopPropagation()}
+                              className="font-medium hover:text-primary hover:underline"
+                            >
+                              {e.full_name}
+                            </Link>
                             <p className="text-xs text-muted-foreground">{e.employee_code}</p>
                           </div>
                         </div>
@@ -183,7 +194,7 @@ export function EmployeesPage() {
                           ? new Intl.NumberFormat(i18n.language).format(e.active_contract.base_salary)
                           : '—'}
                       </td>
-                      <td className="px-6 py-3 text-right">
+                      <td className="px-6 py-3 text-right" onClick={(ev) => ev.stopPropagation()}>
                         <Button variant="ghost" size="icon-sm" asChild>
                           <Link to={`/employees/${e.id}`} aria-label={t('employeesPage.viewEmployee', { name: e.full_name })}>
                             <Eye className="h-4 w-4" />
