@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useTheme } from '@/hooks/use-theme'
+import { cn } from '@/lib/utils'
 import type { EChartsOption } from 'echarts'
 
 interface ChartProps {
@@ -36,7 +37,7 @@ export function Chart({ option, height = 320, className, loading, empty }: Chart
   }
 
   return (
-    <div className={className}>
+    <div className={cn('w-full overflow-hidden', className)}>
       <ReactECharts
         ref={ref}
         option={option}

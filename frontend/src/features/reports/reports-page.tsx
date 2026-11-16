@@ -5,6 +5,7 @@ import { Download, Calendar, Users, UserMinus, TrendingUp, Wallet, Clock, AlertT
 import { toast } from 'sonner'
 import type { EChartsOption } from 'echarts'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { formatMinutesToHours } from '@/lib/format'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -436,8 +437,8 @@ function AttendanceTab({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard icon={Clock} label={t('reports.attendance.records')} value={data.summary.records} />
         <SummaryCard icon={Clock} label={t('reports.attendance.totalHours')} value={data.summary.total_hours} accent="primary" />
-        <SummaryCard icon={AlertTriangle} label={t('reports.attendance.lateMinutes')} value={data.summary.late_minutes} accent="warning" />
-        <SummaryCard icon={Clock} label={t('reports.attendance.overtimeMinutes')} value={data.summary.overtime_minutes} accent="info" />
+        <SummaryCard icon={AlertTriangle} label={t('reports.attendance.lateMinutes')} value={formatMinutesToHours(data.summary.late_minutes)} accent="warning" />
+        <SummaryCard icon={Clock} label={t('reports.attendance.overtimeMinutes')} value={formatMinutesToHours(data.summary.overtime_minutes)} accent="info" />
         <SummaryCard icon={Calendar} label={t('reports.attendance.leavesApproved')} value={data.summary.leaves_approved} accent="success" />
         <SummaryCard icon={Calendar} label={t('reports.attendance.leavesPending')} value={data.summary.leaves_pending} accent="warning" />
       </div>
@@ -455,8 +456,8 @@ function AttendanceTab({
                 { key: 'department', label: t('reports.attendance.byDepartment') },
                 { key: 'records', label: t('reports.attendance.records'), align: 'right' },
                 { key: 'total_hours', label: t('reports.attendance.totalHours'), align: 'right' },
-                { key: 'late_minutes', label: t('reports.attendance.lateMinutes'), align: 'right' },
-                { key: 'overtime_minutes', label: t('reports.attendance.overtimeMinutes'), align: 'right' },
+                { key: 'late_minutes', label: t('reports.attendance.lateMinutes'), align: 'right', render: (row) => formatMinutesToHours(Number(row.late_minutes ?? 0)) },
+                { key: 'overtime_minutes', label: t('reports.attendance.overtimeMinutes'), align: 'right', render: (row) => formatMinutesToHours(Number(row.overtime_minutes ?? 0)) },
               ]}
               rows={data.by_department.map((r) => ({ ...r }))}
               locale={locale}

@@ -79,3 +79,19 @@ export function formatDateStr(
     return d.toLocaleDateString()
   }
 }
+
+export function formatMinutesToHours(minutes?: number | null): string {
+  const total = Math.max(0, Math.round(minutes ?? 0))
+  const hours = Math.floor(total / 60)
+  const remainingMinutes = total % 60
+
+  if (hours === 0) {
+    return `${total} min`
+  }
+
+  if (remainingMinutes === 0) {
+    return `${hours}h`
+  }
+
+  return `${hours}h ${remainingMinutes} min`
+}

@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Eye, Filter } from 'lucide-react'
+import { Plus, Search, Eye, Filter, X } from 'lucide-react'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth-store'
+import { useEmployeesFilterStore } from '@/stores/employees-filter-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,16 +39,24 @@ function getDisplayStatus(e: EmployeeSummary): string {
 
 export function EmployeesPage() {
   const { t, i18n } = useTranslation()
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<string>('all')
-  const [page, setPage] = useState(1)
+  const user = useAuthStore((s) => s.user)
+  const tenantKey = localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id ?? '')
+  const { search, status, page, setSearch, setStatus, setPage, syncTenant, resetFilters } = useEmployeesFilterStore()
+
+  useEffect(() => {
+    if (tenantKey) {
+      syncTenant(tenantKey)
+    }
+  }, [tenantKey, syncTenant])
+
+  const hasActiveFilters = search.trim() !== '' || status !== 'all'
 
   const params: Record<string, string | number> = { page, per_page: 12 }
   if (search) params.search = search
   if (status && status !== 'all') params.status = status
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['employees', params],
+    queryKey: ['employees', tenantKey, params],
     queryFn: () => api.get<Paginated<EmployeeSummary>>('employees', params),
   })
 
@@ -74,13 +84,13 @@ export function EmployeesPage() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('common.search')}
                 className="pl-9"
               />
             </div>
             <div className="w-full sm:w-48">
-              <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1) }}>
+              <Select value={status} onValueChange={setStatus}>
                 <SelectTrigger>
                   <Filter className="mr-2 h-4 w-4" />
                   <SelectValue placeholder={t('common.status')} />
@@ -94,6 +104,12 @@ export function EmployeesPage() {
                 </SelectContent>
               </Select>
             </div>
+            {hasActiveFilters && (
+              <Button variant="outline" onClick={resetFilters} className="shrink-0">
+                <X className="mr-1.5 h-4 w-4" />
+                {t('employeesPage.clearFilters', { defaultValue: 'Limpar filtros' })}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

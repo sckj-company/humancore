@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { formatMinutesToHours } from '@/lib/format'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -1102,11 +1103,11 @@ function SummaryTab({
                                 </span>
                                 <span>
                                   <strong className="text-foreground">{t('payroll.detail.overtimeHours')}:</strong>{' '}
-                                  <span className="font-mono">{r.overtime_hours ?? 0}h</span>
+                                  <span className="font-mono">{formatMinutesToHours(Math.round((r.overtime_hours ?? 0) * 60))}</span>
                                 </span>
                                 <span>
                                   <strong className="text-foreground">{t('payroll.detail.lateMinutes')}:</strong>{' '}
-                                  <span className="font-mono">{lateMinutes}</span>
+                                  <span className="font-mono">{formatMinutesToHours(lateMinutes)}</span>
                                 </span>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">

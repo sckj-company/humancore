@@ -226,7 +226,18 @@
       "upcoming_birthdays": "Próximos Aniversários",
       "expiring_contracts": "Contratos a Expirar",
       "pending_leaves": "Férias Pendentes",
-      "recent_hires": "Admissões Recentes"
+      "recent_hires": "Admissões Recentes",
+      "by_status": "Distribuição por Estado",
+      "by_status_description": "Situação atual dos colaboradores",
+      "by_department_description": "Colaboradores alocados por área",
+      "headcount_trend_description": "Evolução nos últimos 12 meses",
+      "no_departments": "Sem departamentos registados",
+      "employees_label": "Funcionários",
+      "next_payroll": "Folha aberta",
+      "open_payroll": "Abrir folha",
+      "days_count": "{{count}} dias",
+      "days_remaining": "{{count}} dias restantes",
+      "load_error": "Não foi possível carregar o dashboard."
     }
   },
   "employeeDashboard": {
@@ -264,6 +275,7 @@
     "hireDate": "Admissão",
     "salary": "Salário",
     "viewEmployee": "Ver perfil de {{name}}",
+    "clearFilters": "Limpar filtros",
     "pagination": "Página {{current}} de {{pages}} · {{total}} no total"
   },
   "employeeDetail":   {
@@ -379,6 +391,7 @@
     "text": {
       "absences": "Faltas",
       "absent": "Falta",
+      "accumulatedDuration": "{{duration}} acumulados",
       "accumulatedMinutes": "{{count}} min acumulados",
       "accumulatedMinutesWithHours": "{{duration}} ({{count}} min acumulados)",
       "activeEmploymentContract": "Contrato de Trabalho Ativo",
@@ -507,7 +520,7 @@
       "late": "Atrasado",
       "lateArrivals": "Atrasos",
       "overtime": "Horas extras",
-      "dailyLateMinutes": "Atraso do dia (min)",
+      "dailyLateMinutes": "Atraso do dia",
       "weeklyLateSummary": "Total semanal de atrasos (semana de {{date}})",
       "leaveRegister": "Registo de Ausências, Folgas & Férias",
       "leaveTypeLgt": "Tipo de Ausência (LGT)",
@@ -1457,6 +1470,12 @@
     "status": "Estado",
     "actions": "Ações",
     "editPermissions": "Editar permissões",
+    "copyPermissions": "Copiar permissões",
+    "copyPermissionsFor": "Copiar permissões de {{name}}",
+    "permissionsCopied": "Permissões de {{name}} copiadas ({{count}}).",
+    "copyFromUser": "Copiar permissões de utilizador...",
+    "pastePermissionsFrom": "Colar de {{name}}",
+    "permissionsAppliedFrom": "Permissões de {{name}} aplicadas.",
     "deleteUser": "Eliminar utilizador",
     "confirmDelete": "Tem a certeza de que pretende eliminar o utilizador {{name}}?",
     "fullAdmin": "Super-admin total",

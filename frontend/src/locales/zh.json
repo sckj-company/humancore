@@ -136,7 +136,18 @@
       "upcoming_birthdays": "即将到来的生日",
       "expiring_contracts": "即将到期的合同",
       "pending_leaves": "待处理的休假",
-      "recent_hires": "最近入职"
+      "recent_hires": "最近入职",
+      "by_status": "状态分布",
+      "by_status_description": "当前员工状态概览",
+      "by_department_description": "各部门人数分布",
+      "headcount_trend_description": "过去 12 个月变化趋势",
+      "no_departments": "暂无部门",
+      "employees_label": "员工",
+      "next_payroll": "开放工资周期",
+      "open_payroll": "打开工资单",
+      "days_count": "{{count}} 天",
+      "days_remaining": "剩余 {{count}} 天",
+      "load_error": "无法加载仪表板。"
     }
   },
   "employeeDashboard": {
@@ -174,6 +185,7 @@
     "hireDate": "入职日期",
     "salary": "薪资",
     "viewEmployee": "查看 {{name}} 的档案",
+    "clearFilters": "清除筛选",
     "pagination": "第 {{current}} / {{pages}} 页 · 共 {{total}} 条"
   },
   "employeeDetail":   {
@@ -286,6 +298,7 @@
     "text": {
       "absences": "缺勤",
       "absent": "缺勤",
+      "accumulatedDuration": "累计 {{duration}}",
       "accumulatedMinutes": "累计 {{count}} 分钟",
       "accumulatedMinutesWithHours": "{{duration}}（累计 {{count}} 分钟）",
       "activeEmploymentContract": "有效劳动合同",
@@ -398,7 +411,7 @@
       "late": "迟到",
       "lateArrivals": "迟到次数",
       "overtime": "加班",
-      "dailyLateMinutes": "每日迟到（分钟）",
+      "dailyLateMinutes": "每日迟到",
       "weeklyLateSummary": "每周迟到合计（{{date}}所在周）",
       "advanceMonthlyLimit": "每月工资预支扣款上限：{{amount}}",
       "advanceMonthlyRemaining": "本月还可扣款：{{amount}}",
@@ -1250,6 +1263,12 @@
     "status": "状态",
     "actions": "操作",
     "editPermissions": "编辑权限",
+    "copyPermissions": "复制权限",
+    "copyPermissionsFor": "复制 {{name}} 的权限",
+    "permissionsCopied": "已复制 {{name}} 的权限（{{count}} 项）。",
+    "copyFromUser": "从用户复制权限...",
+    "pastePermissionsFrom": "粘贴来自 {{name}}",
+    "permissionsAppliedFrom": "已应用 {{name}} 的权限。",
     "deleteUser": "删除用户",
     "confirmDelete": "确定要删除用户 {{name}} 吗？",
     "fullAdmin": "完整超级管理员",

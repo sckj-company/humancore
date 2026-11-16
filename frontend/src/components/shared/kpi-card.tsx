@@ -40,10 +40,10 @@ export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'p
   return (
     <Card className={cn('overflow-hidden border-border/50', className)}>
       <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="text-2xl font-semibold tracking-tight">{formatted}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="truncate text-sm text-muted-foreground" title={label}>{label}</p>
+            <p className="text-2xl font-semibold tracking-tight tabular-nums">{formatted}</p>
             {trend && (
               <p className={cn('flex items-center gap-1 text-xs', trendColor)}>
                 <TrendIcon className="h-3 w-3" />
@@ -51,7 +51,7 @@ export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'p
               </p>
             )}
           </div>
-          <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', accentMap[accent])}>
+          <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', accentMap[accent])}>
             <Icon className="h-5 w-5" />
           </div>
         </div>

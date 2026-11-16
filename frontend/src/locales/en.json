@@ -136,7 +136,18 @@
       "upcoming_birthdays": "Upcoming Birthdays",
       "expiring_contracts": "Expiring Contracts",
       "pending_leaves": "Pending Leaves",
-      "recent_hires": "Recent Hires"
+      "recent_hires": "Recent Hires",
+      "by_status": "Status Distribution",
+      "by_status_description": "Current workforce breakdown",
+      "by_department_description": "Headcount per department",
+      "headcount_trend_description": "Last 12 months evolution",
+      "no_departments": "No departments registered",
+      "employees_label": "Employees",
+      "next_payroll": "Open payroll",
+      "open_payroll": "Open payroll",
+      "days_count": "{{count}} days",
+      "days_remaining": "{{count}} days left",
+      "load_error": "Could not load the dashboard."
     }
   },
   "employeeDashboard": {
@@ -174,6 +185,7 @@
     "hireDate": "Hire Date",
     "salary": "Salary",
     "viewEmployee": "View {{name}}’s profile",
+    "clearFilters": "Clear filters",
     "pagination": "Page {{current}} of {{pages}} · {{total}} total"
   },
   "employeeDetail":   {
@@ -289,6 +301,7 @@
     "text": {
       "absences": "Absences",
       "absent": "Absent",
+      "accumulatedDuration": "{{duration}} accumulated",
       "accumulatedMinutes": "{{count}} min accumulated",
       "accumulatedMinutesWithHours": "{{duration}} ({{count}} min accumulated)",
       "activeEmploymentContract": "Active Employment Contract",
@@ -417,7 +430,7 @@
       "late": "Late",
       "lateArrivals": "Late Arrivals",
       "overtime": "Overtime",
-      "dailyLateMinutes": "Daily lateness (min)",
+      "dailyLateMinutes": "Daily lateness",
       "weeklyLateSummary": "Weekly lateness total (week of {{date}})",
       "leaveRegister": "Absence, Days Off & Vacation Records",
       "leaveTypeLgt": "Absence Type (LGT)",
@@ -1333,6 +1346,12 @@
     "status": "Status",
     "actions": "Actions",
     "editPermissions": "Edit permissions",
+    "copyPermissions": "Copy permissions",
+    "copyPermissionsFor": "Copy permissions from {{name}}",
+    "permissionsCopied": "Permissions from {{name}} copied ({{count}}).",
+    "copyFromUser": "Copy permissions from user...",
+    "pastePermissionsFrom": "Paste from {{name}}",
+    "permissionsAppliedFrom": "Permissions from {{name}} applied.",
     "deleteUser": "Delete user",
     "confirmDelete": "Are you sure you want to delete user {{name}}?",
     "fullAdmin": "Full super admin",

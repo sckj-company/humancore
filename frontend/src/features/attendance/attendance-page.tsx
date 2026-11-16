@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Clock, LogIn, LogOut, Filter, Loader2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { formatMinutesToHours } from '@/lib/format'
 import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,7 @@ interface AttendanceDTO {
   total_worked: number | null
   status: string
   late_minutes: number
+  overtime_minutes?: number
   overtime_amount?: number | null
   notes: string | null
   deduct_from_salary?: boolean
@@ -193,8 +195,9 @@ function EmployeeAttendanceView() {
                     <th className="px-6 py-3 font-medium">Entrada</th>
                     <th className="px-6 py-3 font-medium">Saída</th>
                     <th className="px-6 py-3 font-medium text-right">Horas</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('employeeDetail.text.overtime')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('attendance.overtimeAmount')}</th>
-                    <th className="px-6 py-3 font-medium text-right">Atraso (min)</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('employeeDetail.text.lateArrivals')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.status')}</th>
                   </tr>
                 </thead>
@@ -208,10 +211,13 @@ function EmployeeAttendanceView() {
                       <td className="px-6 py-3 text-right font-mono">
                         {r.total_worked != null ? (r.total_worked / 60).toFixed(1) : '—'}
                       </td>
+                      <td className="px-6 py-3 text-right font-mono text-muted-foreground">
+                        {formatMinutesToHours(r.overtime_minutes)}
+                      </td>
                       <td className="px-6 py-3 text-right font-mono">
                         {r.overtime_amount != null ? r.overtime_amount.toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                       </td>
-                      <td className="px-6 py-3 text-right text-muted-foreground">{r.late_minutes || 0}</td>
+                      <td className="px-6 py-3 text-right font-mono text-muted-foreground">{formatMinutesToHours(r.late_minutes)}</td>
                       <td className="px-6 py-3 text-right">
                         <Badge className={statusStyle[r.status] ?? ''} variant="secondary">
                           {r.status}
@@ -321,6 +327,7 @@ function AdminAttendanceView() {
                     <th className="px-6 py-3 font-medium">Entrada</th>
                     <th className="px-6 py-3 font-medium">Saída</th>
                     <th className="px-6 py-3 font-medium text-right">Horas</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('employeeDetail.text.overtime')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('attendance.overtimeAmount')}</th>
                     <th className="px-6 py-3 font-medium text-right">Atraso</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.status')}</th>
@@ -343,10 +350,13 @@ function AdminAttendanceView() {
                       <td className="px-6 py-3 text-right font-mono">
                         {r.total_worked != null ? (r.total_worked / 60).toFixed(1) : '—'}
                       </td>
+                      <td className="px-6 py-3 text-right font-mono text-muted-foreground">
+                        {formatMinutesToHours(r.overtime_minutes)}
+                      </td>
                       <td className="px-6 py-3 text-right font-mono">
                         {r.overtime_amount != null ? r.overtime_amount.toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                       </td>
-                      <td className="px-6 py-3 text-right text-muted-foreground">{r.late_minutes || 0}</td>
+                      <td className="px-6 py-3 text-right font-mono text-muted-foreground">{formatMinutesToHours(r.late_minutes)}</td>
                       <td className="px-6 py-3 text-right">
                         <Badge className={statusStyle[r.status] ?? ''} variant="secondary">
                           {r.status}

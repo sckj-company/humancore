@@ -9,6 +9,7 @@ import {
   Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil,
 } from 'lucide-react'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { formatMinutesToHours } from '@/lib/format'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -473,15 +474,17 @@ export function EmployeeDetailPage() {
   const worked = attRecords.filter((r) => r.status === 'present' || r.status === 'late').length
   const lateCount = attRecords.filter((r) => r.status === 'late').length
   const totalLateMinutes = attRecords.reduce((acc, r) => acc + (r.late_minutes ?? 0), 0)
-  const lateDurationLabel = totalLateMinutes >= 60
-    ? t('employeeDetail.text.accumulatedMinutesWithHours', { duration: formatMinutes(totalLateMinutes), count: totalLateMinutes })
-    : t('employeeDetail.text.accumulatedMinutes', { count: totalLateMinutes })
+  const lateDurationLabel = t('employeeDetail.text.accumulatedDuration', {
+    duration: formatMinutesToHours(totalLateMinutes),
+    defaultValue: `${formatMinutesToHours(totalLateMinutes)} acumulados`,
+  })
   const overtimeCount = attRecords.filter((r) => (r.overtime_minutes ?? 0) > 0).length
   const totalOvertimeMinutes = attRecords.reduce((acc, r) => acc + (r.overtime_minutes ?? 0), 0)
   const totalOvertimeAmount = attRecords.reduce((acc, r) => acc + (r.overtime_amount ?? 0), 0)
-  const overtimeDurationLabel = totalOvertimeMinutes >= 60
-    ? t('employeeDetail.text.accumulatedMinutesWithHours', { duration: formatMinutes(totalOvertimeMinutes), count: totalOvertimeMinutes })
-    : t('employeeDetail.text.accumulatedMinutes', { count: totalOvertimeMinutes })
+  const overtimeDurationLabel = t('employeeDetail.text.accumulatedDuration', {
+    duration: formatMinutesToHours(totalOvertimeMinutes),
+    defaultValue: `${formatMinutesToHours(totalOvertimeMinutes)} acumulados`,
+  })
   const absent = attRecords.filter((r) => r.status === 'absent').length
   const totalMins = attRecords.reduce((acc, r) => acc + (r.total_worked ?? 0), 0)
   const vacationUsed = leaves.filter((leave) => leave.leave_type?.code === 'vacation' && leave.status === 'approved').reduce((acc, leave) => acc + (leave.total_days ?? 0), 0)
@@ -950,8 +953,8 @@ export function EmployeeDetailPage() {
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_in)}</td>
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_out)}</td>
                               <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatMinutes(rec.total_worked)}</td>
-                              <td className="px-4 py-3 text-right font-mono text-xs">{rec.late_minutes ?? 0} min</td>
-                              <td className="px-4 py-3 text-right font-mono text-xs">{rec.overtime_minutes ?? 0} min</td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">{formatMinutesToHours(rec.late_minutes)}</td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">{formatMinutesToHours(rec.overtime_minutes)}</td>
                               <td className="px-4 py-3"><Badge variant="outline" className={`text-[10px] font-medium ${attendanceStatusColors[rec.status] ?? ''}`}>{attendanceStatusLabels[rec.status] ?? rec.status}</Badge></td>
                               <td className="px-4 py-3 text-right">
                                 <Button size="icon-sm" variant="ghost" aria-label={t('common.edit')} onClick={() => {
@@ -974,8 +977,8 @@ export function EmployeeDetailPage() {
                           ))}
                           <tr className="bg-muted/40 font-semibold">
                             <td colSpan={5} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
-                            <td className="px-4 py-2 text-right font-mono text-xs">{week.lateMinutes} min</td>
-                            <td className="px-4 py-2 text-right font-mono text-xs">{week.overtimeMinutes} min</td>
+                            <td className="px-4 py-2 text-right font-mono text-xs">{formatMinutesToHours(week.lateMinutes)}</td>
+                            <td className="px-4 py-2 text-right font-mono text-xs">{formatMinutesToHours(week.overtimeMinutes)}</td>
                             <td colSpan={2} />
                           </tr>
                         </Fragment>

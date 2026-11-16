@@ -30,6 +30,8 @@ import {
   UserCog,
   AlertTriangle,
   ArrowUpRight,
+  Copy,
+  ClipboardPaste,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -257,6 +259,53 @@ function toggleTenantPermissionGroup(
   return [...permissions]
 }
 
+function CopyPermissionsControls({
+  users,
+  copied,
+  onSelectUser,
+  onPasteCopied,
+  selectPlaceholder,
+  pasteLabel,
+}: {
+  users: Array<{ id: number; name: string; permissions?: string[] }>
+  copied: { sourceUserId: number; sourceUserName: string; permissions: string[] } | null
+  onSelectUser: (userId: number) => void
+  onPasteCopied: () => void
+  selectPlaceholder: string
+  pasteLabel: string
+}) {
+  if (users.length === 0 && !copied) return null
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {users.length > 0 && (
+        <select
+          aria-label={selectPlaceholder}
+          className="h-8 max-w-full rounded-md border border-input bg-transparent px-2.5 text-xs"
+          value=""
+          onChange={(event) => {
+            const selectedId = Number(event.target.value)
+            if (selectedId) onSelectUser(selectedId)
+          }}
+        >
+          <option value="">{selectPlaceholder}</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name} ({(u.permissions ?? []).length})
+            </option>
+          ))}
+        </select>
+      )}
+      {copied && (
+        <Button type="button" size="sm" variant="secondary" className="h-8 text-xs" onClick={onPasteCopied}>
+          <ClipboardPaste className="mr-1.5 h-3.5 w-3.5" />
+          {pasteLabel}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function SuperAdminPage() {
@@ -313,6 +362,16 @@ export function SuperAdminPage() {
   const [platformUserForm, setPlatformUserForm] = useState<NewPlatformUser>(emptyPlatformUser)
   const [editingPlatformUser, setEditingPlatformUser] = useState<PlatformUser | null>(null)
   const [platformUserPermissions, setPlatformUserPermissions] = useState<string[]>([])
+  const [copiedTenantPermissions, setCopiedTenantPermissions] = useState<{
+    sourceUserId: number
+    sourceUserName: string
+    permissions: string[]
+  } | null>(null)
+  const [copiedPlatformPermissions, setCopiedPlatformPermissions] = useState<{
+    sourceUserId: number
+    sourceUserName: string
+    permissions: string[]
+  } | null>(null)
   const [passwordTarget, setPasswordTarget] = useState<PasswordTarget | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
@@ -572,6 +631,39 @@ export function SuperAdminPage() {
     setUserForm((prev) => ({ ...prev, role, permissions: defaults }))
   }
 
+  const normalizeTenantPermissions = (perms: string[]) => {
+    const allowed = new Set((tenantPermissionsQuery.data?.permissions ?? []).map((p) => p.name))
+    const filtered = allowed.size > 0 ? perms.filter((p) => allowed.has(p)) : [...perms]
+    return [...new Set(filtered)]
+  }
+
+  const normalizePlatformPermissions = (perms: string[]) => {
+    const allowed = new Set((platformUsersQuery.data?.permissions ?? []).map((p) => p.name))
+    const filtered = allowed.size > 0 ? perms.filter((p) => allowed.has(p)) : [...perms]
+    if (!filtered.includes('view_any_tenant')) filtered.push('view_any_tenant')
+    return [...new Set(filtered)]
+  }
+
+  const copyTenantUserPermissions = (u: TenantUser) => {
+    const permissions = normalizeTenantPermissions(u.permissions ?? [])
+    setCopiedTenantPermissions({
+      sourceUserId: u.id,
+      sourceUserName: u.name,
+      permissions,
+    })
+    toast.success(`Permissões de ${u.name} copiadas (${permissions.length}).`)
+  }
+
+  const copyPlatformUserPermissions = (u: PlatformUser) => {
+    const permissions = normalizePlatformPermissions(u.permissions ?? [])
+    setCopiedPlatformPermissions({
+      sourceUserId: u.id,
+      sourceUserName: u.name,
+      permissions,
+    })
+    toast.success(t('superAdminPage.permissionsCopied', { name: u.name, count: permissions.length }))
+  }
+
   const tenantPermissionGroups = (tenantPermissionsQuery.data?.permissions ?? []).reduce<Record<string, PlatformPermission[]>>(
     (groups, permission) => {
       const group = permission.group_name ?? 'outros'
@@ -723,7 +815,7 @@ export function SuperAdminPage() {
 
       {dashboardData && (
         <div className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
+          <Card className="flex flex-col lg:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Activity className="h-4 w-4 text-primary" />
@@ -731,12 +823,12 @@ export function SuperAdminPage() {
               </CardTitle>
               <CardDescription>Novas empresas registadas por mês</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Chart option={trendOption} className="h-[220px]" />
+            <CardContent className="flex-1 pt-2">
+              <Chart option={trendOption} height={220} />
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="flex flex-col">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Globe2 className="h-4 w-4 text-primary" />
@@ -744,8 +836,8 @@ export function SuperAdminPage() {
               </CardTitle>
               <CardDescription>Distribuição atual das empresas</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Chart option={statusOption} className="h-[155px]" />
+            <CardContent className="flex flex-1 flex-col justify-between gap-3 pt-2">
+              <Chart option={statusOption} height={175} />
               <div className="grid grid-cols-3 gap-2 border-t pt-3 text-center text-xs">
                 <div>
                   <p className="text-muted-foreground">Pequenas</p>
@@ -767,7 +859,7 @@ export function SuperAdminPage() {
 
       {/* ── Abas de Gestão ───────────────────────────────────────────── */}
       <Tabs defaultValue="tenants" className="space-y-4">
-        <TabsList>
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-fit">
           <TabsTrigger value="tenants" className="gap-2">
             <Building2 className="h-4 w-4" />
             Empresas registadas
@@ -782,13 +874,13 @@ export function SuperAdminPage() {
 
         <TabsContent value="tenants">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-base">Empresas registadas</CardTitle>
                 <CardDescription>Selecione uma empresa para abrir o painel operacional ou gerir os seus utilizadores e permissões</CardDescription>
               </div>
               {canCreateTenant && (
-                <Button size="sm" onClick={openCreate}>
+                <Button size="sm" className="shrink-0" onClick={openCreate}>
                   <Plus className="mr-1.5 h-4 w-4" />
                   Nova empresa
                 </Button>
@@ -944,17 +1036,38 @@ export function SuperAdminPage() {
         {canManagePlatformUsers && (
           <TabsContent value="platform-users">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle className="text-base">{t('superAdminPage.title')}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">{t('superAdminPage.description')}</p>
                 </div>
-                <Button size="sm" onClick={() => setPlatformUserDialogOpen(true)}>
+                <Button size="sm" className="shrink-0" onClick={() => setPlatformUserDialogOpen(true)}>
                   <UserPlus className="mr-1.5 h-4 w-4" />
                   {t('superAdminPage.createButton')}
                 </Button>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {copiedPlatformPermissions && (
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs">
+                    <span className="flex items-center gap-2">
+                      <ClipboardPaste className="h-3.5 w-3.5 text-primary" />
+                      <span>
+                        {t('superAdminPage.permissionsCopied', {
+                          name: copiedPlatformPermissions.sourceUserName,
+                          count: copiedPlatformPermissions.permissions.length,
+                        })}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t('common.cancel')}
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setCopiedPlatformPermissions(null)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
                 {platformUsersQuery.isLoading ? (
                   <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                 ) : platformUsersQuery.isError ? (
@@ -986,6 +1099,15 @@ export function SuperAdminPage() {
                             <td className="px-3 py-2.5">{platformUser.is_active ? t('superAdminPage.active') : t('superAdminPage.inactive')}</td>
                             <td className="px-3 py-2.5 text-right">
                               <div className="flex justify-end gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={t('superAdminPage.copyPermissionsFor', { name: platformUser.name })}
+                                  title={t('superAdminPage.copyPermissions')}
+                                  onClick={() => copyPlatformUserPermissions(platformUser)}
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
                                 {canSetUserPassword && platformUser.id !== currentUser?.id && (
                                   <Button
                                     size="sm"
@@ -1376,7 +1498,7 @@ export function SuperAdminPage() {
 
       {/* ── Dialog: Utilizadores da Empresa ──────────────────────────── */}
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
@@ -1384,7 +1506,23 @@ export function SuperAdminPage() {
             </DialogTitle>
             <DialogDescription>Gerir os utilizadores, papéis e permissões desta empresa.</DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {copiedTenantPermissions ? (
+              <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs">
+                <ClipboardPaste className="h-3.5 w-3.5 text-primary" />
+                <span>
+                  Permissões copiadas de <strong>{copiedTenantPermissions.sourceUserName}</strong> ({copiedTenantPermissions.permissions.length})
+                </span>
+                <button
+                  type="button"
+                  aria-label="Limpar permissões copiadas"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => setCopiedTenantPermissions(null)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : <span />}
             <Button
               size="sm"
               onClick={() => {
@@ -1432,6 +1570,15 @@ export function SuperAdminPage() {
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Copiar permissões de ${u.name}`}
+                            title="Copiar permissões"
+                            onClick={() => copyTenantUserPermissions(u)}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1501,6 +1648,25 @@ export function SuperAdminPage() {
                 <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
                 <p className="text-xs text-muted-foreground">{t('superAdminPage.permissionsDescription')}</p>
               </div>
+              <CopyPermissionsControls
+                users={platformUsersQuery.data?.users ?? []}
+                copied={copiedPlatformPermissions}
+                selectPlaceholder={t('superAdminPage.copyFromUser')}
+                pasteLabel={t('superAdminPage.pastePermissionsFrom', { name: copiedPlatformPermissions?.sourceUserName ?? '' })}
+                onSelectUser={(userId) => {
+                  const source = (platformUsersQuery.data?.users ?? []).find((u) => u.id === userId)
+                  if (!source) return
+                  const next = normalizePlatformPermissions(source.permissions ?? [])
+                  setPlatformUserForm((current) => ({ ...current, permissions: next }))
+                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: source.name }))
+                }}
+                onPasteCopied={() => {
+                  if (!copiedPlatformPermissions) return
+                  const next = normalizePlatformPermissions(copiedPlatformPermissions.permissions)
+                  setPlatformUserForm((current) => ({ ...current, permissions: next }))
+                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedPlatformPermissions.sourceUserName }))
+                }}
+              />
               <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border p-3">
                 {Object.entries(platformPermissionGroups).map(([group, permissions]) => (
                   <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
@@ -1576,6 +1742,25 @@ export function SuperAdminPage() {
             <div className="space-y-2">
               <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
               <p className="text-xs text-muted-foreground">{t('superAdminPage.permissionsDescription')}</p>
+              <CopyPermissionsControls
+                users={(platformUsersQuery.data?.users ?? []).filter((u) => u.id !== editingPlatformUser?.id)}
+                copied={copiedPlatformPermissions && copiedPlatformPermissions.sourceUserId !== editingPlatformUser?.id ? copiedPlatformPermissions : null}
+                selectPlaceholder={t('superAdminPage.copyFromUser')}
+                pasteLabel={t('superAdminPage.pastePermissionsFrom', { name: copiedPlatformPermissions?.sourceUserName ?? '' })}
+                onSelectUser={(userId) => {
+                  const source = (platformUsersQuery.data?.users ?? []).find((u) => u.id === userId)
+                  if (!source) return
+                  const next = normalizePlatformPermissions(source.permissions ?? [])
+                  setPlatformUserPermissions(next)
+                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: source.name }))
+                }}
+                onPasteCopied={() => {
+                  if (!copiedPlatformPermissions) return
+                  const next = normalizePlatformPermissions(copiedPlatformPermissions.permissions)
+                  setPlatformUserPermissions(next)
+                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedPlatformPermissions.sourceUserName }))
+                }}
+              />
             </div>
             <div className="max-h-[60vh] space-y-2 overflow-y-auto rounded-md border p-3">
               {Object.entries(platformPermissionGroups).map(([group, permissions]) => (
@@ -1670,7 +1855,7 @@ export function SuperAdminPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold">Permissões</h3>
                   <p className="text-xs text-muted-foreground">
@@ -1686,6 +1871,25 @@ export function SuperAdminPage() {
                   Restaurar do papel
                 </Button>
               </div>
+              <CopyPermissionsControls
+                users={tenantUsers ?? []}
+                copied={copiedTenantPermissions}
+                selectPlaceholder="Copiar permissões de utilizador..."
+                pasteLabel={`Colar de ${copiedTenantPermissions?.sourceUserName ?? ''}`}
+                onSelectUser={(userId) => {
+                  const source = (tenantUsers ?? []).find((u) => u.id === userId)
+                  if (!source) return
+                  const next = normalizeTenantPermissions(source.permissions ?? [])
+                  setUserForm((current) => ({ ...current, permissions: next }))
+                  toast.success(`Permissões copiadas de ${source.name}.`)
+                }}
+                onPasteCopied={() => {
+                  if (!copiedTenantPermissions) return
+                  const next = normalizeTenantPermissions(copiedTenantPermissions.permissions)
+                  setUserForm((current) => ({ ...current, permissions: next }))
+                  toast.success(`Permissões de ${copiedTenantPermissions.sourceUserName} aplicadas.`)
+                }}
+              />
               <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border p-3">
                 {Object.entries(tenantPermissionGroups).map(([group, permissions]) => (
                   <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
@@ -1784,7 +1988,7 @@ export function SuperAdminPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold">Permissões</h3>
                   <p className="text-xs text-muted-foreground">
@@ -1800,6 +2004,25 @@ export function SuperAdminPage() {
                   Aplicar permissões do papel
                 </Button>
               </div>
+              <CopyPermissionsControls
+                users={(tenantUsers ?? []).filter((u) => u.id !== editingTenantUser?.id)}
+                copied={copiedTenantPermissions && copiedTenantPermissions.sourceUserId !== editingTenantUser?.id ? copiedTenantPermissions : null}
+                selectPlaceholder="Copiar permissões de utilizador..."
+                pasteLabel={`Colar de ${copiedTenantPermissions?.sourceUserName ?? ''}`}
+                onSelectUser={(userId) => {
+                  const source = (tenantUsers ?? []).find((u) => u.id === userId)
+                  if (!source) return
+                  const next = normalizeTenantPermissions(source.permissions ?? [])
+                  setTenantUserPermissions(next)
+                  toast.success(`Permissões copiadas de ${source.name}.`)
+                }}
+                onPasteCopied={() => {
+                  if (!copiedTenantPermissions) return
+                  const next = normalizeTenantPermissions(copiedTenantPermissions.permissions)
+                  setTenantUserPermissions(next)
+                  toast.success(`Permissões de ${copiedTenantPermissions.sourceUserName} aplicadas.`)
+                }}
+              />
               <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-md border p-3">
                 {Object.entries(tenantPermissionGroups).map(([group, permissions]) => (
                   <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
