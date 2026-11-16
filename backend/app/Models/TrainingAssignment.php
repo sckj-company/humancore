@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Database\Factories\TrainingAssignmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,6 +13,7 @@ class TrainingAssignment extends Model
     /** @use HasFactory<TrainingAssignmentFactory> */
     use HasFactory;
 
+    use Auditable;
     use HasTenant;
 
     public const STATUSES = [

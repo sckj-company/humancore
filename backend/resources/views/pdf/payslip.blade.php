@@ -63,6 +63,11 @@
             },
         };
         $currency = $record->currency ?: $record->tenant->currency;
+        $resolvedOperator = $operatorName
+            ?? auth()->user()?->name
+            ?? $record->period?->processedBy?->name
+            ?? $record->approvedBy?->name
+            ?? 'Sistema';
         $contractTypeLabel = match ($record->contract->contract_type) {
             'permanent' => 'Efetivo / 无固定期限',
             'fixed_term' => 'Termo Certo / 固定期限',
@@ -197,6 +202,7 @@
                 <div class="title-zh">工资单</div>
                 <div class="meta">Período / 工资期间: {{ $record->period->displayName() }}</div>
                 <div class="meta">Emitido em / 签发日期: {{ now()->format('d/m/Y') }}</div>
+                <div class="meta">Operador / 操作员: {{ $resolvedOperator }}</div>
             </td>
         </tr>
     </table>
@@ -324,7 +330,7 @@
 
     <div class="footer">
         {!! $bilingualInline('Documento gerado eletronicamente pelo HRMS', '本工资单由 HRMS 系统生成') !!}
-        | {{ now()->format('d/m/Y H:i') }} | {{ $record->tenant->name }}
+        | {{ now()->format('d/m/Y H:i') }} | Operador: {{ $resolvedOperator }} | {{ $record->tenant->name }}
     </div>
 </body>
 </html>

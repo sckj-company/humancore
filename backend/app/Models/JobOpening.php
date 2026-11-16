@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,6 +11,7 @@ use Illuminate\Support\Str;
 
 class JobOpening extends Model
 {
+    use Auditable;
     use HasFactory;
     use HasTenant;
     use SoftDeletes;

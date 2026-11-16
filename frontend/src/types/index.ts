@@ -490,9 +490,10 @@ export interface AttendanceRecord {
   late_minutes: number
   overtime_minutes?: number
   overtime_amount?: number | null
+  normal_hours?: number
   notes?: string | null
   employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'>
-  shift?: { id: number; name: string; start_time: string; end_time: string } | null
+  shift?: { id: number; name: string; start_time: string; end_time: string; work_hours?: number } | null
 }
 
 export interface LeaveBalance {

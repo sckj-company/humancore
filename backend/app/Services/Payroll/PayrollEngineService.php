@@ -424,6 +424,11 @@ class PayrollEngineService
                 $recalculated++;
             }
 
+            $period->update([
+                'processed_by' => auth()->id() ?? $period->processed_by,
+                'processed_at' => now(),
+            ]);
+
             $this->refreshPeriodTotals($period);
         });
 
@@ -1129,7 +1134,7 @@ class PayrollEngineService
             } elseif (is_array($schedule->shift?->working_days) && count($schedule->shift->working_days) > 0) {
                 $workingDays = $schedule->shift->working_days;
             } else {
-                $workingDays = $schedule->shift ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
+                $workingDays = [1, 2, 3, 4, 5];
             }
 
             if (in_array((int) $date->dayOfWeek, array_map('intval', $workingDays), true)) {

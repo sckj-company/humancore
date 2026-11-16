@@ -970,7 +970,7 @@ export function EmployeeDetailPage() {
               ) : (
                 <div className="rounded-lg border border-border overflow-x-auto">
                   <table className="w-full min-w-[760px] text-sm">
-                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.date')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('attendance.shift')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockIn')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockOut')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.total')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.dailyLateMinutes')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.overtime')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('common.actions')}</th></tr></thead>
+                    <thead><tr className="bg-muted/50"><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.date')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('attendance.shift')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockIn')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.clockOut')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('attendance.normalHours')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.total')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.dailyLateMinutes')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.overtime')}</th><th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">{t('employeeDetail.text.status')}</th><th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">{t('common.actions')}</th></tr></thead>
                     <tbody className="divide-y divide-border">
                       {attendanceByWeek.map((week) => (
                         <Fragment key={week.start}>
@@ -980,6 +980,7 @@ export function EmployeeDetailPage() {
                               <td className="px-4 py-3 text-xs">{rec.shift?.name ?? '—'}</td>
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_in)}</td>
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_out)}</td>
+                              <td className="px-4 py-3 text-right font-mono text-xs text-muted-foreground">{formatMinutesToHours(Math.round((rec.normal_hours ?? rec.shift?.work_hours ?? 8) * 60))}</td>
                               <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatMinutes(rec.total_worked)}</td>
                               <td className="px-4 py-3 text-right font-mono text-xs">{formatMinutesToHours(rec.late_minutes)}</td>
                               <td className="px-4 py-3 text-right font-mono text-xs">{formatMinutesToHours(rec.overtime_minutes)}</td>
@@ -1004,7 +1005,7 @@ export function EmployeeDetailPage() {
                             </tr>
                           ))}
                           <tr className="bg-muted/40 font-semibold">
-                            <td colSpan={5} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
+                            <td colSpan={6} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
                             <td className="px-4 py-2 text-right font-mono text-xs">{formatMinutesToHours(week.lateMinutes)}</td>
                             <td className="px-4 py-2 text-right font-mono text-xs">{formatMinutesToHours(week.overtimeMinutes)}</td>
                             <td colSpan={2} />

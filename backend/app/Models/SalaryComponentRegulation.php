@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Database\Factories\SalaryComponentRegulationFactory;
 use DateTimeInterface;
@@ -14,6 +15,7 @@ class SalaryComponentRegulation extends Model
     /** @use HasFactory<SalaryComponentRegulationFactory> */
     use HasFactory;
 
+    use Auditable;
     use HasTenant;
 
     protected $fillable = [

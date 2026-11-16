@@ -12,14 +12,30 @@ class PayslipPdfService
 {
     public function render(PayrollRecord $record): DomPdfDocument
     {
+        $operatorName = auth()->user()?->name
+            ?? $record->period?->processedBy?->name
+            ?? $record->approvedBy?->name
+            ?? 'Sistema';
+
         return $this->pdf()
-            ->loadView('pdf.payslip', ['record' => $record])
+            ->loadView('pdf.payslip', [
+                'record' => $record,
+                'operatorName' => $operatorName,
+            ])
             ->setPaper('a4', 'portrait');
     }
 
     public function renderPeriod(PayrollPeriod $period): DomPdfDocument
     {
-        return $this->pdf()->loadView('pdf.payroll-period', ['period' => $period]);
+        $operatorName = auth()->user()?->name
+            ?? $period->processedBy?->name
+            ?? $period->approvedBy?->name
+            ?? 'Sistema';
+
+        return $this->pdf()->loadView('pdf.payroll-period', [
+            'period' => $period,
+            'operatorName' => $operatorName,
+        ]);
     }
 
     private function pdf(): DomPdfDocument

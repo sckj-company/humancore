@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class EmployeeSalaryComponent extends Model
 {
-    use HasFactory, HasTenant;
+    use Auditable, HasFactory, HasTenant;
 
     protected $fillable = [
         'tenant_id',

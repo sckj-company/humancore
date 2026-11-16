@@ -779,6 +779,7 @@
     "clockOut": "签退",
     "overtimeAmount": "加班金额",
     "myHistory": "我的记录",
+    "normalHours": "标准工时",
     "qr": {
       "cta": "使用二维码",
       "title": "扫码打卡",

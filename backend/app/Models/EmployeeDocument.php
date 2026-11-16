@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Database\Factories\EmployeeDocumentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ class EmployeeDocument extends Model
     /** @use HasFactory<EmployeeDocumentFactory> */
     use HasFactory;
 
+    use Auditable;
     use HasTenant;
     use SoftDeletes;
 

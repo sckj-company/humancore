@@ -19,8 +19,17 @@ class PayrollPeriodResource extends JsonResource
             'payment_date' => $this->payment_date?->format('Y-m-d'),
             'status' => $this->status,
             'processed_at' => $this->processed_at,
+            'processed_by' => $this->processed_by,
+            'processed_by_user' => $this->whenLoaded('processedBy', fn () => $this->processedBy ? [
+                'id' => $this->processedBy->id,
+                'name' => $this->processedBy->name,
+            ] : null),
             'approved_at' => $this->approved_at,
             'approved_by' => $this->approved_by,
+            'approved_by_user' => $this->whenLoaded('approvedBy', fn () => $this->approvedBy ? [
+                'id' => $this->approvedBy->id,
+                'name' => $this->approvedBy->name,
+            ] : null),
             'closed_at' => $this->closed_at,
             'rejection_reason' => $this->rejection_reason,
             'totals_snapshot' => $this->totals_snapshot,

@@ -24,6 +24,9 @@ class AttendanceResource extends JsonResource
             'late_minutes' => $this->late_minutes,
             'overtime_minutes' => $this->overtime_minutes,
             'overtime_amount' => $this->overtime_amount === null ? null : (float) $this->overtime_amount,
+            'normal_hours' => $this->shift && $this->shift->work_hours !== null
+                ? (float) $this->shift->work_hours
+                : 8.0,
             'notes' => $this->notes,
             'employee' => $this->whenLoaded('employee', fn () => [
                 'id' => $this->employee->id,
@@ -35,6 +38,7 @@ class AttendanceResource extends JsonResource
                 'name' => $this->shift->name,
                 'start_time' => $this->shift->start_time,
                 'end_time' => $this->shift->end_time,
+                'work_hours' => $this->shift->work_hours !== null ? (float) $this->shift->work_hours : 8.0,
             ] : null),
         ];
     }

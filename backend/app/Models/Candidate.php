@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Database\Factories\CandidateFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ class Candidate extends Model
     /** @use HasFactory<CandidateFactory> */
     use HasFactory;
 
+    use Auditable;
     use HasTenant;
     use SoftDeletes;
 

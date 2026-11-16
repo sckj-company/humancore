@@ -38,10 +38,11 @@ interface AttendanceDTO {
   late_minutes: number
   overtime_minutes?: number
   overtime_amount?: number | null
+  normal_hours?: number
   notes: string | null
   deduct_from_salary?: boolean
   shift_id?: number | null
-  shift?: { id: number; name: string; start_time: string; end_time: string } | null
+  shift?: { id: number; name: string; start_time: string; end_time: string; work_hours?: number } | null
   employee?: { id: number; full_name: string; employee_code: string }
 }
 
@@ -194,6 +195,7 @@ function EmployeeAttendanceView() {
                     <th className="px-6 py-3 font-medium">{t('attendance.shift')}</th>
                     <th className="px-6 py-3 font-medium">Entrada</th>
                     <th className="px-6 py-3 font-medium">Saída</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('attendance.normalHours')}</th>
                     <th className="px-6 py-3 font-medium text-right">Horas</th>
                     <th className="px-6 py-3 font-medium text-right">{t('employeeDetail.text.overtime')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('attendance.overtimeAmount')}</th>
@@ -208,6 +210,9 @@ function EmployeeAttendanceView() {
                       <td className="px-6 py-3">{r.shift?.name ?? '—'}</td>
                       <td className="px-6 py-3">{r.clock_in ?? '—'}</td>
                       <td className="px-6 py-3">{r.clock_out ?? '—'}</td>
+                      <td className="px-6 py-3 text-right font-mono text-muted-foreground">
+                        {formatMinutesToHours(Math.round((r.normal_hours ?? r.shift?.work_hours ?? 8) * 60))}
+                      </td>
                       <td className="px-6 py-3 text-right font-mono">
                         {r.total_worked != null ? (r.total_worked / 60).toFixed(1) : '—'}
                       </td>
@@ -326,6 +331,7 @@ function AdminAttendanceView() {
                     <th className="px-6 py-3 font-medium">{t('attendance.shift')}</th>
                     <th className="px-6 py-3 font-medium">Entrada</th>
                     <th className="px-6 py-3 font-medium">Saída</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('attendance.normalHours')}</th>
                     <th className="px-6 py-3 font-medium text-right">Horas</th>
                     <th className="px-6 py-3 font-medium text-right">{t('employeeDetail.text.overtime')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('attendance.overtimeAmount')}</th>
@@ -347,6 +353,9 @@ function AdminAttendanceView() {
                       <td className="px-6 py-3">{r.shift?.name ?? '—'}</td>
                       <td className="px-6 py-3">{r.clock_in ?? '—'}</td>
                       <td className="px-6 py-3">{r.clock_out ?? '—'}</td>
+                      <td className="px-6 py-3 text-right font-mono text-muted-foreground">
+                        {formatMinutesToHours(Math.round((r.normal_hours ?? r.shift?.work_hours ?? 8) * 60))}
+                      </td>
                       <td className="px-6 py-3 text-right font-mono">
                         {r.total_worked != null ? (r.total_worked / 60).toFixed(1) : '—'}
                       </td>

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use App\Traits\HasTenant;
 use Database\Factories\PerformanceEvaluationFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ class PerformanceEvaluation extends Model
     /** @use HasFactory<PerformanceEvaluationFactory> */
     use HasFactory;
 
+    use Auditable;
     use HasTenant;
     use SoftDeletes;
 

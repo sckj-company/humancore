@@ -855,6 +855,7 @@
     "updated": "Attendance record updated.",
     "editError": "Error updating attendance record.",
     "myHistory": "My history",
+    "normalHours": "Normal hours",
     "qr": {
       "cta": "Show QR Code",
       "title": "Clock-in QR Code",

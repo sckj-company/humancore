@@ -56,7 +56,13 @@ class PayrollController extends BaseController
     {
         $this->authorize('view', $period);
 
-        $period->load(['records.employee', 'records.items', 'events.actor:id,name'])
+        $period->load([
+            'records.employee',
+            'records.items',
+            'events.actor:id,name',
+            'processedBy:id,name',
+            'approvedBy:id,name',
+        ])
             ->loadCount('records');
 
         return $this->success(new PayrollPeriodResource($period));
@@ -148,6 +154,8 @@ class PayrollController extends BaseController
             'records.employee.position',
             'records.items',
             'events.actor:id,name',
+            'processedBy:id,name',
+            'approvedBy:id,name',
         ])->loadCount('records');
 
         return $this->success(new PayrollPeriodResource($period), 'Folha recalculada com sucesso.');

@@ -17,6 +17,8 @@ class PayslipController extends BaseController
 
         $period->load([
             'tenant',
+            'processedBy:id,name',
+            'approvedBy:id,name',
             'records.employee',
             'records.contract.position',
             'records.items.deduction',
@@ -31,7 +33,15 @@ class PayslipController extends BaseController
     {
         $this->authorize('view', $record);
 
-        $record->loadMissing('employee', 'period', 'tenant', 'contract.position', 'items');
+        $record->loadMissing(
+            'employee',
+            'period.processedBy:id,name',
+            'period.approvedBy:id,name',
+            'approvedBy:id,name',
+            'tenant',
+            'contract.position',
+            'items'
+        );
 
         $filename = 'recibo-'.$record->employee?->employee_code.'-'.($record->period?->displayName() ?? $record->id).'.pdf';
         $filename = str_replace(['/', '\\', ' '], '-', $filename);
@@ -49,7 +59,15 @@ class PayslipController extends BaseController
     {
         $this->authorize('view', $record);
 
-        $record->loadMissing('employee', 'period', 'tenant', 'contract.position', 'items');
+        $record->loadMissing(
+            'employee',
+            'period.processedBy:id,name',
+            'period.approvedBy:id,name',
+            'approvedBy:id,name',
+            'tenant',
+            'contract.position',
+            'items'
+        );
 
         $filename = 'recibo-'.$record->employee?->employee_code.'-'.($record->period?->displayName() ?? $record->id).'.pdf';
         $filename = str_replace(['/', '\\', ' '], '-', $filename);

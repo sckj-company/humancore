@@ -945,6 +945,7 @@
     "updated": "Registo de presença atualizado.",
     "editError": "Erro ao atualizar o registo de presença.",
     "myHistory": "O meu histórico",
+    "normalHours": "Horas normais",
     "qr": {
       "cta": "Mostrar QR Code",
       "title": "QR Code de registo",
