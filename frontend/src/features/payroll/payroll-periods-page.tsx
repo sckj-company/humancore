@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Play, CheckCircle2, Lock, Eye, Loader2, Send, Banknote, RotateCcw } from 'lucide-react'
+import { Plus, Play, CheckCircle2, Lock, Eye, Loader2, Send, Banknote, RotateCcw, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
@@ -72,10 +72,34 @@ export function PayrollPeriodsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [reopenId, setReopenId] = useState<number | null>(null)
   const [processId, setProcessId] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [periodTypeFilter, setPeriodTypeFilter] = useState('all')
+  const [monthFilter, setMonthFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState('')
+
+  const queryParams: Record<string, string | number> = { per_page: 30 }
+  if (search.trim()) queryParams.search = search.trim()
+  if (statusFilter !== 'all') queryParams.status = statusFilter
+  if (periodTypeFilter !== 'all') queryParams.period_type = periodTypeFilter
+  if (monthFilter) queryParams.month = monthFilter
+  if (yearFilter.trim()) queryParams.year = Number(yearFilter)
+
+  const hasFilters = Boolean(
+    search.trim() || statusFilter !== 'all' || periodTypeFilter !== 'all' || monthFilter || yearFilter.trim(),
+  )
+
+  const resetFilters = () => {
+    setSearch('')
+    setStatusFilter('all')
+    setPeriodTypeFilter('all')
+    setMonthFilter('')
+    setYearFilter('')
+  }
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['payroll-periods'],
-    queryFn: () => api.get<Paginated<PayrollPeriod>>('payroll/periods', { per_page: 30 }),
+    queryKey: ['payroll-periods', queryParams],
+    queryFn: () => api.get<Paginated<PayrollPeriod>>('payroll/periods', queryParams),
   })
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['payroll-periods'] })
@@ -141,11 +165,83 @@ export function PayrollPeriodsPage() {
         }
       />
 
+      <Card>
+        <CardContent className="flex flex-wrap items-end gap-3 pt-6">
+          <div className="min-w-[200px] flex-1 space-y-1.5">
+            <Label className="text-xs">{t('common.search')}</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('payroll.periodsPage.searchPlaceholder', { defaultValue: 'Pesquisar por nome do período...' })}
+                className="pl-9"
+              />
+            </div>
+          </div>
+          <div className="w-full space-y-1.5 sm:w-44">
+            <Label className="text-xs">{t('common.status')}</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="open">{t('payroll.periodStatuses.open', { defaultValue: 'Aberto' })}</SelectItem>
+                <SelectItem value="processing">{t('payroll.periodStatuses.processing', { defaultValue: 'A Processar' })}</SelectItem>
+                <SelectItem value="completed">{t('payroll.periodStatuses.completed', { defaultValue: 'Calculado' })}</SelectItem>
+                <SelectItem value="pending_validation">{t('payroll.periodStatuses.pending_validation', { defaultValue: 'Pend. Validação' })}</SelectItem>
+                <SelectItem value="pending_approval">{t('payroll.periodStatuses.pending_approval', { defaultValue: 'Pend. Aprovação' })}</SelectItem>
+                <SelectItem value="approved">{t('payroll.periodStatuses.approved', { defaultValue: 'Aprovado' })}</SelectItem>
+                <SelectItem value="closed">{t('payroll.periodStatuses.closed', { defaultValue: 'Fechado' })}</SelectItem>
+                <SelectItem value="paid">{t('payroll.periodStatuses.paid', { defaultValue: 'Pago' })}</SelectItem>
+                <SelectItem value="failed">{t('payroll.periodStatuses.failed', { defaultValue: 'Com Erros' })}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full space-y-1.5 sm:w-40">
+            <Label className="text-xs">{t('payroll.periodsPage.type')}</Label>
+            <Select value={periodTypeFilter} onValueChange={setPeriodTypeFilter}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="monthly">{t('payroll.periodTypes.monthly', { defaultValue: 'Mensal' })}</SelectItem>
+                <SelectItem value="biweekly">{t('payroll.periodTypes.biweekly', { defaultValue: 'Quinzenal' })}</SelectItem>
+                <SelectItem value="weekly">{t('payroll.periodTypes.weekly', { defaultValue: 'Semanal' })}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full space-y-1.5 sm:w-36">
+            <Label className="text-xs">{t('schedules.month', { defaultValue: 'Mês' })}</Label>
+            <Input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
+          </div>
+          <div className="w-full space-y-1.5 sm:w-28">
+            <Label className="text-xs">{t('payroll.periodsPage.year', { defaultValue: 'Ano' })}</Label>
+            <Input
+              type="number"
+              min={2020}
+              max={2100}
+              placeholder="2026"
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+            />
+          </div>
+          {hasFilters && (
+            <Button type="button" variant="outline" onClick={resetFilters}>
+              <X className="mr-1.5 h-4 w-4" />
+              {t('employeesPage.clearFilters', { defaultValue: 'Limpar filtros' })}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       {isLoading && <LoadingState />}
       {isError && <ErrorState message="Não foi possível carregar os períodos." onRetry={refetch} />}
 
       {data && data.data.length === 0 && (
-        <EmptyState title={t('payroll.periodsPage.emptyTitle')} description={t('payroll.periodsPage.emptyDescription')} />
+        <EmptyState
+          title={t('payroll.periodsPage.emptyTitle')}
+          description={hasFilters ? t('payroll.periodsPage.noFilterMatches', { defaultValue: 'Nenhum período encontrado para os filtros aplicados.' }) : t('payroll.periodsPage.emptyDescription')}
+          action={hasFilters ? <Button variant="outline" onClick={resetFilters}>{t('employeesPage.clearFilters', { defaultValue: 'Limpar filtros' })}</Button> : undefined}
+        />
       )}
 
       {data && data.data.length > 0 && (

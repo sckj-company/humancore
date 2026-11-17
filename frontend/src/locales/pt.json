@@ -318,7 +318,8 @@
     "approval": {
       "pending": "Pendente",
       "approved": "Aprovado"
-    }
+    },
+    "contractType": "Contrato"
   },
   "employeeDetail": {
     "status": {
@@ -761,7 +762,15 @@
       "documentVerifiedBadge": "Verificado",
       "documentUnverifiedBadge": "Por verificar",
       "verifiedAction": "Verificado",
-      "verifyAction": "Verificar"
+      "verifyAction": "Verificar",
+      "advancesSectionTitle": "Adiantamentos / Vales Salariais",
+      "advancesSectionDescription": "Registe vales e adiantamentos salariais com plano mensal por percentagem, comprovativo PDF e envio assinado.",
+      "deductionsSectionTitle": "Descontos",
+      "deductionsSectionDescription": "Registe empréstimos, pensões, seguros ou outros descontos em folha com plano mensal por percentagem e comprovativo.",
+      "advanceName": "Descrição / Motivo do Adiantamento",
+      "addAdvance": "Adicionar Adiantamento",
+      "advanceCreated": "Adiantamento registado com sucesso.",
+      "noAdvances": "Nenhum adiantamento ou vale registado."
     }
   },
   "employees": {
@@ -972,7 +981,16 @@
     "annual": "Anual",
     "requiredName": "Nome obrigatório",
     "requiredStartTime": "Hora de início obrigatória",
-    "requiredEndTime": "Hora de fim obrigatória"
+    "requiredEndTime": "Hora de fim obrigatória",
+    "periodMode": "Duração / Período do Turno",
+    "periodContinuous": "Contínuo (sem data fim)",
+    "periodDaily": "Data única (1 dia)",
+    "periodWeekly": "Semanal (7 dias a partir do início)",
+    "periodMonthly": "Mensal (mês completo)",
+    "periodCustom": "Intervalo de datas (De – Até)",
+    "month": "Mês",
+    "effectiveTo": "Válido até",
+    "replacePrevious": "Encerrar turno anterior na véspera do início"
   },
   "payroll": {
     "title": "Folha Salarial",
@@ -982,7 +1000,7 @@
       "open": "Aberto",
       "processing": "A processar",
       "completed": "Calculado",
-      "failed": "Com erros",
+      "failed": "Com Erros",
       "pending_validation": "Pendente de validação",
       "pending_approval": "Pendente de aprovação",
       "approved": "Aprovado",
@@ -1147,7 +1165,13 @@
         "reopenDescription": "Esta ação cria uma nova versão do período. O resultado anterior é preservado.",
         "reopenWarning": "O período voltará ao estado Aberto para recálculo. Totais aprovados anteriores ficam registados no histórico.",
         "reopenPlaceholder": "Indique o motivo da reabertura…"
-      }
+      },
+      "searchEmployeePlaceholder": "Filtrar por funcionário ou código...",
+      "allDepartments": "Todos departamentos",
+      "allContracts": "Todos contratos",
+      "outdatedFilter": "Desatualizado",
+      "withErrorsFilter": "Com alertas",
+      "noFilteredRecords": "Nenhum funcionário corresponde aos filtros aplicados."
     },
     "periodsPage": {
       "emptyTitle": "Nenhum período de folha",
@@ -1179,7 +1203,10 @@
       "typeMonthly": "Mensal",
       "typeBiweekly": "Quinzenal",
       "typeWeekly": "Semanal",
-      "create": "Criar"
+      "create": "Criar",
+      "searchPlaceholder": "Pesquisar por nome do período...",
+      "year": "Ano",
+      "noFilterMatches": "Nenhum período encontrado para os filtros aplicados."
     },
     "processDialog": {
       "title": "Processar folha salarial",
@@ -1746,7 +1773,39 @@
     "empty": "Sem descontos registados.",
     "emptyDescription": "Crie o primeiro desconto para começar.",
     "deleteConfirm": "Eliminar desconto",
-    "error": "Não foi possível carregar."
+    "error": "Não foi possível carregar.",
+    "signedDocumentUploaded": "Comprovativo assinado carregado com sucesso.",
+    "signedDocumentError": "Erro ao carregar comprovativo assinado.",
+    "receiptDownloadError": "Erro ao baixar comprovativo.",
+    "signedDownloadError": "Erro ao baixar documento assinado.",
+    "downloadReceipt": "Baixar comprovativo para assinar",
+    "receiptShort": "Comprovativo PDF",
+    "uploadSigned": "Carregar comprovativo assinado",
+    "replaceSigned": "Substituir Assinado",
+    "uploadSignedShort": "Enviar Assinado",
+    "viewSigned": "Ver comprovativo assinado",
+    "signedBadge": "Assinado",
+    "installmentsScheduleTitle": "Plano de Parcelas por Mês e Percentagem",
+    "percentageSum": "Soma",
+    "splitEvenly": "Distribuir igualmente",
+    "addInstallment": "Adicionar parcela",
+    "deductionMonth": "Mês de Desconto",
+    "percentageCol": "Percentagem (%)",
+    "installmentAmountCol": "Valor (Kz)",
+    "percentageSumError": "A soma das percentagens das parcelas deve ser exatamente 100% para cobrir o valor total.",
+    "noDetailedInstallments": "Sem parcelas detalhadas configuradas para este registo.",
+    "settlementPeriod": "Folha / Pagamento",
+    "installmentPaid": "Pago / Descontado",
+    "installmentCancelled": "Cancelada",
+    "installmentPending": "Pendente",
+    "requestedDate": "Data Pedido",
+    "receiptColumn": "Comprovativo",
+    "toggleInstallments": "Ver parcelas detalhadas",
+    "installmentsShort": "parcela(s)",
+    "installmentsDetailHeading": "Lista de Parcelas Detalhada",
+    "viewInstallments": "Ver Parcelas",
+    "paidAmount": "Pago",
+    "downloadSignedShort": "Baixar Assinado"
   },
   "superAdminDashboard": {
     "platform": "Plataforma",
@@ -2858,5 +2917,52 @@
       "invalidPhoto": "Por favor selecione uma imagem válida (JPG, PNG, WebP).",
       "unsupportedFile": "O ficheiro {{name}} não é suportado. Use PDF, imagens ou documentos."
     }
+  },
+  "attendanceReport": {
+    "button": "Relatório de Presenças",
+    "employeeReport": "Relatório de presenças deste funcionário",
+    "title": "Relatório de Presenças",
+    "description": "Consulte e exporte em PDF as presenças diárias, semanais ou mensais por funcionário ou equipa filtrada.",
+    "periodType": "Periodicidade",
+    "daily": "Diário",
+    "weekly": "Semanal",
+    "monthly": "Mensal",
+    "custom": "Personalizado",
+    "weekReferenceDate": "Data de referência da semana",
+    "startDate": "Data início",
+    "endDate": "Data fim",
+    "allFilteredEmployees": "Todos (com filtros da lista)",
+    "attendanceStatus": "Estado de presença",
+    "present": "Presenças",
+    "late": "Atrasos",
+    "absent": "Faltas",
+    "onLeave": "Férias / Aus.",
+    "workedHours": "Horas Trab.",
+    "overtimeHours": "H. Extras",
+    "attendanceRate": "Assiduidade",
+    "empty": "Nenhum dado encontrado para os filtros aplicados.",
+    "dailyLog": "Registos Diários",
+    "clockIn": "Entrada",
+    "clockOut": "Saída",
+    "downloadPdf": "Baixar PDF",
+    "downloadError": "Erro ao gerar PDF de presenças.",
+    "pdfHint": "Clique em Baixar PDF para exportar o relatório completo formatado.",
+    "statuses": {
+      "present": "Presente",
+      "late": "Atraso",
+      "absent": "Falta",
+      "on_leave": "Férias / Ausência",
+      "half_day": "Meio Dia"
+    },
+    "selectedCount": "{{count}} selecionado(s)",
+    "allScope": "Todos",
+    "searchEmployeePlaceholder": "Pesquisar por nome ou código...",
+    "selectVisible": "Selecionar filtrados",
+    "clearSelection": "Limpar seleção (Todos)",
+    "noEmployeesMatch": "Nenhum funcionário encontrado.",
+    "loadError": "Não foi possível carregar o relatório de presenças.",
+    "recordsShort": "registo(s)",
+    "selectedFooterHint": "{{count}} funcionário(s) selecionado(s) para exportação.",
+    "allFooterHint": "A exportar todos os funcionários dos filtros atuais."
   }
 }

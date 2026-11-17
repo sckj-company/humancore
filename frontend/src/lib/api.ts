@@ -79,13 +79,31 @@ class ApiClient {
     return this.request<T>({ method: 'DELETE', url, data })
   }
 
-  async downloadFile(url: string, filename?: string): Promise<void> {
-    const response = await this.client.get(url, { responseType: 'blob' })
-    const blob = response.data
+  async downloadFile(url: string, filename?: string, params?: Record<string, unknown>): Promise<void> {
+    const response = await this.client.get(url, { params, responseType: 'blob' })
+    const blob: Blob = response.data
+    const disposition = String(response.headers['content-disposition'] ?? '')
+    const match = /filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i.exec(disposition)
+    let resolvedName = filename ?? match?.[1] ?? 'download'
+    if (filename && !/\.[a-z0-9]{2,5}$/i.test(filename)) {
+      if (match?.[1] && /\.[a-z0-9]{2,5}$/i.test(match[1])) {
+        const ext = match[1].split('.').pop()
+        resolvedName = `${filename}.${ext}`
+      } else if (blob.type) {
+        const extMap: Record<string, string> = {
+          'application/pdf': 'pdf',
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+        }
+        const ext = extMap[blob.type]
+        if (ext) resolvedName = `${filename}.${ext}`
+      }
+    }
     const objectUrl = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = objectUrl
-    anchor.download = filename ?? 'download'
+    anchor.download = resolvedName
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()

@@ -107,10 +107,13 @@ class PayrollRecordResource extends JsonResource
                     return true;
                 })->values();
             }),
+            'contract_type' => $this->whenLoaded('contract', fn () => $this->contract?->contract_type),
             'employee' => $this->whenLoaded('employee', fn () => [
                 'id' => $this->employee->id,
                 'full_name' => $this->employee->full_name,
                 'employee_code' => $this->employee->employee_code,
+                'department_id' => $this->employee->department_id,
+                'department' => $this->employee->relationLoaded('department') ? $this->employee->department?->name : null,
             ]),
         ];
     }

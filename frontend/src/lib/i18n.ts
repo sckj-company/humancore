@@ -18,6 +18,10 @@ const bilingualPostProcessor = {
     if (localStorage.getItem('hrms_bilingual') !== 'true') return value
 
     const translationKey = Array.isArray(key) ? key[0] : key
+    if (translationKey.startsWith('language.') || translationKey.startsWith('profilePage.languages.')) {
+      return value
+    }
+
     const translationOptions = { ...options, postProcess: [] }
     const portuguese = i18n.t(translationKey, { ...translationOptions, lng: 'pt' })
     const mandarin = i18n.t(translationKey, { ...translationOptions, lng: 'zh', fallbackLng: 'zh' })

@@ -380,6 +380,7 @@ export interface PayrollRecord {
   status: PayrollRecordStatus
   is_outdated?: boolean
   outdated_reason?: string | null
+  contract_type?: string | null
   approved_at?: string
   paid_at?: string
   details?: {
@@ -915,6 +916,19 @@ export interface Benefit {
   updated_at?: string
 }
 
+export interface DeductionInstallment {
+  id: number
+  installment_number: number
+  reference_month: string
+  percentage: number | null
+  amount: number | null
+  status: 'pending' | 'paid' | 'cancelled' | string
+  status_label?: string
+  payroll_period_id?: number | null
+  payroll_period_name?: string | null
+  paid_at?: string | null
+}
+
 export interface Deduction {
   id: number
   employee_id: number
@@ -931,9 +945,13 @@ export interface Deduction {
   installment_count?: number | null
   installment_amount?: number | null
   start_period?: string | null
+  requested_at?: string | null
   is_recurring: boolean
   is_mandatory: boolean
   legal_basis?: string | null
+  has_signed_document?: boolean
+  signed_document_url?: string | null
+  signed_document_uploaded_at?: string | null
   status: DeductionStatus
   status_label: string
   status_variant: 'success' | 'warning' | 'info' | 'destructive'
@@ -943,6 +961,7 @@ export interface Deduction {
   notes?: string | null
   cancellation_reason?: string | null
   cancelled_at?: string | null
+  installments?: DeductionInstallment[]
   employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'> | null
   approver?: { id: number; name: string } | null
   created_at?: string

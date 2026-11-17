@@ -302,6 +302,7 @@ class PayrollEngineService
                     'name' => $item['name'],
                     'salary_component_id' => $item['salary_component_id'] ?? null,
                     'deduction_id' => $item['deduction_id'] ?? null,
+                    'deduction_installment_id' => $item['deduction_installment_id'] ?? null,
                     'regulation_id' => $item['regulation_id'] ?? null,
                     'base_amount' => $item['base_amount'] ?? match ($item['code']) {
                         'base_salary' => $contract->base_salary,
@@ -331,6 +332,7 @@ class PayrollEngineService
                     'name' => 'INSS Patronal',
                     'salary_component_id' => null,
                     'deduction_id' => null,
+                    'deduction_installment_id' => null,
                     'regulation_id' => null,
                     'base_amount' => $inssBase,
                     'quantity' => null,
@@ -750,6 +752,7 @@ class PayrollEngineService
             ->get();
 
         $context->deductions = $employee->deductions()
+            ->with('installments')
             ->where('status', 'active')
             ->where(fn ($query) => $query->whereNull('starts_at')
                 ->orWhereDate('starts_at', '<=', $period->period_end))
@@ -784,35 +787,61 @@ class PayrollEngineService
     }
 
     /**
-     * @return array<int, array{code: string, name: string, type: string, amount: float, deduction_id: int, base_amount: ?float, rate: ?float}>
+     * @return array<int, array{code: string, name: string, type: string, amount: float, deduction_id: int, deduction_installment_id: ?int, base_amount: ?float, rate: ?float}>
      */
     protected function calculateEmployeeDeductions(PayrollContext $context, float $gross): array
     {
         $breakdown = [];
+        $periodMonth = Carbon::parse($context->period->period_start)->format('Y-m');
 
         foreach ($context->deductions as $deduction) {
             if (! $deduction->is_recurring && $deduction->total_amount === null && (float) $deduction->paid_amount > 0) {
                 continue;
             }
 
-            $baseAmount = $deduction->amount_type === 'percentage' ? $gross : null;
-            $rate = $deduction->amount_type === 'percentage' ? (float) $deduction->percentage : null;
-            $amount = $deduction->amount_type === 'percentage'
-                ? (float) $baseAmount * ((float) $rate / 100)
-                : (float) ($deduction->installment_amount ?? $deduction->amount);
+            $installments = $deduction->relationLoaded('installments')
+                ? $deduction->installments
+                : $deduction->installments()->get();
 
-            if ($deduction->total_amount !== null) {
-                $remaining = max(0, (float) $deduction->total_amount - (float) $deduction->paid_amount);
-                if (
-                    $deduction->amount_type === 'fixed'
-                    && $deduction->installment_count !== null
-                    && (float) $deduction->installment_amount > 0
-                ) {
-                    $paidInstallments = (int) round((float) $deduction->paid_amount / (float) $deduction->installment_amount);
-                    $remainingInstallments = max(1, (int) $deduction->installment_count - $paidInstallments);
-                    $amount = min($amount, round($remaining / $remainingInstallments, 2));
-                } else {
-                    $amount = min($amount, $remaining);
+            $deductionInstallmentId = null;
+
+            if ($installments->isNotEmpty()) {
+                $dueInstallments = $installments
+                    ->where('reference_month', $periodMonth)
+                    ->where('status', 'pending');
+
+                if ($dueInstallments->isEmpty()) {
+                    continue;
+                }
+
+                $amount = round((float) $dueInstallments->sum('amount'), 2);
+                $remaining = $deduction->total_amount !== null
+                    ? max(0, (float) $deduction->total_amount - (float) $deduction->paid_amount)
+                    : $amount;
+                $amount = min($amount, $remaining);
+                $baseAmount = $deduction->total_amount !== null ? (float) $deduction->total_amount : null;
+                $rate = round((float) $dueInstallments->sum('percentage'), 2);
+                $deductionInstallmentId = $dueInstallments->first()?->id;
+            } else {
+                $baseAmount = $deduction->amount_type === 'percentage' ? $gross : null;
+                $rate = $deduction->amount_type === 'percentage' ? (float) $deduction->percentage : null;
+                $amount = $deduction->amount_type === 'percentage'
+                    ? (float) $baseAmount * ((float) $rate / 100)
+                    : (float) ($deduction->installment_amount ?? $deduction->amount);
+
+                if ($deduction->total_amount !== null) {
+                    $remaining = max(0, (float) $deduction->total_amount - (float) $deduction->paid_amount);
+                    if (
+                        $deduction->amount_type === 'fixed'
+                        && $deduction->installment_count !== null
+                        && (float) $deduction->installment_amount > 0
+                    ) {
+                        $paidInstallments = (int) round((float) $deduction->paid_amount / (float) $deduction->installment_amount);
+                        $remainingInstallments = max(1, (int) $deduction->installment_count - $paidInstallments);
+                        $amount = min($amount, round($remaining / $remainingInstallments, 2));
+                    } else {
+                        $amount = min($amount, $remaining);
+                    }
                 }
             }
 
@@ -833,6 +862,7 @@ class PayrollEngineService
                 'type' => 'deduction',
                 'amount' => -$amount,
                 'deduction_id' => $deduction->id,
+                'deduction_installment_id' => $deductionInstallmentId,
                 'base_amount' => $baseAmount,
                 'rate' => $rate,
             ];

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, ListChecks } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -28,6 +29,14 @@ import {
 import { PageHeader, EmptyState, ErrorState } from '@/components/shared/page-header'
 import { DataTable } from '@/components/data/data-table'
 import { Progress } from '@/components/ui/progress'
+import { DeductionDocumentActions } from '@/features/deductions/deduction-document-actions'
+import {
+  areInstallmentsValid,
+  buildEvenInstallmentRows,
+  DeductionInstallmentsList,
+  DeductionInstallmentsPlanner,
+  type InstallmentDraftRow,
+} from '@/features/deductions/deduction-installments-planner'
 import type { Deduction, DeductionType, DeductionStatus, AmountType, Paginated, EmployeeSummary } from '@/types'
 
 const deductionTypeOptions: DeductionType[] = [
@@ -99,9 +108,16 @@ function toForm(d: Deduction): DeductionFormState {
   }
 }
 
-function toPayload(form: DeductionFormState) {
+function toPayload(form: DeductionFormState, installmentRows?: InstallmentDraftRow[]) {
   const totalAmount = form.total_amount ? Number(form.total_amount) : null
   const installmentCount = form.installment_count ? Number(form.installment_count) : null
+  const useCustomInstallments = Boolean(
+    form.amount_type === 'fixed'
+    && totalAmount
+    && totalAmount > 0
+    && installmentRows
+    && installmentRows.length > 0,
+  )
   const calculatedInstallment = totalAmount && installmentCount
     ? Math.round((totalAmount / installmentCount) * 100) / 100
     : null
@@ -114,9 +130,17 @@ function toPayload(form: DeductionFormState) {
     amount: form.amount_type === 'fixed' ? calculatedInstallment ?? Number(form.amount || 0) : 0,
     percentage: form.amount_type === 'percentage' ? Number(form.percentage || 0) : null,
     total_amount: totalAmount,
-    installment_count: installmentCount,
-    start_period: form.start_period || null,
-    is_recurring: form.is_recurring,
+    installment_count: useCustomInstallments ? installmentRows!.length : installmentCount,
+    start_period: (useCustomInstallments ? installmentRows![0]?.reference_month : form.start_period) || null,
+    ...(useCustomInstallments
+      ? {
+          installments: installmentRows!.map((r) => ({
+            reference_month: r.reference_month,
+            percentage: Number(r.percentage),
+          })),
+        }
+      : {}),
+    is_recurring: useCustomInstallments ? false : form.is_recurring,
     is_mandatory: form.is_mandatory,
     legal_basis: form.legal_basis.trim() || null,
     status: form.status,
@@ -125,7 +149,7 @@ function toPayload(form: DeductionFormState) {
 }
 
 export function DeductionsPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const canCreate = hasPermission(user, 'create_deduction')
   const canUpdate = hasPermission(user, 'update_deduction')
@@ -135,6 +159,7 @@ export function DeductionsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [editTarget, setEditTarget] = useState<Deduction | null>(null)
+  const [detailTarget, setDetailTarget] = useState<Deduction | null>(null)
   const qc = useQueryClient()
 
   const deductions = useQuery({
@@ -274,9 +299,45 @@ export function DeductionsPage() {
             ),
           },
           {
+            id: 'requested_at',
+            header: t('deductionsPage.requestedDate', { defaultValue: 'Data Pedido' }),
+            cell: (r) => {
+              const dt = r.requested_at ?? r.created_at
+              return (
+                <span className="text-xs text-muted-foreground">
+                  {dt ? new Intl.DateTimeFormat(i18n.language).format(new Date(dt)) : '—'}
+                </span>
+              )
+            },
+          },
+          {
             id: 'start_period',
             header: t('deductionsPage.startPeriod'),
-            cell: (r) => <span className="text-sm text-muted-foreground">{r.start_period ?? '—'}</span>,
+            cell: (r) => (
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground">{r.start_period ?? '—'}</span>
+                {(r.installments?.length ?? 0) > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-1.5 text-xs text-primary"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDetailTarget(r)
+                    }}
+                  >
+                    <ListChecks className="mr-1 h-3.5 w-3.5" />
+                    {r.installments!.length}
+                  </Button>
+                )}
+              </div>
+            ),
+          },
+          {
+            id: 'receipt',
+            header: t('deductionsPage.receiptColumn', { defaultValue: 'Comprovativo' }),
+            cell: (r) => <DeductionDocumentActions deduction={r} canUpload={canUpdate} compact />,
           },
           {
             id: 'status',
@@ -284,32 +345,67 @@ export function DeductionsPage() {
             cell: (r) => <Badge variant={r.status_variant}>{r.status_label}</Badge>,
           },
         ]}
-        actions={
-          canUpdate || canDelete
-            ? [
-                ...(canUpdate
-                  ? [{
-                      label: t('common.edit'),
-                      icon: <Pencil className="h-4 w-4" />,
-                      onClick: (r: Deduction) => setEditTarget(r),
-                    }]
-                  : []),
-                ...(canDelete
-                  ? [{
-                      label: t('common.delete'),
-                      icon: <Trash2 className="h-4 w-4" />,
-                      destructive: true,
-                      onClick: (r: Deduction) => {
-                        if (window.confirm(`${t('deductionsPage.deleteConfirm')}: ${r.name}?`)) {
-                          remove.mutate(r.id)
-                        }
-                      },
-                    }]
-                  : []),
-              ]
-            : undefined
-        }
+        actions={[
+          {
+            label: t('deductionsPage.viewInstallments', { defaultValue: 'Ver Parcelas' }),
+            icon: <ListChecks className="h-4 w-4" />,
+            onClick: (r: Deduction) => setDetailTarget(r),
+          },
+          ...(canUpdate
+            ? [{
+                label: t('common.edit'),
+                icon: <Pencil className="h-4 w-4" />,
+                onClick: (r: Deduction) => setEditTarget(r),
+              }]
+            : []),
+          ...(canDelete
+            ? [{
+                label: t('common.delete'),
+                icon: <Trash2 className="h-4 w-4" />,
+                destructive: true,
+                onClick: (r: Deduction) => {
+                  if (window.confirm(`${t('deductionsPage.deleteConfirm')}: ${r.name}?`)) {
+                    remove.mutate(r.id)
+                  }
+                },
+              }]
+            : []),
+        ]}
       />
+
+      <Dialog open={detailTarget !== null} onOpenChange={(open) => { if (!open) setDetailTarget(null) }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{detailTarget?.name ?? ''}</DialogTitle>
+            <DialogDescription>
+              {detailTarget?.employee?.full_name} · {detailTarget?.type_label}
+              {(detailTarget?.requested_at ?? detailTarget?.created_at)
+                ? ` · ${t('deductionsPage.requestedDate', { defaultValue: 'Data Pedido' })}: ${new Intl.DateTimeFormat(i18n.language).format(new Date((detailTarget!.requested_at ?? detailTarget!.created_at)!))}`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {detailTarget && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm">
+                <div>
+                  <span className="text-muted-foreground">{t('deductionsPage.totalAmount')}: </span>
+                  <strong>
+                    {(detailTarget.total_amount ?? detailTarget.amount).toLocaleString(i18n.language, { minimumFractionDigits: 2 })} Kz
+                  </strong>
+                  <span className="mx-2 text-muted-foreground">·</span>
+                  <span className="text-muted-foreground">{t('deductionsPage.paidAmount', { defaultValue: 'Pago' })}: </span>
+                  <strong>{detailTarget.paid_amount.toLocaleString(i18n.language, { minimumFractionDigits: 2 })} Kz</strong>
+                </div>
+                <DeductionDocumentActions deduction={detailTarget} canUpload={canUpdate} compact />
+              </div>
+              <DeductionInstallmentsList installments={detailTarget.installments} />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailTarget(null)}>{t('common.close', { defaultValue: 'Fechar' })}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <DeductionFormDialog
         editing={editTarget}
@@ -365,10 +461,44 @@ function DeductionFormDialog({
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const [form, setForm] = useState<DeductionFormState>(emptyForm)
+  const [installmentRows, setInstallmentRows] = useState<InstallmentDraftRow[]>([])
 
   useEffect(() => {
-    setForm(editing ? toForm(editing) : emptyForm)
+    const nextForm = editing ? toForm(editing) : emptyForm
+    setForm(nextForm)
+    if (editing?.installments && editing.installments.length > 0) {
+      setInstallmentRows(
+        editing.installments.map((item) => ({
+          reference_month: item.reference_month,
+          percentage: String(item.percentage ?? 0),
+        })),
+      )
+    } else if (nextForm.total_amount && nextForm.installment_count && Number(nextForm.installment_count) > 0) {
+      setInstallmentRows(
+        buildEvenInstallmentRows(
+          Number(nextForm.installment_count),
+          nextForm.start_period || new Date().toISOString().slice(0, 7),
+        ),
+      )
+    } else {
+      setInstallmentRows([])
+    }
   }, [editing, open])
+
+  const hasPaidInstallments = Boolean(editing?.installments?.some((i) => i.status === 'paid'))
+
+  const syncInstallmentGrid = (totalVal: string, countVal: string, startPeriodVal: string) => {
+    if (hasPaidInstallments) return
+    const total = Number(totalVal)
+    const count = Number(countVal)
+    if (Number.isFinite(total) && total > 0 && Number.isInteger(count) && count >= 1 && count <= 60) {
+      setInstallmentRows(
+        buildEvenInstallmentRows(count, /^\d{4}-\d{2}$/.test(startPeriodVal) ? startPeriodVal : new Date().toISOString().slice(0, 7)),
+      )
+    } else if (!totalVal && !countVal) {
+      setInstallmentRows([])
+    }
+  }
 
   const { data: employeeOptions } = useQuery({
     queryKey: ['employees', 'select'],
@@ -379,12 +509,13 @@ function DeductionFormDialog({
   const save = useMutation({
     mutationFn: () =>
       editing
-        ? api.patch<Deduction>(`deductions/${editing.id}`, toPayload(form))
-        : api.post<Deduction>('deductions', toPayload(form)),
+        ? api.patch<Deduction>(`deductions/${editing.id}`, toPayload(form, hasPaidInstallments ? undefined : installmentRows))
+        : api.post<Deduction>('deductions', toPayload(form, installmentRows)),
     onSuccess: () => {
       toast.success(t('recruitment.saved'))
       onOpenChange(false)
       setForm(emptyForm)
+      setInstallmentRows([])
       qc.invalidateQueries({ queryKey: ['deductions'] })
       onCreated?.()
     },
@@ -398,14 +529,19 @@ function DeductionFormDialog({
     && totalAmountValue > 0
     && Number.isInteger(installmentCountValue)
     && installmentCountValue > 0
+  const showInstallmentPlanner = form.amount_type === 'fixed' && hasCalculatedInstallment && installmentRows.length > 0
+  const hasInvalidInstallmentsSchedule = showInstallmentPlanner
+    && !hasPaidInstallments
+    && !areInstallmentsValid(installmentRows, totalAmountValue)
   const hasInvalidInstallmentConfig =
     (form.total_amount !== '' && (!Number.isFinite(totalAmountValue) || totalAmountValue <= 0))
     || (form.installment_count !== '' && (!Number.isInteger(installmentCountValue) || installmentCountValue < 1))
+    || hasInvalidInstallmentsSchedule
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-4 w-4 text-primary" />
@@ -502,17 +638,64 @@ function DeductionFormDialog({
           )}
           <div className="space-y-1.5">
             <Label>{t('deductionsPage.totalAmount')}</Label>
-            <Input type="number" min="0.01" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} />
+            <Input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={form.total_amount}
+              onChange={(e) => {
+                const nextTotal = e.target.value
+                setForm({ ...form, total_amount: nextTotal })
+                syncInstallmentGrid(nextTotal, form.installment_count, form.start_period)
+              }}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>{t('deductionsPage.installmentCount')}</Label>
-            <Input type="number" min={1} value={form.installment_count} onChange={(e) => setForm({ ...form, installment_count: e.target.value })} />
+            <Input
+              type="number"
+              min={1}
+              max={60}
+              disabled={hasPaidInstallments}
+              value={form.installment_count}
+              onChange={(e) => {
+                const nextCount = e.target.value
+                setForm({ ...form, installment_count: nextCount })
+                syncInstallmentGrid(form.total_amount, nextCount, form.start_period)
+              }}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>{t('deductionsPage.startPeriod')}</Label>
-            <Input type="month" value={form.start_period} onChange={(e) => setForm({ ...form, start_period: e.target.value })} />
+            <Input
+              type="month"
+              disabled={hasPaidInstallments}
+              value={form.start_period}
+              onChange={(e) => {
+                const nextPeriod = e.target.value
+                setForm({ ...form, start_period: nextPeriod })
+                syncInstallmentGrid(form.total_amount, form.installment_count, nextPeriod)
+              }}
+            />
             <p className="text-xs text-muted-foreground">{t('deductionsPage.startPeriodDescription')}</p>
           </div>
+          {showInstallmentPlanner && (
+            <div className="md:col-span-2">
+              <DeductionInstallmentsPlanner
+                rows={installmentRows}
+                totalAmount={totalAmountValue}
+                disabled={hasPaidInstallments}
+                onChange={(next) => {
+                  setInstallmentRows(next)
+                  setForm((prev) => ({
+                    ...prev,
+                    installment_count: String(next.length),
+                    start_period: next[0]?.reference_month ?? prev.start_period,
+                  }))
+                }}
+              />
+            </div>
+          )}
           <div className="space-y-3 md:col-span-2">
             <Label className="flex items-center gap-2 text-sm">
               <input

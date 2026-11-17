@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, Eye, Filter, X } from 'lucide-react'
+import { Plus, Search, Eye, Filter, X, CalendarCheck2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { hasFieldPermission, useAuthStore } from '@/stores/auth-store'
 import { useEmployeesFilterStore } from '@/stores/employees-filter-store'
@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/shared/page-header'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmployeeImportModal } from '@/features/employees/components/employee-import-modal'
+import { AttendanceReportDialog } from '@/features/employees/attendance-report-dialog'
 import type { Paginated, EmployeeSummary } from '@/types'
 
 const statusColor: Record<string, string> = {
@@ -49,6 +50,8 @@ export function EmployeesPage() {
   const user = useAuthStore((s) => s.user)
   const tenantKey = localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id ?? '')
   const { search, status, page, setSearch, setStatus, setPage, syncTenant, resetFilters } = useEmployeesFilterStore()
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [reportEmployeeId, setReportEmployeeId] = useState<number | null>(null)
   const urlStatus = searchParams.get('status')
 
   useEffect(() => {
@@ -102,6 +105,17 @@ export function EmployeesPage() {
         description={t('employeesPage.totalEmployees', { count: data?.meta?.total ?? 0 })}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setReportEmployeeId(null)
+                setReportDialogOpen(true)
+              }}
+            >
+              <CalendarCheck2 className="mr-2 h-4 w-4 shrink-0" />
+              {t('attendanceReport.button', { defaultValue: 'Relatório de Presenças' })}
+            </Button>
             <EmployeeImportModal onSuccess={() => refetch()} />
             <Button asChild className="h-auto min-h-9 max-w-full whitespace-normal text-center">
               <Link to="/employees/new">
@@ -234,11 +248,24 @@ export function EmployeesPage() {
                         </td>
                       )}
                       <td className="px-6 py-3 text-right" onClick={(ev) => ev.stopPropagation()}>
-                        <Button variant="ghost" size="icon-sm" asChild>
-                          <Link to={`/employees/${e.id}`} aria-label={t('employeesPage.viewEmployee', { name: e.full_name })}>
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        </Button>
+                        <div className="inline-flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title={t('attendanceReport.employeeReport', { defaultValue: 'Relatório de presenças deste funcionário' })}
+                            onClick={() => {
+                              setReportEmployeeId(e.id)
+                              setReportDialogOpen(true)
+                            }}
+                          >
+                            <CalendarCheck2 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon-sm" asChild>
+                            <Link to={`/employees/${e.id}`} aria-label={t('employeesPage.viewEmployee', { name: e.full_name })}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                     )
@@ -274,6 +301,14 @@ export function EmployeesPage() {
           </CardContent>
         </Card>
       )}
+
+      <AttendanceReportDialog
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+        initialEmployeeId={reportEmployeeId}
+        initialSearch={search}
+        initialEmployeeStatus={status}
+      />
     </div>
   )
 }

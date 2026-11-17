@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Admin\SuperAdminController;
 use App\Http\Controllers\Api\V1\Attendance\AttendanceController;
 use App\Http\Controllers\Api\V1\Attendance\AttendanceQrController;
+use App\Http\Controllers\Api\V1\Attendance\AttendanceReportController;
 use App\Http\Controllers\Api\V1\Audit\AuditController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
@@ -150,6 +151,8 @@ Route::prefix('v1')->group(function () {
         Route::post('attendance/manual', [AttendanceController::class, 'storeManual']);
         Route::get('attendance/today', [AttendanceController::class, 'today']);
         Route::get('attendance/my-history', [AttendanceController::class, 'myHistory']);
+        Route::get('attendance/report', [AttendanceReportController::class, 'index']);
+        Route::get('attendance/report.pdf', [AttendanceReportController::class, 'pdf']);
         Route::get('attendance', [AttendanceController::class, 'index']);
         Route::put('attendance/{record}', [AttendanceController::class, 'update']);
         Route::post('attendance/{record}/justify', [AttendanceController::class, 'justify']);
@@ -272,6 +275,9 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('deductions', DeductionController::class);
         Route::post('deductions/{deduction}/approve', [DeductionController::class, 'approve']);
         Route::post('deductions/{deduction}/cancel', [DeductionController::class, 'cancel']);
+        Route::get('deductions/{deduction}/receipt.pdf', [DeductionController::class, 'receiptPdf']);
+        Route::post('deductions/{deduction}/signed-document', [DeductionController::class, 'uploadSignedDocument']);
+        Route::get('deductions/{deduction}/signed-document', [DeductionController::class, 'downloadSignedDocument']);
 
         // Templates de Email
         Route::apiResource('email-templates', EmailTemplateController::class);

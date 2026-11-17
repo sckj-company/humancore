@@ -5,9 +5,23 @@ namespace App\Http\Controllers\Api\V1\Compensation;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\DeductionResource;
 use App\Models\Deduction;
+use App\Models\DeductionInstallment;
+use App\Models\Employee;
+use App\Services\CloudinaryService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DeductionController extends BaseController
 {
@@ -17,7 +31,11 @@ class DeductionController extends BaseController
         $allowedDepartmentIds = $request->user()?->allowedDepartmentIds();
 
         $deductions = Deduction::query()
-            ->with(['employee:id,first_name,last_name,employee_code', 'approver:id,name'])
+            ->with([
+                'employee:id,first_name,last_name,employee_code',
+                'approver:id,name',
+                'installments.payrollPeriod:id,name',
+            ])
             ->when($allowedDepartmentIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDepartmentIds)))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = $request->string('search');
@@ -50,16 +68,26 @@ class DeductionController extends BaseController
             'name' => ['required', 'string', 'max:255'],
             'deduction_type' => ['required', 'string', 'max:50'],
             'amount_type' => ['required', 'in:'.implode(',', array_keys(Deduction::AMOUNT_TYPES))],
-            'amount' => ['required_if:amount_type,fixed', 'nullable', 'numeric', 'min:0'],
+            'amount' => [
+                Rule::requiredIf(fn () => $request->input('amount_type') === 'fixed' && ! $request->filled('installments') && ! $request->filled('total_amount')),
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
             'percentage' => ['required_if:amount_type,percentage', 'nullable', 'numeric', 'min:0', 'max:100'],
             'total_amount' => [
                 'nullable',
                 'numeric',
                 'min:0',
-                Rule::requiredIf(fn () => $request->input('amount_type') === 'percentage' && $request->filled('installment_count')),
+                Rule::requiredIf(fn () => ($request->input('amount_type') === 'percentage' && $request->filled('installment_count'))
+                    || $request->filled('installments')),
             ],
             'installment_count' => ['nullable', 'integer', 'min:1'],
             'start_period' => ['sometimes', 'nullable', 'date_format:Y-m'],
+            'requested_at' => ['sometimes', 'nullable', 'date'],
+            'installments' => ['sometimes', 'nullable', 'array', 'min:1', 'max:60'],
+            'installments.*.reference_month' => ['required_with:installments', 'date_format:Y-m'],
+            'installments.*.percentage' => ['required_with:installments', 'numeric', 'gt:0', 'lte:100'],
             'is_recurring' => ['nullable', 'boolean'],
             'is_mandatory' => ['nullable', 'boolean'],
             'legal_basis' => ['nullable', 'string', 'max:1000'],
@@ -67,33 +95,58 @@ class DeductionController extends BaseController
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        $employee = \App\Models\Employee::find($data['employee_id']);
+        $employee = Employee::find($data['employee_id']);
         if ($employee && ! $employee->isApproved()) {
             return $this->error('Funcionário aguarda aprovação e verificação dos documentos.', 422);
+        }
+
+        $customInstallments = $data['installments'] ?? null;
+        unset($data['installments']);
+
+        if ($customInstallments !== null) {
+            $this->validateInstallmentsSchedule($customInstallments, (float) ($data['total_amount'] ?? 0));
         }
 
         $data['tenant_id'] = tenant_id();
         $data['status'] = $data['status'] ?? 'active';
         $data['paid_amount'] = 0;
+        $data['requested_at'] = filled($data['requested_at'] ?? null) ? Carbon::parse($data['requested_at']) : now();
+
         if (array_key_exists('start_period', $data)) {
             $data['starts_at'] = filled($data['start_period']) ? $data['start_period'].'-01' : null;
             unset($data['start_period']);
         }
 
-        if (($data['amount_type'] ?? '') === 'fixed' && filled($data['installment_count'] ?? null)) {
+        if ($customInstallments !== null) {
+            $totalAmount = round((float) $data['total_amount'], 2);
+            $count = count($customInstallments);
+            $months = collect($customInstallments)->pluck('reference_month')->sort()->values();
+            $data['total_amount'] = $totalAmount;
+            $data['installment_count'] = $count;
+            $data['starts_at'] = $months->first().'-01';
+            $data['installment_amount'] = round($totalAmount / $count, 2);
+            $data['amount'] = $data['amount_type'] === 'fixed' ? $data['installment_amount'] : (float) ($data['amount'] ?? 0);
+            $data['is_recurring'] = false;
+        } elseif (($data['amount_type'] ?? '') === 'fixed' && filled($data['installment_count'] ?? null)) {
             $data['total_amount'] = filled($data['total_amount'] ?? null)
                 ? (float) $data['total_amount']
-                : round((float) $data['amount'] * (int) $data['installment_count'], 2);
+                : round((float) ($data['amount'] ?? 0) * (int) $data['installment_count'], 2);
             $data['installment_amount'] = round($data['total_amount'] / (int) $data['installment_count'], 2);
             $data['amount'] = $data['installment_amount'];
         } else {
+            $data['amount'] = $data['amount'] ?? 0;
             $data['installment_amount'] = null;
         }
 
-        $deduction = Deduction::query()->create($data);
+        $deduction = DB::transaction(function () use ($data, $customInstallments): Deduction {
+            $deduction = Deduction::query()->create($data);
+            $this->syncInstallments($deduction, $customInstallments);
+
+            return $deduction;
+        });
 
         return $this->success(
-            new DeductionResource($deduction->load('employee')),
+            new DeductionResource($deduction->load(['employee', 'approver', 'installments.payrollPeriod'])),
             'Desconto criado com sucesso.',
             201,
         );
@@ -103,7 +156,9 @@ class DeductionController extends BaseController
     {
         $this->authorize('view', $deduction);
 
-        return $this->success(new DeductionResource($deduction->load('employee', 'approver')));
+        return $this->success(
+            new DeductionResource($deduction->load(['employee', 'approver', 'installments.payrollPeriod']))
+        );
     }
 
     public function update(Request $request, Deduction $deduction): JsonResponse
@@ -121,13 +176,18 @@ class DeductionController extends BaseController
                 'nullable',
                 'numeric',
                 'min:0',
-                Rule::requiredIf(fn () => $request->input('amount_type', $deduction->amount_type) === 'percentage'
+                Rule::requiredIf(fn () => ($request->input('amount_type', $deduction->amount_type) === 'percentage'
                     && ($request->exists('installment_count')
                         ? $request->filled('installment_count')
-                        : $deduction->installment_count !== null)),
+                        : $deduction->installment_count !== null))
+                    || $request->filled('installments')),
             ],
             'installment_count' => ['nullable', 'integer', 'min:1'],
             'start_period' => ['sometimes', 'nullable', 'date_format:Y-m'],
+            'requested_at' => ['sometimes', 'nullable', 'date'],
+            'installments' => ['sometimes', 'nullable', 'array', 'min:1', 'max:60'],
+            'installments.*.reference_month' => ['required_with:installments', 'date_format:Y-m'],
+            'installments.*.percentage' => ['required_with:installments', 'numeric', 'gt:0', 'lte:100'],
             'is_recurring' => ['nullable', 'boolean'],
             'is_mandatory' => ['sometimes', 'boolean'],
             'legal_basis' => ['nullable', 'string', 'max:1000'],
@@ -135,15 +195,41 @@ class DeductionController extends BaseController
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
 
+        $customInstallments = $data['installments'] ?? null;
+        $hasInstallmentsInput = array_key_exists('installments', $data);
+        unset($data['installments']);
+
+        if ($customInstallments !== null) {
+            if ($deduction->installments()->where('status', 'paid')->exists()) {
+                return $this->error('Não é possível redefinir o plano porque já existem parcelas pagas/descontadas.', 422);
+            }
+            $targetTotal = (float) ($data['total_amount'] ?? $deduction->total_amount ?? 0);
+            $this->validateInstallmentsSchedule($customInstallments, $targetTotal);
+        }
+
         $amountType = $data['amount_type'] ?? $deduction->amount_type;
         if (array_key_exists('start_period', $data)) {
             $data['starts_at'] = filled($data['start_period']) ? $data['start_period'].'-01' : null;
             unset($data['start_period']);
         }
+        if (array_key_exists('requested_at', $data) && filled($data['requested_at'])) {
+            $data['requested_at'] = Carbon::parse($data['requested_at']);
+        }
+
         $totalAmount = array_key_exists('total_amount', $data) ? $data['total_amount'] : $deduction->total_amount;
         $installmentCount = array_key_exists('installment_count', $data) ? $data['installment_count'] : $deduction->installment_count;
 
-        if ($amountType === 'fixed' && filled($installmentCount)) {
+        if ($customInstallments !== null) {
+            $resolvedTotal = round((float) $totalAmount, 2);
+            $count = count($customInstallments);
+            $months = collect($customInstallments)->pluck('reference_month')->sort()->values();
+            $data['total_amount'] = $resolvedTotal;
+            $data['installment_count'] = $count;
+            $data['starts_at'] = $months->first().'-01';
+            $data['installment_amount'] = round($resolvedTotal / $count, 2);
+            $data['amount'] = $amountType === 'fixed' ? $data['installment_amount'] : ($data['amount'] ?? $deduction->amount);
+            $data['is_recurring'] = false;
+        } elseif ($amountType === 'fixed' && filled($installmentCount)) {
             $totalAmount = filled($totalAmount)
                 ? (float) $totalAmount
                 : round((float) ($data['amount'] ?? $deduction->amount) * (int) $installmentCount, 2);
@@ -154,10 +240,15 @@ class DeductionController extends BaseController
             $data['installment_amount'] = null;
         }
 
-        $deduction->update($data);
+        DB::transaction(function () use ($deduction, $data, $customInstallments, $hasInstallmentsInput): void {
+            $deduction->update($data);
+            if ($hasInstallmentsInput || ($customInstallments === null && ! $deduction->installments()->where('status', 'paid')->exists() && ($deduction->starts_at && $deduction->total_amount && $deduction->installment_count))) {
+                $this->syncInstallments($deduction->fresh(), $customInstallments);
+            }
+        });
 
         return $this->success(
-            new DeductionResource($deduction->fresh()->load('employee', 'approver')),
+            new DeductionResource($deduction->fresh()->load(['employee', 'approver', 'installments.payrollPeriod'])),
             'Desconto atualizado com sucesso.',
         );
     }
@@ -197,15 +288,21 @@ class DeductionController extends BaseController
             'reason' => ['required', 'string', 'min:3', 'max:1000'],
         ]);
 
-        $deduction->update([
-            'status' => 'cancelled',
-            'cancellation_reason' => trim((string) $data['reason']),
-            'cancelled_at' => now(),
-            'cancelled_by' => $request->user()?->id,
-        ]);
+        DB::transaction(function () use ($deduction, $data, $request): void {
+            $deduction->update([
+                'status' => 'cancelled',
+                'cancellation_reason' => trim((string) $data['reason']),
+                'cancelled_at' => now(),
+                'cancelled_by' => $request->user()?->id,
+            ]);
+
+            $deduction->installments()
+                ->where('status', 'pending')
+                ->update(['status' => 'cancelled']);
+        });
 
         return $this->success(
-            new DeductionResource($deduction->fresh()->load('employee', 'approver')),
+            new DeductionResource($deduction->fresh()->load(['employee', 'approver', 'installments.payrollPeriod'])),
             'Adiantamento/desconto cancelado com sucesso.',
         );
     }
@@ -224,8 +321,284 @@ class DeductionController extends BaseController
         ]);
 
         return $this->success(
-            new DeductionResource($deduction->fresh()->load('employee', 'approver')),
+            new DeductionResource($deduction->fresh()->load(['employee', 'approver', 'installments.payrollPeriod'])),
             'Desconto aprovado com sucesso.',
         );
+    }
+
+    public function receiptPdf(Request $request, Deduction $deduction): SymfonyResponse
+    {
+        $this->authorize('view', $deduction);
+
+        $deduction->loadMissing([
+            'tenant',
+            'employee.department',
+            'employee.position',
+            'approver:id,name',
+            'installments.payrollPeriod:id,name',
+        ]);
+
+        $fontCache = storage_path('framework/cache/dompdf/fonts');
+        File::ensureDirectoryExists($fontCache);
+
+        $pdf = Pdf::setOption([
+            'font_dir' => $fontCache,
+            'font_cache' => $fontCache,
+            'chroot' => base_path(),
+            'default_font' => 'Droid Sans Fallback',
+        ])->loadView('pdf.deduction-receipt', [
+            'deduction' => $deduction,
+            'operatorName' => $request->user()?->name ?? 'Sistema',
+        ])->setPaper('a4', 'portrait');
+
+        $code = $deduction->employee?->employee_code ?? $deduction->employee_id;
+        $filename = str_replace(['/', '\\', ' '], '-', "comprovativo-{$deduction->deduction_type}-{$code}-{$deduction->id}.pdf");
+
+        return $pdf->download($filename);
+    }
+
+    public function uploadSignedDocument(Request $request, Deduction $deduction, CloudinaryService $cloudinary): JsonResponse
+    {
+        $this->authorize('update', $deduction);
+
+        $rawFile = $request->file('document');
+        if ($rawFile !== null && ! $rawFile->isValid()) {
+            $errorCode = $rawFile->getError();
+            $message = match ($errorCode) {
+                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'O ficheiro excede o limite máximo permitido pelo servidor PHP ('.ini_get('upload_max_filesize').').',
+                UPLOAD_ERR_PARTIAL => 'O carregamento do ficheiro foi interrompido. Tente novamente.',
+                UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE, UPLOAD_ERR_EXTENSION => 'Erro interno no diretório temporário ao gravar o ficheiro.',
+                default => 'Não foi possível carregar o ficheiro selecionado.',
+            };
+
+            return $this->error($message, 422);
+        }
+
+        $oldPath = $deduction->signed_document_path;
+        $hasCloudinary = ! app()->runningUnitTests()
+            && filled(config('services.cloudinary.cloud_name'))
+            && filled(config('services.cloudinary.api_key'))
+            && filled(config('services.cloudinary.api_secret'));
+
+        $newPath = null;
+        $tempFilePath = null;
+
+        if ($request->filled('document_base64')) {
+            $validated = $request->validate([
+                'document_base64' => ['required', 'string'],
+                'document_name' => ['nullable', 'string', 'max:255'],
+                'document_mime' => ['nullable', 'string', 'max:100'],
+            ]);
+
+            $payload = (string) $validated['document_base64'];
+            if (str_contains($payload, ',')) {
+                [, $payload] = explode(',', $payload, 2);
+            }
+            $binary = base64_decode($payload, true);
+            if ($binary === false || strlen($binary) === 0 || strlen($binary) > 10 * 1024 * 1024) {
+                return $this->error('Ficheiro codificado inválido ou superior a 10 MB.', 422);
+            }
+
+            $ext = match (strtolower((string) ($validated['document_mime'] ?? ''))) {
+                'application/pdf' => 'pdf',
+                'image/jpeg', 'image/jpg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                default => strtolower(pathinfo((string) ($validated['document_name'] ?? 'documento.pdf'), PATHINFO_EXTENSION) ?: 'pdf'),
+            };
+            if (! in_array($ext, ['pdf', 'jpg', 'jpeg', 'png', 'webp'], true)) {
+                return $this->error('Formato não suportado. Envie PDF, JPG, PNG ou WEBP.', 422);
+            }
+
+            $relativePath = 'tenants/'.$deduction->tenant_id.'/deduction-documents/'.uniqid('signed_', true).'.'.$ext;
+            Storage::disk('local')->put($relativePath, $binary);
+
+            if ($hasCloudinary) {
+                $tempFilePath = Storage::disk('local')->path($relativePath);
+                try {
+                    $newPath = $cloudinary->upload(
+                        $tempFilePath,
+                        'humancore/tenants/'.$deduction->tenant_id.'/deduction-documents',
+                        'auto'
+                    )['url'];
+                    Storage::disk('local')->delete($relativePath);
+                } catch (\Throwable) {
+                    $newPath = $relativePath;
+                }
+            } else {
+                $newPath = $relativePath;
+            }
+        } else {
+            $validated = $request->validate([
+                'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            ]);
+
+            if ($hasCloudinary) {
+                try {
+                    $newPath = $cloudinary->upload(
+                        $validated['document'],
+                        'humancore/tenants/'.$deduction->tenant_id.'/deduction-documents',
+                        'auto'
+                    )['url'];
+                } catch (\Throwable) {
+                    $newPath = null;
+                }
+            }
+
+            if (! $newPath) {
+                $newPath = $validated['document']->store(
+                    'tenants/'.$deduction->tenant_id.'/deduction-documents',
+                    'local'
+                );
+            }
+        }
+
+        $deduction->update([
+            'signed_document_path' => $newPath,
+            'signed_document_uploaded_at' => now(),
+        ]);
+
+        if ($oldPath) {
+            if ($cloudinary->isCloudinaryUrl($oldPath)) {
+                $cloudinary->delete($oldPath);
+            } else {
+                Storage::disk('local')->delete($oldPath);
+            }
+        }
+
+        return $this->success(
+            new DeductionResource($deduction->fresh()->load(['employee', 'approver', 'installments.payrollPeriod'])),
+            'Comprovativo assinado carregado com sucesso.'
+        );
+    }
+
+    public function downloadSignedDocument(Deduction $deduction, CloudinaryService $cloudinary): Response|StreamedResponse|RedirectResponse|JsonResponse
+    {
+        $this->authorize('view', $deduction);
+
+        $path = $deduction->signed_document_path;
+        if (! $path) {
+            return $this->error('Comprovativo assinado não encontrado.', 404);
+        }
+
+        if ($cloudinary->isCloudinaryUrl($path)) {
+            try {
+                $remote = Http::timeout(20)->get($path);
+                if ($remote->successful()) {
+                    $ext = pathinfo((string) parse_url($path, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'pdf';
+                    $contentType = $remote->header('Content-Type') ?: 'application/octet-stream';
+                    $filename = "comprovativo-assinado-{$deduction->id}.{$ext}";
+
+                    return response($remote->body(), 200, [
+                        'Content-Type' => $contentType,
+                        'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                    ]);
+                }
+            } catch (\Throwable) {
+                // Fall through to error response below
+            }
+
+            return $this->error('Não foi possível transferir o comprovativo assinado.', 502);
+        }
+
+        if (! Storage::disk('local')->exists($path)) {
+            return $this->error('Comprovativo assinado não encontrado.', 404);
+        }
+
+        return Storage::disk('local')->download($path);
+    }
+
+    /**
+     * @param  array<int, array{reference_month: string, percentage: numeric}>  $rows
+     */
+    private function validateInstallmentsSchedule(array $rows, float $totalAmount): void
+    {
+        if ($totalAmount <= 0) {
+            throw ValidationException::withMessages([
+                'total_amount' => 'Indique um valor total superior a zero para definir parcelas.',
+            ]);
+        }
+
+        $totalPct = round(collect($rows)->sum(fn ($r) => (float) $r['percentage']), 2);
+        if (abs($totalPct - 100.0) > 0.05) {
+            throw ValidationException::withMessages([
+                'installments' => "A soma das percentagens das parcelas deve totalizar 100% (atual: {$totalPct}%).",
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<int, array{reference_month: string, percentage: numeric}>|null  $customInstallments
+     */
+    private function syncInstallments(Deduction $deduction, ?array $customInstallments): void
+    {
+        $deduction->installments()->delete();
+
+        $totalAmount = (float) ($deduction->total_amount ?? 0);
+        if ($totalAmount <= 0) {
+            return;
+        }
+
+        if ($customInstallments !== null && count($customInstallments) > 0) {
+            $sorted = collect($customInstallments)
+                ->sortBy('reference_month')
+                ->values();
+            $count = $sorted->count();
+            $accumulated = 0.0;
+
+            foreach ($sorted as $index => $row) {
+                $pct = round((float) $row['percentage'], 2);
+                $isLast = $index === ($count - 1);
+                $amount = $isLast
+                    ? round(max(0, $totalAmount - $accumulated), 2)
+                    : round($totalAmount * ($pct / 100), 2);
+                $accumulated = round($accumulated + $amount, 2);
+
+                DeductionInstallment::query()->create([
+                    'tenant_id' => $deduction->tenant_id,
+                    'deduction_id' => $deduction->id,
+                    'employee_id' => $deduction->employee_id,
+                    'installment_number' => $index + 1,
+                    'reference_month' => (string) $row['reference_month'],
+                    'percentage' => $pct,
+                    'amount' => $amount,
+                    'status' => $deduction->status === 'cancelled' ? 'cancelled' : 'pending',
+                ]);
+            }
+
+            return;
+        }
+
+        // Legacy fallback when caller sets total_amount + installment_count + start_period explicitly
+        $count = (int) ($deduction->installment_count ?? 0);
+        if ($count <= 0 || ! $deduction->starts_at) {
+            return;
+        }
+
+        $startMonth = Carbon::parse($deduction->starts_at)->startOfMonth();
+        $basePct = round(100 / $count, 2);
+        $accumulatedAmount = 0.0;
+        $accumulatedPct = 0.0;
+
+        for ($i = 0; $i < $count; $i++) {
+            $isLast = $i === ($count - 1);
+            $pct = $isLast ? round(max(0, 100 - $accumulatedPct), 2) : $basePct;
+            $amount = $isLast
+                ? round(max(0, $totalAmount - $accumulatedAmount), 2)
+                : round($totalAmount * ($pct / 100), 2);
+            $accumulatedPct = round($accumulatedPct + $pct, 2);
+            $accumulatedAmount = round($accumulatedAmount + $amount, 2);
+
+            DeductionInstallment::query()->create([
+                'tenant_id' => $deduction->tenant_id,
+                'deduction_id' => $deduction->id,
+                'employee_id' => $deduction->employee_id,
+                'installment_number' => $i + 1,
+                'reference_month' => $startMonth->copy()->addMonthsNoOverflow($i)->format('Y-m'),
+                'percentage' => $pct,
+                'amount' => $amount,
+                'status' => $deduction->status === 'cancelled' ? 'cancelled' : 'pending',
+            ]);
+        }
     }
 }

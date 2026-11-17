@@ -162,7 +162,15 @@ export function EmployeeDetailPage() {
     signed_document: null as File | null,
   })
   const [isShiftOpen, setIsShiftOpen] = useState(false)
-  const [shiftForm, setShiftForm] = useState({ shift_id: '', effective_from: new Date().toISOString().slice(0, 10), notes: '' })
+  const [shiftForm, setShiftForm] = useState({
+    shift_id: '',
+    period_mode: 'continuous' as 'continuous' | 'daily' | 'weekly' | 'monthly' | 'custom',
+    effective_from: new Date().toISOString().slice(0, 10),
+    effective_to: '',
+    month: new Date().toISOString().slice(0, 7),
+    replace_previous: true,
+    notes: '',
+  })
   const [isDeactivateContractOpen, setIsDeactivateContractOpen] = useState(false)
   const [deactivateContractForm, setDeactivateContractForm] = useState({ reason: '', end_date: new Date().toISOString().slice(0, 10) })
   const [isContractDialogOpen, setIsContractDialogOpen] = useState(false)
@@ -413,9 +421,60 @@ export function EmployeeDetailPage() {
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.recordError')))
   })
+  const resolveShiftDates = () => {
+    if (shiftForm.period_mode === 'daily') {
+      return { effective_from: shiftForm.effective_from, effective_to: shiftForm.effective_from }
+    }
+    if (shiftForm.period_mode === 'weekly' && shiftForm.effective_from) {
+      const start = new Date(`${shiftForm.effective_from}T00:00:00`)
+      const end = new Date(start)
+      end.setDate(end.getDate() + 6)
+      return { effective_from: shiftForm.effective_from, effective_to: end.toISOString().slice(0, 10) }
+    }
+    if (shiftForm.period_mode === 'monthly' && /^\d{4}-\d{2}$/.test(shiftForm.month)) {
+      const [y, m] = shiftForm.month.split('-').map(Number)
+      const first = new Date(y, m - 1, 1)
+      const last = new Date(y, m, 0)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return {
+        effective_from: `${first.getFullYear()}-${pad(first.getMonth() + 1)}-${pad(first.getDate())}`,
+        effective_to: `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`,
+      }
+    }
+    if (shiftForm.period_mode === 'custom') {
+      return { effective_from: shiftForm.effective_from, effective_to: shiftForm.effective_to || null }
+    }
+    return { effective_from: shiftForm.effective_from, effective_to: null }
+  }
+
   const shiftMutation = useMutation({
-    mutationFn: () => api.post('employee-schedules', { employee_id: Number(id), shift_id: Number(shiftForm.shift_id), effective_from: shiftForm.effective_from, notes: shiftForm.notes || undefined, is_active: true }),
-    onSuccess: () => { toast.success(t('employeeDetail.messages.shiftAssigned')); setIsShiftOpen(false); setShiftForm({ shift_id: '', effective_from: new Date().toISOString().slice(0, 10), notes: '' }); qc.invalidateQueries({ queryKey: ['employees', id] }); refetchSchedule() },
+    mutationFn: () => {
+      const { effective_from, effective_to } = resolveShiftDates()
+      return api.post('employee-schedules', {
+        employee_id: Number(id),
+        shift_id: Number(shiftForm.shift_id),
+        effective_from,
+        effective_to: effective_to ?? undefined,
+        replace_previous: shiftForm.replace_previous,
+        notes: shiftForm.notes || undefined,
+        is_active: true,
+      })
+    },
+    onSuccess: () => {
+      toast.success(t('employeeDetail.messages.shiftAssigned'))
+      setIsShiftOpen(false)
+      setShiftForm({
+        shift_id: '',
+        period_mode: 'continuous',
+        effective_from: new Date().toISOString().slice(0, 10),
+        effective_to: '',
+        month: new Date().toISOString().slice(0, 7),
+        replace_previous: true,
+        notes: '',
+      })
+      qc.invalidateQueries({ queryKey: ['employees', id] })
+      refetchSchedule()
+    },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.assignShiftError')))
   })
 
@@ -1727,10 +1786,56 @@ export function EmployeeDetailPage() {
           <DialogHeader><DialogTitle className="flex items-center gap-2"><RotateCcw className="h-5 w-5 text-primary" />{t('employeeDetail.text.assignShift')}</DialogTitle><DialogDescription>{t('employeeDetail.text.assignShiftDescription', { name: data.first_name })}</DialogDescription></DialogHeader>
           <div className="space-y-4 py-2">
             <div><Label className="text-xs font-semibold">{t('employeeDetail.text.shiftTab')} <span className="text-destructive">*</span></Label><Select value={shiftForm.shift_id} onValueChange={(v) => setShiftForm((p) => ({ ...p, shift_id: v }))}><SelectTrigger className="mt-1.5"><SelectValue placeholder={t('employeeDetail.text.selectShift')} /></SelectTrigger><SelectContent>{(shiftsData?.data ?? []).filter((s) => s.is_active).map((s) => (<SelectItem key={s.id} value={String(s.id)}><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full shrink-0" style={{ background: s.color ?? 'var(--primary)' }} />{s.name} · {s.start_time}–{s.end_time} ({t('employeeDetail.text.hoursCount', { count: s.work_hours })}){s.is_night_shift && ' 🌙'}</div></SelectItem>))}</SelectContent></Select></div>
-            <div><Label className="text-xs font-semibold">{t('employeeDetail.text.effectiveFrom')} <span className="text-destructive">*</span></Label><Input type="date" className="mt-1.5" value={shiftForm.effective_from} onChange={(e) => setShiftForm((p) => ({ ...p, effective_from: e.target.value }))} /></div>
+            <div>
+              <Label className="text-xs font-semibold">{t('schedules.periodMode', { defaultValue: 'Duração / Período do Turno' })}</Label>
+              <Select
+                value={shiftForm.period_mode}
+                onValueChange={(v) => setShiftForm((p) => ({
+                  ...p,
+                  period_mode: v as 'continuous' | 'daily' | 'weekly' | 'monthly' | 'custom',
+                  effective_to: v === 'custom' && !p.effective_to ? p.effective_from : p.effective_to,
+                }))}
+              >
+                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="continuous">{t('schedules.periodContinuous', { defaultValue: 'Contínuo (sem data fim)' })}</SelectItem>
+                  <SelectItem value="daily">{t('schedules.periodDaily', { defaultValue: 'Data única (1 dia)' })}</SelectItem>
+                  <SelectItem value="weekly">{t('schedules.periodWeekly', { defaultValue: 'Semanal (7 dias a partir do início)' })}</SelectItem>
+                  <SelectItem value="monthly">{t('schedules.periodMonthly', { defaultValue: 'Mensal (mês completo)' })}</SelectItem>
+                  <SelectItem value="custom">{t('schedules.periodCustom', { defaultValue: 'Intervalo de datas (De – Até)' })}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {shiftForm.period_mode === 'monthly' ? (
+              <div>
+                <Label className="text-xs font-semibold">{t('schedules.month', { defaultValue: 'Mês' })} <span className="text-destructive">*</span></Label>
+                <Input type="month" className="mt-1.5" value={shiftForm.month} onChange={(e) => setShiftForm((p) => ({ ...p, month: e.target.value }))} />
+              </div>
+            ) : (
+              <div className={shiftForm.period_mode === 'custom' ? 'grid grid-cols-2 gap-3' : undefined}>
+                <div>
+                  <Label className="text-xs font-semibold">{shiftForm.period_mode === 'daily' ? t('common.date', { defaultValue: 'Data' }) : t('employeeDetail.text.effectiveFrom')} <span className="text-destructive">*</span></Label>
+                  <Input type="date" className="mt-1.5" value={shiftForm.effective_from} onChange={(e) => setShiftForm((p) => ({ ...p, effective_from: e.target.value }))} />
+                </div>
+                {shiftForm.period_mode === 'custom' && (
+                  <div>
+                    <Label className="text-xs font-semibold">{t('schedules.effectiveTo', { defaultValue: 'Válido até' })} <span className="text-destructive">*</span></Label>
+                    <Input type="date" className="mt-1.5" min={shiftForm.effective_from} value={shiftForm.effective_to} onChange={(e) => setShiftForm((p) => ({ ...p, effective_to: e.target.value }))} />
+                  </div>
+                )}
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={shiftForm.replace_previous}
+                onChange={(e) => setShiftForm((p) => ({ ...p, replace_previous: e.target.checked }))}
+              />
+              {t('schedules.replacePrevious', { defaultValue: 'Encerrar turno anterior na véspera do início' })}
+            </label>
             <div><Label className="text-xs font-semibold">{t('employeeDetail.text.notesOptional')}</Label><Input className="mt-1.5" placeholder={t('employeeDetail.text.changeReason')} value={shiftForm.notes} onChange={(e) => setShiftForm((p) => ({ ...p, notes: e.target.value }))} /></div>
           </div>
-          <DialogFooter className="flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center"><Button variant="outline" size="sm" onClick={() => setIsShiftOpen(false)} disabled={shiftMutation.isPending}>{t('employeeDetail.text.cancel')}</Button><Button size="sm" onClick={() => shiftMutation.mutate()} disabled={shiftMutation.isPending || !shiftForm.shift_id}>{shiftMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}{t('employeeDetail.text.assign')}</Button></DialogFooter>
+          <DialogFooter className="flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center"><Button variant="outline" size="sm" onClick={() => setIsShiftOpen(false)} disabled={shiftMutation.isPending}>{t('employeeDetail.text.cancel')}</Button><Button size="sm" onClick={() => shiftMutation.mutate()} disabled={shiftMutation.isPending || !shiftForm.shift_id || (shiftForm.period_mode === 'custom' && (!shiftForm.effective_to || shiftForm.effective_to < shiftForm.effective_from))}>{shiftMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}{t('employeeDetail.text.assign')}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

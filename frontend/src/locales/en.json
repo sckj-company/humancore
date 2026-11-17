@@ -212,7 +212,8 @@
     "approval": {
       "pending": "Pending",
       "approved": "Approved"
-    }
+    },
+    "contractType": "Contract"
   },
   "employeeDetail": {
     "status": {
@@ -655,7 +656,15 @@
       "documentVerifiedBadge": "Verified",
       "documentUnverifiedBadge": "Pending verification",
       "verifiedAction": "Verified",
-      "verifyAction": "Verify"
+      "verifyAction": "Verify",
+      "advancesSectionTitle": "Salary Advances / Vouchers",
+      "advancesSectionDescription": "Record salary advances and vouchers with monthly percentage schedule, printable PDF receipt and signed upload.",
+      "deductionsSectionTitle": "Deductions",
+      "deductionsSectionDescription": "Record loans, pensions, insurance or other payroll deductions with monthly percentage schedule and receipt.",
+      "advanceName": "Advance Description / Reason",
+      "addAdvance": "Add Advance",
+      "advanceCreated": "Advance recorded successfully.",
+      "noAdvances": "No salary advances or vouchers recorded."
     }
   },
   "employees": {
@@ -866,7 +875,16 @@
     "annual": "Annual",
     "requiredName": "Name is required",
     "requiredStartTime": "Start time is required",
-    "requiredEndTime": "End time is required"
+    "requiredEndTime": "End time is required",
+    "periodMode": "Shift Duration / Period",
+    "periodContinuous": "Continuous (no end date)",
+    "periodDaily": "Single date (1 day)",
+    "periodWeekly": "Weekly (7 days from start)",
+    "periodMonthly": "Monthly (full month)",
+    "periodCustom": "Custom date range (From – To)",
+    "month": "Month",
+    "effectiveTo": "Effective Until",
+    "replacePrevious": "Close previous shift the day before start"
   },
   "payroll": {
     "title": "Payroll",
@@ -876,7 +894,7 @@
       "open": "Open",
       "processing": "Processing",
       "completed": "Calculated",
-      "failed": "With errors",
+      "failed": "Failed",
       "pending_validation": "Pending validation",
       "pending_approval": "Pending approval",
       "approved": "Approved",
@@ -1041,7 +1059,13 @@
         "reopenDescription": "This creates a new period version. The previous result is preserved.",
         "reopenWarning": "The period will return to Open for recalculation. Previous approved totals remain in history.",
         "reopenPlaceholder": "Enter the reason for reopening…"
-      }
+      },
+      "searchEmployeePlaceholder": "Filter by employee or code...",
+      "allDepartments": "All departments",
+      "allContracts": "All contracts",
+      "outdatedFilter": "Outdated",
+      "withErrorsFilter": "With alerts",
+      "noFilteredRecords": "No employee records match the current filters."
     },
     "periodsPage": {
       "emptyTitle": "No payroll periods",
@@ -1073,7 +1097,10 @@
       "typeMonthly": "Monthly",
       "typeBiweekly": "Biweekly",
       "typeWeekly": "Weekly",
-      "create": "Create"
+      "create": "Create",
+      "searchPlaceholder": "Search by period name...",
+      "year": "Year",
+      "noFilterMatches": "No payroll periods match the current filters."
     },
     "processDialog": {
       "title": "Process payroll",
@@ -2075,7 +2102,39 @@
     "empty": "No deductions registered",
     "emptyDescription": "Create the first deduction to get started.",
     "deleteConfirm": "Are you sure you want to delete this deduction?",
-    "error": "Error saving deduction"
+    "error": "Error saving deduction",
+    "signedDocumentUploaded": "Signed voucher uploaded successfully.",
+    "signedDocumentError": "Failed to upload signed voucher.",
+    "receiptDownloadError": "Failed to download voucher PDF.",
+    "signedDownloadError": "Failed to download signed voucher.",
+    "downloadReceipt": "Download voucher to sign",
+    "receiptShort": "Voucher PDF",
+    "uploadSigned": "Upload signed voucher",
+    "replaceSigned": "Replace Signed",
+    "uploadSignedShort": "Upload Signed",
+    "viewSigned": "Download signed voucher",
+    "signedBadge": "Signed",
+    "installmentsScheduleTitle": "Installment Schedule by Month & Percentage",
+    "percentageSum": "Total",
+    "splitEvenly": "Split evenly",
+    "addInstallment": "Add installment",
+    "deductionMonth": "Deduction Month",
+    "percentageCol": "Percentage (%)",
+    "installmentAmountCol": "Amount (Kz)",
+    "percentageSumError": "Installment percentages must sum to exactly 100%.",
+    "noDetailedInstallments": "No detailed installments configured for this record.",
+    "settlementPeriod": "Payroll / Settlement",
+    "installmentPaid": "Paid / Deducted",
+    "installmentCancelled": "Cancelled",
+    "installmentPending": "Pending",
+    "requestedDate": "Request Date",
+    "receiptColumn": "Voucher",
+    "toggleInstallments": "View detailed installments",
+    "installmentsShort": "installment(s)",
+    "installmentsDetailHeading": "Detailed Installment Schedule",
+    "viewInstallments": "View Installments",
+    "paidAmount": "Paid",
+    "downloadSignedShort": "Download Signed"
   },
   "emailTemplates": {
     "eyebrow": "COMMUNICATION",
@@ -2858,5 +2917,52 @@
       "invalidPhoto": "Please select a valid image (JPG, PNG, WebP).",
       "unsupportedFile": "File {{name}} is not supported. Use PDF, images, or documents."
     }
+  },
+  "attendanceReport": {
+    "button": "Attendance Report",
+    "employeeReport": "Attendance report for this employee",
+    "title": "Attendance Report",
+    "description": "Review and export daily, weekly, or monthly attendance PDFs per employee or filtered team.",
+    "periodType": "Periodicity",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "custom": "Custom",
+    "weekReferenceDate": "Week reference date",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "allFilteredEmployees": "All (with list filters)",
+    "attendanceStatus": "Attendance status",
+    "present": "Present",
+    "late": "Late",
+    "absent": "Absent",
+    "onLeave": "Leave / Excused",
+    "workedHours": "Worked Hours",
+    "overtimeHours": "Overtime",
+    "attendanceRate": "Attendance Rate",
+    "empty": "No data found for the selected filters.",
+    "dailyLog": "Daily Records",
+    "clockIn": "Clock In",
+    "clockOut": "Clock Out",
+    "downloadPdf": "Download PDF",
+    "downloadError": "Failed to generate attendance PDF.",
+    "pdfHint": "Click Download PDF to export the complete formatted report.",
+    "statuses": {
+      "present": "Present",
+      "late": "Late",
+      "absent": "Absent",
+      "on_leave": "On Leave",
+      "half_day": "Half Day"
+    },
+    "selectedCount": "{{count}} selected",
+    "allScope": "All",
+    "searchEmployeePlaceholder": "Search by name or code...",
+    "selectVisible": "Select filtered",
+    "clearSelection": "Clear selection (All)",
+    "noEmployeesMatch": "No employees found.",
+    "loadError": "Failed to load the attendance report.",
+    "recordsShort": "record(s)",
+    "selectedFooterHint": "{{count}} employee(s) selected for export.",
+    "allFooterHint": "Exporting all employees matching current filters."
   }
 }

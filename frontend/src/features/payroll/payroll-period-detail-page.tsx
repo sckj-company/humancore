@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
@@ -6,7 +6,7 @@ import {
   ArrowLeft, ChevronDown, ChevronRight, Play, CheckCircle2, Lock, FileDown, Users,
   TrendingUp, Wallet, Building2, AlertTriangle, AlertCircle, Info,
   Loader2, Clock, Calendar, FileText, BarChart3, XCircle, Send,
-  Banknote, RotateCcw, History, X, ExternalLink, Settings2, Calculator, Plus, Trash2,
+  Banknote, RotateCcw, History, X, ExternalLink, Settings2, Calculator, Plus, Trash2, Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -838,6 +838,61 @@ function SummaryTab({
   const user = useAuthStore((s) => s.user)
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [drafts, setDrafts] = useState<Record<number, RecordDraft>>({})
+  const [search, setSearch] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState('all')
+  const [recordStatusFilter, setRecordStatusFilter] = useState('all')
+  const [contractTypeFilter, setContractTypeFilter] = useState('all')
+
+  const departmentOptions = useMemo(() => {
+    const names = new Set<string>()
+    for (const r of records) {
+      if (r.employee?.department) names.add(r.employee.department)
+    }
+    return Array.from(names).sort()
+  }, [records])
+
+  const contractTypeOptions = useMemo(() => {
+    const types = new Set<string>()
+    for (const r of records) {
+      const ct = r.contract_type ?? r.contract?.contract_type
+      if (ct) types.add(ct)
+    }
+    return Array.from(types).sort()
+  }, [records])
+
+  const filteredRecords = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return records.filter((r) => {
+      if (q) {
+        const name = (r.employee?.full_name ?? '').toLowerCase()
+        const code = (r.employee?.employee_code ?? '').toLowerCase()
+        if (!name.includes(q) && !code.includes(q)) return false
+      }
+      if (departmentFilter !== 'all' && (r.employee?.department ?? '') !== departmentFilter) {
+        return false
+      }
+      const ct = r.contract_type ?? r.contract?.contract_type ?? ''
+      if (contractTypeFilter !== 'all' && ct !== contractTypeFilter) {
+        return false
+      }
+      if (recordStatusFilter !== 'all') {
+        if (recordStatusFilter === 'outdated' && !r.is_outdated) return false
+        if (recordStatusFilter === 'with_errors' && !(r.validation_errors && r.validation_errors.length > 0)) return false
+        if (recordStatusFilter !== 'outdated' && recordStatusFilter !== 'with_errors' && r.status !== recordStatusFilter) return false
+      }
+      return true
+    })
+  }, [records, search, departmentFilter, contractTypeFilter, recordStatusFilter])
+
+  const hasRecordFilters = Boolean(
+    search.trim() || departmentFilter !== 'all' || recordStatusFilter !== 'all' || contractTypeFilter !== 'all',
+  )
+  const resetRecordFilters = () => {
+    setSearch('')
+    setDepartmentFilter('all')
+    setRecordStatusFilter('all')
+    setContractTypeFilter('all')
+  }
 
   const canViewBase = hasFieldPermission(user, 'payroll', 'base_salary', 'view')
   const canViewGross = hasFieldPermission(user, 'payroll', 'gross_salary', 'view')
@@ -871,7 +926,7 @@ function SummaryTab({
     )
   }
 
-  const allExpanded = expandedIds.size === records.length
+  const allExpanded = filteredRecords.length > 0 && filteredRecords.every((r) => expandedIds.has(r.id))
   const dirtyCount = Object.keys(drafts).length
   const outdatedRecords = records.filter((r) => r.is_outdated)
   const handleRecalculateOutdated = async () => {
@@ -896,7 +951,7 @@ function SummaryTab({
     if (allExpanded) {
       setExpandedIds(new Set())
     } else {
-      setExpandedIds(new Set(records.map((r) => r.id)))
+      setExpandedIds(new Set(filteredRecords.map((r) => r.id)))
     }
   }
   const updateDraft = (record: PayrollRecord, updater: (prev: RecordDraft) => RecordDraft) => {
@@ -939,19 +994,19 @@ function SummaryTab({
   }
   const canDownloadPayslip = periodStatus === 'approved' || periodStatus === 'paid' || periodStatus === 'closed'
 
-  const totalsGross = records.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
-  const totalsNet = records.reduce((s, r) => s + (r.net_salary ?? 0), 0)
-  const totalsInss = records.reduce((sum, record) => sum + (getPayrollComponent(record, 'inss')?.amount ?? 0), 0)
-  const totalsEmployerInss = records.reduce(
+  const totalsGross = filteredRecords.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
+  const totalsNet = filteredRecords.reduce((s, r) => s + (r.net_salary ?? 0), 0)
+  const totalsInss = filteredRecords.reduce((sum, record) => sum + (getPayrollComponent(record, 'inss')?.amount ?? 0), 0)
+  const totalsEmployerInss = filteredRecords.reduce(
     (sum, record) => sum + (getPayrollComponent(record, 'employer_inss')?.amount ?? Number(record.employer_inss ?? 0)),
     0,
   )
-  const totalsIrt = records.reduce((sum, record) => sum + (getPayrollComponent(record, 'irt')?.amount ?? Math.abs(record.total_taxes ?? 0)), 0)
-  const totalsOtherDeductions = records.reduce((sum, record) => {
+  const totalsIrt = filteredRecords.reduce((sum, record) => sum + (getPayrollComponent(record, 'irt')?.amount ?? Math.abs(record.total_taxes ?? 0)), 0)
+  const totalsOtherDeductions = filteredRecords.reduce((sum, record) => {
     const inssAmount = getPayrollComponent(record, 'inss')?.amount ?? 0
     return sum + Math.max(0, (record.total_deductions ?? 0) - inssAmount)
   }, 0)
-  const totalsCost = records.reduce((s, r) => s + (r.employer_cost ?? r.gross_salary ?? 0), 0)
+  const totalsCost = filteredRecords.reduce((s, r) => s + (r.employer_cost ?? r.gross_salary ?? 0), 0)
 
   return (
     <div className="space-y-4">
@@ -1019,6 +1074,65 @@ function SummaryTab({
               </Button>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/15 px-5 py-3">
+            <div className="relative min-w-[200px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('payroll.detail.searchEmployeePlaceholder', { defaultValue: 'Filtrar por funcionário ou código...' })}
+                className="h-9 pl-9"
+              />
+            </div>
+            {departmentOptions.length > 0 && (
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger className="h-9 w-full sm:w-44">
+                  <SelectValue placeholder={t('employeesPage.department')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('payroll.detail.allDepartments', { defaultValue: 'Todos departamentos' })}</SelectItem>
+                  {departmentOptions.map((dept) => (
+                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Select value={recordStatusFilter} onValueChange={setRecordStatusFilter}>
+              <SelectTrigger className="h-9 w-full sm:w-40">
+                <SelectValue placeholder={t('common.status')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="calculated">{t('payroll.recordStatuses.calculated', { defaultValue: 'Calculado' })}</SelectItem>
+                <SelectItem value="approved">{t('payroll.recordStatuses.approved', { defaultValue: 'Aprovado' })}</SelectItem>
+                <SelectItem value="paid">{t('payroll.recordStatuses.paid', { defaultValue: 'Pago' })}</SelectItem>
+                <SelectItem value="outdated">{t('payroll.detail.outdatedFilter', { defaultValue: 'Desatualizado' })}</SelectItem>
+                <SelectItem value="with_errors">{t('payroll.detail.withErrorsFilter', { defaultValue: 'Com alertas' })}</SelectItem>
+              </SelectContent>
+            </Select>
+            {contractTypeOptions.length > 0 && (
+              <Select value={contractTypeFilter} onValueChange={setContractTypeFilter}>
+                <SelectTrigger className="h-9 w-full sm:w-40">
+                  <SelectValue placeholder={t('employeesPage.contractType', { defaultValue: 'Contrato' })} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('payroll.detail.allContracts', { defaultValue: 'Todos contratos' })}</SelectItem>
+                  {contractTypeOptions.map((ct) => (
+                    <SelectItem key={ct} value={ct}>{ct}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {filteredRecords.length} / {records.length}
+            </span>
+            {hasRecordFilters && (
+              <Button type="button" size="sm" variant="ghost" onClick={resetRecordFilters}>
+                <X className="mr-1 h-3.5 w-3.5" />
+                {t('employeesPage.clearFilters', { defaultValue: 'Limpar filtros' })}
+              </Button>
+            )}
+          </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
@@ -1036,7 +1150,13 @@ function SummaryTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-border text-sm">
-              {records.map((r) => {
+              {filteredRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={visibleColumnCount} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                    {t('payroll.detail.noFilteredRecords', { defaultValue: 'Nenhum funcionário corresponde aos filtros aplicados.' })}
+                  </td>
+                </tr>
+              ) : filteredRecords.map((r) => {
                 const inssAmount = getPayrollComponent(r, 'inss')?.amount ?? null
                 const irtAmount = getPayrollComponent(r, 'irt')?.amount ?? Math.abs(r.total_taxes ?? 0)
                 const otherDeductions = Math.max(0, (r.total_deductions ?? 0) - (inssAmount ?? 0))

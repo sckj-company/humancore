@@ -59,14 +59,39 @@ class EmployeeScheduleController extends BaseController
             'custom_days' => ['nullable', 'array'],
             'custom_days.*' => ['integer', 'min:0', 'max:6'],
             'is_active' => ['nullable', 'boolean'],
+            'replace_previous' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        $replacePrevious = (bool) ($data['replace_previous'] ?? false);
+        unset($data['replace_previous']);
 
         $data['tenant_id'] = tenant_id();
         $data['assigned_by'] = $request->user()->id;
 
         $isActive = $data['is_active'] ?? true;
         $data['is_active'] = $isActive;
+
+        if ($replacePrevious && $isActive) {
+            $newStart = \Carbon\Carbon::parse($data['effective_from']);
+            EmployeeSchedule::query()
+                ->where('employee_id', $data['employee_id'])
+                ->where('is_active', true)
+                ->where(function ($q) use ($newStart): void {
+                    $q->whereNull('effective_to')
+                        ->orWhereDate('effective_to', '>=', $newStart->toDateString());
+                })
+                ->get()
+                ->each(function (EmployeeSchedule $existing) use ($newStart): void {
+                    if ($existing->effective_from && $existing->effective_from->lt($newStart)) {
+                        $existing->update([
+                            'effective_to' => $newStart->copy()->subDay()->toDateString(),
+                        ]);
+                    } else {
+                        $existing->update(['is_active' => false]);
+                    }
+                });
+        }
 
         $schedule = EmployeeSchedule::query()->create($data);
 

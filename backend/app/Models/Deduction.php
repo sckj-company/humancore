@@ -53,9 +53,12 @@ class Deduction extends Model
         'installment_count',
         'installment_amount',
         'starts_at',
+        'requested_at',
         'is_recurring',
         'is_mandatory',
         'legal_basis',
+        'signed_document_path',
+        'signed_document_uploaded_at',
         'status',
         'approved_by',
         'approved_at',
@@ -75,11 +78,23 @@ class Deduction extends Model
             'paid_amount' => 'decimal:2',
             'installment_amount' => 'decimal:2',
             'starts_at' => 'date',
+            'requested_at' => 'datetime',
             'is_recurring' => 'boolean',
             'is_mandatory' => 'boolean',
+            'signed_document_uploaded_at' => 'datetime',
             'approved_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    public function installments()
+    {
+        return $this->hasMany(DeductionInstallment::class)->orderBy('installment_number');
+    }
+
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     public function employee()

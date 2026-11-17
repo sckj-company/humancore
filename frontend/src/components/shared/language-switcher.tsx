@@ -20,10 +20,10 @@ export function LanguageSwitcher() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setAppLanguage('pt')}>{t('language.portuguese')}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setAppLanguage('en')}>{t('language.english')}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setAppLanguage('zh')}>{t('language.chinese')}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setAppLanguage('bilingual')}>{t('language.bilingual')}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setAppLanguage('pt')}>Português</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setAppLanguage('en')}>English</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setAppLanguage('zh')}>中文 (Mandarim)</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setAppLanguage('bilingual')}>Português + 中文</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

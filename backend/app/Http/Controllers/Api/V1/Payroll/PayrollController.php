@@ -30,6 +30,26 @@ class PayrollController extends BaseController
             ->withCount('records')
             ->withSum('records', 'gross_salary')
             ->withSum('records', 'net_salary')
+            ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.trim((string) $request->input('search')).'%'))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
+            ->when($request->filled('period_type'), fn ($q) => $q->where('period_type', $request->string('period_type')))
+            ->when($request->filled('year'), function ($q) use ($request): void {
+                $year = $request->integer('year');
+                if ($year >= 2000 && $year <= 2100) {
+                    $q->whereDate('period_start', '>=', "{$year}-01-01")
+                        ->whereDate('period_start', '<=', "{$year}-12-31");
+                }
+            })
+            ->when($request->filled('month'), function ($q) use ($request): void {
+                $month = trim((string) $request->input('month'));
+                if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
+                    $start = Carbon::createFromFormat('Y-m', $month)->startOfMonth()->toDateString();
+                    $end = Carbon::createFromFormat('Y-m', $month)->endOfMonth()->toDateString();
+                    $q->whereDate('period_start', '<=', $end)->whereDate('period_end', '>=', $start);
+                }
+            })
+            ->when($request->filled('date_from'), fn ($q) => $q->whereDate('period_end', '>=', $request->date('date_from')))
+            ->when($request->filled('date_to'), fn ($q) => $q->whereDate('period_start', '<=', $request->date('date_to')))
             ->orderByDesc('period_start')
             ->paginate($request->integer('per_page', 15));
 
@@ -63,7 +83,7 @@ class PayrollController extends BaseController
                 if ($allowedDeptIds !== null) {
                     $query->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDeptIds));
                 }
-                $query->with(['employee', 'items']);
+                $query->with(['employee.department', 'contract', 'items']);
             },
             'events.actor:id,name',
             'processedBy:id,name',
@@ -403,9 +423,9 @@ class PayrollController extends BaseController
                     $record->update(['status' => 'paid', 'paid_at' => $paidAt]);
                 }
 
-                $deductionAmounts = $records
-                    ->flatMap(fn ($record) => $record->items)
-                    ->filter(fn (PayrollRecordItem $item) => $item->deduction_id !== null)
+                $periodMonth = Carbon::parse($period->period_start)->format('Y-m');
+                $deductionItems = $records->flatMap(fn ($record) => $record->items->filter(fn (PayrollRecordItem $item) => $item->deduction_id !== null));
+                $deductionAmounts = $deductionItems
                     ->groupBy('deduction_id')
                     ->map(fn ($items) => $items->sum(fn (PayrollRecordItem $item) => abs((float) $item->amount)));
 
@@ -415,9 +435,44 @@ class PayrollController extends BaseController
                         continue;
                     }
 
+                    $relatedRecordIds = $deductionItems
+                        ->where('deduction_id', $deductionId)
+                        ->pluck('payroll_record_id')
+                        ->unique()
+                        ->values();
+
+                    $installmentIds = $deductionItems
+                        ->where('deduction_id', $deductionId)
+                        ->pluck('deduction_installment_id')
+                        ->filter()
+                        ->unique()
+                        ->values();
+
+                    $installmentQuery = \App\Models\DeductionInstallment::query()
+                        ->where('deduction_id', $deductionId)
+                        ->where('status', 'pending');
+
+                    if ($installmentIds->isNotEmpty()) {
+                        $installmentQuery->where(function ($q) use ($installmentIds, $periodMonth): void {
+                            $q->whereIn('id', $installmentIds)
+                                ->orWhere('reference_month', $periodMonth);
+                        });
+                    } else {
+                        $installmentQuery->where('reference_month', $periodMonth);
+                    }
+
+                    $installmentQuery->update([
+                        'status' => 'paid',
+                        'payroll_period_id' => $period->id,
+                        'payroll_record_id' => $relatedRecordIds->first(),
+                        'paid_at' => $paidAt,
+                    ]);
+
                     $paidAmount = round((float) $deduction->paid_amount + $amount, 2);
                     $updates = ['paid_amount' => $paidAmount];
-                    $isComplete = ($deduction->total_amount !== null && $paidAmount >= (float) $deduction->total_amount)
+                    $hasRemainingInstallments = $deduction->installments()->where('status', 'pending')->exists();
+                    $isComplete = (! $hasRemainingInstallments && $deduction->installments()->exists())
+                        || ($deduction->total_amount !== null && $paidAmount >= (float) $deduction->total_amount)
                         || (! $deduction->is_recurring && $deduction->total_amount === null);
 
                     if ($isComplete && $deduction->status !== 'cancelled') {
@@ -455,7 +510,29 @@ class PayrollController extends BaseController
 
         $records = $period->records()
             ->when($allowedDeptIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDeptIds)))
-            ->with(['employee', 'contract', 'items'])
+            ->when($request->filled('search'), function ($q) use ($request): void {
+                $term = trim((string) $request->input('search'));
+                $q->whereHas('employee', function ($eq) use ($term): void {
+                    $eq->where(function ($inner) use ($term): void {
+                        $inner->where('first_name', 'like', "%{$term}%")
+                            ->orWhere('last_name', 'like', "%{$term}%")
+                            ->orWhere('employee_code', 'like', "%{$term}%");
+                    });
+                });
+            })
+            ->when($request->filled('department_id'), fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->where('department_id', $request->integer('department_id'))))
+            ->when($request->filled('contract_type'), fn ($q) => $q->whereHas('contract', fn ($cq) => $cq->where('contract_type', $request->string('contract_type'))))
+            ->when($request->filled('status'), function ($q) use ($request): void {
+                $status = (string) $request->string('status');
+                if ($status === 'outdated') {
+                    $q->where('is_outdated', true);
+                } elseif ($status === 'with_errors') {
+                    $q->whereNotNull('validation_errors');
+                } else {
+                    $q->where('status', $status);
+                }
+            })
+            ->with(['employee.department', 'contract', 'items'])
             ->get();
 
         return $this->success(PayrollRecordResource::collection($records));

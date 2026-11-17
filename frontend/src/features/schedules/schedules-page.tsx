@@ -608,15 +608,41 @@ function AssignmentDialog({ open, onOpenChange, shifts, employees }: { open: boo
   const queryClient = useQueryClient()
   const [employeeId, setEmployeeId] = useState('')
   const [shiftId, setShiftId] = useState('')
+  const [periodMode, setPeriodMode] = useState<'continuous' | 'daily' | 'weekly' | 'monthly' | 'custom'>('continuous')
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10))
+  const [effectiveTo, setEffectiveTo] = useState('')
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [replacePrevious, setReplacePrevious] = useState(true)
+
+  const resolveDates = () => {
+    if (periodMode === 'daily') return { from: effectiveFrom, to: effectiveFrom }
+    if (periodMode === 'weekly' && effectiveFrom) {
+      const start = new Date(`${effectiveFrom}T00:00:00`)
+      const end = new Date(start)
+      end.setDate(end.getDate() + 6)
+      return { from: effectiveFrom, to: end.toISOString().slice(0, 10) }
+    }
+    if (periodMode === 'monthly' && /^\d{4}-\d{2}$/.test(month)) {
+      const [y, m] = month.split('-').map(Number)
+      const last = new Date(y, m, 0)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return { from: `${y}-${pad(m)}-01`, to: `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}` }
+    }
+    if (periodMode === 'custom') return { from: effectiveFrom, to: effectiveTo || undefined }
+    return { from: effectiveFrom, to: undefined }
+  }
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api.post('employee-schedules', {
+    mutationFn: () => {
+      const { from, to } = resolveDates()
+      return api.post('employee-schedules', {
         employee_id: Number(employeeId),
         shift_id: Number(shiftId),
-        effective_from: effectiveFrom,
-      }),
+        effective_from: from,
+        effective_to: to,
+        replace_previous: replacePrevious,
+      })
+    },
     onSuccess: () => {
       toast.success(t('schedules.scheduleAssigned'))
       queryClient.invalidateQueries({ queryKey: ['employee-schedules'] })
@@ -666,15 +692,52 @@ function AssignmentDialog({ open, onOpenChange, shifts, employees }: { open: boo
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>{t('schedules.effectiveFrom')} *</Label>
-            <Input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+            <Label>{t('schedules.periodMode', { defaultValue: 'Duração / Período do Turno' })}</Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+              value={periodMode}
+              onChange={(e) => setPeriodMode(e.target.value as 'continuous' | 'daily' | 'weekly' | 'monthly' | 'custom')}
+            >
+              <option value="continuous">{t('schedules.periodContinuous', { defaultValue: 'Contínuo (sem data fim)' })}</option>
+              <option value="daily">{t('schedules.periodDaily', { defaultValue: 'Data única (1 dia)' })}</option>
+              <option value="weekly">{t('schedules.periodWeekly', { defaultValue: 'Semanal (7 dias a partir do início)' })}</option>
+              <option value="monthly">{t('schedules.periodMonthly', { defaultValue: 'Mensal (mês completo)' })}</option>
+              <option value="custom">{t('schedules.periodCustom', { defaultValue: 'Intervalo de datas (De – Até)' })}</option>
+            </select>
           </div>
+          {periodMode === 'monthly' ? (
+            <div className="space-y-1.5">
+              <Label>{t('schedules.month', { defaultValue: 'Mês' })} *</Label>
+              <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+            </div>
+          ) : (
+            <div className={periodMode === 'custom' ? 'grid grid-cols-2 gap-3' : 'space-y-1.5'}>
+              <div className="space-y-1.5">
+                <Label>{periodMode === 'daily' ? t('common.date', { defaultValue: 'Data' }) : t('schedules.effectiveFrom')} *</Label>
+                <Input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+              </div>
+              {periodMode === 'custom' && (
+                <div className="space-y-1.5">
+                  <Label>{t('schedules.effectiveTo', { defaultValue: 'Válido até' })} *</Label>
+                  <Input type="date" min={effectiveFrom} value={effectiveTo} onChange={(e) => setEffectiveTo(e.target.value)} />
+                </div>
+              )}
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={replacePrevious}
+              onChange={(e) => setReplacePrevious(e.target.checked)}
+            />
+            {t('schedules.replacePrevious', { defaultValue: 'Encerrar turno anterior na véspera do início' })}
+          </label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
           <Button
             onClick={() => mutation.mutate()}
-            disabled={!employeeId || !shiftId || mutation.isPending}
+            disabled={!employeeId || !shiftId || (periodMode === 'custom' && (!effectiveTo || effectiveTo < effectiveFrom)) || mutation.isPending}
           >
             {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('schedules.assign')}

@@ -20,6 +20,7 @@ class PayrollRecordItem extends Model
         'name',
         'salary_component_id',
         'deduction_id',
+        'deduction_installment_id',
         'regulation_id',
         'inss_rule_id',
         'irt_table_id',
@@ -53,6 +54,11 @@ class PayrollRecordItem extends Model
     public function deduction(): BelongsTo
     {
         return $this->belongsTo(Deduction::class);
+    }
+
+    public function deductionInstallment(): BelongsTo
+    {
+        return $this->belongsTo(DeductionInstallment::class);
     }
 
     public function regulation(): BelongsTo
