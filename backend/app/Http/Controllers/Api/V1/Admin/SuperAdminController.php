@@ -10,9 +10,13 @@ use App\Models\LeaveType;
 use App\Models\PermissionGroup;
 use App\Models\SalaryComponent;
 use App\Models\Tenant;
+use App\Models\TenantRelationship;
 use App\Models\User;
 use App\Models\UserTenantAccess;
 use App\Services\Audit\AuditService;
+use App\Services\SaaS\PlanEntitlementService;
+use App\Services\SaaS\TenantHierarchyService;
+use App\Services\SaaS\TenantProvisioningService;
 use App\Services\Tenant\TenantManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -304,30 +308,56 @@ class SuperAdminController extends BaseController
         $this->authorize('viewAny', Tenant::class);
 
         $tenants = Tenant::query()
-            ->withCount(['employees', 'users', 'departments'])
+            ->with([
+                'latestSubscription.plan:id,name,slug,currency,base_price',
+                'activeManagerRelationship.managerTenant:id,name,slug',
+            ])
+            ->withCount(['employees', 'users', 'departments', 'activeManagedRelationships'])
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = $request->string('search');
-                $q->where('name', 'like', "%{$term}%")
-                    ->orWhere('slug', 'like', "%{$term}%")
-                    ->orWhere('email', 'like', "%{$term}%")
-                    ->orWhere('tax_id', 'like', "%{$term}%");
+                $q->where(function ($sub) use ($term) {
+                    $sub->where('name', 'like', "%{$term}%")
+                        ->orWhere('slug', 'like', "%{$term}%")
+                        ->orWhere('email', 'like', "%{$term}%")
+                        ->orWhere('tax_id', 'like', "%{$term}%");
+                });
             })
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
             ->orderBy($request->string('sort_by', 'created_at'), $request->string('sort_dir', 'desc'))
             ->paginate($request->integer('per_page', 20));
 
-        return $this->paginated($tenants->through(fn (Tenant $tenant) => array_merge(
-            (new TenantResource($tenant))->resolve(),
-            [
-                'stats' => [
-                    'employees' => $tenant->employees_count,
-                    'departments' => $tenant->departments_count,
-                    'users' => $tenant->users_count,
+        return $this->paginated($tenants->through(function (Tenant $tenant) {
+            $sub = $tenant->latestSubscription;
+            $managerRel = $tenant->activeManagerRelationship;
+
+            return array_merge(
+                (new TenantResource($tenant))->resolve(),
+                [
+                    'stats' => [
+                        'employees' => $tenant->employees_count,
+                        'departments' => $tenant->departments_count,
+                        'users' => $tenant->users_count,
+                        'managed_tenants' => $tenant->active_managed_relationships_count,
+                    ],
+                    'subscription' => $sub ? [
+                        'id' => $sub->id,
+                        'plan_id' => $sub->plan_id,
+                        'plan_name' => $sub->plan?->name,
+                        'status' => $sub->status,
+                        'ends_at' => $sub->ends_at?->toIso8601String(),
+                        'custom_price' => $sub->custom_price,
+                    ] : null,
+                    'managed_by' => $managerRel?->managerTenant ? [
+                        'relationship_id' => $managerRel->id,
+                        'relationship_type' => $managerRel->relationship_type,
+                        'manager_tenant_id' => $managerRel->managerTenant->id,
+                        'manager_tenant_name' => $managerRel->managerTenant->name,
+                    ] : null,
+                    'created_at' => $tenant->created_at?->toIso8601String(),
+                    'updated_at' => $tenant->updated_at?->toIso8601String(),
                 ],
-                'created_at' => $tenant->created_at?->toIso8601String(),
-                'updated_at' => $tenant->updated_at?->toIso8601String(),
-            ],
-        )));
+            );
+        }));
     }
 
     public function storeTenant(Request $request): JsonResponse
@@ -338,10 +368,15 @@ class SuperAdminController extends BaseController
             'name'               => ['required', 'string', 'max:255'],
             'slug'               => ['required', 'string', 'max:255', 'regex:/^[a-z0-9-]+$/', 'unique:tenants,slug'],
             'email'              => ['nullable', 'email', 'max:255'],
+            'billing_email'      => ['nullable', 'email', 'max:255'],
             'phone'              => ['nullable', 'string', 'max:50'],
             'tax_id'             => ['nullable', 'string', 'max:100'],
+            'inss_number'        => ['nullable', 'string', 'max:100'],
+            'legal_entity_type'  => ['nullable', 'string', 'max:50'],
+            'economic_sector'    => ['nullable', 'string', 'max:150'],
             'address'            => ['nullable', 'string', 'max:500'],
             'city'               => ['nullable', 'string', 'max:150'],
+            'province'           => ['nullable', 'string', 'max:150'],
             'country'            => ['nullable', 'string', 'max:100'],
             'currency'           => ['nullable', 'string', 'size:3'],
             'locale'             => ['nullable', 'string', 'max:10'],
@@ -351,79 +386,46 @@ class SuperAdminController extends BaseController
             'admin_name'         => ['nullable', 'string', 'max:255'],
             'admin_email'        => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'admin_password'     => ['nullable', 'string', 'min:8'],
+            // SaaS Plan & Manager (optional)
+            'plan_id'            => ['nullable', 'integer', 'exists:plans,id'],
+            'manager_tenant_id'  => ['nullable', 'integer', 'exists:tenants,id'],
+            'relationship_type'  => ['nullable', 'in:bpo,accounting,consulting,holding,reseller'],
+            'custom_price'       => ['nullable', 'numeric', 'min:0'],
+            'subscription_status' => ['nullable', 'in:active,pending_payment,grace_period,suspended'],
+            'subscription_ends_at' => ['nullable', 'date'],
         ]);
 
-        $tenantData = collect($data)->except(['admin_name', 'admin_email', 'admin_password'])->toArray();
-        $tenantData['currency'] = $tenantData['currency'] ?? 'AOA';
-        $tenantData['locale']   = $tenantData['locale']   ?? 'pt';
-        $tenantData['timezone'] = $tenantData['timezone'] ?? 'Africa/Luanda';
-        $tenantData['status']   = $tenantData['status']   ?? 'active';
+        $tenantData = collect($data)->except([
+            'admin_name', 'admin_email', 'admin_password',
+            'plan_id', 'manager_tenant_id', 'relationship_type',
+            'custom_price', 'subscription_status', 'subscription_ends_at',
+        ])->toArray();
 
-        $tenant = DB::transaction(function () use ($tenantData, $data) {
-            $tenant = Tenant::query()->create($tenantData);
+        $tenant = app(TenantProvisioningService::class)->createTenant($tenantData, [
+            'admin_name' => $data['admin_name'] ?? null,
+            'admin_email' => $data['admin_email'] ?? null,
+            'admin_password' => $data['admin_password'] ?? null,
+            'plan_id' => $data['plan_id'] ?? null,
+            'assigned_by' => $request->user()->id,
+            'subscription' => [
+                'custom_price' => $data['custom_price'] ?? null,
+                'status' => $data['subscription_status'] ?? 'active',
+                'ends_at' => $data['subscription_ends_at'] ?? null,
+            ],
+        ]);
 
-            /** @var TenantManager $manager */
-            $manager = app(TenantManager::class);
-            $manager->set($tenant);
-
-            // Create admin user if credentials were provided
-            if (! empty($data['admin_email'])) {
-                $admin = User::query()->create([
-                    'tenant_id'         => $tenant->id,
-                    'name'              => $data['admin_name'] ?? 'Administrador',
-                    'email'             => $data['admin_email'],
-                    'password'          => Hash::make($data['admin_password'] ?? 'password'),
-                    'locale'            => $tenantData['locale'],
-                    'timezone'          => $tenantData['timezone'],
-                    'email_verified_at' => now(),
-                    'is_active'         => true,
-                ]);
-                $admin->assignRole('admin');
-            }
-
-            // Seed default leave types
-            $leaveDefaults = [
-                ['name' => 'Férias Anuais',      'code' => 'vacation',    'category' => 'vacation',  'days_per_year' => 22, 'is_paid' => true],
-                ['name' => 'Doença',             'code' => 'sick',        'category' => 'sick',      'days_per_year' => 30, 'is_paid' => true],
-                ['name' => 'Casamento',          'code' => 'marriage',    'category' => 'family',    'days_per_year' => 3,  'is_paid' => true],
-                ['name' => 'Falecimento',        'code' => 'bereavement', 'category' => 'family',    'days_per_year' => 5,  'is_paid' => true],
-                ['name' => 'Licença sem Vencimento', 'code' => 'unpaid', 'category' => 'unpaid',   'days_per_year' => 30, 'is_paid' => false],
-                ['name' => 'Maternidade',        'code' => 'maternity',   'category' => 'maternity', 'days_per_year' => 90, 'is_paid' => true],
-            ];
-            foreach ($leaveDefaults as $lt) {
-                LeaveType::query()->withoutGlobalScopes()->firstOrCreate(
-                    ['tenant_id' => $tenant->id, 'code' => $lt['code']],
-                    $lt,
-                );
-            }
-
-            // Seed default salary components
-            $salaryDefaults = [
-                ['code' => 'base_salary',         'name' => 'Salário Base',             'type' => 'earning',   'calculation_type' => 'fixed',      'is_mandatory' => true,  'priority' => 10],
-                ['code' => 'meal_allowance',      'name' => 'Subsídio de Refeição',     'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 20],
-                ['code' => 'transport_allowance', 'name' => 'Subsídio de Transporte',   'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 21],
-                ['code' => 'vacation_subsidy',    'name' => 'Subsídio de Férias',       'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 22],
-                ['code' => 'christmas_subsidy',   'name' => 'Subsídio de Natal',        'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 23],
-                ['code' => 'family_allowance',   'name' => 'Abono de Família',         'type' => 'benefit',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 24],
-                ['code' => 'additional_allowance','name' => 'Abono Adicional',          'type' => 'earning',   'calculation_type' => 'fixed',      'default_value' => 0, 'is_mandatory' => false, 'priority' => 25],
-                ['code' => 'overtime',            'name' => 'Horas Extraordinárias',    'type' => 'earning',   'calculation_type' => 'formula',    'is_mandatory' => true,  'priority' => 30],
-                ['code' => 'inss',                'name' => 'INSS (Funcionário)',        'type' => 'deduction', 'calculation_type' => 'percentage', 'default_value' => 3,    'is_mandatory' => true, 'priority' => 100],
-                ['code' => 'irt',                 'name' => 'IRT',                      'type' => 'tax',       'calculation_type' => 'formula',    'is_mandatory' => true,  'priority' => 110],
-            ];
-            foreach ($salaryDefaults as $sc) {
-                SalaryComponent::query()->withoutGlobalScopes()->firstOrCreate(
-                    ['tenant_id' => $tenant->id, 'code' => $sc['code']],
-                    $sc,
-                );
-            }
-
-            $manager->clear();
-
-            return $tenant;
-        });
+        if (! empty($data['manager_tenant_id'])) {
+            $managerTenant = Tenant::query()->findOrFail((int) $data['manager_tenant_id']);
+            app(TenantHierarchyService::class)->attachManagedTenant(
+                $managerTenant,
+                $tenant,
+                $request->user(),
+                ['relationship_type' => $data['relationship_type'] ?? 'bpo'],
+            );
+        }
 
         return $this->success(
-            new TenantResource($tenant),
+            new TenantResource($tenant->fresh()),
             'Empresa criada com sucesso.',
             201,
         );
@@ -632,6 +634,7 @@ class SuperAdminController extends BaseController
         $this->authorize('viewAny', Tenant::class);
 
         $groups = PermissionGroup::query()
+            ->whereNull('tenant_id')
             ->orderBy('name')
             ->get();
 
@@ -643,7 +646,7 @@ class SuperAdminController extends BaseController
         $this->authorize('viewAny', Tenant::class);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:150', 'unique:permission_groups,name'],
+            'name' => ['required', 'string', 'max:150', Rule::unique('permission_groups', 'name')->whereNull('tenant_id')],
             'description' => ['nullable', 'string', 'max:500'],
             'permissions' => ['required', 'array', 'min:1'],
             'permissions.*' => ['required', 'string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
@@ -652,6 +655,7 @@ class SuperAdminController extends BaseController
         $this->validateTenantAssignablePermissions($data['permissions']);
 
         $group = PermissionGroup::query()->create([
+            'tenant_id' => null,
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'permissions' => array_values(array_unique($data['permissions'])),
@@ -666,7 +670,7 @@ class SuperAdminController extends BaseController
         $this->authorize('viewAny', Tenant::class);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:150', Rule::unique('permission_groups', 'name')->ignore($group->id)],
+            'name' => ['required', 'string', 'max:150', Rule::unique('permission_groups', 'name')->where('tenant_id', $group->tenant_id)->ignore($group->id)],
             'description' => ['nullable', 'string', 'max:500'],
             'permissions' => ['required', 'array', 'min:1'],
             'permissions.*' => ['required', 'string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
@@ -863,5 +867,84 @@ class SuperAdminController extends BaseController
         $tenant->delete();
 
         return $this->success(null, 'Empresa eliminada com sucesso.');
+    }
+
+    public function relationships(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Tenant::class);
+
+        $relationships = TenantRelationship::query()
+            ->with(['managerTenant:id,name,slug,status', 'managedTenant:id,name,slug,status,tax_id'])
+            ->when($request->filled('manager_tenant_id'), fn ($q) => $q->where('manager_tenant_id', $request->integer('manager_tenant_id')))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
+            ->latest('id')
+            ->get();
+
+        return $this->success($relationships);
+    }
+
+    public function attachRelationship(Request $request): JsonResponse
+    {
+        $this->authorize('update', new Tenant);
+
+        $data = $request->validate([
+            'manager_tenant_id' => ['required', 'integer', 'exists:tenants,id'],
+            'managed_tenant_id' => ['required_without:managed_tenant_ids', 'integer', 'exists:tenants,id'],
+            'managed_tenant_ids' => ['required_without:managed_tenant_id', 'array', 'min:1'],
+            'managed_tenant_ids.*' => ['required', 'integer', 'distinct', 'exists:tenants,id'],
+            'relationship_type' => ['nullable', 'in:bpo,accounting,consulting,holding,reseller'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'allowed_modules' => ['nullable', 'array'],
+            'allowed_modules.*' => ['string'],
+        ]);
+
+        $manager = Tenant::query()->findOrFail((int) $data['manager_tenant_id']);
+        $managedIds = collect($data['managed_tenant_ids'] ?? [])
+            ->when(isset($data['managed_tenant_id']), fn ($c) => $c->push((int) $data['managed_tenant_id']))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $options = [
+            'relationship_type' => $data['relationship_type'] ?? 'bpo',
+            'notes' => $data['notes'] ?? null,
+            'management_scope' => [
+                'can_manage_users' => true,
+                'can_manage_settings' => true,
+                'can_manage_billing' => false,
+                'allowed_modules' => $data['allowed_modules'] ?? null,
+            ],
+        ];
+
+        $hierarchyService = app(TenantHierarchyService::class);
+
+        $relationships = DB::transaction(function () use ($manager, $managedIds, $request, $options, $hierarchyService) {
+            $created = [];
+            foreach ($managedIds as $managedId) {
+                $managed = Tenant::query()->findOrFail($managedId);
+                $rel = $hierarchyService->attachManagedTenant($manager, $managed, $request->user(), $options);
+                $created[] = $rel->load(['managerTenant:id,name,slug', 'managedTenant:id,name,slug']);
+            }
+
+            return $created;
+        });
+
+        if (isset($data['managed_tenant_id']) && ! isset($data['managed_tenant_ids'])) {
+            return $this->success($relationships[0], 'Relação entre empresas criada com sucesso.', 201);
+        }
+
+        return $this->success([
+            'attached_count' => count($relationships),
+            'relationships' => $relationships,
+        ], 'Empresas vinculadas à empresa gestora com sucesso.', 201);
+    }
+
+    public function revokeRelationship(TenantRelationship $relationship): JsonResponse
+    {
+        $this->authorize('update', new Tenant);
+
+        app(TenantHierarchyService::class)->revokeRelationship($relationship);
+
+        return $this->success(null, 'Relação entre empresas revogada com sucesso.');
     }
 }

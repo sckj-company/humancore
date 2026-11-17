@@ -32,7 +32,7 @@ class SetTenantContext
                 $tenantId = $user->tenant_id
                     ?: ($firstAccessTenantId ?: (Tenant::query()->where('status', 'active')->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id')));
             } else {
-                $tenantId = $user->tenant_id ?: $user->tenantAccesses()->orderBy('id')->value('tenant_id');
+                $tenantId = $user->tenant_id ?: $user->tenantAccesses()->where('is_active', true)->orderBy('id')->value('tenant_id');
             }
 
             if ($tenantId) {

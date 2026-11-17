@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
-import { Building2, Check, ChevronsUpDown, Search } from 'lucide-react'
+import { Building2, Check, ChevronsUpDown, CornerUpLeft, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -37,37 +38,61 @@ export function Header() {
   const canSwitchCompany = isSuperAdmin || availableTenants.length > 1
 
   const activeTenant = availableTenants.find((tenant) => String(tenant.id) === selectedTenantId) ?? user?.tenant
+  const isOperatingInManaged = Boolean(
+    user?.home_tenant_id && activeTenant?.id && Number(user.home_tenant_id) !== Number(activeTenant.id),
+  )
   const filteredTenants = availableTenants.filter((tenant) =>
     `${tenant.name} ${tenant.slug}`.toLocaleLowerCase().includes(companySearch.trim().toLocaleLowerCase()),
   )
 
   return (
     <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-card px-3 md:px-6">
-      {canSwitchCompany ? (
-        <Button
-          variant="ghost"
-          className="min-w-0 justify-start gap-2 px-2 text-left"
-          onClick={() => setCompanyDialogOpen(true)}
-        >
-          <Building2 className="h-4 w-4 shrink-0 text-primary" />
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-foreground">
-              {activeTenant?.name ?? t('tenant.select', { defaultValue: 'Selecionar empresa' })}
+      <div className="flex min-w-0 items-center gap-2">
+        {canSwitchCompany ? (
+          <Button
+            variant="ghost"
+            className="min-w-0 justify-start gap-2 px-2 text-left"
+            onClick={() => setCompanyDialogOpen(true)}
+          >
+            <Building2 className="h-4 w-4 shrink-0 text-primary" />
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+                <span className="truncate">{activeTenant?.name ?? t('tenant.select', { defaultValue: 'Selecionar empresa' })}</span>
+                {isOperatingInManaged && (
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    {t('tenant.managedBadge')}
+                  </Badge>
+                )}
+              </span>
+              <span className="hidden text-[10px] text-muted-foreground sm:block">
+                {t('tenant.current', { defaultValue: 'Empresa ativa' })}
+              </span>
             </span>
-            <span className="hidden text-[10px] text-muted-foreground sm:block">
-              {t('tenant.current', { defaultValue: 'Empresa ativa' })}
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          </Button>
+        ) : (
+          <div className="flex min-w-0 items-center gap-2 px-2">
+            <Building2 className="h-4 w-4 shrink-0 text-primary" />
+            <span className="truncate text-sm font-semibold text-foreground">
+              {activeTenant?.name ?? t('tenant.label', { defaultValue: 'Empresa' })}
             </span>
-          </span>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        </Button>
-      ) : (
-        <div className="flex min-w-0 items-center gap-2 px-2">
-          <Building2 className="h-4 w-4 shrink-0 text-primary" />
-          <span className="truncate text-sm font-semibold text-foreground">
-            {activeTenant?.name ?? t('tenant.label', { defaultValue: 'Empresa' })}
-          </span>
-        </div>
-      )}
+          </div>
+        )}
+        {isOperatingInManaged && user?.home_tenant_id && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden h-7 gap-1 text-xs md:inline-flex"
+            onClick={() => {
+              localStorage.setItem('hrms_selected_tenant', String(user.home_tenant_id))
+              window.location.reload()
+            }}
+          >
+            <CornerUpLeft className="h-3 w-3" />
+            {t('tenant.backToManager')}
+          </Button>
+        )}
+      </div>
 
       <div className="flex items-center gap-2">
         <LanguageSwitcher />

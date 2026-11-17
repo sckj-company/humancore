@@ -12,10 +12,12 @@ class UserTenantAccess extends Model
     protected $fillable = [
         'user_id',
         'tenant_id',
+        'granted_by_tenant_id',
         'permission_group_id',
         'role_name',
         'permissions',
         'department_ids',
+        'is_active',
     ];
 
     protected function casts(): array
@@ -23,7 +25,13 @@ class UserTenantAccess extends Model
         return [
             'permissions' => 'array',
             'department_ids' => 'array',
+            'is_active' => 'boolean',
         ];
+    }
+
+    public function grantedByTenant()
+    {
+        return $this->belongsTo(Tenant::class, 'granted_by_tenant_id');
     }
 
     public function user()

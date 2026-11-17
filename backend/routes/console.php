@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('humancore:deactivate-expired-contracts')->dailyAt('00:05');
 Schedule::command('attendance:mark-biometric-absences')->dailyAt('23:50');
+Schedule::command('saas:process-subscriptions')->dailyAt('01:00');

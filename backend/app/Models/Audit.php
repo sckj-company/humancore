@@ -20,6 +20,7 @@ class Audit extends Model
     protected $fillable = [
         'user_id',
         'tenant_id',
+        'acting_tenant_id',
         'event',
         'auditable_type',
         'auditable_id',
@@ -28,6 +29,11 @@ class Audit extends Model
         'ip_address',
         'user_agent',
     ];
+
+    public function actingTenant()
+    {
+        return $this->belongsTo(Tenant::class, 'acting_tenant_id');
+    }
 
     protected function casts(): array
     {

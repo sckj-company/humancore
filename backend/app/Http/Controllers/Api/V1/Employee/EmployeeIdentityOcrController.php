@@ -28,6 +28,9 @@ class EmployeeIdentityOcrController extends BaseController
 
         try {
             $fields = $ocr->extract($validated['image']);
+            if ($tid = tenant_id()) {
+                app(\App\Services\SaaS\PlanEntitlementService::class)->recordMonthlyUsage((int) $tid, 'ocr_requests', 1);
+            }
         } catch (IdentityDocumentOcrException $exception) {
             Log::warning('Groq could not process employee identity document', [
                 'reason' => $exception->getMessage(),

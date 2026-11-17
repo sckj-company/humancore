@@ -39,6 +39,13 @@ class PermissionSeeder extends Seeder
             }
         }
 
+        // Permissões operacionais adicionais atribuíveis a tenants
+        $permissions[] = [
+            'name' => 'manage_portfolio',
+            'guard_name' => 'web',
+            'group_name' => 'tenant',
+        ];
+
         // Ações globais (sem recurso específico)
         $globalActions = ['impersonate_user', 'manage_platform', 'manage_super_admins', 'view_system_logs'];
         foreach ($globalActions as $action) {

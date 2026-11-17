@@ -21,7 +21,9 @@
     "select": "Selecionar empresa",
     "selectDescription": "Escolha a empresa em que deseja operar.",
     "globalView": "Visão Global (Todas)",
-    "globalViewDescription": "Modo administrativo sem filtro de empresa."
+    "globalViewDescription": "Modo administrativo sem filtro de empresa.",
+    "managedBadge": "Gerida",
+    "backToManager": "Voltar à gestora"
   },
   "command": {
     "placeholder": "Pesquisar no HumaCore — funcionários, módulos, ações...",
@@ -155,7 +157,10 @@
     "deductions": "Descontos",
     "emailTemplates": "Templates de Email",
     "section_platform": "Plataforma",
-    "tenants": "Gestão de Empresas"
+    "tenants": "Gestão de Empresas",
+    "portfolio": "Empresas Geridas",
+    "team": "Equipa & Acessos",
+    "billing": "Plano & Faturação"
   },
   "settings": {
     "title": "Configurações"
@@ -2326,7 +2331,10 @@
       "Africa/Nairobi": "África/Nairobi (EAT +03:00)",
       "UTC": "UTC +00:00",
       "Europe/Lisbon": "Europa/Lisboa (WET)"
-    }
+    },
+    "plansTab": "Planos Customizados",
+    "hierarchyTab": "Hierarquia & Subscrições",
+    "billingTab": "Faturação SaaS"
   },
   "emailTemplates": {
     "eyebrow": "COMUNICAÇÃO",
@@ -3213,5 +3221,570 @@
     "pdfError": "Erro ao gerar comprovativo PDF.",
     "downloadError": "Erro ao descarregar o documento.",
     "confirmDelete": "Tem a certeza que pretende eliminar este registo de educação?"
+  },
+  "saas": {
+    "common": {
+      "unlimited": "Ilimitado",
+      "optional": "Opcional",
+      "yes": "Sim",
+      "no": "Não",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "create": "Criar",
+      "edit": "Editar",
+      "active": "Ativo",
+      "inactive": "Inativo",
+      "allStatuses": "Todos os estados"
+    },
+    "featureGroups": {
+      "core": "Core & Colaboradores",
+      "organization": "Estrutura Organizacional",
+      "time": "Presenças, Horários & Férias",
+      "payroll": "Folha Salarial & Compensação",
+      "talent": "Talento & Desempenho",
+      "governance": "Documentos, Auditoria & Relatórios",
+      "platform": "Segurança, API & White-Label"
+    },
+    "features": {
+      "employees": {
+        "label": "Gestão de Funcionários",
+        "description": "Cadastro, fichas, histórico e timeline dos colaboradores."
+      },
+      "employee_approvals": {
+        "label": "Aprovação de Funcionários",
+        "description": "Fluxo de aprovação pendente antes da ativação do colaborador."
+      },
+      "employee_educations": {
+        "label": "Advertências e Processos Disciplinares",
+        "description": "Registo de advertências, recibos PDF e anexos assinados."
+      },
+      "branches": {
+        "label": "Filiais / Sucursais",
+        "description": "Gestão de múltiplas filiais dentro da mesma empresa."
+      },
+      "departments_positions": {
+        "label": "Departamentos e Cargos",
+        "description": "Estrutura orgânica de departamentos e cargos."
+      },
+      "excel_import": {
+        "label": "Importação via Excel",
+        "description": "Pré-visualização e importação em massa de funcionários."
+      },
+      "ocr_identity": {
+        "label": "OCR de Bilhete de Identidade",
+        "description": "Leitura automática de documentos de identificação."
+      },
+      "attendance_manual": {
+        "label": "Presenças Manuais e Justificações",
+        "description": "Marcação de ponto manual, relatórios e justificações."
+      },
+      "attendance_qr": {
+        "label": "Presenças por QR Code",
+        "description": "Emissão e leitura de QR Code dinâmico para ponto."
+      },
+      "biometric_integration": {
+        "label": "Integração Biométrica",
+        "description": "Sincronização com terminais biométricos externos."
+      },
+      "schedules_shifts": {
+        "label": "Turnos e Escalas de Horário",
+        "description": "Gestão de turnos e atribuição de horários."
+      },
+      "holidays": {
+        "label": "Calendário de Feriados",
+        "description": "Configuração de feriados nacionais e internos."
+      },
+      "leave_management": {
+        "label": "Férias e Ausências",
+        "description": "Pedidos, saldos, aprovações e comprovativos de ausência."
+      },
+      "payroll": {
+        "label": "Processamento Salarial (Payroll)",
+        "description": "Períodos salariais, processamento, aprovação e fecho."
+      },
+      "payroll_inss_irt_custom": {
+        "label": "Regras INSS & IRT Versionadas",
+        "description": "Configuração de tabelas IRT e regras INSS com vigência."
+      },
+      "salary_regulations": {
+        "label": "Regulamentos de Componentes Salariais",
+        "description": "Subsídios, fórmulas e regulamentação salarial."
+      },
+      "benefits": {
+        "label": "Benefícios",
+        "description": "Gestão de benefícios atribuídos aos colaboradores."
+      },
+      "deductions_installments": {
+        "label": "Descontos e Adiantamentos Parcelados",
+        "description": "Vales, empréstimos e plano mensal de parcelas."
+      },
+      "payslips_pdf": {
+        "label": "Recibos de Vencimento PDF",
+        "description": "Geração e download de recibos individuais e por período."
+      },
+      "recruitment": {
+        "label": "Recrutamento e Candidatos",
+        "description": "Vagas, pipeline de candidatos e contratação."
+      },
+      "onboarding": {
+        "label": "Onboarding",
+        "description": "Templates e tarefas de integração de novos colaboradores."
+      },
+      "performance": {
+        "label": "Avaliação de Desempenho",
+        "description": "Ciclos de avaliação, metas e aprovações."
+      },
+      "trainings": {
+        "label": "Formações",
+        "description": "Catálogo de formações, inscrições e conclusões."
+      },
+      "documents_storage": {
+        "label": "Gestão Documental",
+        "description": "Upload, verificação e arquivo de documentos digitais."
+      },
+      "reports_basic": {
+        "label": "Relatórios Operacionais",
+        "description": "Headcount, turnover, presenças e resumo de folha."
+      },
+      "reports_advanced_export": {
+        "label": "Exportação Avançada de Relatórios",
+        "description": "Exportação de relatórios analíticos e custos."
+      },
+      "audits": {
+        "label": "Trilha de Auditoria",
+        "description": "Registo detalhado de alterações e ações por utilizador."
+      },
+      "email_templates": {
+        "label": "Templates de Email",
+        "description": "Personalização de notificações enviadas por email."
+      },
+      "custom_permission_groups": {
+        "label": "Grupos de Permissões Customizados",
+        "description": "Criação de grupos de acesso próprios na empresa."
+      },
+      "field_level_permissions": {
+        "label": "Permissões por Campo Sensível",
+        "description": "Controlo granular de visualização/edição de salários e NIF."
+      },
+      "api_tokens": {
+        "label": "Chaves de API por Empresa",
+        "description": "Acesso programático via tokens dedicados da empresa."
+      },
+      "white_label": {
+        "label": "White-Label (Marca Própria)",
+        "description": "Personalização visual da marca na interface e documentos."
+      },
+      "two_factor_auth": {
+        "label": "Autenticação 2FA",
+        "description": "Suporte e exigência de segundo fator de autenticação."
+      }
+    },
+    "limits": {
+      "max_employees": {
+        "label": "Máximo de Funcionários",
+        "unit": "funcionários",
+        "description": "Deixe vazio para ilimitado."
+      },
+      "max_users": {
+        "label": "Máximo de Utilizadores com Login",
+        "unit": "utilizadores",
+        "description": "Contas ativas com acesso ao sistema."
+      },
+      "max_branches": {
+        "label": "Máximo de Filiais",
+        "unit": "filiais",
+        "description": "Filiais físicas dentro da empresa."
+      },
+      "max_departments": {
+        "label": "Máximo de Departamentos",
+        "unit": "departamentos",
+        "description": "Departamentos ativos."
+      },
+      "max_storage_mb": {
+        "label": "Armazenamento Documental",
+        "unit": "MB",
+        "description": "Espaço total para documentos enviados."
+      },
+      "max_ocr_requests_per_month": {
+        "label": "Leituras OCR por Mês",
+        "unit": "pedidos/mês",
+        "description": "Extração automática de BI/documentos por mês."
+      },
+      "max_payroll_runs_per_month": {
+        "label": "Processamentos de Folha por Mês",
+        "unit": "execuções/mês",
+        "description": "Deixe vazio para ilimitado."
+      },
+      "max_api_keys": {
+        "label": "Chaves de API",
+        "unit": "chaves",
+        "description": "Tokens de integração externos."
+      }
+    },
+    "cycles": {
+      "monthly": "Mensal",
+      "quarterly": "Trimestral",
+      "semiannual": "Semestral",
+      "annual": "Anual",
+      "lifetime": "Vitalício",
+      "custom_days": "Personalizado (dias)"
+    },
+    "pricingModels": {
+      "flat": "Valor fixo por ciclo",
+      "per_employee": "Base + por funcionário adicional",
+      "per_managed_tenant": "Base + por empresa gerida adicional",
+      "hybrid": "Híbrido (Base + funcionários + empresas geridas)"
+    },
+    "statuses": {
+      "active": "Ativa",
+      "pending_payment": "Aguardando Pagamento",
+      "past_due": "Em Atraso",
+      "grace_period": "Período de Tolerância",
+      "suspended": "Suspensa",
+      "cancelled": "Cancelada",
+      "expired": "Expirada",
+      "open": "Em Aberto",
+      "under_review": "Em Revisão",
+      "paid": "Paga",
+      "overdue": "Vencida",
+      "void": "Anulada",
+      "draft": "Rascunho",
+      "pending": "Pendente",
+      "approved": "Aprovado",
+      "rejected": "Rejeitado",
+      "revoked": "Revogada",
+      "unassigned": "Sem Plano",
+      "unrestricted": "Sem Restrições"
+    },
+    "relationshipTypes": {
+      "bpo": "BPO / Gestão de RH",
+      "accounting": "Contabilidade",
+      "consulting": "Consultoria",
+      "holding": "Holding / Grupo Económico",
+      "reseller": "Parceiro / Revendedor"
+    },
+    "paymentMethods": {
+      "bank_transfer": "Transferência Bancária",
+      "multicaixa_reference": "Referência Multicaixa",
+      "cash": "Depósito / Numerário",
+      "gpo": "GPO / Multicaixa Express",
+      "other": "Outro"
+    },
+    "plans": {
+      "title": "Planos Customizados & Subscrições",
+      "description": "Crie planos sob medida com módulos, quotas, regras multi-empresa (não-filiais) e vincule a quantas empresas precisar.",
+      "createButton": "Criar Plano Customizado",
+      "empty": "Nenhum plano criado ainda. Crie o primeiro plano customizado para começar a vincular empresas.",
+      "visibilityPublic": "Público",
+      "visibilityPrivate": "Privado",
+      "visibilityArchived": "Arquivado",
+      "employeesLabel": "Funcionários",
+      "usersLabel": "Utilizadores",
+      "modulesLabel": "Módulos",
+      "linkedCompaniesLabel": "Empresas vinculadas",
+      "manageOthersLabel": "Gerir outras empresas",
+      "linkCompanies": "Vincular Empresas",
+      "editTooltip": "Editar",
+      "duplicateTooltip": "Duplicar plano",
+      "deleteTooltip": "Eliminar",
+      "confirmDelete": "Eliminar o plano \"{{name}}\"?",
+      "builderCreateTitle": "Criar Plano Altamente Customizado",
+      "builderEditTitle": "Editar Plano: {{name}}",
+      "builderDescription": "Configure preço, ciclo, módulos habilitados, quotas, regras para empresas gestoras (não-filiais) e atributos contratuais.",
+      "tabGeneral": "Geral & Preço",
+      "tabFeatures": "Módulos ({{count}})",
+      "tabLimits": "Quotas & Limites",
+      "tabAgency": "Multi-Empresa (Não-Filial)",
+      "tabCustom": "Regras Customizadas",
+      "nameLabel": "Nome do Plano *",
+      "namePlaceholder": "Ex: Parceiro Contabilidade VIP",
+      "codeLabel": "Código Interno",
+      "codePlaceholder": "Ex: HC-BPO-VIP",
+      "slugLabel": "Slug (opcional)",
+      "slugPlaceholder": "auto-gerado se vazio",
+      "badgeLabel": "Selo / Badge",
+      "badgePlaceholder": "Ex: Mais Popular / Sob Medida",
+      "visibilityLabel": "Visibilidade",
+      "visibilityPrivateOption": "Privado (Sob medida / Restrito)",
+      "planActiveLabel": "Plano Ativo",
+      "planActiveDesc": "Disponível para novas vinculações",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "Resumo comercial do plano...",
+      "billingCycleLabel": "Ciclo de Faturação",
+      "customDaysLabel": "Dias do Ciclo",
+      "currencyLabel": "Moeda",
+      "basePriceLabel": "Preço Base",
+      "pricingModelLabel": "Modelo de Preço",
+      "graceDaysLabel": "Dias de Tolerância (Grace)",
+      "includedEmployees": "Func. Incluídos",
+      "extraEmployeePrice": "Preço / Func. Extra",
+      "includedManagedTenants": "Empresas Geridas Incl.",
+      "extraManagedTenantPrice": "Preço / Empresa Extra",
+      "enableAll": "Ativar todos",
+      "disableAll": "Desativar",
+      "limitBehaviorLabel": "Comportamento ao Atingir Limite (Funcionários / Empresas)",
+      "limitBehaviorBlock": "Bloquear criação ao atingir o limite",
+      "limitBehaviorOverage": "Permitir excedente e cobrar adicional na fatura",
+      "agencyHint": "Estas regras definem se uma empresa neste plano pode atuar como Empresa Gestora de outras empresas independentes (que não são filiais).",
+      "canManageOthers": "Pode Gerir Outras Empresas",
+      "canManageOthersDesc": "Habilita o portal de Carteira de Empresas",
+      "canCreateManaged": "Pode Criar Novas Empresas Geridas",
+      "canCreateManagedDesc": "Permite criar empresas clientes diretamente",
+      "maxManagedTenants": "Máx. de Empresas Geridas",
+      "hierarchyDepth": "Profundidade da Hierarquia",
+      "hierarchyDepthHint": "1 = gere clientes diretos; 2+ = sub-revenda.",
+      "quotaScope": "Escopo dos Limites (Quotas)",
+      "quotaScopePooled": "Consolidado na Empresa Gestora",
+      "quotaScopePerTenant": "Por cada empresa gerida",
+      "delegateTeam": "Delegar Equipa da Gestora às Clientes",
+      "delegateTeamDesc": "Atribuir consultores/contabilistas por cliente",
+      "customizeChildPerms": "Customizar Permissões nas Geridas",
+      "customizeChildPermsDesc": "Definir módulos e departamentos por acesso",
+      "customRulesHint": "Adicione atributos contratuais ou regras personalizadas (chave → valor) para este plano.",
+      "addRule": "Adicionar Regra",
+      "noCustomRules": "Nenhuma regra customizada adicionada.",
+      "ruleKeyPlaceholder": "Chave (ex: sla_hours)",
+      "ruleValuePlaceholder": "Valor (ex: 4)",
+      "saveChanges": "Guardar Alterações",
+      "createPlan": "Criar Plano",
+      "assignTitle": "Vincular Plano \"{{name}}\" às Empresas",
+      "assignDescription": "Selecione quantas empresas desejar para associar este plano em lote.",
+      "initialStatus": "Estado Inicial da Subscrição",
+      "customPriceOptional": "Preço Negociado (opcional)",
+      "defaultPricePlaceholder": "Padrão: {{price}} {{currency}}",
+      "searchTenantsPlaceholder": "Pesquisar empresa por nome, slug ou NIF...",
+      "currentPlanPrefix": "Atual: {{name}}",
+      "selectedCount": "{{count}} empresa(s) selecionada(s)",
+      "linkButtonCount": "Vincular ({{count}})",
+      "toastCreated": "Plano customizado criado com sucesso.",
+      "toastUpdated": "Plano atualizado com sucesso.",
+      "toastSaveError": "Erro ao guardar plano.",
+      "toastDuplicated": "Plano duplicado como plano privado.",
+      "toastDuplicateError": "Não foi possível duplicar o plano.",
+      "toastDeleted": "Plano eliminado com sucesso.",
+      "toastDeleteError": "Não foi possível eliminar este plano.",
+      "toastAssigned": "Plano vinculado às empresas selecionadas!",
+      "toastAssignError": "Erro ao vincular empresas ao plano."
+    },
+    "platformBilling": {
+      "kpiOpen": "Faturas em Aberto",
+      "kpiPendingProofs": "Comprovativos por Rever",
+      "kpiPaidMonth": "Receita Aprovada (Mês)",
+      "kpiUnderReview": "Faturas em Revisão",
+      "pendingProofsTitle": "Comprovativos de Pagamento Pendentes",
+      "pendingProofsDesc": "Valide transferências e referências enviadas pelas empresas ou empresas gestoras.",
+      "processLifecycle": "Processar Vencimentos",
+      "noPendingProofs": "Sem comprovativos pendentes de aprovação.",
+      "proofButton": "Comprovativo",
+      "approveButton": "Aprovar",
+      "rejectButton": "Rejeitar",
+      "invoicesTitle": "Faturas SaaS",
+      "invoicesDesc": "Emitidas apenas para empresas independentes e empresas gestoras.",
+      "generateInvoice": "Gerar Fatura",
+      "noInvoices": "Nenhuma fatura encontrada.",
+      "planDueMeta": "Plano: {{plan}} • Vencimento: {{due}}",
+      "generateTitle": "Gerar Fatura de Subscrição",
+      "generateDesc": "Apenas empresas independentes ou empresas gestoras podem ser faturadas.",
+      "companyLabel": "Empresa *",
+      "selectCompany": "Selecionar empresa...",
+      "notesLabel": "Notas",
+      "rejectTitle": "Rejeitar Comprovativo",
+      "rejectDesc": "Informe o motivo para que o cliente possa reenviar.",
+      "rejectPlaceholder": "Ex: Referência não localizada no extrato bancário",
+      "confirmReject": "Confirmar Rejeição",
+      "toastInvoiceGenerated": "Fatura gerada com sucesso.",
+      "toastInvoiceError": "Erro ao gerar fatura.",
+      "toastApproved": "Pagamento aprovado e subscrição renovada!",
+      "toastApproveError": "Erro ao aprovar pagamento.",
+      "toastRejected": "Comprovativo rejeitado.",
+      "toastRejectError": "Erro ao rejeitar comprovativo.",
+      "toastLifecycle": "Ciclo processado: {{grace}} em tolerância, {{suspended}} suspensas.",
+      "toastLifecycleError": "Erro ao processar ciclo."
+    },
+    "relationships": {
+      "title": "Hierarquia: Empresas Gestoras ↔ Empresas Geridas (Não-Filiais)",
+      "description": "Controle quais empresas gerem carteiras de outras empresas independentes.",
+      "linkButton": "Vincular Empresa a Gestora",
+      "empty": "Nenhuma relação multi-empresa registada.",
+      "typeClientMeta": "Tipo: {{type}} • NIF cliente: {{nif}}",
+      "revokeButton": "Revogar",
+      "confirmRevoke": "Revogar vínculo de gestão entre estas empresas?",
+      "overridesTitle": "Subscrições & Customização Individual por Empresa",
+      "overridesDesc": "Ajuste plano, estado ou overrides pontuais de limite por empresa sem afetar outras empresas no mesmo plano.",
+      "managedByPrefix": "Gerida por: {{name}}",
+      "planPrefix": "Plano: {{name}}",
+      "noPlan": "Sem plano",
+      "configureButton": "Configurar Plano / Overrides",
+      "linkDialogTitle": "Vincular Empresa Gerida",
+      "linkDialogDesc": "Escolha a Empresa Gestora e a Empresa Cliente independente.",
+      "managerCompanyLabel": "Empresa Gestora *",
+      "selectManager": "Selecionar gestora...",
+      "clientCompanyLabel": "Empresa Cliente (Gerida) *",
+      "selectClient": "Selecionar cliente...",
+      "relationshipTypeLabel": "Tipo de Relação",
+      "linkSubmit": "Vincular",
+      "overrideDialogTitle": "Subscrição & Overrides — {{name}}",
+      "overrideDialogDesc": "Atribua um plano e personalize limites individuais para esta empresa sem alterar o plano base.",
+      "planLabel": "Plano",
+      "selectPlan": "Selecionar plano...",
+      "subscriptionStatusLabel": "Estado da Subscrição",
+      "customPriceLabel": "Preço Negociado (Override)",
+      "customPricePlaceholder": "Usar preço do plano",
+      "overrideMaxEmployees": "Override Máx. Funcionários",
+      "overrideMaxUsers": "Override Máx. Utilizadores",
+      "overrideMaxManaged": "Override Máx. Empresas Geridas",
+      "usePlanDefaultPlaceholder": "Usar do plano",
+      "saveSubscription": "Guardar Subscrição",
+      "toastAttached": "Empresa vinculada à Empresa Gestora.",
+      "toastAttachError": "Erro ao vincular empresas.",
+      "toastRevoked": "Vínculo revogado com sucesso.",
+      "toastRevokeError": "Erro ao revogar vínculo.",
+      "toastSubscriptionUpdated": "Subscrição e overrides atualizados.",
+      "toastSubscriptionError": "Erro ao atualizar subscrição.",
+      "clientCompaniesLabel": "Empresas Clientes (Geridas) *",
+      "searchClientsPlaceholder": "Pesquisar empresas por nome, slug ou NIF...",
+      "selectAllVisible": "Selecionar visíveis",
+      "clearSelection": "Limpar",
+      "selectedClientsCount": "{{count}} empresa(s) selecionada(s)",
+      "linkSubmitCount": "Vincular ({{count}})",
+      "alreadyManagedBy": "Já gerida por {{name}}"
+    },
+    "portfolio": {
+      "title": "Carteira de Empresas Geridas",
+      "description": "Gira outras empresas independentes (clientes BPO, contabilidade ou grupo económico) sob os limites do seu plano.",
+      "newCompany": "Nova Empresa Gerida",
+      "kpiManaged": "Empresas Geridas",
+      "kpiEmployees": "Funcionários na Carteira",
+      "kpiPayrolls": "Folhas Pendentes",
+      "listTitle": "Empresas Sob Sua Gestão",
+      "listDesc": "Cada empresa abaixo possui o seu próprio NIF, INSS, filiais, funcionários e folha salarial isolados.",
+      "empty": "Ainda não tem empresas geridas na sua carteira.",
+      "statEmployees": "Funcionários",
+      "statUsers": "Utilizadores",
+      "statOpenPayrolls": "Folhas Abertas",
+      "enterCompany": "Gerir Empresa",
+      "teamButton": "Equipa",
+      "teamButtonTitle": "Gerir acessos da sua equipa nesta empresa",
+      "confirmRevoke": "Revogar gestão da empresa \"{{name}}\"?",
+      "createTitle": "Nova Empresa Gerida",
+      "editTitle": "Editar: {{name}}",
+      "formDesc": "Crie uma empresa cliente independente (não é filial). O consumo será contabilizado nos limites do seu plano.",
+      "companyNameLabel": "Nome da Empresa *",
+      "companyNamePlaceholder": "Ex: Comércio Sul Lda",
+      "nifLabel": "NIF",
+      "nifPlaceholder": "Ex: 5000123456",
+      "emailLabel": "Email",
+      "phoneLabel": "Telefone",
+      "managementTypeLabel": "Tipo de Gestão",
+      "cityLabel": "Cidade",
+      "clientAdminSection": "Administrador Inicial da Empresa Cliente (Opcional)",
+      "adminNamePlaceholder": "Nome",
+      "adminEmailPlaceholder": "Email",
+      "adminPasswordPlaceholder": "Palavra-passe",
+      "createCompanySubmit": "Criar Empresa",
+      "teamModalTitle": "Acessos da Sua Equipa em \"{{name}}\"",
+      "teamModalDesc": "Defina quais colaboradores da sua empresa gestora podem operar dentro desta empresa cliente.",
+      "roles": {
+        "admin": "Admin",
+        "hr-manager": "Gestor RH",
+        "manager": "Gestor",
+        "employee": "Colaborador"
+      },
+      "toastCreated": "Empresa gerida criada na sua carteira.",
+      "toastCreateError": "Erro ao criar empresa gerida.",
+      "toastUpdated": "Empresa gerida atualizada.",
+      "toastUpdateError": "Erro ao atualizar empresa.",
+      "toastRevoked": "Vínculo de gestão revogado.",
+      "toastRevokeError": "Erro ao revogar vínculo.",
+      "toastTeamUpdated": "Acesso da equipa atualizado.",
+      "toastTeamError": "Erro ao atualizar acesso."
+    },
+    "billing": {
+      "title": "Plano, Consumo & Faturação",
+      "description": "Acompanhe os limites do seu plano, consumo atual e faturas da subscrição.",
+      "currentSubscription": "Subscrição Atual",
+      "noPlanAssigned": "Sem plano atribuído",
+      "viaManager": "(via {{name}})",
+      "cycleMeta": "Ciclo: {{cycle}}",
+      "validUntil": "Válido até: {{date}}",
+      "notOperationalWarning": "A subscrição não está operacional. Regularize uma fatura em aberto ou contacte o suporte.",
+      "quotaTitle": "Consumo de Quotas",
+      "quotaDescPooled": "Os limites abaixo incluem o consumo consolidado da sua empresa e das empresas geridas.",
+      "quotaDescSingle": "Utilização atual face aos limites contratados no plano.",
+      "quotaEmployees": "Funcionários",
+      "quotaUsers": "Utilizadores",
+      "quotaBranches": "Filiais",
+      "quotaDepartments": "Departamentos",
+      "quotaStorage": "Armazenamento (MB)",
+      "quotaManagedTenants": "Empresas Geridas",
+      "invoicesTitle": "Faturas & Pagamentos",
+      "centralizedTitle": "Faturação Centralizada na Empresa Gestora",
+      "centralizedDesc": "Esta empresa é gerida por {{name}}. Todas as faturas são emitidas apenas para a empresa gestora.",
+      "noInvoices": "Ainda não existem faturas emitidas para esta empresa.",
+      "invoicePeriod": "Período: {{start}} {{end}} • Vencimento: {{due}}",
+      "invoicePeriodEnd": "até {{date}}",
+      "sendProof": "Enviar Comprovativo",
+      "latestPayment": "Último pagamento enviado: {{status}} ({{method}}{{ref}})",
+      "rejectionPrefix": " — Motivo: {{reason}}",
+      "viewProof": "Ver Comprovativo",
+      "submitProofTitle": "Enviar Comprovativo — {{number}}",
+      "totalDue": "Total a pagar: {{amount}} {{currency}}",
+      "paymentMethodLabel": "Método de Pagamento",
+      "referenceLabel": "Referência / Nº Operação",
+      "referencePlaceholder": "Ex: TRF-20261117-01",
+      "paymentDateLabel": "Data do Pagamento",
+      "proofFileLabel": "Comprovativo (PDF / Imagem)",
+      "submitProofButton": "Submeter",
+      "toastProofSent": "Comprovativo enviado! Aguarda validação do administrador da plataforma.",
+      "toastProofError": "Erro ao enviar comprovativo."
+    },
+    "team": {
+      "title": "Equipa & Acessos da Empresa",
+      "description": "Utilizadores ativos: {{used}} / {{limit}}",
+      "generateInvite": "Gerar Convite",
+      "newUser": "Novo Utilizador",
+      "usersTitle": "Utilizadores com Acesso",
+      "usersDesc": "Membros internos e acessos delegados pela empresa gestora.",
+      "managerBadge": "Gestora",
+      "pendingInvitesTitle": "Convites Pendentes",
+      "noPendingInvites": "Sem convites pendentes.",
+      "inviteProfile": "Perfil: {{role}}",
+      "copyLink": "Copiar Link",
+      "createUserTitle": "Novo Utilizador da Empresa",
+      "createUserDesc": "Sujeito ao limite de utilizadores do seu plano.",
+      "nameLabel": "Nome *",
+      "emailLabel": "Email *",
+      "passwordLabel": "Palavra-passe *",
+      "roleLabel": "Perfil",
+      "inviteTitle": "Convidar Utilizador por Link",
+      "inviteDesc": "O utilizador definirá a própria palavra-passe ao aceitar o convite.",
+      "nameOptionalLabel": "Nome (opcional)",
+      "roles": {
+        "admin": "Administrador",
+        "hr-manager": "Gestor RH",
+        "manager": "Gestor",
+        "employee": "Colaborador"
+      },
+      "toastUserCreated": "Utilizador criado com sucesso.",
+      "toastUserError": "Erro ao criar utilizador.",
+      "toastInviteCreated": "Convite gerado! Copie o link para partilhar.",
+      "toastInviteError": "Erro ao enviar convite.",
+      "toastInviteCancelled": "Convite cancelado.",
+      "toastInviteCancelError": "Erro ao cancelar convite.",
+      "toastLinkCopied": "Link de convite copiado!"
+    },
+    "invitation": {
+      "title": "Convite HumanCore",
+      "joinCompany": "Junte-se à empresa {{company}} ({{email}})",
+      "defaultSubtitle": "Ativação da sua conta",
+      "missingToken": "Token de convite em falta.",
+      "invalidOrExpired": "Convite inválido ou expirado.",
+      "fullName": "Nome Completo",
+      "password": "Palavra-passe",
+      "confirmPassword": "Confirmar Palavra-passe",
+      "activateButton": "Ativar Conta",
+      "toastAccepted": "Conta ativada! Já pode iniciar sessão.",
+      "toastAcceptError": "Não foi possível aceitar o convite."
+    }
   }
 }

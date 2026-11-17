@@ -131,7 +131,10 @@
     "deductions": "Deductions",
     "emailTemplates": "Email Templates",
     "section_platform": "Platform",
-    "tenants": "Company Management"
+    "tenants": "Company Management",
+    "portfolio": "Managed Companies",
+    "team": "Team & Access",
+    "billing": "Plan & Billing"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -2174,7 +2177,10 @@
       "Africa/Nairobi": "Africa/Nairobi (EAT +03:00)",
       "UTC": "UTC +00:00",
       "Europe/Lisbon": "Europe/Lisbon (WET)"
-    }
+    },
+    "plansTab": "Custom Plans",
+    "hierarchyTab": "Hierarchy & Subscriptions",
+    "billingTab": "SaaS Billing"
   },
   "tenant": {
     "current": "Current company",
@@ -2185,7 +2191,9 @@
     "select": "Select company",
     "selectDescription": "Choose the company you want to operate in.",
     "globalView": "Global View (All)",
-    "globalViewDescription": "Administrative mode without company filter."
+    "globalViewDescription": "Administrative mode without company filter.",
+    "managedBadge": "Managed",
+    "backToManager": "Back to manager"
   },
   "command": {
     "placeholder": "Type a command or search…",
@@ -3213,5 +3221,570 @@
     "pdfError": "Error generating receipt PDF.",
     "downloadError": "Error downloading document.",
     "confirmDelete": "Are you sure you want to delete this education record?"
+  },
+  "saas": {
+    "common": {
+      "unlimited": "Unlimited",
+      "optional": "Optional",
+      "yes": "Yes",
+      "no": "No",
+      "cancel": "Cancel",
+      "save": "Save",
+      "create": "Create",
+      "edit": "Edit",
+      "active": "Active",
+      "inactive": "Inactive",
+      "allStatuses": "All statuses"
+    },
+    "featureGroups": {
+      "core": "Core & Employees",
+      "organization": "Organizational Structure",
+      "time": "Attendance, Schedules & Leave",
+      "payroll": "Payroll & Compensation",
+      "talent": "Talent & Performance",
+      "governance": "Documents, Audits & Reports",
+      "platform": "Security, API & White-Label"
+    },
+    "features": {
+      "employees": {
+        "label": "Employee Management",
+        "description": "Employee profiles, records, history and timeline."
+      },
+      "employee_approvals": {
+        "label": "Employee Approvals",
+        "description": "Pending approval workflow before activating employees."
+      },
+      "employee_educations": {
+        "label": "Warnings & Disciplinary Actions",
+        "description": "Disciplinary notices, PDF receipts and signed attachments."
+      },
+      "branches": {
+        "label": "Branches",
+        "description": "Manage multiple branches within the same company."
+      },
+      "departments_positions": {
+        "label": "Departments & Positions",
+        "description": "Organizational structure of departments and positions."
+      },
+      "excel_import": {
+        "label": "Excel Import",
+        "description": "Preview and bulk import employees from spreadsheets."
+      },
+      "ocr_identity": {
+        "label": "ID Document OCR",
+        "description": "Automatic extraction from identity documents."
+      },
+      "attendance_manual": {
+        "label": "Manual Attendance & Justifications",
+        "description": "Manual check-in/out, reports and justifications."
+      },
+      "attendance_qr": {
+        "label": "QR Code Attendance",
+        "description": "Dynamic QR code generation and scanning for attendance."
+      },
+      "biometric_integration": {
+        "label": "Biometric Integration",
+        "description": "Sync with external biometric attendance terminals."
+      },
+      "schedules_shifts": {
+        "label": "Shifts & Work Schedules",
+        "description": "Shift management and schedule assignments."
+      },
+      "holidays": {
+        "label": "Holiday Calendar",
+        "description": "National and company-specific holidays configuration."
+      },
+      "leave_management": {
+        "label": "Leave & Absences",
+        "description": "Leave requests, balances, approvals and receipts."
+      },
+      "payroll": {
+        "label": "Payroll Processing",
+        "description": "Payroll periods, calculation, approval and closing."
+      },
+      "payroll_inss_irt_custom": {
+        "label": "Versioned INSS & IRT Rules",
+        "description": "Configurable tax and social security tables with effective dates."
+      },
+      "salary_regulations": {
+        "label": "Salary Component Regulations",
+        "description": "Allowances, formulas and regulatory incidence rules."
+      },
+      "benefits": {
+        "label": "Benefits",
+        "description": "Manage employee benefits and allowances."
+      },
+      "deductions_installments": {
+        "label": "Deductions & Installment Advances",
+        "description": "Salary advances, loans and monthly installment plans."
+      },
+      "payslips_pdf": {
+        "label": "PDF Payslips",
+        "description": "Generate and download individual and period payslips."
+      },
+      "recruitment": {
+        "label": "Recruitment & Candidates",
+        "description": "Job openings, candidate pipeline and hiring."
+      },
+      "onboarding": {
+        "label": "Onboarding",
+        "description": "Templates and onboarding tasks for new hires."
+      },
+      "performance": {
+        "label": "Performance Reviews",
+        "description": "Evaluation cycles, goals and approvals."
+      },
+      "trainings": {
+        "label": "Training Catalog",
+        "description": "Training courses, enrollments and completions."
+      },
+      "documents_storage": {
+        "label": "Document Management",
+        "description": "Upload, verify and archive digital employee documents."
+      },
+      "reports_basic": {
+        "label": "Operational Reports",
+        "description": "Headcount, turnover, attendance and payroll summaries."
+      },
+      "reports_advanced_export": {
+        "label": "Advanced Report Exports",
+        "description": "Export analytical and cost reports."
+      },
+      "audits": {
+        "label": "Audit Trail",
+        "description": "Detailed log of changes and actions per user."
+      },
+      "email_templates": {
+        "label": "Email Templates",
+        "description": "Customize automated email notifications."
+      },
+      "custom_permission_groups": {
+        "label": "Custom Permission Groups",
+        "description": "Create company-specific access permission groups."
+      },
+      "field_level_permissions": {
+        "label": "Field-Level Permissions",
+        "description": "Granular view/edit control over salaries and tax IDs."
+      },
+      "api_tokens": {
+        "label": "Company API Keys",
+        "description": "Programmatic access via dedicated company tokens."
+      },
+      "white_label": {
+        "label": "White-Label Branding",
+        "description": "Custom brand styling on the interface and documents."
+      },
+      "two_factor_auth": {
+        "label": "Two-Factor Auth (2FA)",
+        "description": "Support and enforcement of two-factor authentication."
+      }
+    },
+    "limits": {
+      "max_employees": {
+        "label": "Max Employees",
+        "unit": "employees",
+        "description": "Leave empty for unlimited."
+      },
+      "max_users": {
+        "label": "Max Login Users",
+        "unit": "users",
+        "description": "Active accounts with system access."
+      },
+      "max_branches": {
+        "label": "Max Branches",
+        "unit": "branches",
+        "description": "Physical branches within the company."
+      },
+      "max_departments": {
+        "label": "Max Departments",
+        "unit": "departments",
+        "description": "Active departments."
+      },
+      "max_storage_mb": {
+        "label": "Document Storage",
+        "unit": "MB",
+        "description": "Total space for uploaded documents."
+      },
+      "max_ocr_requests_per_month": {
+        "label": "Monthly OCR Scans",
+        "unit": "requests/month",
+        "description": "Automatic ID extraction requests per month."
+      },
+      "max_payroll_runs_per_month": {
+        "label": "Monthly Payroll Runs",
+        "unit": "runs/month",
+        "description": "Leave empty for unlimited."
+      },
+      "max_api_keys": {
+        "label": "API Keys",
+        "unit": "keys",
+        "description": "External integration tokens."
+      }
+    },
+    "cycles": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "semiannual": "Semi-annual",
+      "annual": "Annual",
+      "lifetime": "Lifetime",
+      "custom_days": "Custom (days)"
+    },
+    "pricingModels": {
+      "flat": "Flat rate per cycle",
+      "per_employee": "Base + per additional employee",
+      "per_managed_tenant": "Base + per additional managed company",
+      "hybrid": "Hybrid (Base + employees + managed companies)"
+    },
+    "statuses": {
+      "active": "Active",
+      "pending_payment": "Pending Payment",
+      "past_due": "Past Due",
+      "grace_period": "Grace Period",
+      "suspended": "Suspended",
+      "cancelled": "Cancelled",
+      "expired": "Expired",
+      "open": "Open",
+      "under_review": "Under Review",
+      "paid": "Paid",
+      "overdue": "Overdue",
+      "void": "Void",
+      "draft": "Draft",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "revoked": "Revoked",
+      "unassigned": "No Plan",
+      "unrestricted": "Unrestricted"
+    },
+    "relationshipTypes": {
+      "bpo": "BPO / HR Management",
+      "accounting": "Accounting",
+      "consulting": "Consulting",
+      "holding": "Holding / Group",
+      "reseller": "Partner / Reseller"
+    },
+    "paymentMethods": {
+      "bank_transfer": "Bank Transfer",
+      "multicaixa_reference": "Multicaixa Reference",
+      "cash": "Cash / Deposit",
+      "gpo": "GPO / Multicaixa Express",
+      "other": "Other"
+    },
+    "plans": {
+      "title": "Custom Plans & Subscriptions",
+      "description": "Create tailored plans with modules, quotas, multi-company rules (non-branches) and link them to as many companies as needed.",
+      "createButton": "Create Custom Plan",
+      "empty": "No plans created yet. Create the first custom plan to start linking companies.",
+      "visibilityPublic": "Public",
+      "visibilityPrivate": "Private",
+      "visibilityArchived": "Archived",
+      "employeesLabel": "Employees",
+      "usersLabel": "Users",
+      "modulesLabel": "Modules",
+      "linkedCompaniesLabel": "Linked companies",
+      "manageOthersLabel": "Manage other companies",
+      "linkCompanies": "Link Companies",
+      "editTooltip": "Edit",
+      "duplicateTooltip": "Duplicate plan",
+      "deleteTooltip": "Delete",
+      "confirmDelete": "Delete plan \"{{name}}\"?",
+      "builderCreateTitle": "Create Custom Plan",
+      "builderEditTitle": "Edit Plan: {{name}}",
+      "builderDescription": "Configure pricing, billing cycle, enabled modules, quotas, manager company rules (non-branches) and custom attributes.",
+      "tabGeneral": "General & Pricing",
+      "tabFeatures": "Modules ({{count}})",
+      "tabLimits": "Quotas & Limits",
+      "tabAgency": "Multi-Company (Non-Branch)",
+      "tabCustom": "Custom Rules",
+      "nameLabel": "Plan Name *",
+      "namePlaceholder": "e.g. Accounting Partner VIP",
+      "codeLabel": "Internal Code",
+      "codePlaceholder": "e.g. HC-BPO-VIP",
+      "slugLabel": "Slug (optional)",
+      "slugPlaceholder": "auto-generated if empty",
+      "badgeLabel": "Badge",
+      "badgePlaceholder": "e.g. Most Popular / Custom",
+      "visibilityLabel": "Visibility",
+      "visibilityPrivateOption": "Private (Custom / Restricted)",
+      "planActiveLabel": "Active Plan",
+      "planActiveDesc": "Available for new assignments",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Commercial summary of the plan...",
+      "billingCycleLabel": "Billing Cycle",
+      "customDaysLabel": "Cycle Days",
+      "currencyLabel": "Currency",
+      "basePriceLabel": "Base Price",
+      "pricingModelLabel": "Pricing Model",
+      "graceDaysLabel": "Grace Period (Days)",
+      "includedEmployees": "Included Employees",
+      "extraEmployeePrice": "Price / Extra Emp.",
+      "includedManagedTenants": "Included Managed Cos.",
+      "extraManagedTenantPrice": "Price / Extra Co.",
+      "enableAll": "Enable all",
+      "disableAll": "Disable",
+      "limitBehaviorLabel": "Behavior When Limit Is Reached (Employees / Companies)",
+      "limitBehaviorBlock": "Block creation when limit is reached",
+      "limitBehaviorOverage": "Allow overage and bill extra on invoice",
+      "agencyHint": "These rules define whether a company on this plan can act as a Manager Company for other independent companies (non-branches).",
+      "canManageOthers": "Can Manage Other Companies",
+      "canManageOthersDesc": "Enables the Managed Companies Portfolio portal",
+      "canCreateManaged": "Can Create New Managed Companies",
+      "canCreateManagedDesc": "Allows creating independent client companies directly",
+      "maxManagedTenants": "Max Managed Companies",
+      "hierarchyDepth": "Hierarchy Depth",
+      "hierarchyDepthHint": "1 = manages direct clients; 2+ = sub-reselling.",
+      "quotaScope": "Quota Scope",
+      "quotaScopePooled": "Pooled under Manager Company",
+      "quotaScopePerTenant": "Per managed company",
+      "delegateTeam": "Delegate Manager Team to Clients",
+      "delegateTeamDesc": "Assign consultants/accountants per client company",
+      "customizeChildPerms": "Customize Permissions on Managed",
+      "customizeChildPermsDesc": "Configure modules and departments per access",
+      "customRulesHint": "Add custom contractual attributes or rules (key → value) for this plan.",
+      "addRule": "Add Rule",
+      "noCustomRules": "No custom rules added.",
+      "ruleKeyPlaceholder": "Key (e.g. sla_hours)",
+      "ruleValuePlaceholder": "Value (e.g. 4)",
+      "saveChanges": "Save Changes",
+      "createPlan": "Create Plan",
+      "assignTitle": "Link Plan \"{{name}}\" to Companies",
+      "assignDescription": "Select as many companies as you want to assign this plan in bulk.",
+      "initialStatus": "Initial Subscription Status",
+      "customPriceOptional": "Negotiated Price (optional)",
+      "defaultPricePlaceholder": "Default: {{price}} {{currency}}",
+      "searchTenantsPlaceholder": "Search company by name, slug or tax ID...",
+      "currentPlanPrefix": "Current: {{name}}",
+      "selectedCount": "{{count}} company(ies) selected",
+      "linkButtonCount": "Link ({{count}})",
+      "toastCreated": "Custom plan created successfully.",
+      "toastUpdated": "Plan updated successfully.",
+      "toastSaveError": "Failed to save plan.",
+      "toastDuplicated": "Plan duplicated as private plan.",
+      "toastDuplicateError": "Could not duplicate plan.",
+      "toastDeleted": "Plan deleted successfully.",
+      "toastDeleteError": "Could not delete this plan.",
+      "toastAssigned": "Plan linked to selected companies!",
+      "toastAssignError": "Failed to link companies to plan."
+    },
+    "platformBilling": {
+      "kpiOpen": "Open Invoices",
+      "kpiPendingProofs": "Proofs to Review",
+      "kpiPaidMonth": "Approved Revenue (Month)",
+      "kpiUnderReview": "Invoices Under Review",
+      "pendingProofsTitle": "Pending Payment Proofs",
+      "pendingProofsDesc": "Validate bank transfers and references submitted by companies or manager companies.",
+      "processLifecycle": "Process Due Dates",
+      "noPendingProofs": "No payment proofs pending approval.",
+      "proofButton": "Proof",
+      "approveButton": "Approve",
+      "rejectButton": "Reject",
+      "invoicesTitle": "SaaS Invoices",
+      "invoicesDesc": "Issued only to independent companies and manager companies.",
+      "generateInvoice": "Generate Invoice",
+      "noInvoices": "No invoices found.",
+      "planDueMeta": "Plan: {{plan}} • Due: {{due}}",
+      "generateTitle": "Generate Subscription Invoice",
+      "generateDesc": "Only independent or manager companies can be billed.",
+      "companyLabel": "Company *",
+      "selectCompany": "Select company...",
+      "notesLabel": "Notes",
+      "rejectTitle": "Reject Payment Proof",
+      "rejectDesc": "Provide a reason so the client can resubmit.",
+      "rejectPlaceholder": "e.g. Reference not found on bank statement",
+      "confirmReject": "Confirm Rejection",
+      "toastInvoiceGenerated": "Invoice generated successfully.",
+      "toastInvoiceError": "Failed to generate invoice.",
+      "toastApproved": "Payment approved and subscription renewed!",
+      "toastApproveError": "Failed to approve payment.",
+      "toastRejected": "Payment proof rejected.",
+      "toastRejectError": "Failed to reject payment proof.",
+      "toastLifecycle": "Lifecycle processed: {{grace}} in grace period, {{suspended}} suspended.",
+      "toastLifecycleError": "Failed to process lifecycle."
+    },
+    "relationships": {
+      "title": "Hierarchy: Manager Companies ↔ Managed Companies (Non-Branches)",
+      "description": "Control which companies manage portfolios of other independent companies.",
+      "linkButton": "Link Company to Manager",
+      "empty": "No multi-company relationships registered.",
+      "typeClientMeta": "Type: {{type}} • Client Tax ID: {{nif}}",
+      "revokeButton": "Revoke",
+      "confirmRevoke": "Revoke management link between these companies?",
+      "overridesTitle": "Subscriptions & Per-Company Customization",
+      "overridesDesc": "Adjust plan, status or targeted limit overrides per company without affecting others on the same plan.",
+      "managedByPrefix": "Managed by: {{name}}",
+      "planPrefix": "Plan: {{name}}",
+      "noPlan": "No plan",
+      "configureButton": "Configure Plan / Overrides",
+      "linkDialogTitle": "Link Managed Company",
+      "linkDialogDesc": "Select the Manager Company and the independent Client Company.",
+      "managerCompanyLabel": "Manager Company *",
+      "selectManager": "Select manager...",
+      "clientCompanyLabel": "Client Company (Managed) *",
+      "selectClient": "Select client...",
+      "relationshipTypeLabel": "Relationship Type",
+      "linkSubmit": "Link",
+      "overrideDialogTitle": "Subscription & Overrides — {{name}}",
+      "overrideDialogDesc": "Assign a plan and customize individual limits for this company without modifying the base plan.",
+      "planLabel": "Plan",
+      "selectPlan": "Select plan...",
+      "subscriptionStatusLabel": "Subscription Status",
+      "customPriceLabel": "Negotiated Price (Override)",
+      "customPricePlaceholder": "Use plan price",
+      "overrideMaxEmployees": "Override Max Employees",
+      "overrideMaxUsers": "Override Max Users",
+      "overrideMaxManaged": "Override Max Managed Cos.",
+      "usePlanDefaultPlaceholder": "Use plan default",
+      "saveSubscription": "Save Subscription",
+      "toastAttached": "Company linked to Manager Company.",
+      "toastAttachError": "Failed to link companies.",
+      "toastRevoked": "Management link revoked.",
+      "toastRevokeError": "Failed to revoke link.",
+      "toastSubscriptionUpdated": "Subscription and overrides updated.",
+      "toastSubscriptionError": "Failed to update subscription.",
+      "clientCompaniesLabel": "Client Companies (Managed) *",
+      "searchClientsPlaceholder": "Search companies by name, slug or tax ID...",
+      "selectAllVisible": "Select visible",
+      "clearSelection": "Clear",
+      "selectedClientsCount": "{{count}} company(ies) selected",
+      "linkSubmitCount": "Link ({{count}})",
+      "alreadyManagedBy": "Already managed by {{name}}"
+    },
+    "portfolio": {
+      "title": "Managed Companies Portfolio",
+      "description": "Manage other independent companies (BPO clients, accounting or group) within your plan limits.",
+      "newCompany": "New Managed Company",
+      "kpiManaged": "Managed Companies",
+      "kpiEmployees": "Portfolio Employees",
+      "kpiPayrolls": "Pending Payrolls",
+      "listTitle": "Companies Under Your Management",
+      "listDesc": "Each company below has its own isolated Tax ID, social security, branches, employees and payroll.",
+      "empty": "You do not have any managed companies in your portfolio yet.",
+      "statEmployees": "Employees",
+      "statUsers": "Users",
+      "statOpenPayrolls": "Open Payrolls",
+      "enterCompany": "Manage Company",
+      "teamButton": "Team",
+      "teamButtonTitle": "Manage your team access in this company",
+      "confirmRevoke": "Revoke management of \"{{name}}\"?",
+      "createTitle": "New Managed Company",
+      "editTitle": "Edit: {{name}}",
+      "formDesc": "Create an independent client company (not a branch). Usage counts toward your plan limits.",
+      "companyNameLabel": "Company Name *",
+      "companyNamePlaceholder": "e.g. South Commerce Ltd",
+      "nifLabel": "Tax ID",
+      "nifPlaceholder": "e.g. 5000123456",
+      "emailLabel": "Email",
+      "phoneLabel": "Phone",
+      "managementTypeLabel": "Management Type",
+      "cityLabel": "City",
+      "clientAdminSection": "Initial Client Company Admin (Optional)",
+      "adminNamePlaceholder": "Name",
+      "adminEmailPlaceholder": "Email",
+      "adminPasswordPlaceholder": "Password",
+      "createCompanySubmit": "Create Company",
+      "teamModalTitle": "Your Team Access in \"{{name}}\"",
+      "teamModalDesc": "Choose which members of your manager company can operate inside this client company.",
+      "roles": {
+        "admin": "Admin",
+        "hr-manager": "HR Manager",
+        "manager": "Manager",
+        "employee": "Employee"
+      },
+      "toastCreated": "Managed company created in your portfolio.",
+      "toastCreateError": "Failed to create managed company.",
+      "toastUpdated": "Managed company updated.",
+      "toastUpdateError": "Failed to update company.",
+      "toastRevoked": "Management link revoked.",
+      "toastRevokeError": "Failed to revoke link.",
+      "toastTeamUpdated": "Team access updated.",
+      "toastTeamError": "Failed to update access."
+    },
+    "billing": {
+      "title": "Plan, Usage & Billing",
+      "description": "Track your plan limits, current usage and subscription invoices.",
+      "currentSubscription": "Current Subscription",
+      "noPlanAssigned": "No plan assigned",
+      "viaManager": "(via {{name}})",
+      "cycleMeta": "Cycle: {{cycle}}",
+      "validUntil": "Valid until: {{date}}",
+      "notOperationalWarning": "Subscription is not operational. Settle an open invoice or contact support.",
+      "quotaTitle": "Quota Usage",
+      "quotaDescPooled": "Limits below include pooled usage across your company and all managed companies.",
+      "quotaDescSingle": "Current usage against your contracted plan limits.",
+      "quotaEmployees": "Employees",
+      "quotaUsers": "Users",
+      "quotaBranches": "Branches",
+      "quotaDepartments": "Departments",
+      "quotaStorage": "Storage (MB)",
+      "quotaManagedTenants": "Managed Companies",
+      "invoicesTitle": "Invoices & Payments",
+      "centralizedTitle": "Billing Centralized on Manager Company",
+      "centralizedDesc": "This company is managed by {{name}}. All invoices are issued solely to the manager company.",
+      "noInvoices": "No invoices issued for this company yet.",
+      "invoicePeriod": "Period: {{start}} {{end}} • Due: {{due}}",
+      "invoicePeriodEnd": "to {{date}}",
+      "sendProof": "Upload Proof",
+      "latestPayment": "Latest payment submitted: {{status}} ({{method}}{{ref}})",
+      "rejectionPrefix": " — Reason: {{reason}}",
+      "viewProof": "View Proof",
+      "submitProofTitle": "Upload Payment Proof — {{number}}",
+      "totalDue": "Amount due: {{amount}} {{currency}}",
+      "paymentMethodLabel": "Payment Method",
+      "referenceLabel": "Reference / Transaction ID",
+      "referencePlaceholder": "e.g. TRF-20261117-01",
+      "paymentDateLabel": "Payment Date",
+      "proofFileLabel": "Proof Document (PDF / Image)",
+      "submitProofButton": "Submit",
+      "toastProofSent": "Proof uploaded! Pending review by platform administrator.",
+      "toastProofError": "Failed to upload payment proof."
+    },
+    "team": {
+      "title": "Company Team & Access",
+      "description": "Active users: {{used}} / {{limit}}",
+      "generateInvite": "Create Invite",
+      "newUser": "New User",
+      "usersTitle": "Users with Access",
+      "usersDesc": "Internal members and delegated access from the manager company.",
+      "managerBadge": "Manager",
+      "pendingInvitesTitle": "Pending Invitations",
+      "noPendingInvites": "No pending invitations.",
+      "inviteProfile": "Role: {{role}}",
+      "copyLink": "Copy Link",
+      "createUserTitle": "New Company User",
+      "createUserDesc": "Subject to your plan user quota.",
+      "nameLabel": "Name *",
+      "emailLabel": "Email *",
+      "passwordLabel": "Password *",
+      "roleLabel": "Role",
+      "inviteTitle": "Invite User via Link",
+      "inviteDesc": "The invited user will set their own password when accepting.",
+      "nameOptionalLabel": "Name (optional)",
+      "roles": {
+        "admin": "Administrator",
+        "hr-manager": "HR Manager",
+        "manager": "Manager",
+        "employee": "Employee"
+      },
+      "toastUserCreated": "User created successfully.",
+      "toastUserError": "Failed to create user.",
+      "toastInviteCreated": "Invitation created! Copy the link to share.",
+      "toastInviteError": "Failed to create invitation.",
+      "toastInviteCancelled": "Invitation cancelled.",
+      "toastInviteCancelError": "Failed to cancel invitation.",
+      "toastLinkCopied": "Invitation link copied!"
+    },
+    "invitation": {
+      "title": "HumanCore Invitation",
+      "joinCompany": "Join {{company}} ({{email}})",
+      "defaultSubtitle": "Activate your account",
+      "missingToken": "Missing invitation token.",
+      "invalidOrExpired": "Invalid or expired invitation.",
+      "fullName": "Full Name",
+      "password": "Password",
+      "confirmPassword": "Confirm Password",
+      "activateButton": "Activate Account",
+      "toastAccepted": "Account activated! You can now sign in.",
+      "toastAcceptError": "Could not accept invitation."
+    }
   }
 }

@@ -27,9 +27,19 @@ import {
   Receipt,
   ClipboardCheck,
   FileWarning,
+  CreditCard,
+  Layers,
+  UserCog,
 } from 'lucide-react'
 import { useUiStore } from '@/stores/ui-store'
-import { hasAnyRole, hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
+import {
+  canManageOtherTenants,
+  hasAnyRole,
+  hasPermission,
+  hasPlanFeature,
+  isPlatformAdmin,
+  useAuthStore,
+} from '@/stores/auth-store'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -46,10 +56,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 interface NavItem {
   titleKey: string
+  defaultTitle?: string
   href: string
   icon: typeof LayoutDashboard
   roles?: string[]
   permission?: string
+  planFeature?: string
+  requiresAgency?: boolean
 }
 
 interface NavSection {
@@ -87,43 +100,46 @@ const sections: NavSection[] = [
   {
     titleKey: 'nav.section_people',
     items: [
-      { titleKey: 'nav.employees', href: '/employees', icon: Users, permission: 'view_any_employee' },
-      { titleKey: 'nav.educations', href: '/educations', icon: FileWarning, permission: 'view_any_employee' },
-      { titleKey: 'nav.organization', href: '/organization', icon: Building2, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_department' },
-      { titleKey: 'nav.recruitment', href: '/recruitment', icon: UserPlus, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_recruitment' },
+      { titleKey: 'nav.portfolio', defaultTitle: 'Empresas Geridas', href: '/portfolio', icon: Layers, roles: ['admin'], requiresAgency: true },
+      { titleKey: 'nav.employees', href: '/employees', icon: Users, permission: 'view_any_employee', planFeature: 'employees' },
+      { titleKey: 'nav.educations', href: '/educations', icon: FileWarning, permission: 'view_any_employee', planFeature: 'employee_educations' },
+      { titleKey: 'nav.organization', href: '/organization', icon: Building2, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_department', planFeature: 'departments_positions' },
+      { titleKey: 'nav.recruitment', href: '/recruitment', icon: UserPlus, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_recruitment', planFeature: 'recruitment' },
     ],
   },
   {
     titleKey: 'nav.section_time',
     items: [
-      { titleKey: 'nav.attendance', href: '/attendance', icon: CalendarCheck, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_attendance' },
-      { titleKey: 'nav.schedules', href: '/schedules', icon: Clock, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_attendance' },
+      { titleKey: 'nav.attendance', href: '/attendance', icon: CalendarCheck, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_attendance', planFeature: 'attendance_manual' },
+      { titleKey: 'nav.schedules', href: '/schedules', icon: Clock, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_attendance', planFeature: 'schedules_shifts' },
     ],
   },
   {
     titleKey: 'nav.section_management',
     items: [
-      { titleKey: 'nav.payroll', href: '/payroll', icon: Wallet, roles: ['admin', 'hr-manager'], permission: 'view_any_payroll' },
-      { titleKey: 'nav.salaryComponents', href: '/settings/payroll-components', icon: CircleDollarSign, roles: ['admin', 'hr-manager'], permission: 'view_any_salary-component' },
-      { titleKey: 'nav.documents', href: '/documents', icon: FileText, permission: 'view_any_document' },
-      { titleKey: 'nav.performance', href: '/performance', icon: TrendingUp, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_performance' },
-      { titleKey: 'nav.training', href: '/training', icon: ClipboardCheck, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_training' },
-      { titleKey: 'nav.trainings', href: '/trainings', icon: GraduationCap, roles: ['admin', 'hr-manager'], permission: 'view_any_training' },
-      { titleKey: 'nav.benefits', href: '/benefits', icon: Gift, roles: ['admin', 'hr-manager'], permission: 'view_any_benefit' },
-      { titleKey: 'nav.deductions', href: '/deductions', icon: Receipt, roles: ['admin', 'hr-manager'], permission: 'view_any_deduction' },
+      { titleKey: 'nav.payroll', href: '/payroll', icon: Wallet, roles: ['admin', 'hr-manager'], permission: 'view_any_payroll', planFeature: 'payroll' },
+      { titleKey: 'nav.salaryComponents', href: '/settings/payroll-components', icon: CircleDollarSign, roles: ['admin', 'hr-manager'], permission: 'view_any_salary-component', planFeature: 'salary_regulations' },
+      { titleKey: 'nav.documents', href: '/documents', icon: FileText, permission: 'view_any_document', planFeature: 'documents_storage' },
+      { titleKey: 'nav.performance', href: '/performance', icon: TrendingUp, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_performance', planFeature: 'performance' },
+      { titleKey: 'nav.training', href: '/training', icon: ClipboardCheck, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_training', planFeature: 'onboarding' },
+      { titleKey: 'nav.trainings', href: '/trainings', icon: GraduationCap, roles: ['admin', 'hr-manager'], permission: 'view_any_training', planFeature: 'trainings' },
+      { titleKey: 'nav.benefits', href: '/benefits', icon: Gift, roles: ['admin', 'hr-manager'], permission: 'view_any_benefit', planFeature: 'benefits' },
+      { titleKey: 'nav.deductions', href: '/deductions', icon: Receipt, roles: ['admin', 'hr-manager'], permission: 'view_any_deduction', planFeature: 'deductions_installments' },
     ],
   },
   {
     titleKey: 'nav.section_analytics',
     items: [
-      { titleKey: 'nav.reports', href: '/reports', icon: BarChart3, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_report' },
-      { titleKey: 'nav.audits', href: '/audits', icon: Activity, roles: ['admin', 'hr-manager'], permission: 'view_any_audit' },
-      { titleKey: 'nav.emailTemplates', href: '/email-templates', icon: Mail, roles: ['admin'], permission: 'view_any_email-template' },
+      { titleKey: 'nav.reports', href: '/reports', icon: BarChart3, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_report', planFeature: 'reports_basic' },
+      { titleKey: 'nav.audits', href: '/audits', icon: Activity, roles: ['admin', 'hr-manager'], permission: 'view_any_audit', planFeature: 'audits' },
+      { titleKey: 'nav.emailTemplates', href: '/email-templates', icon: Mail, roles: ['admin'], permission: 'view_any_email-template', planFeature: 'email_templates' },
     ],
   },
 ]
 
 const footerItems: NavItem[] = [
+  { titleKey: 'nav.team', defaultTitle: 'Equipa & Acessos', href: '/settings/team', icon: UserCog, roles: ['admin'] },
+  { titleKey: 'nav.billing', defaultTitle: 'Plano & Faturação', href: '/settings/billing', icon: CreditCard, roles: ['admin'] },
   { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin'], permission: 'view_any_setting' },
 ]
 
@@ -146,7 +162,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       aria-current={active ? 'page' : undefined}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      {!collapsed && <span className="truncate">{t(item.titleKey)}</span>}
+      {!collapsed && <span className="truncate">{item.defaultTitle ? t(item.titleKey, { defaultValue: item.defaultTitle }) : t(item.titleKey)}</span>}
     </Link>
   )
 
@@ -155,7 +171,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
         <TooltipContent side="right" className="font-medium">
-          {t(item.titleKey)}
+          {item.defaultTitle ? t(item.titleKey, { defaultValue: item.defaultTitle }) : t(item.titleKey)}
         </TooltipContent>
       </Tooltip>
     )
@@ -219,7 +235,9 @@ export function Sidebar() {
             {activeSections.map((section, idx) => {
               const visibleItems = section.items.filter(
                 (item) => (isSuperAdmin || enforceAssignedPermissions || !item.roles || hasAnyRole(user, item.roles))
-                  && (!enforceAssignedPermissions || !item.permission || hasPermission(user, item.permission)),
+                  && (!enforceAssignedPermissions || !item.permission || hasPermission(user, item.permission))
+                  && hasPlanFeature(user, item.planFeature)
+                  && (!item.requiresAgency || canManageOtherTenants(user)),
               )
               if (visibleItems.length === 0) return null
 
@@ -242,6 +260,7 @@ export function Sidebar() {
             {footerItems
               .filter((item) => isSuperAdmin || enforceAssignedPermissions || !item.roles || hasAnyRole(user, item.roles))
               .filter((item) => !enforceAssignedPermissions || !item.permission || hasPermission(user, item.permission))
+              .filter((item) => hasPlanFeature(user, item.planFeature))
               .map((item) => (
                 <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
               ))}

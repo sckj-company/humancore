@@ -10,12 +10,18 @@ class PermissionGroup extends Model
     use HasFactory;
 
     protected $fillable = [
+        'tenant_id',
         'name',
         'description',
         'permissions',
         'is_system',
         'created_by',
     ];
+
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
+    }
 
     protected function casts(): array
     {

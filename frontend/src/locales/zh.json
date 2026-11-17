@@ -131,7 +131,10 @@
     "deductions": "扣款",
     "emailTemplates": "邮件模板",
     "section_platform": "平台",
-    "tenants": "企业管理"
+    "tenants": "企业管理",
+    "portfolio": "托管企业",
+    "team": "团队与权限",
+    "billing": "套餐与账单"
   },
   "dashboard": {
     "title": "仪表板",
@@ -2127,7 +2130,10 @@
       "Africa/Nairobi": "非洲/内罗毕 (EAT +03:00)",
       "UTC": "协调世界时 (UTC +00:00)",
       "Europe/Lisbon": "欧洲/里斯本 (WET)"
-    }
+    },
+    "plansTab": "自定义套餐",
+    "hierarchyTab": "层级与订阅",
+    "billingTab": "SaaS 账单"
   },
   "tenant": {
     "current": "当前公司",
@@ -2138,7 +2144,9 @@
     "select": "选择公司",
     "selectDescription": "选择您要操作的公司。",
     "globalView": "全局视图（全部）",
-    "globalViewDescription": "不按公司过滤的全局管理模式。"
+    "globalViewDescription": "不按公司过滤的全局管理模式。",
+    "managedBadge": "托管",
+    "backToManager": "返回管理公司"
   },
   "command": {
     "placeholder": "输入命令或搜索…",
@@ -3153,5 +3161,570 @@
     "pdfError": "生成 PDF 凭证失败。",
     "downloadError": "下载文件失败。",
     "confirmDelete": "确定要删除此教育记录吗？"
+  },
+  "saas": {
+    "common": {
+      "unlimited": "无限制",
+      "optional": "可选",
+      "yes": "是",
+      "no": "否",
+      "cancel": "取消",
+      "save": "保存",
+      "create": "创建",
+      "edit": "编辑",
+      "active": "启用",
+      "inactive": "停用",
+      "allStatuses": "所有状态"
+    },
+    "featureGroups": {
+      "core": "核心与员工管理",
+      "organization": "组织架构",
+      "time": "考勤、排班与休假",
+      "payroll": "薪资与薪酬",
+      "talent": "人才与绩效",
+      "governance": "文档、审计与报表",
+      "platform": "安全、API 与白标"
+    },
+    "features": {
+      "employees": {
+        "label": "员工管理",
+        "description": "员工档案、信息卡、历史与时间线。"
+      },
+      "employee_approvals": {
+        "label": "员工审批流",
+        "description": "员工启用前的待审批流程。"
+      },
+      "employee_educations": {
+        "label": "警告与纪律记录",
+        "description": "纪律处分记录、PDF凭证及签字附件。"
+      },
+      "branches": {
+        "label": "分支机构 / 分公司",
+        "description": "管理同一公司下的多个分支机构。"
+      },
+      "departments_positions": {
+        "label": "部门与职位",
+        "description": "部门和职位的组织架构。"
+      },
+      "excel_import": {
+        "label": "Excel 批量导入",
+        "description": "从电子表格预览和批量导入员工。"
+      },
+      "ocr_identity": {
+        "label": "身份证件 OCR 识别",
+        "description": "自动识别身份证件信息。"
+      },
+      "attendance_manual": {
+        "label": "手动考勤与说明",
+        "description": "手动打卡、考勤报表与说明。"
+      },
+      "attendance_qr": {
+        "label": "二维码考勤",
+        "description": "生成与扫描动态二维码打卡。"
+      },
+      "biometric_integration": {
+        "label": "生物识别集成",
+        "description": "与外部指纹/人脸考勤终端同步。"
+      },
+      "schedules_shifts": {
+        "label": "班次与排班",
+        "description": "班次设置与员工排班分配。"
+      },
+      "holidays": {
+        "label": "节假日日历",
+        "description": "国家及公司节假日配置。"
+      },
+      "leave_management": {
+        "label": "休假与缺勤",
+        "description": "请假申请、假期余额、审批及凭证。"
+      },
+      "payroll": {
+        "label": "薪资核算 (Payroll)",
+        "description": "薪资周期、核算、审批与结账。"
+      },
+      "payroll_inss_irt_custom": {
+        "label": "版本化 INSS 与 IRT 规则",
+        "description": "可配置生效日期的社保与个税税表。"
+      },
+      "salary_regulations": {
+        "label": "薪资项法规配置",
+        "description": "津贴、计算公式及合规规则。"
+      },
+      "benefits": {
+        "label": "福利管理",
+        "description": "管理分配给员工的各类福利。"
+      },
+      "deductions_installments": {
+        "label": "扣款与分期预支",
+        "description": "预支薪资、借款及月度分期计划。"
+      },
+      "payslips_pdf": {
+        "label": "PDF 工资单",
+        "description": "生成和下载个人及周期工资单。"
+      },
+      "recruitment": {
+        "label": "招聘与候选人",
+        "description": "职位发布、候选人流程与录用。"
+      },
+      "onboarding": {
+        "label": "入职引导",
+        "description": "新员工入职模板与任务管理。"
+      },
+      "performance": {
+        "label": "绩效评估",
+        "description": "考核周期、目标与审批。"
+      },
+      "trainings": {
+        "label": "培训管理",
+        "description": "培训目录、报名与完成记录。"
+      },
+      "documents_storage": {
+        "label": "文档管理",
+        "description": "员工电子文档上传、核验与归档。"
+      },
+      "reports_basic": {
+        "label": "运营报表",
+        "description": "人数、离职率、考勤与薪资汇总。"
+      },
+      "reports_advanced_export": {
+        "label": "高级报表导出",
+        "description": "导出分析报表与成本明细。"
+      },
+      "audits": {
+        "label": "审计日志",
+        "description": "按用户记录详细的操作与变更历史。"
+      },
+      "email_templates": {
+        "label": "邮件模板",
+        "description": "自定义系统自动邮件通知内容。"
+      },
+      "custom_permission_groups": {
+        "label": "自定义权限组",
+        "description": "为企业创建专属访问权限组。"
+      },
+      "field_level_permissions": {
+        "label": "敏感字段权限",
+        "description": "精细控制薪资与税号字段的查看与编辑。"
+      },
+      "api_tokens": {
+        "label": "企业 API 密钥",
+        "description": "通过专用企业令牌进行接口集成。"
+      },
+      "white_label": {
+        "label": "白标品牌定制",
+        "description": "自定义界面及文档的企业品牌样式。"
+      },
+      "two_factor_auth": {
+        "label": "双因素认证 (2FA)",
+        "description": "支持并强制双因素身份验证。"
+      }
+    },
+    "limits": {
+      "max_employees": {
+        "label": "最大员工数",
+        "unit": "人",
+        "description": "留空表示无限制。"
+      },
+      "max_users": {
+        "label": "最大登录用户数",
+        "unit": "人",
+        "description": "可登录系统的活跃账号数。"
+      },
+      "max_branches": {
+        "label": "最大分支机构数",
+        "unit": "个",
+        "description": "公司内的实体分支机构。"
+      },
+      "max_departments": {
+        "label": "最大部门数",
+        "unit": "个",
+        "description": "启用中的部门数量。"
+      },
+      "max_storage_mb": {
+        "label": "文档存储空间",
+        "unit": "MB",
+        "description": "上传文档的总容量限制。"
+      },
+      "max_ocr_requests_per_month": {
+        "label": "每月 OCR 识别次数",
+        "unit": "次/月",
+        "description": "每月自动证件识别请求上限。"
+      },
+      "max_payroll_runs_per_month": {
+        "label": "每月薪资核算次数",
+        "unit": "次/月",
+        "description": "留空表示无限制。"
+      },
+      "max_api_keys": {
+        "label": "API 密钥数",
+        "unit": "个",
+        "description": "外部集成令牌上限。"
+      }
+    },
+    "cycles": {
+      "monthly": "按月",
+      "quarterly": "按季度",
+      "semiannual": "每半年",
+      "annual": "按年",
+      "lifetime": "终身",
+      "custom_days": "自定义天数"
+    },
+    "pricingModels": {
+      "flat": "周期固定价格",
+      "per_employee": "基础价 + 超额员工单价",
+      "per_managed_tenant": "基础价 + 超额托管企业单价",
+      "hybrid": "混合计费（基础价 + 员工 + 托管企业）"
+    },
+    "statuses": {
+      "active": "有效",
+      "pending_payment": "待付款",
+      "past_due": "已逾期",
+      "grace_period": "宽限期",
+      "suspended": "已暂停",
+      "cancelled": "已取消",
+      "expired": "已过期",
+      "open": "待支付",
+      "under_review": "审核中",
+      "paid": "已支付",
+      "overdue": "已逾期",
+      "void": "已作废",
+      "draft": "草稿",
+      "pending": "待审核",
+      "approved": "已批准",
+      "rejected": "已驳回",
+      "revoked": "已撤销",
+      "unassigned": "未分配套餐",
+      "unrestricted": "无限制"
+    },
+    "relationshipTypes": {
+      "bpo": "BPO / 人事外包",
+      "accounting": "财税代理",
+      "consulting": "咨询顾问",
+      "holding": "集团控股",
+      "reseller": "合作伙伴 / 分销商"
+    },
+    "paymentMethods": {
+      "bank_transfer": "银行转账",
+      "multicaixa_reference": "Multicaixa 参考号",
+      "cash": "现金 / 存款",
+      "gpo": "GPO / 在线支付",
+      "other": "其他"
+    },
+    "plans": {
+      "title": "自定义套餐与订阅",
+      "description": "按模块、配额和多企业管理规则创建定制套餐，并可关联至任意数量的企业。",
+      "createButton": "创建自定义套餐",
+      "empty": "暂无套餐，请创建第一个自定义套餐以开始绑定企业。",
+      "visibilityPublic": "公开",
+      "visibilityPrivate": "私有",
+      "visibilityArchived": "已归档",
+      "employeesLabel": "员工上限",
+      "usersLabel": "用户上限",
+      "modulesLabel": "已启模块",
+      "linkedCompaniesLabel": "已绑定企业",
+      "manageOthersLabel": "管理其他企业",
+      "linkCompanies": "绑定企业",
+      "editTooltip": "编辑",
+      "duplicateTooltip": "复制套餐",
+      "deleteTooltip": "删除",
+      "confirmDelete": "确定删除套餐“{{name}}”吗？",
+      "builderCreateTitle": "创建高度自定义套餐",
+      "builderEditTitle": "编辑套餐：{{name}}",
+      "builderDescription": "配置价格、周期、功能模块、配额、管理公司规则（非分支机构）及自定义合同属性。",
+      "tabGeneral": "常规与价格",
+      "tabFeatures": "功能模块 ({{count}})",
+      "tabLimits": "配额与限制",
+      "tabAgency": "多企业管理（非分支）",
+      "tabCustom": "自定义规则",
+      "nameLabel": "套餐名称 *",
+      "namePlaceholder": "例如：财税合作 VIP 套餐",
+      "codeLabel": "内部编码",
+      "codePlaceholder": "例如：HC-BPO-VIP",
+      "slugLabel": "标识 Slug（可选）",
+      "slugPlaceholder": "留空则自动生成",
+      "badgeLabel": "标签徽章",
+      "badgePlaceholder": "例如：最受欢迎 / 定制版",
+      "visibilityLabel": "可见性",
+      "visibilityPrivateOption": "私有（定制 / 内部专享）",
+      "planActiveLabel": "启用套餐",
+      "planActiveDesc": "可用于新企业绑定",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "套餐商业简介...",
+      "billingCycleLabel": "计费周期",
+      "customDaysLabel": "周期天数",
+      "currencyLabel": "币种",
+      "basePriceLabel": "基础价格",
+      "pricingModelLabel": "计费模式",
+      "graceDaysLabel": "宽限天数",
+      "includedEmployees": "包含员工数",
+      "extraEmployeePrice": "超额员工单价",
+      "includedManagedTenants": "包含托管企业数",
+      "extraManagedTenantPrice": "超额企业单价",
+      "enableAll": "全部启用",
+      "disableAll": "全部停用",
+      "limitBehaviorLabel": "达到上限时的处理方式（员工 / 企业）",
+      "limitBehaviorBlock": "达到上限时阻止新增",
+      "limitBehaviorOverage": "允许超额并在账单中加收费用",
+      "agencyHint": "以下规则决定使用此套餐的企业是否可作为管理公司来管理其他独立企业（非分支机构）。",
+      "canManageOthers": "允许管理其他企业",
+      "canManageOthersDesc": "启用“托管企业组合”门户",
+      "canCreateManaged": "允许直接创建托管企业",
+      "canCreateManagedDesc": "允许管理公司直接新建客户企业",
+      "maxManagedTenants": "最大托管企业数",
+      "hierarchyDepth": "层级深度",
+      "hierarchyDepthHint": "1 = 仅管理直接客户；2+ = 支持下级分销。",
+      "quotaScope": "配额计算范围",
+      "quotaScopePooled": "在管理公司名下合并计算",
+      "quotaScopePerTenant": "按每家托管企业独立计算",
+      "delegateTeam": "委派管理团队至客户企业",
+      "delegateTeamDesc": "为客户企业分配顾问或会计人员",
+      "customizeChildPerms": "自定义托管企业内权限",
+      "customizeChildPermsDesc": "按访问记录设置模块与部门范围",
+      "customRulesHint": "为此套餐添加自定义合同属性或规则（键 → 值）。",
+      "addRule": "添加规则",
+      "noCustomRules": "暂未添加自定义规则。",
+      "ruleKeyPlaceholder": "键（如 sla_hours）",
+      "ruleValuePlaceholder": "值（如 4）",
+      "saveChanges": "保存修改",
+      "createPlan": "创建套餐",
+      "assignTitle": "将套餐“{{name}}”绑定至企业",
+      "assignDescription": "可同时勾选任意数量的企业进行批量绑定。",
+      "initialStatus": "初始订阅状态",
+      "customPriceOptional": "协商价格（可选）",
+      "defaultPricePlaceholder": "默认：{{price}} {{currency}}",
+      "searchTenantsPlaceholder": "按企业名称、Slug 或税号搜索...",
+      "currentPlanPrefix": "当前：{{name}}",
+      "selectedCount": "已选择 {{count}} 家企业",
+      "linkButtonCount": "绑定 ({{count}})",
+      "toastCreated": "自定义套餐创建成功。",
+      "toastUpdated": "套餐更新成功。",
+      "toastSaveError": "保存套餐失败。",
+      "toastDuplicated": "已复制为私有套餐。",
+      "toastDuplicateError": "无法复制套餐。",
+      "toastDeleted": "套餐已删除。",
+      "toastDeleteError": "无法删除此套餐。",
+      "toastAssigned": "已成功将套餐绑定至所选企业！",
+      "toastAssignError": "绑定企业失败。"
+    },
+    "platformBilling": {
+      "kpiOpen": "未结账单金额",
+      "kpiPendingProofs": "待审核付款凭证",
+      "kpiPaidMonth": "本月已批准收入",
+      "kpiUnderReview": "审核中账单数",
+      "pendingProofsTitle": "待审核付款凭证",
+      "pendingProofsDesc": "核验企业或管理公司提交的银行转账及付款参考凭证。",
+      "processLifecycle": "处理到期订阅",
+      "noPendingProofs": "暂无待审核付款凭证。",
+      "proofButton": "查看凭证",
+      "approveButton": "批准",
+      "rejectButton": "驳回",
+      "invoicesTitle": "SaaS 账单列表",
+      "invoicesDesc": "仅向独立企业及管理公司开具账单。",
+      "generateInvoice": "生成账单",
+      "noInvoices": "未找到账单记录。",
+      "planDueMeta": "套餐：{{plan}} • 到期日：{{due}}",
+      "generateTitle": "生成订阅账单",
+      "generateDesc": "仅独立企业或管理公司可直接开具账单。",
+      "companyLabel": "企业 *",
+      "selectCompany": "选择企业...",
+      "notesLabel": "备注",
+      "rejectTitle": "驳回付款凭证",
+      "rejectDesc": "请说明驳回原因以便客户重新提交。",
+      "rejectPlaceholder": "例如：银行流水中未查到该笔参考号",
+      "confirmReject": "确认驳回",
+      "toastInvoiceGenerated": "账单生成成功。",
+      "toastInvoiceError": "生成账单失败。",
+      "toastApproved": "付款已批准，订阅已续期！",
+      "toastApproveError": "批准付款失败。",
+      "toastRejected": "付款凭证已驳回。",
+      "toastRejectError": "驳回凭证失败。",
+      "toastLifecycle": "订阅周期已处理：{{grace}} 家进入宽限期，{{suspended}} 家已暂停。",
+      "toastLifecycleError": "处理订阅周期失败。"
+    },
+    "relationships": {
+      "title": "企业层级：管理公司 ↔ 托管企业（非分支机构）",
+      "description": "控制哪些企业可管理其他独立企业客户。",
+      "linkButton": "关联企业到管理公司",
+      "empty": "暂无多企业关联记录。",
+      "typeClientMeta": "类型：{{type}} • 客户税号：{{nif}}",
+      "revokeButton": "解除关联",
+      "confirmRevoke": "确定解除这两家企业之间的管理关联吗？",
+      "overridesTitle": "企业订阅与单项配额覆盖",
+      "overridesDesc": "在不影响同套餐其他企业的情况下，单独调整某家企业的套餐、状态或配额上限。",
+      "managedByPrefix": "托管方：{{name}}",
+      "planPrefix": "套餐：{{name}}",
+      "noPlan": "无套餐",
+      "configureButton": "配置套餐 / 覆盖",
+      "linkDialogTitle": "关联托管企业",
+      "linkDialogDesc": "选择管理公司和独立的客户企业。",
+      "managerCompanyLabel": "管理公司 *",
+      "selectManager": "选择管理公司...",
+      "clientCompanyLabel": "客户企业（被托管） *",
+      "selectClient": "选择客户企业...",
+      "relationshipTypeLabel": "关联类型",
+      "linkSubmit": "关联",
+      "overrideDialogTitle": "订阅与覆盖设置 — {{name}}",
+      "overrideDialogDesc": "为该企业分配套餐并单独定制配额，无需修改基础套餐。",
+      "planLabel": "套餐",
+      "selectPlan": "选择套餐...",
+      "subscriptionStatusLabel": "订阅状态",
+      "customPriceLabel": "协商价格（覆盖）",
+      "customPricePlaceholder": "使用套餐价格",
+      "overrideMaxEmployees": "覆盖最大员工数",
+      "overrideMaxUsers": "覆盖最大用户数",
+      "overrideMaxManaged": "覆盖最大托管企业数",
+      "usePlanDefaultPlaceholder": "使用套餐默认值",
+      "saveSubscription": "保存订阅",
+      "toastAttached": "企业已成功关联至管理公司。",
+      "toastAttachError": "关联企业失败。",
+      "toastRevoked": "管理关联已解除。",
+      "toastRevokeError": "解除关联失败。",
+      "toastSubscriptionUpdated": "订阅与覆盖设置已更新。",
+      "toastSubscriptionError": "更新订阅失败。",
+      "clientCompaniesLabel": "客户企业（可多选）*",
+      "searchClientsPlaceholder": "按名称、Slug 或税号搜索企业...",
+      "selectAllVisible": "全选当前",
+      "clearSelection": "清空",
+      "selectedClientsCount": "已选择 {{count}} 家企业",
+      "linkSubmitCount": "关联 ({{count}})",
+      "alreadyManagedBy": "已由 {{name}} 托管"
+    },
+    "portfolio": {
+      "title": "托管企业组合",
+      "description": "在您的套餐配额范围内管理其他独立企业（BPO 客户、代理记账或集团成员）。",
+      "newCompany": "新建托管企业",
+      "kpiManaged": "托管企业数",
+      "kpiEmployees": "组合内员工总数",
+      "kpiPayrolls": "待处理薪资",
+      "listTitle": "您名下管理的企业",
+      "listDesc": "下方每家企业均拥有独立的税号、社保号、分支机构、员工与薪资体系。",
+      "empty": "您的组合中暂未添加任何托管企业。",
+      "statEmployees": "员工数",
+      "statUsers": "用户数",
+      "statOpenPayrolls": "待办薪资",
+      "enterCompany": "进入管理",
+      "teamButton": "团队",
+      "teamButtonTitle": "管理您团队在该企业的访问权限",
+      "confirmRevoke": "确定解除对“{{name}}”的托管管理吗？",
+      "createTitle": "新建托管企业",
+      "editTitle": "编辑：{{name}}",
+      "formDesc": "创建独立的客户企业（非分支机构）。资源消耗计入您的套餐上限。",
+      "companyNameLabel": "企业名称 *",
+      "companyNamePlaceholder": "例如：南方贸易有限公司",
+      "nifLabel": "税号 (NIF)",
+      "nifPlaceholder": "例如：5000123456",
+      "emailLabel": "邮箱",
+      "phoneLabel": "电话",
+      "managementTypeLabel": "托管类型",
+      "cityLabel": "城市",
+      "clientAdminSection": "客户企业初始管理员（可选）",
+      "adminNamePlaceholder": "姓名",
+      "adminEmailPlaceholder": "邮箱",
+      "adminPasswordPlaceholder": "密码",
+      "createCompanySubmit": "创建企业",
+      "teamModalTitle": "您的团队在“{{name}}”的访问权限",
+      "teamModalDesc": "指定您管理公司中的哪些成员可进入该客户企业进行操作。",
+      "roles": {
+        "admin": "管理员",
+        "hr-manager": "人事经理",
+        "manager": "主管",
+        "employee": "员工"
+      },
+      "toastCreated": "托管企业已创建并加入您的组合。",
+      "toastCreateError": "创建托管企业失败。",
+      "toastUpdated": "托管企业已更新。",
+      "toastUpdateError": "更新企业失败。",
+      "toastRevoked": "管理关联已解除。",
+      "toastRevokeError": "解除关联失败。",
+      "toastTeamUpdated": "团队访问权限已更新。",
+      "toastTeamError": "更新访问权限失败。"
+    },
+    "billing": {
+      "title": "套餐、用量与账单",
+      "description": "查看当前套餐配额、资源使用情况及订阅账单。",
+      "currentSubscription": "当前订阅",
+      "noPlanAssigned": "未分配套餐",
+      "viaManager": "（经由 {{name}}）",
+      "cycleMeta": "周期：{{cycle}}",
+      "validUntil": "有效期至：{{date}}",
+      "notOperationalWarning": "当前订阅未处于可用状态，请结清未付账单或联系平台支持。",
+      "quotaTitle": "配额使用情况",
+      "quotaDescPooled": "以下配额包含您公司及名下所有托管企业的合并使用量。",
+      "quotaDescSingle": "当前使用量与套餐合同上限对比。",
+      "quotaEmployees": "员工数",
+      "quotaUsers": "用户数",
+      "quotaBranches": "分支机构",
+      "quotaDepartments": "部门数",
+      "quotaStorage": "存储空间 (MB)",
+      "quotaManagedTenants": "托管企业数",
+      "invoicesTitle": "账单与付款记录",
+      "centralizedTitle": "账单由管理公司统一结算",
+      "centralizedDesc": "本企业由 {{name}} 托管管理。所有账单均仅向管理公司开具。",
+      "noInvoices": "本企业暂无账单记录。",
+      "invoicePeriod": "周期：{{start}} {{end}} • 到期日：{{due}}",
+      "invoicePeriodEnd": "至 {{date}}",
+      "sendProof": "上传付款凭证",
+      "latestPayment": "最近提交的付款：{{status}}（{{method}}{{ref}}）",
+      "rejectionPrefix": " — 驳回原因：{{reason}}",
+      "viewProof": "查看凭证",
+      "submitProofTitle": "上传付款凭证 — {{number}}",
+      "totalDue": "应付总额：{{amount}} {{currency}}",
+      "paymentMethodLabel": "付款方式",
+      "referenceLabel": "参考号 / 流水号",
+      "referencePlaceholder": "例如：TRF-20261117-01",
+      "paymentDateLabel": "付款日期",
+      "proofFileLabel": "付款凭证文件（PDF / 图片）",
+      "submitProofButton": "提交",
+      "toastProofSent": "凭证已提交！等待平台管理员审核。",
+      "toastProofError": "提交付款凭证失败。"
+    },
+    "team": {
+      "title": "企业团队与访问权限",
+      "description": "活跃用户：{{used}} / {{limit}}",
+      "generateInvite": "生成邀请链接",
+      "newUser": "新建用户",
+      "usersTitle": "有权限的用户",
+      "usersDesc": "企业内部成员及由管理公司委派的访问人员。",
+      "managerBadge": "管理公司",
+      "pendingInvitesTitle": "待接受邀请",
+      "noPendingInvites": "暂无待接受邀请。",
+      "inviteProfile": "角色：{{role}}",
+      "copyLink": "复制链接",
+      "createUserTitle": "新建企业用户",
+      "createUserDesc": "受当前套餐最大用户数限制。",
+      "nameLabel": "姓名 *",
+      "emailLabel": "邮箱 *",
+      "passwordLabel": "密码 *",
+      "roleLabel": "角色",
+      "inviteTitle": "通过链接邀请用户",
+      "inviteDesc": "受邀用户在接受邀请时自行设置登录密码。",
+      "nameOptionalLabel": "姓名（可选）",
+      "roles": {
+        "admin": "管理员",
+        "hr-manager": "人事经理",
+        "manager": "主管",
+        "employee": "员工"
+      },
+      "toastUserCreated": "用户创建成功。",
+      "toastUserError": "创建用户失败。",
+      "toastInviteCreated": "邀请已生成！请复制链接分享。",
+      "toastInviteError": "生成邀请失败。",
+      "toastInviteCancelled": "邀请已取消。",
+      "toastInviteCancelError": "取消邀请失败。",
+      "toastLinkCopied": "邀请链接已复制！"
+    },
+    "invitation": {
+      "title": "HumanCore 邀请",
+      "joinCompany": "加入 {{company}}（{{email}}）",
+      "defaultSubtitle": "激活您的账号",
+      "missingToken": "缺少邀请令牌。",
+      "invalidOrExpired": "邀请无效或已过期。",
+      "fullName": "全名",
+      "password": "密码",
+      "confirmPassword": "确认密码",
+      "activateButton": "激活账号",
+      "toastAccepted": "账号已激活！现在可以登录。",
+      "toastAcceptError": "无法接受此邀请。"
+    }
   }
 }

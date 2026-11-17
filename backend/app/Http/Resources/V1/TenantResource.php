@@ -35,6 +35,10 @@ class TenantResource extends JsonResource
             'timezone'           => $this->timezone,
             'date_format'        => $this->date_format,
             'status'             => $this->status,
+            'origin_type'        => $this->origin_type ?? 'platform',
+            'created_by_tenant_id' => $this->created_by_tenant_id,
+            'billing_email'      => $this->billing_email,
+            'branding'           => $this->branding,
         ];
     }
 }

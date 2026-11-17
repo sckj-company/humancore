@@ -43,6 +43,10 @@ const BenefitsPage = lazy(() => import('@/features/benefits/benefits-page').then
 const DeductionsPage = lazy(() => import('@/features/deductions/deductions-page').then((m) => ({ default: m.DeductionsPage })))
 const PlaceholderPage = lazy(() => import('@/features/shared/placeholder-page').then((m) => ({ default: m.PlaceholderPage })))
 const SuperAdminPage = lazy(() => import('@/features/admin/super-admin-page').then((m) => ({ default: m.SuperAdminPage })))
+const PortfolioPage = lazy(() => import('@/features/saas/portfolio-page').then((m) => ({ default: m.PortfolioPage })))
+const BillingPage = lazy(() => import('@/features/saas/billing-page').then((m) => ({ default: m.BillingPage })))
+const TeamPage = lazy(() => import('@/features/saas/team-page').then((m) => ({ default: m.TeamPage })))
+const AcceptInvitationPage = lazy(() => import('@/features/saas/accept-invitation-page').then((m) => ({ default: m.AcceptInvitationPage })))
 
 function PageLoader() {
   return (
@@ -93,6 +97,7 @@ export function AppRouter() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<PasswordResetPage />} />
+        <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
         <Route
           element={
             <ProtectedRoute>
@@ -131,6 +136,9 @@ export function AppRouter() {
           <Route path="/deductions" element={<TenantRoute><DeductionsPage /></TenantRoute>} />
           <Route path="/reports" element={<TenantRoute><ReportsPage /></TenantRoute>} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/billing" element={<TenantRoute><BillingPage /></TenantRoute>} />
+          <Route path="/settings/team" element={<TenantRoute><TeamPage /></TenantRoute>} />
+          <Route path="/portfolio" element={<TenantRoute><PortfolioPage /></TenantRoute>} />
           <Route path="/settings/payroll-components" element={<SalaryComponentRegulationsPage />} />
           <Route path="/settings/payroll-tax-rules" element={<PayrollTaxRulesPage />} />
           <Route path="/email-templates" element={<TenantRoute><EmailTemplatesPage /></TenantRoute>} />

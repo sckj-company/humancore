@@ -53,6 +53,9 @@ import {
   type PermissionGroupRecord,
   type TenantAccessDraft,
 } from '@/features/admin/permissions-editor'
+import { PlansManagementTab } from '@/features/admin/plans-management-tab'
+import { PlatformBillingTab } from '@/features/admin/platform-billing-tab'
+import { RelationshipsAndSubscriptionsTab } from '@/features/admin/relationships-tab'
 import type { Paginated, Tenant } from '@/types'
 
 // ── Constantes Angola ─────────────────────────────────────────────────────────
@@ -960,6 +963,18 @@ export function SuperAdminPage() {
             <Building2 className="h-4 w-4" />
             {t('superAdminPage.registeredTenantsTab', { defaultValue: 'Empresas registadas' })}
           </TabsTrigger>
+          <TabsTrigger value="plans" className="gap-2">
+            <Layers className="h-4 w-4" />
+            {t('superAdminPage.plansTab')}
+          </TabsTrigger>
+          <TabsTrigger value="relationships" className="gap-2">
+            <Globe2 className="h-4 w-4" />
+            {t('superAdminPage.hierarchyTab')}
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="gap-2">
+            <Activity className="h-4 w-4" />
+            {t('superAdminPage.billingTab')}
+          </TabsTrigger>
           <TabsTrigger value="permission-groups" className="gap-2">
             <Layers className="h-4 w-4" />
             {t('superAdminPage.permissionGroupsTab', { defaultValue: 'Grupos de permissões' })}
@@ -1248,6 +1263,18 @@ export function SuperAdminPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+        <TabsContent value="plans">
+          <PlansManagementTab />
+        </TabsContent>
+
+        <TabsContent value="relationships">
+          <RelationshipsAndSubscriptionsTab />
+        </TabsContent>
+
+        <TabsContent value="billing">
+          <PlatformBillingTab />
+        </TabsContent>
 
         {canManagePlatformUsers && (
           <TabsContent value="platform-users">

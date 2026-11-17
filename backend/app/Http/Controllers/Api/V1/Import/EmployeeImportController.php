@@ -74,6 +74,23 @@ class EmployeeImportController extends BaseController
         $activeTenant = $this->tenantManager->get();
         $allowCrossTenant = $request->user()?->hasRole('super-admin') ?? false;
 
+        if ($activeTenant && ! $allowCrossTenant) {
+            $dryCheck = $this->importService->execute(
+                filePath: $tempPath,
+                dryRun: true,
+                dispatchUploadJobs: false,
+                activeTenant: $activeTenant,
+                allowCrossTenant: false
+            );
+            $newCount = (int) ($dryCheck['created'] ?? $dryCheck['total_records'] ?? 0);
+            if ($newCount > 0) {
+                $quota = app(\App\Services\SaaS\PlanEntitlementService::class)->checkQuota($activeTenant, 'max_employees', $newCount);
+                if (! $quota['allowed']) {
+                    return $this->error($quota['message'] ?? 'Limite de funcionários do plano excedido para esta importação.', 422);
+                }
+            }
+        }
+
         try {
             $result = $this->importService->execute(
                 filePath: $tempPath,

@@ -4,6 +4,7 @@ namespace App\Http\Resources\V1;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\SaaS\PlanEntitlementService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,6 +25,9 @@ class AuthResource extends JsonResource
         $roles = $activeAccess?->role_name
             ? collect([$activeAccess->role_name])
             : $this->getRoleNames();
+        $entitlements = $tenant
+            ? app(PlanEntitlementService::class)->resolve($tenant)
+            : null;
 
         return [
             'id' => $this->id,
@@ -33,6 +37,7 @@ class AuthResource extends JsonResource
             'timezone' => $this->timezone,
             'is_active' => $this->is_active,
             'tenant_id' => $activeTenantId ?? $this->tenant_id,
+            'home_tenant_id' => $this->tenant_id,
             'tenant' => $tenant ? [
                 'id' => $tenant->id,
                 'name' => $tenant->name,
@@ -41,7 +46,10 @@ class AuthResource extends JsonResource
                 'locale' => $tenant->locale,
                 'timezone' => $tenant->timezone,
                 'logo_path' => $tenant->logo_path,
+                'status' => $tenant->status,
+                'branding' => $tenant->branding,
             ] : null,
+            'entitlements' => $entitlements,
             'accessible_tenants' => $accessibleTenants->values(),
             'active_department_ids' => $this->allowedDepartmentIds($activeTenantId),
             'active_permission_group_id' => $activeAccess?->permission_group_id,

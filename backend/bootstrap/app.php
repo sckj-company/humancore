@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Middleware\CheckPlanFeature;
+use App\Http\Middleware\CheckPlanQuota;
+use App\Http\Middleware\EnsureActiveSubscription;
 use App\Http\Middleware\LogHttpOperations;
 use App\Http\Middleware\SetTenantContext;
 use Illuminate\Foundation\Application;
@@ -25,6 +28,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'tenant' => SetTenantContext::class,
+            'subscription.active' => EnsureActiveSubscription::class,
+            'plan.feature' => CheckPlanFeature::class,
+            'plan.quota' => CheckPlanQuota::class,
         ]);
 
         $middleware->priority([

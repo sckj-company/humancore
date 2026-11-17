@@ -57,3 +57,23 @@ export function hasAnyRole(user: User | null, roles: string[]): boolean {
   if (!user) return false
   return user.roles?.some((r) => roles.includes(r)) ?? false
 }
+
+export function hasPlanFeature(user: User | null, feature?: string): boolean {
+  if (!user) return false
+  if (!feature) return true
+  if (user.roles?.includes('super-admin')) return true
+  if (!user.entitlements?.features) return true
+  return user.entitlements.features[feature] !== false
+}
+
+export function canManageOtherTenants(user: User | null): boolean {
+  if (!user) return false
+  return Boolean(user.entitlements?.agency?.can_manage_other_tenants)
+}
+
+export function isSubscriptionOperational(user: User | null): boolean {
+  if (!user) return false
+  if (user.roles?.includes('super-admin')) return true
+  if (!user.entitlements) return true
+  return user.entitlements.is_operational !== false
+}

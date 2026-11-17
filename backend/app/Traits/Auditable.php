@@ -46,10 +46,12 @@ trait Auditable
 
         $tenantId = $this->tenant_id
             ?? (app()->bound('currentTenant') ? app('currentTenant')?->id : null);
+        $actingTenantId = auth()->check() ? auth()->user()?->tenant_id : null;
 
         $audit = Audit::query()->withoutGlobalScopes()->create([
             'user_id' => auth()->id(),
             'tenant_id' => $tenantId,
+            'acting_tenant_id' => ($actingTenantId && $tenantId && (int) $actingTenantId !== (int) $tenantId) ? $actingTenantId : null,
             'event' => $event,
             'auditable_type' => $this->getMorphClass(),
             'auditable_id' => $this->getKey(),

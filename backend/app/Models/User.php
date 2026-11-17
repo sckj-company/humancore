@@ -87,7 +87,27 @@ class User extends Authenticatable
             ? $this->tenantAccesses
             : $this->tenantAccesses()->with('permissionGroup')->get();
 
-        return $accesses->first(fn (UserTenantAccess $access) => (int) $access->tenant_id === (int) $resolvedTenantId);
+        $access = $accesses->first(
+            fn (UserTenantAccess $access) => (int) $access->tenant_id === (int) $resolvedTenantId && $access->is_active !== false
+        );
+
+        if (! $access) {
+            return null;
+        }
+
+        if ($access->granted_by_tenant_id) {
+            $isRelActive = TenantRelationship::query()
+                ->where('manager_tenant_id', $access->granted_by_tenant_id)
+                ->where('managed_tenant_id', $resolvedTenantId)
+                ->where('status', 'active')
+                ->exists();
+
+            if (! $isRelActive) {
+                return null;
+            }
+        }
+
+        return $access;
     }
 
     public function hasTenantScopedAccess(?int $tenantId = null): bool
@@ -104,9 +124,18 @@ class User extends Authenticatable
             return Permission::query()->pluck('name');
         }
 
-        $access = $this->activeTenantAccess($tenantId);
+        $resolvedTenantId = $tenantId ?? $this->activeTenantId();
+        $access = $this->activeTenantAccess($resolvedTenantId);
         if ($access) {
             return collect($access->resolvedPermissions())->values();
+        }
+
+        // Caso esteja a aceder a uma empresa gerida através da sua empresa gestora (sem UserTenantAccess direto)
+        if ($resolvedTenantId && $this->tenant_id && (int) $this->tenant_id !== (int) $resolvedTenantId) {
+            $managerAccess = $this->activeTenantAccess((int) $this->tenant_id);
+            if ($managerAccess) {
+                return collect($managerAccess->resolvedPermissions())->values();
+            }
         }
 
         return $this->getAllPermissions()->pluck('name')->values();
@@ -207,12 +236,18 @@ class User extends Authenticatable
                 || $this->activeTenantAccess($targetId) !== null;
         }
 
-        return ($this->tenant_id !== null && (int) $this->tenant_id === $targetId)
-            || $this->activeTenantAccess($targetId) !== null;
+        if (($this->tenant_id !== null && (int) $this->tenant_id === $targetId)
+            || $this->activeTenantAccess($targetId) !== null) {
+            return true;
+        }
+
+        $managedIds = app(\App\Services\SaaS\TenantHierarchyService::class)->accessibleManagedTenantIdsForUser($this);
+
+        return in_array($targetId, $managedIds, true);
     }
 
     /**
-     * @return Collection<int, array{id: int, name: string, slug: string, status: string, logo_path: string|null}>
+     * @return Collection<int, array{id: int, name: string, slug: string, status: string, logo_path: string|null, is_managed?: bool}>
      */
     public function accessibleTenants(): Collection
     {
@@ -226,10 +261,15 @@ class User extends Authenticatable
                     'slug' => $t->slug,
                     'status' => $t->status,
                     'logo_path' => $t->logo_path,
+                    'is_managed' => false,
                 ]);
         }
 
-        $accessTenantIds = $this->tenantAccesses()->pluck('tenant_id')->map(fn ($id) => (int) $id)->all();
+        $accessTenantIds = $this->tenantAccesses()
+            ->where('is_active', true)
+            ->pluck('tenant_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
 
         if ($this->hasRole('super-admin-limited') && $accessTenantIds === []) {
             return $query->get(['id', 'name', 'slug', 'status', 'logo_path'])
@@ -239,10 +279,14 @@ class User extends Authenticatable
                     'slug' => $t->slug,
                     'status' => $t->status,
                     'logo_path' => $t->logo_path,
+                    'is_managed' => false,
                 ]);
         }
 
+        $managedIds = app(\App\Services\SaaS\TenantHierarchyService::class)->accessibleManagedTenantIdsForUser($this);
+
         $ids = collect($accessTenantIds)
+            ->merge($managedIds)
             ->when($this->tenant_id, fn (Collection $c) => $c->push((int) $this->tenant_id))
             ->unique()
             ->values()
@@ -260,6 +304,7 @@ class User extends Authenticatable
                 'slug' => $t->slug,
                 'status' => $t->status,
                 'logo_path' => $t->logo_path,
+                'is_managed' => in_array((int) $t->id, $managedIds, true) && (int) $t->id !== (int) $this->tenant_id,
             ]);
     }
 

@@ -8,11 +8,13 @@ export interface User {
   roles: string[]
   permissions: string[]
   tenant_id?: number | null
-  accessible_tenants?: Array<{ id: number; name: string; slug: string; status?: string; logo_path?: string | null }>
+  home_tenant_id?: number | null
+  accessible_tenants?: Array<{ id: number; name: string; slug: string; status?: string; logo_path?: string | null; is_managed?: boolean }>
   active_department_ids?: number[] | null
   active_permission_group_id?: number | null
   employee?: EmployeeSummary | null
   tenant?: Tenant | null
+  entitlements?: TenantEntitlements | null
 }
 
 export interface Tenant {
@@ -20,6 +22,7 @@ export interface Tenant {
   name: string
   slug: string
   email?: string
+  billing_email?: string | null
   phone?: string
   tax_id?: string          // NIF angolano (10 dígitos)
   inss_number?: string     // Nº INSS
@@ -36,7 +39,23 @@ export interface Tenant {
   locale: string
   timezone: string
   status: 'active' | 'inactive' | 'suspended'
-  stats?: { employees: number; departments: number; users: number } | null
+  origin_type?: 'platform' | 'agency' | 'self_service'
+  created_by_tenant_id?: number | null
+  stats?: { employees: number; departments: number; users: number; managed_tenants?: number } | null
+  subscription?: {
+    id: number
+    plan_id: number
+    plan_name?: string | null
+    status: string
+    ends_at?: string | null
+    custom_price?: number | null
+  } | null
+  managed_by?: {
+    relationship_id: number
+    relationship_type: string
+    manager_tenant_id: number
+    manager_tenant_name: string
+  } | null
   created_at?: string
   updated_at?: string
 }
@@ -1087,4 +1106,169 @@ export interface EmployeeEducation {
   creator?: { id: number; name: string } | null
   created_at?: string
   updated_at?: string
+}
+
+// SaaS Plans, Subscriptions, Billing & Multi-Company Portfolio
+export interface PlanCatalogResponse {
+  features: Record<string, { label: string; group: string; description: string; default: boolean }>
+  limits: Record<string, { label: string; unit: string; description: string; default: number | string | null }>
+  billing_cycles: Record<string, { label: string; months: number | null; days: number | null }>
+  pricing_models: Record<string, string>
+  defaults: {
+    features: Record<string, boolean>
+    limits: Record<string, number | string | null>
+    agency_config: PlanAgencyConfig
+  }
+}
+
+export interface PlanAgencyConfig {
+  can_manage_other_tenants: boolean
+  can_create_managed_tenants: boolean
+  can_link_existing_tenants: boolean
+  max_managed_tenants: number | null
+  max_hierarchy_depth: number
+  quota_scope: 'pooled_under_manager' | 'per_managed_tenant'
+  can_manage_child_users: boolean
+  can_customize_child_permissions: boolean
+}
+
+export interface Plan {
+  id: number
+  name: string
+  slug: string
+  code?: string | null
+  description?: string | null
+  badge_text?: string | null
+  visibility: 'public' | 'private' | 'archived'
+  is_active: boolean
+  sort_order: number
+  billing_cycle: string
+  custom_cycle_days?: number | null
+  currency: string
+  base_price: number
+  pricing_model: string
+  included_employees: number
+  extra_employee_price: number
+  included_managed_tenants: number
+  extra_managed_tenant_price: number
+  setup_fee: number
+  trial_days: number
+  grace_period_days: number
+  features: Record<string, boolean>
+  limits: Record<string, number | string | null>
+  agency_config: PlanAgencyConfig
+  custom_rules: Record<string, unknown>
+  subscriptions_count?: number
+  active_subscriptions_count?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface TenantEntitlements {
+  has_subscription: boolean
+  status: string
+  is_operational: boolean
+  is_managed: boolean
+  inherited_from_manager: boolean
+  billing_tenant_id: number
+  manager_tenant?: { id: number; name: string; slug: string } | null
+  plan?: {
+    id: number
+    name: string
+    slug: string
+    code?: string | null
+    billing_cycle: string
+    currency: string
+    base_price: number
+    pricing_model: string
+  } | null
+  subscription?: {
+    id: number
+    status: string
+    starts_at?: string | null
+    ends_at?: string | null
+    grace_until?: string | null
+    auto_renew: boolean
+    custom_price?: number | null
+    overrides?: Record<string, unknown> | null
+  } | null
+  features: Record<string, boolean>
+  limits: Record<string, number | string | null>
+  agency: PlanAgencyConfig
+  custom_rules: Record<string, unknown>
+  usage: {
+    employees: number
+    users: number
+    branches: number
+    departments: number
+    storage_mb: number
+    ocr_requests_this_month: number
+    payroll_runs_this_month: number
+    managed_tenants: number
+  }
+  quota_scope?: 'pooled_under_manager' | 'per_managed_tenant'
+  hierarchy_depth: number
+}
+
+export interface SubscriptionPayment {
+  id: number
+  invoice_id: number
+  tenant_id: number
+  amount: number
+  currency: string
+  payment_method: string
+  reference_code?: string | null
+  payment_date?: string | null
+  proof_file_path?: string | null
+  proof_original_name?: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  reviewed_at?: string | null
+  rejection_reason?: string | null
+  notes?: string | null
+  tenant?: { id: number; name: string; slug: string; tax_id?: string | null }
+  invoice?: { id: number; invoice_number: string; total_amount: number; currency: string; status: string; due_date: string }
+  submitter?: { id: number; name: string; email: string }
+  created_at?: string
+}
+
+export interface SubscriptionInvoice {
+  id: number
+  invoice_number: string
+  tenant_id: number
+  subscription_id: number
+  plan_id: number
+  period_start: string
+  period_end?: string | null
+  due_date: string
+  currency: string
+  subtotal: number
+  overage_amount: number
+  discount_amount: number
+  total_amount: number
+  line_items: Array<{ description: string; quantity: number; unit_price: number; amount: number }>
+  status: 'draft' | 'open' | 'under_review' | 'paid' | 'overdue' | 'void'
+  paid_at?: string | null
+  notes?: string | null
+  tenant?: { id: number; name: string; slug: string; tax_id?: string | null }
+  plan?: { id: number; name: string; slug: string }
+  payments?: SubscriptionPayment[]
+  created_at?: string
+}
+
+export interface TenantRelationship {
+  id: number
+  manager_tenant_id: number
+  managed_tenant_id: number
+  relationship_type: 'bpo' | 'accounting' | 'consulting' | 'holding' | 'reseller'
+  status: 'pending' | 'active' | 'suspended' | 'revoked'
+  management_scope?: {
+    can_manage_users?: boolean
+    can_manage_settings?: boolean
+    can_manage_billing?: boolean
+    allowed_modules?: string[] | null
+  } | null
+  notes?: string | null
+  accepted_at?: string | null
+  manager_tenant?: { id: number; name: string; slug: string; status: string }
+  managed_tenant?: { id: number; name: string; slug: string; status: string; tax_id?: string | null }
 }
