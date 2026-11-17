@@ -173,6 +173,7 @@ class SuperAdminTest extends TestCase
                 'first_name' => 'Novo',
                 'last_name' => 'Funcionário',
                 'email' => 'novo@empresa.test',
+                'phone' => '+244923000001',
                 'status' => 'active',
             ], ['X-Tenant-ID' => (string) $selectedTenant->id])
             ->assertCreated()

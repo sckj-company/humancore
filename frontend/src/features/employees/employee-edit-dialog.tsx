@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { ANGOLA_PROVINCES } from '@/lib/angola-provinces'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -93,7 +94,7 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
     setForm((current) => ({ ...current, [key]: value }))
   }
 
-  const selectValue = (key: 'gender' | 'marital_status' | 'status' | 'approval_status' | 'department_id' | 'position_id' | 'manager_id') =>
+  const selectValue = (key: 'gender' | 'marital_status' | 'state' | 'status' | 'approval_status' | 'department_id' | 'position_id' | 'manager_id') =>
     form[key] || 'none'
   const setSelectValue = (key: keyof EmployeeEditForm, value: string) => update(key, value === 'none' ? '' : value)
   const handleOpenChange = (nextOpen: boolean) => {
@@ -114,7 +115,7 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
               <h3 className="text-sm font-semibold">{t('employeeEdit.identification')}</h3>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <TextField label={t('employeeEdit.firstName')} value={form.first_name} onChange={(value) => update('first_name', value)} required />
-                <TextField label={t('employeeEdit.lastName')} value={form.last_name} onChange={(value) => update('last_name', value)} required />
+                <TextField label={t('employeeEdit.lastName')} value={form.last_name} onChange={(value) => update('last_name', value)} />
                 <TextField label={t('employees.code')} value={form.employee_code} onChange={(value) => update('employee_code', value)} required />
                 <TextField label={t('common.email')} type="email" value={form.email} onChange={(value) => update('email', value)} />
                 <TextField label={t('common.phone')} value={form.phone} onChange={(value) => update('phone', value)} />
@@ -146,7 +147,7 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <TextField label={t('employeeEdit.streetAddress')} value={form.address} onChange={(value) => update('address', value)} />
                 <TextField label={t('employeeEdit.city')} value={form.city} onChange={(value) => update('city', value)} />
-                <TextField label={t('employeeEdit.stateProvince')} value={form.state} onChange={(value) => update('state', value)} />
+                <SelectField label={t('employeeEdit.stateProvince')} value={selectValue('state')} onChange={(value) => setSelectValue('state', value)} options={ANGOLA_PROVINCES.map((province) => [province, province])} />
                 <TextField label={t('employeeEdit.country')} value={form.country} onChange={(value) => update('country', value)} />
                 <TextField label={t('employeeEdit.postalCode')} value={form.postal_code} onChange={(value) => update('postal_code', value)} />
               </div>
@@ -180,7 +181,7 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
         </ScrollArea>
         <DialogFooter className="shrink-0 px-6 pb-6">
           <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={mutation.isPending}>{t('common.cancel')}</Button>
-          <Button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.first_name.trim() || !form.last_name.trim() || !form.employee_code.trim()}>
+          <Button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.first_name.trim() || !form.employee_code.trim()}>
             {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
             {t('employeeEdit.saveChanges')}
           </Button>

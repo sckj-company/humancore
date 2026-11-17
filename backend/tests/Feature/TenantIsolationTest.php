@@ -94,6 +94,7 @@ class TenantIsolationTest extends TestCase
             'first_name' => 'Ana',
             'last_name' => 'Costa',
             'email' => 'ana.costa@example.com',
+            'phone' => '+244923000002',
             'status' => 'active',
         ]);
 

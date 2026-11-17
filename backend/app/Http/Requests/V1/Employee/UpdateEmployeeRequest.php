@@ -16,10 +16,10 @@ class UpdateEmployeeRequest extends FormRequest
     {
         return [
             'first_name' => ['sometimes', 'string', 'max:150'],
-            'last_name' => ['sometimes', 'string', 'max:150'],
+            'last_name' => ['nullable', 'string', 'max:150'],
             'employee_code' => ['sometimes', 'string', 'max:50'],
             'email' => [
-                'sometimes',
+                'nullable',
                 'email',
                 'max:255',
                 Rule::unique('employees', 'email')

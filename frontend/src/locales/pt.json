@@ -2738,7 +2738,8 @@
       "contractStartDate": "Data de Início do Contrato",
       "contractEndDate": "Data de Término (se aplicável)",
       "contractSignedAt": "Data de Assinatura",
-      "contractNotes": "Observações e Cláusulas Especiais"
+      "contractNotes": "Observações e Cláusulas Especiais",
+      "phoneAtLeastOneHint": "mín. 1 telefone"
     },
     "placeholders": {
       "firstName": "Ex: João",
@@ -2757,7 +2758,8 @@
       "selectDepartment": "Selecionar departamento",
       "selectPosition": "Selecionar cargo",
       "selectManager": "Selecionar gestor",
-      "contractNotes": "Detalhes adicionais, subsídios acordados, cláusulas de confidencialidade..."
+      "contractNotes": "Detalhes adicionais, subsídios acordados, cláusulas de confidencialidade...",
+      "selectProvince": "Selecionar província"
     },
     "options": {
       "none": "Nenhum",
@@ -2849,7 +2851,8 @@
       "emailInvalid": "Insira um email válido.",
       "contractEndBeforeStart": "A data de término deve ser posterior ou igual à data de início.",
       "missingRequiredDocuments": "Anexe os documentos obrigatórios: {{documents}}.",
-      "fillRequiredBasicFields": "Preencha os campos obrigatórios na aba Dados Básicos."
+      "fillRequiredBasicFields": "Preencha os campos obrigatórios na aba Dados Básicos.",
+      "phoneRequired": "Indique pelo menos um número de telefone (principal ou alternativo)."
     },
     "errors": {
       "invalidPhoto": "Por favor selecione uma imagem válida (JPG, PNG, WebP).",

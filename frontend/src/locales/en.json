@@ -2738,7 +2738,8 @@
       "contractStartDate": "Contract Start Date",
       "contractEndDate": "End Date (if applicable)",
       "contractSignedAt": "Signature Date",
-      "contractNotes": "Notes & Special Clauses"
+      "contractNotes": "Notes & Special Clauses",
+      "phoneAtLeastOneHint": "min. 1 phone"
     },
     "placeholders": {
       "firstName": "e.g., João",
@@ -2757,7 +2758,8 @@
       "selectDepartment": "Select department",
       "selectPosition": "Select position",
       "selectManager": "Select manager",
-      "contractNotes": "Additional details, agreed allowances, confidentiality clauses..."
+      "contractNotes": "Additional details, agreed allowances, confidentiality clauses...",
+      "selectProvince": "Select province"
     },
     "options": {
       "none": "None",
@@ -2849,7 +2851,8 @@
       "emailInvalid": "Enter a valid email address.",
       "contractEndBeforeStart": "End date must be on or after start date.",
       "missingRequiredDocuments": "Attach required documents: {{documents}}.",
-      "fillRequiredBasicFields": "Fill in required fields in the Basic Data tab."
+      "fillRequiredBasicFields": "Fill in required fields in the Basic Data tab.",
+      "phoneRequired": "Provide at least one phone number (primary or alternative)."
     },
     "errors": {
       "invalidPhoto": "Please select a valid image (JPG, PNG, WebP).",

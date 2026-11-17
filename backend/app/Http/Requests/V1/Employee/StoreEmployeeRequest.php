@@ -18,17 +18,17 @@ class StoreEmployeeRequest extends FormRequest
     {
         return [
             'first_name' => ['required', 'string', 'max:150'],
-            'last_name' => ['required', 'string', 'max:150'],
+            'last_name' => ['nullable', 'string', 'max:150'],
             'employee_code' => ['nullable', 'string', 'max:50'],
             'email' => [
-                'required',
+                'nullable',
                 'email',
                 'max:255',
                 Rule::unique('employees', 'email')
                     ->where('tenant_id', tenant_id())
                     ->whereNull('deleted_at'),
             ],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'required_without:alternative_phone', 'string', 'max:50'],
             'alternative_phone' => ['nullable', 'string', 'max:50'],
             'birth_date' => ['nullable', 'date', 'before:today'],
             'gender' => ['nullable', Rule::in(['male', 'female', 'other'])],
@@ -134,8 +134,8 @@ class StoreEmployeeRequest extends FormRequest
     {
         return [
             'first_name.required' => 'O nome é obrigatório.',
-            'last_name.required' => 'O apelido é obrigatório.',
-            'email.required' => 'O email é obrigatório.',
+            'phone.required_without' => 'Pelo menos um número de telefone (principal ou alternativo) é obrigatório.',
+            'email.email' => 'Insira um email válido.',
             'email.unique' => 'Já existe um funcionário com este email.',
             'status.required' => 'O estado é obrigatório.',
             'contract_end_date.after_or_equal' => 'A data de término do contrato deve ser posterior ou igual à data de início.',

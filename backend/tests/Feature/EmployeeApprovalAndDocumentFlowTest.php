@@ -61,16 +61,14 @@ class EmployeeApprovalAndDocumentFlowTest extends TestCase
         // Sem documento obrigatório -> 422
         $this->post('/api/v1/employees', [
             'first_name' => 'Ana',
-            'last_name' => 'Silva',
-            'email' => 'ana.optional@test.ao',
+            'phone' => '+244923000010',
             'status' => 'active',
         ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('documents');
 
-        // Apenas com o obrigatório (opcional ausente) -> 201 e estado pendente
+        // Apenas com o obrigatório (sem apelido e sem email; opcional ausente) -> 201 e estado pendente
         $res = $this->post('/api/v1/employees', [
             'first_name' => 'Ana',
-            'last_name' => 'Silva',
-            'email' => 'ana.optional@test.ao',
+            'phone' => '+244923000010',
             'status' => 'active',
             'documents' => [UploadedFile::fake()->create('bi.pdf', 100, 'application/pdf')],
             'document_names' => ['BI'],
@@ -79,22 +77,27 @@ class EmployeeApprovalAndDocumentFlowTest extends TestCase
 
         $res->assertJsonPath('data.approval_status', 'pending');
 
-        // Override bilateral: documento obrigatório nas configurações marcado como opcional no cadastro -> 201
+        // Override bilateral com telefone alternativo apenas (sem principal, email ou apelido) -> 201
         $overrideRes = $this->post('/api/v1/employees', [
             'first_name' => 'Bruno',
-            'last_name' => 'Costa',
-            'email' => 'bruno.override@test.ao',
+            'alternative_phone' => '+244923000011',
             'status' => 'active',
             'optional_document_types' => ['id_card'],
         ], ['Accept' => 'application/json'])->assertCreated();
 
         $overrideRes->assertJsonPath('data.approval_status', 'pending');
 
+        // Sem nenhum telefone -> 422 no campo phone
+        $this->post('/api/v1/employees', [
+            'first_name' => 'SemTelefone',
+            'status' => 'active',
+            'optional_document_types' => ['id_card'],
+        ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('phone');
+
         // Override inverso: documento opcional promovido a obrigatório na criação -> 422 se faltar
         $this->post('/api/v1/employees', [
             'first_name' => 'Celia',
-            'last_name' => 'Diaz',
-            'email' => 'celia.override@test.ao',
+            'phone' => '+244923000012',
             'status' => 'active',
             'optional_document_types' => ['id_card'],
             'required_document_types' => ['vaccination_card'],
@@ -122,6 +125,7 @@ class EmployeeApprovalAndDocumentFlowTest extends TestCase
             'first_name' => 'Carlos',
             'last_name' => 'Mendes',
             'email' => 'carlos.pending@test.ao',
+            'phone' => '+244923000013',
             'status' => 'active',
             'department_id' => $dept->id,
             'contract_type' => 'permanent',

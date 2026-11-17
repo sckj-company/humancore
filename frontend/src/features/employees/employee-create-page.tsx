@@ -54,6 +54,7 @@ import {
   ANGOLA_DOCUMENT_PRESETS,
   ANGOLA_DOCUMENT_TYPE_KEYS,
 } from '@/lib/document-presets'
+import { ANGOLA_PROVINCES } from '@/lib/angola-provinces'
 import { toast } from 'sonner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentRequirement, Paginated, SettingGroups } from '@/types'
@@ -502,11 +503,13 @@ export function EmployeeCreatePage() {
 
     // Validation - Tab 1
     if (!basicData.first_name.trim()) errors.first_name = t('employeeCreate.validation.firstNameRequired')
-    if (!basicData.last_name.trim()) errors.last_name = t('employeeCreate.validation.lastNameRequired')
-    if (!basicData.email.trim()) {
-      errors.email = t('employeeCreate.validation.emailRequired')
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(basicData.email)) {
+    if (basicData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(basicData.email)) {
       errors.email = t('employeeCreate.validation.emailInvalid')
+    }
+    if (!basicData.phone.trim() && !basicData.alternative_phone.trim()) {
+      errors.phone = t('employeeCreate.validation.phoneRequired', {
+        defaultValue: 'Indique pelo menos um número de telefone (principal ou alternativo).',
+      })
     }
 
     // Validation - Tab 2 (Dates)
@@ -527,7 +530,7 @@ export function EmployeeCreatePage() {
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
       // Switch to the tab with errors
-      if (errors.first_name || errors.last_name || errors.email) {
+      if (errors.first_name || errors.email || errors.phone) {
         switchTab('dados-basicos')
         toast.error(t('employeeCreate.validation.fillRequiredBasicFields'))
       } else if (errors.contract_end_date) {
@@ -635,7 +638,7 @@ export function EmployeeCreatePage() {
             <TabsTrigger value="dados-basicos" className="gap-2 text-sm font-medium">
               <User className="h-4 w-4" />
               {t('employeeCreate.tabs.basicData')}
-              {Object.keys(formErrors).some((k) => ['first_name', 'last_name', 'email'].includes(k)) && (
+              {Object.keys(formErrors).some((k) => ['first_name', 'email', 'phone'].includes(k)) && (
                 <span className="h-2 w-2 rounded-full bg-destructive" />
               )}
             </TabsTrigger>
@@ -794,7 +797,7 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="last_name">{t('employeeCreate.fields.lastName')} *</Label>
+                    <Label htmlFor="last_name">{t('employeeCreate.fields.lastName')}</Label>
                     <Input
                       id="last_name"
                       value={basicData.last_name}
@@ -804,9 +807,6 @@ export function EmployeeCreatePage() {
                       }}
                       placeholder={t('employeeCreate.placeholders.lastName')}
                     />
-                    {formErrors.last_name && (
-                      <p className="text-xs text-destructive">{formErrors.last_name}</p>
-                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -948,7 +948,7 @@ export function EmployeeCreatePage() {
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-2">
-                  <Label htmlFor="email">{t('employeeCreate.fields.email')} *</Label>
+                  <Label htmlFor="email">{t('employeeCreate.fields.email')}</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -969,17 +969,28 @@ export function EmployeeCreatePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">{t('employeeCreate.fields.phone')}</Label>
+                  <Label htmlFor="phone">
+                    {t('employeeCreate.fields.phone')} *
+                    <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                      ({t('employeeCreate.fields.phoneAtLeastOneHint', { defaultValue: 'mín. 1 telefone' })})
+                    </span>
+                  </Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="phone"
                       value={basicData.phone}
-                      onChange={(e) => setBasicData((p) => ({ ...p, phone: e.target.value }))}
+                      onChange={(e) => {
+                        setBasicData((p) => ({ ...p, phone: e.target.value }))
+                        if (formErrors.phone) setFormErrors((p) => ({ ...p, phone: '' }))
+                      }}
                       className="pl-9"
                       placeholder={t('employeeCreate.placeholders.phone')}
                     />
                   </div>
+                  {formErrors.phone && (
+                    <p className="text-xs text-destructive">{formErrors.phone}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -987,9 +998,10 @@ export function EmployeeCreatePage() {
                   <Input
                     id="alternative_phone"
                     value={basicData.alternative_phone}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setBasicData((p) => ({ ...p, alternative_phone: e.target.value }))
-                    }
+                      if (formErrors.phone) setFormErrors((p) => ({ ...p, phone: '' }))
+                    }}
                     placeholder={t('employeeCreate.placeholders.phone')}
                   />
                 </div>
@@ -1016,12 +1028,32 @@ export function EmployeeCreatePage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="state">{t('employeeCreate.fields.state')}</Label>
-                  <Input
-                    id="state"
-                    value={basicData.state}
-                    onChange={(e) => setBasicData((p) => ({ ...p, state: e.target.value }))}
-                    placeholder={t('employeeCreate.placeholders.state')}
-                  />
+                  <Select
+                    value={basicData.state || 'none'}
+                    onValueChange={(val) =>
+                      setBasicData((p) => ({ ...p, state: val === 'none' ? '' : val }))
+                    }
+                  >
+                    <SelectTrigger id="state">
+                      <SelectValue
+                        placeholder={t('employeeCreate.placeholders.selectProvince', {
+                          defaultValue: 'Selecionar província',
+                        })}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        {t('employeeCreate.placeholders.selectProvince', {
+                          defaultValue: 'Selecionar província',
+                        })}
+                      </SelectItem>
+                      {ANGOLA_PROVINCES.map((province) => (
+                        <SelectItem key={province} value={province}>
+                          {province}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">

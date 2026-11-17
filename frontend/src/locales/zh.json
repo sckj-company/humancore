@@ -2613,7 +2613,8 @@
       "contractStartDate": "合同开始日期",
       "contractEndDate": "合同结束日期（如适用）",
       "contractSignedAt": "签署日期",
-      "contractNotes": "备注与特别条款"
+      "contractNotes": "备注与特别条款",
+      "phoneAtLeastOneHint": "至少填 1 个电话"
     },
     "placeholders": {
       "firstName": "例如：João",
@@ -2632,7 +2633,8 @@
       "selectDepartment": "选择部门",
       "selectPosition": "选择职位",
       "selectManager": "选择上级",
-      "contractNotes": "补充说明、津贴约定、保密条款等..."
+      "contractNotes": "补充说明、津贴约定、保密条款等...",
+      "selectProvince": "选择省份"
     },
     "options": {
       "none": "无",
@@ -2724,7 +2726,8 @@
       "emailInvalid": "请输入有效的邮箱地址。",
       "contractEndBeforeStart": "合同结束日期必须晚于或等于开始日期。",
       "missingRequiredDocuments": "请上传必填文档：{{documents}}。",
-      "fillRequiredBasicFields": "请先在“基本信息”标签页填写必填字段。"
+      "fillRequiredBasicFields": "请先在“基本信息”标签页填写必填字段。",
+      "phoneRequired": "请至少填写一个联系电话（主电话或备用电话）。"
     },
     "errors": {
       "invalidPhoto": "请选择有效的图片文件（JPG、PNG、WebP）。",
