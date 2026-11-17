@@ -18,6 +18,7 @@ class BiometricAttendanceService
 {
     public function __construct(
         private readonly OvertimePayCalculator $overtimeCalculator,
+        private readonly WorkedHoursCalculator $workedHoursCalculator,
     ) {}
 
     public function syncEmployees(int $tenantId, array $items, bool $createMissing = false): array
@@ -387,10 +388,16 @@ class BiometricAttendanceService
                         ? (string) $item['status']
                         : ($record->late_minutes > 0 ? 'late' : 'present');
                     if ($record->clock_out) {
-                        $record->total_worked = $this->workedMinutes(Carbon::parse($record->clock_in), Carbon::parse($record->clock_out), $shift);
+                        $record->total_worked = $this->workedMinutes(
+                            Carbon::parse($record->clock_in),
+                            Carbon::parse($record->clock_out),
+                            $shift,
+                            $record->break_start ? Carbon::parse($record->break_start) : null,
+                            $record->break_end ? Carbon::parse($record->break_end) : null,
+                        );
                         $record->overtime_minutes = $this->overtimeMinutes($tenantId, $dateStr, Carbon::parse($record->clock_out), $shift, $timezone);
                         $record->overtime_amount = $this->overtimeCalculator->amount($employee, (int) $record->overtime_minutes);
-                        $record->status = ! empty($item['status']) ? (string) $item['status'] : $this->resolveStatus($tenantId, $record);
+                        $record->status = ! empty($item['status']) ? (string) $item['status'] : $this->resolveStatus($tenantId, $record, $shift);
                     }
                 } else {
                     if (! $record->clock_in) {
@@ -399,12 +406,18 @@ class BiometricAttendanceService
                         $record->status = $record->late_minutes > 0 ? 'late' : 'present';
                     } else {
                         $record->clock_out = $punchedAt;
-                        $record->total_worked = $this->workedMinutes(Carbon::parse($record->clock_in), Carbon::parse($record->clock_out), $shift);
+                        $record->total_worked = $this->workedMinutes(
+                            Carbon::parse($record->clock_in),
+                            Carbon::parse($record->clock_out),
+                            $shift,
+                            $record->break_start ? Carbon::parse($record->break_start) : null,
+                            $record->break_end ? Carbon::parse($record->break_end) : null,
+                        );
                         $record->overtime_minutes = $this->overtimeMinutes($tenantId, $dateStr, $punchedAt, $shift, $timezone);
                         $record->overtime_amount = $this->overtimeCalculator->amount($employee, (int) $record->overtime_minutes);
                         $record->status = ! empty($item['status'])
                             ? (string) $item['status']
-                            : $this->resolveStatus($tenantId, $record);
+                            : $this->resolveStatus($tenantId, $record, $shift);
                     }
                 }
 
@@ -458,7 +471,7 @@ class BiometricAttendanceService
         if ($status === '') {
             if ($inDateTime && $outDateTime) {
                 $probe = new AttendanceRecord(['total_worked' => $totalWorked, 'late_minutes' => $lateMinutes]);
-                $status = $this->resolveStatus($tenantId, $probe);
+                $status = $this->resolveStatus($tenantId, $probe, $shift);
             } else {
                 $status = $lateMinutes > 0 ? 'late' : 'present';
             }
@@ -719,10 +732,10 @@ class BiometricAttendanceService
         return (int) $expected->diffInMinutes($actual);
     }
 
-    private function resolveStatus(int $tenantId, AttendanceRecord $record): string
+    private function resolveStatus(int $tenantId, AttendanceRecord $record, ?Shift $shift = null): string
     {
-        $dailyHours = (int) ($this->setting($tenantId, 'hr.daily_hours') ?? 8);
-        $threshold = $dailyHours * 30;
+        $dailyHours = (float) ($shift?->work_hours ?: ($this->setting($tenantId, 'hr.daily_hours') ?? 8));
+        $threshold = (int) round($dailyHours * 30);
 
         if (($record->total_worked ?? 0) < $threshold) {
             return 'half_day';
@@ -756,14 +769,14 @@ class BiometricAttendanceService
         return $outDateTime;
     }
 
-    private function workedMinutes(Carbon $clockIn, Carbon $clockOut, ?Shift $shift): int
-    {
-        $end = $clockOut->copy();
-        if ($end->lessThanOrEqualTo($clockIn) && ($shift?->is_night_shift || ($shift?->start_time && $shift->end_time <= $shift->start_time))) {
-            $end->addDay();
-        }
-
-        return max(0, (int) $clockIn->diffInMinutes($end));
+    private function workedMinutes(
+        Carbon $clockIn,
+        Carbon $clockOut,
+        ?Shift $shift,
+        ?Carbon $breakStart = null,
+        ?Carbon $breakEnd = null,
+    ): int {
+        return $this->workedHoursCalculator->workedMinutes($clockIn, $clockOut, $shift, $breakStart, $breakEnd);
     }
 
     private function isNightShift(string $date, string $endTime, ?Shift $shift, string $timezone): bool

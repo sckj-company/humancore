@@ -231,13 +231,14 @@ export function EmployeeDetailPage() {
 
   const attRecords = attendanceData?.data ?? []
   const attendanceByWeek = useMemo(() => {
-    const weeks = new Map<string, { start: string; records: AttendanceRecord[]; lateMinutes: number; overtimeMinutes: number }>()
+    const weeks = new Map<string, { start: string; records: AttendanceRecord[]; workedMinutes: number; lateMinutes: number; overtimeMinutes: number }>()
     for (const record of [...attRecords].sort((a, b) => b.date.localeCompare(a.date))) {
       const date = new Date(`${record.date}T00:00:00Z`)
       date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7))
       const weekStart = date.toISOString().slice(0, 10)
-      const week = weeks.get(weekStart) ?? { start: weekStart, records: [], lateMinutes: 0, overtimeMinutes: 0 }
+      const week = weeks.get(weekStart) ?? { start: weekStart, records: [], workedMinutes: 0, lateMinutes: 0, overtimeMinutes: 0 }
       week.records.push(record)
+      week.workedMinutes += record.total_worked ?? 0
       week.lateMinutes += record.late_minutes ?? 0
       week.overtimeMinutes += record.overtime_minutes ?? 0
       weeks.set(weekStart, week)
@@ -1254,7 +1255,8 @@ export function EmployeeDetailPage() {
                             </tr>
                           ))}
                           <tr className="bg-muted/40 font-semibold">
-                            <td colSpan={6} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
+                            <td colSpan={5} className="px-4 py-2 text-xs">{t('employeeDetail.text.weeklyLateSummary', { date: formatDate(week.start) })}</td>
+                            <td className="px-4 py-2 font-mono text-xs">{formatMinutes(week.workedMinutes)}</td>
                             <td className="px-4 py-2 text-right font-mono text-xs">{formatMinutesToHours(week.lateMinutes)}</td>
                             <td className="px-4 py-2 text-right font-mono text-xs">{formatMinutesToHours(week.overtimeMinutes)}</td>
                             <td colSpan={2} />

@@ -488,7 +488,7 @@ class AttendanceTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.overtime_minutes', 90)
             ->assertJsonPath('data.overtime_amount', 1800)
-            ->assertJsonPath('data.total_worked', 570)
+            ->assertJsonPath('data.total_worked', 510)
             ->json('data.id');
 
         $this->putJson("/api/v1/attendance/{$recordId}", [
@@ -497,6 +497,73 @@ class AttendanceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.overtime_minutes', 120)
             ->assertJsonPath('data.overtime_amount', 2400)
-            ->assertJsonPath('data.total_worked', 600);
+            ->assertJsonPath('data.total_worked', 540);
+    }
+
+    public function test_daily_weekly_and_monthly_worked_hours_deduct_shift_break_minutes(): void
+    {
+        [$tenant, $employee, $admin] = $this->setupEmployeeUser('admin');
+
+        // Shift 08:00-17:00 with 60 min break => 8h (480 min) net daily
+        $shift = Shift::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno Comercial',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'break_minutes' => 60,
+            'work_hours' => 8,
+            'working_days' => [1, 2, 3, 4, 5],
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'effective_from' => '2026-10-01',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin, 'sanctum');
+
+        // 5 full days (08:00-17:00) in the same week -> 540 min gross - 60 min break = 480 min (8h)/day => 40h/week
+        foreach (['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'] as $day) {
+            $this->postJson('/api/v1/attendance/manual', [
+                'employee_id' => $employee->id,
+                'shift_id' => $shift->id,
+                'date' => $day,
+                'clock_in' => '08:00',
+                'clock_out' => '17:00',
+                'status' => 'present',
+            ])
+                ->assertCreated()
+                ->assertJsonPath('data.total_worked', 480);
+        }
+
+        // Daily report -> 8.0h
+        $this->getJson('/api/v1/attendance/report?period_type=daily&date=2026-11-02&employee_id='.$employee->id)
+            ->assertOk()
+            ->assertJsonPath('data.totals.total_worked_minutes', 480)
+            ->assertJsonPath('data.totals.total_worked_hours', 8);
+
+        // Weekly report -> 40.0h (not 45h!)
+        $this->getJson('/api/v1/attendance/report?period_type=weekly&date=2026-11-02&employee_id='.$employee->id)
+            ->assertOk()
+            ->assertJsonPath('data.totals.total_worked_minutes', 2400)
+            ->assertJsonPath('data.totals.total_worked_hours', 40);
+
+        // Add another day later in November (08:00-17:00) -> monthly report = 48.0h
+        $this->postJson('/api/v1/attendance/manual', [
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'date' => '2026-11-09',
+            'clock_in' => '08:00',
+            'clock_out' => '17:00',
+            'status' => 'present',
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/attendance/report?period_type=monthly&month=2026-11&employee_id='.$employee->id)
+            ->assertOk()
+            ->assertJsonPath('data.totals.total_worked_minutes', 2880)
+            ->assertJsonPath('data.totals.total_worked_hours', 48);
     }
 }

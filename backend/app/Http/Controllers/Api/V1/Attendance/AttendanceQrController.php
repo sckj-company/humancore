@@ -10,6 +10,7 @@ use App\Models\Shift;
 use App\Models\Setting;
 use App\Services\Attendance\OvertimePayCalculator;
 use App\Services\Attendance\QrCodeService;
+use App\Services\Attendance\WorkedHoursCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,9 +102,16 @@ class AttendanceQrController extends BaseController
             }
 
             $record->clock_out = now();
-            $record->total_worked = (int) Carbon::parse($record->clock_in)->diffInMinutes($record->clock_out);
             $record->loadMissing('shift');
-            $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee, $record->shift);
+            $shift = $record->shift ?? $this->resolveShiftForDate($today, $employee);
+            $record->total_worked = app(WorkedHoursCalculator::class)->workedMinutes(
+                Carbon::parse($record->clock_in),
+                $record->clock_out,
+                $shift,
+                $record->break_start ? Carbon::parse($record->break_start) : null,
+                $record->break_end ? Carbon::parse($record->break_end) : null,
+            );
+            $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee, $shift);
             $record->overtime_amount = app(OvertimePayCalculator::class)->amount($employee, $record->overtime_minutes);
             $record->save();
         }
@@ -116,16 +124,22 @@ class AttendanceQrController extends BaseController
         );
     }
 
-    protected function overtimeMinutes(string $date, \DateTimeInterface $clockOut, Employee $employee, ?Shift $shift = null): int
+    protected function resolveShiftForDate(string $date, Employee $employee): ?Shift
     {
-        $schedule = $shift ? null : $employee->schedules()
+        $schedule = $employee->schedules()
             ->with('shift')
             ->where('is_active', true)
             ->whereDate('effective_from', '<=', $date)
             ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date))
             ->orderByDesc('effective_from')
             ->first();
-        $shift ??= $schedule?->shift;
+
+        return $schedule?->shift;
+    }
+
+    protected function overtimeMinutes(string $date, \DateTimeInterface $clockOut, Employee $employee, ?Shift $shift = null): int
+    {
+        $shift ??= $this->resolveShiftForDate($date, $employee);
         $endTime = $shift?->end_time ?: (string) (Setting::where('tenant_id', tenant_id())
             ->where('group', 'hr')
             ->where('key', 'work_end_time')

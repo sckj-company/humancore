@@ -10,6 +10,7 @@ use App\Models\EmployeeSchedule;
 use App\Models\Shift;
 use App\Models\Setting;
 use App\Services\Attendance\OvertimePayCalculator;
+use App\Services\Attendance\WorkedHoursCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,10 +59,16 @@ class AttendanceController extends BaseController
 
         if ($record->clock_in && ! $record->clock_out) {
             $record->clock_out = now();
-            $record->total_worked = (int) Carbon::parse($record->clock_in)->diffInMinutes($record->clock_out);
+            $record->total_worked = $this->workedMinutes(
+                Carbon::parse($record->clock_in),
+                $record->clock_out,
+                $schedule?->shift,
+                $record->break_start ? Carbon::parse($record->break_start) : null,
+                $record->break_end ? Carbon::parse($record->break_end) : null,
+            );
             $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee, $schedule?->shift);
             $record->overtime_amount = app(OvertimePayCalculator::class)->amount($employee, $record->overtime_minutes);
-            $record->status = $this->resolveStatus($record);
+            $record->status = $this->resolveStatus($record, $schedule?->shift);
             $record->save();
 
             return $this->success(new AttendanceResource($record->load('shift')), 'Saída registada.');
@@ -319,10 +326,10 @@ class AttendanceController extends BaseController
         return (int) $expected->diffInMinutes($actual);
     }
 
-    protected function resolveStatus(AttendanceRecord $record): string
+    protected function resolveStatus(AttendanceRecord $record, ?Shift $shift = null): string
     {
-        $dailyHours = (int) ($this->setting('hr.daily_hours') ?? 8);
-        $threshold = $dailyHours * 30;
+        $dailyHours = (float) ($shift?->work_hours ?: ($this->setting('hr.daily_hours') ?? 8));
+        $threshold = (int) round($dailyHours * 30);
 
         if (($record->total_worked ?? 0) < $threshold) {
             return 'half_day';
@@ -376,14 +383,14 @@ class AttendanceController extends BaseController
         return $outDateTime;
     }
 
-    private function workedMinutes(Carbon $clockIn, Carbon $clockOut, ?Shift $shift): int
-    {
-        $end = $clockOut->copy();
-        if ($end->lessThanOrEqualTo($clockIn) && ($shift?->is_night_shift || ($shift?->start_time && $shift->end_time <= $shift->start_time))) {
-            $end->addDay();
-        }
-
-        return max(0, (int) $clockIn->diffInMinutes($end));
+    private function workedMinutes(
+        Carbon $clockIn,
+        Carbon $clockOut,
+        ?Shift $shift,
+        ?Carbon $breakStart = null,
+        ?Carbon $breakEnd = null,
+    ): int {
+        return app(WorkedHoursCalculator::class)->workedMinutes($clockIn, $clockOut, $shift, $breakStart, $breakEnd);
     }
 
     private function recordForShift(int $employeeId, string $date, ?int $shiftId)

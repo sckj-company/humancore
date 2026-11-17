@@ -51,13 +51,12 @@ class ShiftController extends BaseController
         $data['tenant_id'] = tenant_id();
 
         if (empty($data['work_hours']) && isset($data['start_time'], $data['end_time'])) {
-            $start = Carbon::parse($data['start_time']);
-            $end = Carbon::parse($data['end_time']);
-            $hours = $end->greaterThan($start)
-                ? $start->diffInHours($end)
-                : 24 - $start->diffInHours($end);
-            $breakHours = (($data['break_minutes'] ?? 0) / 60);
-            $data['work_hours'] = max(0, $hours - $breakHours);
+            $data['work_hours'] = $this->computeWorkHours(
+                (string) $data['start_time'],
+                (string) $data['end_time'],
+                (int) ($data['break_minutes'] ?? 60),
+                (bool) ($data['is_night_shift'] ?? false),
+            );
         }
 
         $shift = Shift::query()->create($data);
@@ -96,12 +95,35 @@ class ShiftController extends BaseController
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        if (! array_key_exists('work_hours', $data) && (array_key_exists('start_time', $data) || array_key_exists('end_time', $data) || array_key_exists('break_minutes', $data))) {
+            $data['work_hours'] = $this->computeWorkHours(
+                (string) ($data['start_time'] ?? $shift->start_time),
+                (string) ($data['end_time'] ?? $shift->end_time),
+                (int) ($data['break_minutes'] ?? $shift->break_minutes ?? 60),
+                (bool) ($data['is_night_shift'] ?? $shift->is_night_shift),
+            );
+        }
+
         $shift->update($data);
 
         return $this->success(
             new ShiftResource($shift->fresh()),
             'Turno atualizado com sucesso.',
         );
+    }
+
+    private function computeWorkHours(string $startTime, string $endTime, int $breakMinutes, bool $isNightShift): float
+    {
+        $start = Carbon::parse($startTime);
+        $end = Carbon::parse($endTime);
+        if ($end->lessThanOrEqualTo($start) || $isNightShift) {
+            if ($end->lessThanOrEqualTo($start)) {
+                $end->addDay();
+            }
+        }
+        $spanMinutes = max(0, (int) $start->diffInMinutes($end));
+
+        return round(max(0, $spanMinutes - max(0, $breakMinutes)) / 60, 2);
     }
 
     public function destroy(Shift $shift): JsonResponse

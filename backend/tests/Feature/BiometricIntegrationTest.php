@@ -183,7 +183,7 @@ class BiometricIntegrationTest extends TestCase
             ->assertJsonPath('data.created', 1)
             ->assertJsonPath('data.failed', 1);
 
-        // Employee A: 08:25 -> 18:30 = 605 min worked, 15 min late, 90 min overtime (90/60 * 2400 = 3600)
+        // Employee A: 08:25 -> 18:30 (605 min span) - 60 min shift break = 545 min worked, 15 min late, 90 min overtime (90/60 * 2400 = 3600)
         $recA = AttendanceRecord::query()
             ->where('tenant_id', $tenant->id)
             ->where('employee_id', $employeeA->id)
@@ -193,9 +193,9 @@ class BiometricIntegrationTest extends TestCase
         $this->assertSame(15, (int) $recA->late_minutes);
         $this->assertSame(90, (int) $recA->overtime_minutes);
         $this->assertEquals(3600.0, (float) $recA->overtime_amount);
-        $this->assertSame(605, (int) $recA->total_worked);
+        $this->assertSame(545, (int) $recA->total_worked);
 
-        // Employee B: 08:05 -> 17:00 within 10m tolerance -> present, 0 late, 0 overtime
+        // Employee B: 08:05 -> 17:00 (535 min span) - 60 min shift break = 475 min worked, within 10m tolerance -> present
         $recB = AttendanceRecord::query()
             ->where('tenant_id', $tenant->id)
             ->where('employee_id', $employeeB->id)
@@ -204,6 +204,7 @@ class BiometricIntegrationTest extends TestCase
         $this->assertSame('present', $recB->status);
         $this->assertSame(0, (int) $recB->late_minutes);
         $this->assertSame(0, (int) $recB->overtime_minutes);
+        $this->assertSame(475, (int) $recB->total_worked);
     }
 
     public function test_close_day_automatically_marks_unpunched_scheduled_employees_absent_respecting_leaves_and_holidays(): void
