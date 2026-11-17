@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { Download, Calendar, Users, UserMinus, TrendingUp, Wallet, Clock, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EChartsOption } from 'echarts'
@@ -34,8 +35,18 @@ export function ReportsPage() {
   const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const canExport = hasPermission(user, 'export_report')
+  const [searchParams] = useSearchParams()
+  const urlTab = searchParams.get('tab')
 
-  const [tab, setTab] = useState<TabValue>('headcount')
+  const [tab, setTab] = useState<TabValue>(
+    urlTab && ['headcount', 'turnover', 'payroll', 'attendance'].includes(urlTab) ? (urlTab as TabValue) : 'headcount',
+  )
+
+  useEffect(() => {
+    if (urlTab && ['headcount', 'turnover', 'payroll', 'attendance'].includes(urlTab)) {
+      setTab(urlTab as TabValue)
+    }
+  }, [urlTab])
   const [startDate, setStartDate] = useState<string>(monthsAgoIso(6))
   const [endDate, setEndDate] = useState<string>(todayIso())
 

@@ -71,7 +71,11 @@ class DashboardController extends BaseController
         $byDepartment = Department::query()
             ->withCount('employees')
             ->get()
-            ->map(fn ($dept) => ['name' => $dept->name, 'count' => $dept->employees_count]);
+            ->map(fn ($dept) => [
+                'id' => $dept->id,
+                'name' => $dept->name,
+                'count' => $dept->employees_count,
+            ]);
 
         // Contratos a expirar
         $expiringContracts = EmployeeContract::query()
@@ -84,10 +88,11 @@ class DashboardController extends BaseController
             ->get()
             ->map(fn ($contract) => [
                 'id' => $contract->id,
+                'employee_id' => $contract->employee_id,
                 'employee' => $contract->employee?->full_name,
                 'employee_code' => $contract->employee?->employee_code,
                 'end_date' => $contract->end_date?->format('Y-m-d'),
-                'days_remaining' => now()->diffInDays($contract->end_date, false),
+                'days_remaining' => (int) $today->diffInDays($contract->end_date->copy()->startOfDay(), false),
             ]);
 
         // Férias pendentes
@@ -106,18 +111,42 @@ class DashboardController extends BaseController
                 'days' => $leave->total_days,
             ]);
 
-        // Aniversários do mês
+        // Aniversários mais próximos no mês atual e no mês seguinte
+        $nextMonthDate = $today->copy()->startOfMonth()->addMonth();
+        $currentMonth = $today->month;
+        $nextMonth = $nextMonthDate->month;
+
         $birthdays = Employee::query()
             ->where('status', 'active')
             ->whereNotNull('birth_date')
-            ->whereMonth('birth_date', $today->month)
+            ->where(function ($q) use ($currentMonth, $nextMonth) {
+                $q->whereMonth('birth_date', $currentMonth)
+                    ->orWhereMonth('birth_date', $nextMonth);
+            })
             ->get()
-            ->sortBy(fn ($e) => $e->birth_date->day)
-            ->map(fn ($e) => [
-                'id' => $e->id,
-                'full_name' => $e->full_name,
-                'birth_date' => $e->birth_date->format('d/m'),
-                'day' => $e->birth_date->day,
+            ->map(function (Employee $e) use ($today, $currentMonth, $nextMonthDate) {
+                $birthMonth = $e->birth_date->month;
+                $targetYear = $birthMonth === $currentMonth ? $today->year : $nextMonthDate->year;
+                $daysInTargetMonth = Carbon::createFromDate($targetYear, $birthMonth, 1)->daysInMonth;
+                $targetDay = min($e->birth_date->day, $daysInTargetMonth);
+                $upcomingDate = Carbon::createFromDate($targetYear, $birthMonth, $targetDay)->startOfDay();
+                $daysUntil = (int) $today->diffInDays($upcomingDate, false);
+
+                return [
+                    'id' => $e->id,
+                    'full_name' => $e->full_name,
+                    'birth_date' => $e->birth_date->format('d/m'),
+                    'upcoming_date' => $upcomingDate->format('Y-m-d'),
+                    'day' => $e->birth_date->day,
+                    'month' => $birthMonth,
+                    'days_until' => $daysUntil,
+                    'is_current_month' => $birthMonth === $currentMonth,
+                ];
+            })
+            ->filter(fn (array $b) => $b['days_until'] >= 0)
+            ->sortBy([
+                ['days_until', 'asc'],
+                ['full_name', 'asc'],
             ])
             ->values();
 
@@ -126,22 +155,53 @@ class DashboardController extends BaseController
             ->where('is_active', true)
             ->sum('base_salary');
 
-        // Últimos funcionários admitidos
-        $recentHires = Employee::query()
+        // Funcionários em estágio ou período experimental
+        $probationInternship = Employee::query()
             ->where('status', 'active')
-            ->with(['department:id,name', 'position:id,title'])
-            ->orderByDesc('hired_at')
-            ->limit(5)
+            ->where(function ($q) use ($today) {
+                $q->whereDate('probation_end', '>=', $today)
+                    ->orWhereHas('activeContract', function ($cq) use ($today) {
+                        $cq->whereIn('contract_type', ['probation', 'internship'])
+                            ->where(function ($eq) use ($today) {
+                                $eq->whereNull('end_date')
+                                    ->orWhereDate('end_date', '>=', $today);
+                            });
+                    });
+            })
+            ->with(['department:id,name', 'position:id,title', 'activeContract'])
             ->get()
-            ->map(fn ($e) => [
-                'id' => $e->id,
-                'full_name' => $e->full_name,
-                'employee_code' => $e->employee_code,
-                'department' => $e->department?->name,
-                'position' => $e->position?->title,
-                'hired_at' => $e->hired_at?->format('Y-m-d'),
-                'photo_path' => $e->photo_path,
-            ]);
+            ->map(function (Employee $e) use ($today) {
+                $contract = $e->activeContract;
+                $isInternship = $contract?->contract_type === 'internship';
+                $stage = $isInternship ? 'internship' : 'probation';
+
+                if ($isInternship) {
+                    $endDate = $contract?->end_date?->format('Y-m-d');
+                } elseif ($e->probation_end && $e->probation_end->gte($today)) {
+                    $endDate = $e->probation_end->format('Y-m-d');
+                } else {
+                    $endDate = $contract?->end_date?->format('Y-m-d');
+                }
+
+                return [
+                    'id' => $e->id,
+                    'full_name' => $e->full_name,
+                    'employee_code' => $e->employee_code,
+                    'department' => $e->department?->name,
+                    'position' => $e->position?->title,
+                    'hired_at' => $e->hired_at?->format('Y-m-d'),
+                    'probation_end' => $e->probation_end?->format('Y-m-d'),
+                    'contract_type' => $contract?->contract_type ?? $stage,
+                    'stage' => $stage,
+                    'end_date' => $endDate,
+                    'photo_path' => $e->photo_path,
+                ];
+            })
+            ->sortBy(fn (array $item) => [
+                $item['end_date'] ?? '9999-12-31',
+                $item['full_name'],
+            ])
+            ->values();
 
         // Distribuição de estados
         $byStatus = collect([
@@ -179,7 +239,8 @@ class DashboardController extends BaseController
             'expiring_contracts' => $expiringContracts,
             'pending_leaves' => $pendingLeaves,
             'birthdays' => $birthdays,
-            'recent_hires' => $recentHires,
+            'probation_internship' => $probationInternship,
+            'recent_hires' => $probationInternship,
             'next_payroll' => $nextPayroll ? [
                 'id' => $nextPayroll->id,
                 'name' => $nextPayroll->name,

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, useRef, type MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -11,9 +11,10 @@ import {
   TrendingUp,
   Globe,
   ArrowRight,
+  ArrowUpRight,
 } from 'lucide-react'
 import type { EChartsOption } from 'echarts'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { Chart } from '@/components/charts/chart'
@@ -48,15 +49,46 @@ interface SuperAdminDashboardData {
 
 const ACENTS = { true: 'success', false: 'destructive' } as const
 
+const TENANT_STATUS_COLORS: Record<string, string> = {
+  active: '#10b981',
+  inactive: '#94a3b8',
+  suspended: '#ef4444',
+}
+
+function formatTrendMonth(monthKey: string, fallback: string, locale: string): string {
+  const date = new Date(`${monthKey}-01T00:00:00`)
+  if (Number.isNaN(date.getTime())) return fallback
+  try {
+    return new Intl.DateTimeFormat(locale, { month: 'short', year: '2-digit' }).format(date)
+  } catch {
+    return fallback
+  }
+}
+
 export function SuperAdminDashboardPage() {
   const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const locale = i18n.language
+  const sliceClickedRef = useRef(false)
 
   const { data, isLoading, isError, refetch } = useQuery<SuperAdminDashboardData>({
     queryKey: ['dashboard', 'super-admin'],
     queryFn: () => api.get<SuperAdminDashboardData>('superadmin/dashboard'),
   })
+
+  const navigateFromCard = useCallback(
+    (e: MouseEvent<HTMLElement>, path: string) => {
+      if (sliceClickedRef.current) {
+        sliceClickedRef.current = false
+        return
+      }
+      const target = e.target as HTMLElement | null
+      if (target?.closest('a, button')) return
+      navigate(path)
+    },
+    [navigate],
+  )
 
   const firstName = useMemo(() => {
     const name = user?.name ?? ''
@@ -64,7 +96,7 @@ export function SuperAdminDashboardPage() {
   }, [user])
 
   const trendOption: EChartsOption = useMemo(() => {
-    const labels = (data?.tenant_trend ?? []).map((d) => d.label)
+    const labels = (data?.tenant_trend ?? []).map((d) => formatTrendMonth(d.month, d.label, locale))
     const values = (data?.tenant_trend ?? []).map((d) => d.count)
     return {
       tooltip: {
@@ -100,7 +132,23 @@ export function SuperAdminDashboardPage() {
         },
       ],
     }
-  }, [data, t])
+  }, [data, locale, t])
+
+  const statusEntries = useMemo(
+    () =>
+      Object.entries(data?.by_status ?? {}).map(([k, v]) => ({
+        key: k,
+        name: t(`superAdminDashboard.status.${k}`, { defaultValue: k }),
+        value: v,
+        color: TENANT_STATUS_COLORS[k] ?? '#64748b',
+      })),
+    [data?.by_status, t],
+  )
+
+  const totalStatusCount = useMemo(
+    () => statusEntries.reduce((sum, entry) => sum + entry.value, 0),
+    [statusEntries],
+  )
 
   const statusOption: EChartsOption = useMemo(() => {
     return {
@@ -109,31 +157,59 @@ export function SuperAdminDashboardPage() {
         backgroundColor: 'var(--popover)',
         borderColor: 'var(--border)',
         textStyle: { color: 'var(--popover-foreground)' },
+        formatter: '{b}: {c} ({d}%)',
       },
-      legend: {
-        bottom: 0,
-        textStyle: { fontSize: 11, color: 'var(--muted-foreground)' },
-        itemWidth: 8,
-        itemHeight: 8,
-      },
-      color: ['#10b981', '#94a3b8', '#ef4444'],
+      legend: { show: false },
+      color: statusEntries.map((entry) => entry.color),
       series: [
         {
-          name: 'Estado Tenants',
+          name: t('superAdminDashboard.byStatus'),
           type: 'pie',
-          radius: ['55%', '78%'],
-          center: ['50%', '45%'],
+          radius: ['46%', '70%'],
+          center: ['50%', '50%'],
           avoidLabelOverlap: true,
           itemStyle: { borderRadius: 6, borderColor: 'var(--card)', borderWidth: 2 },
-          label: { show: false },
-          data: Object.entries(data?.by_status ?? {}).map(([k, v]) => ({
-            name: t(`superAdminDashboard.status.${k}`, { defaultValue: k }),
-            value: v,
+          label: {
+            show: true,
+            position: 'outside',
+            formatter: '{c}',
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--foreground)',
+          },
+          labelLine: {
+            show: true,
+            length: 8,
+            length2: 6,
+          },
+          emphasis: {
+            label: { show: true, fontWeight: 700 },
+          },
+          data: statusEntries.map(({ key, name, value }) => ({
+            name,
+            value,
+            statusKey: key,
+            label: { show: value > 0 },
+            labelLine: { show: value > 0 },
           })),
         },
       ],
     }
-  }, [data, t])
+  }, [statusEntries, t])
+
+  const statusChartEvents = useMemo(
+    () => ({
+      click: (params: unknown) => {
+        const payload = params as { data?: { statusKey?: string } } | null
+        const statusKey = payload?.data?.statusKey
+        if (statusKey) {
+          sliceClickedRef.current = true
+          navigate(`/admin/tenants?status=${statusKey}`)
+        }
+      },
+    }),
+    [navigate],
+  )
 
   const segmentsOption: EChartsOption = useMemo(() => {
     const segments = data?.segments ?? { small: 0, medium: 0, large: 0 }
@@ -178,7 +254,7 @@ export function SuperAdminDashboardPage() {
   }, [data, t])
 
   if (isLoading) return <LoadingState />
-  if (isError || !data) return <ErrorState message={t('employeeDashboard.loadError')} onRetry={refetch} />
+  if (isError || !data) return <ErrorState message={t('superAdminDashboard.loadError')} onRetry={refetch} />
 
   return (
     <div className="space-y-6">
@@ -201,7 +277,7 @@ export function SuperAdminDashboardPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="gap-1.5">
-              <Link to="/organization">
+              <Link to="/admin/tenants">
                 <Globe className="h-3.5 w-3.5" />
                 {t('superAdminDashboard.manageTenants')}
                 <ArrowRight className="h-3 w-3" />
@@ -213,22 +289,26 @@ export function SuperAdminDashboardPage() {
 
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
-        <KpiCard label={t('superAdminDashboard.tenants')} value={data.kpis.total_tenants} icon={Building2} accent="primary" />
-        <KpiCard label={t('superAdminDashboard.active')} value={data.kpis.active_tenants} icon={Activity} accent="success" />
-        <KpiCard label={t('superAdminDashboard.suspended')} value={data.kpis.suspended_tenants} icon={AlertTriangle} accent="destructive" />
-        <KpiCard label={t('superAdminDashboard.employees')} value={data.kpis.total_employees} icon={Users} accent="info" />
-        <KpiCard label={t('superAdminDashboard.activeEmployees')} value={data.kpis.active_employees} icon={Users} accent="success" />
-        <KpiCard label={t('superAdminDashboard.users')} value={data.kpis.total_users} icon={UserCog} accent="warning" />
-        <KpiCard label={t('superAdminDashboard.superAdmins')} value={data.kpis.super_admins} icon={ShieldCheck} accent="neutral" />
+        <KpiCard label={t('superAdminDashboard.tenants')} value={data.kpis.total_tenants} icon={Building2} accent="primary" to="/admin/tenants?status=all" />
+        <KpiCard label={t('superAdminDashboard.active')} value={data.kpis.active_tenants} icon={Activity} accent="success" to="/admin/tenants?status=active" />
+        <KpiCard label={t('superAdminDashboard.suspended')} value={data.kpis.suspended_tenants} icon={AlertTriangle} accent="destructive" to="/admin/tenants?status=suspended" />
+        <KpiCard label={t('superAdminDashboard.employees')} value={data.kpis.total_employees} icon={Users} accent="info" to="/admin/tenants" />
+        <KpiCard label={t('superAdminDashboard.activeEmployees')} value={data.kpis.active_employees} icon={Users} accent="success" to="/admin/tenants" />
+        <KpiCard label={t('superAdminDashboard.users')} value={data.kpis.total_users} icon={UserCog} accent="warning" to="/admin/tenants" />
+        <KpiCard label={t('superAdminDashboard.superAdmins')} value={data.kpis.super_admins} icon={ShieldCheck} accent="neutral" to="/admin/tenants" />
       </div>
 
       {/* Charts row */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        <Card
+          onClick={(e) => navigateFromCard(e, '/admin/tenants')}
+          className="cursor-pointer transition-colors hover:border-primary/40 lg:col-span-2"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
-              <CardTitle className="text-base">
+              <CardTitle className="flex items-center gap-2 text-base">
                 {t('superAdminDashboard.tenantTrend')}
+                <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
               </CardTitle>
               <CardDescription>{t('superAdminDashboard.tenantTrendDescription')}</CardDescription>
             </div>
@@ -242,24 +322,53 @@ export function SuperAdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {t('superAdminDashboard.byStatus')}
+        <Card
+          onClick={(e) => navigateFromCard(e, '/admin/tenants?status=all')}
+          className="flex cursor-pointer flex-col transition-colors hover:border-primary/40"
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between text-base">
+              <span>{t('superAdminDashboard.byStatus')}</span>
+              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
             </CardTitle>
             <CardDescription>{t('superAdminDashboard.statusDescription')}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Chart option={statusOption} height={180} />
+          <CardContent className="flex flex-1 flex-col justify-between gap-2 pt-1">
+            <Chart option={statusOption} height={175} onEvents={statusChartEvents} />
+            <div className="space-y-1.5">
+              {statusEntries.map((entry) => {
+                const pct = totalStatusCount > 0 ? Math.round((entry.value / totalStatusCount) * 100) : 0
+                return (
+                  <Link
+                    key={entry.key}
+                    to={`/admin/tenants?status=${entry.key}`}
+                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-xs transition-colors hover:border-primary/40 hover:bg-muted/50"
+                  >
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+                      <span className="truncate text-muted-foreground">{entry.name}</span>
+                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums">
+                      {entry.value}
+                      <span className="ml-1 font-normal text-muted-foreground">({pct}%)</span>
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
+        <Card
+          onClick={(e) => navigateFromCard(e, '/admin/tenants')}
+          className="cursor-pointer transition-colors hover:border-primary/40"
+        >
           <CardHeader>
-            <CardTitle className="text-base">
-              {t('superAdminDashboard.segments')}
+            <CardTitle className="flex items-center justify-between text-base">
+              <span>{t('superAdminDashboard.segments')}</span>
+              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
             </CardTitle>
             <CardDescription>{t('superAdminDashboard.segmentDescription')}</CardDescription>
           </CardHeader>
@@ -268,9 +377,15 @@ export function SuperAdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card
+          onClick={(e) => navigateFromCard(e, '/admin/tenants')}
+          className="cursor-pointer transition-colors hover:border-primary/40 lg:col-span-2"
+        >
           <CardHeader>
-            <CardTitle className="text-base">{t('superAdminDashboard.tenantsTable')}</CardTitle>
+            <CardTitle className="flex items-center justify-between text-base">
+              <span>{t('superAdminDashboard.tenantsTable')}</span>
+              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+            </CardTitle>
             <CardDescription>{t('superAdminDashboard.tenantsTableDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="p-0">

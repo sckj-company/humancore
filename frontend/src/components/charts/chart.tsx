@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactECharts from 'echarts-for-react'
 import { useTheme } from '@/hooks/use-theme'
 import { cn } from '@/lib/utils'
@@ -10,9 +11,11 @@ interface ChartProps {
   className?: string
   loading?: boolean
   empty?: boolean
+  onEvents?: Record<string, (params: unknown) => void>
 }
 
-export function Chart({ option, height = 320, className, loading, empty }: ChartProps) {
+export function Chart({ option, height = 320, className, loading, empty, onEvents }: ChartProps) {
+  const { t } = useTranslation()
   const ref = useRef<ReactECharts>(null)
   const theme = useTheme()
   const [, setReady] = useState(false)
@@ -31,7 +34,7 @@ export function Chart({ option, height = 320, className, loading, empty }: Chart
         className="flex items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground"
         style={{ height }}
       >
-        Sem dados para mostrar
+        {t('common.no_data')}
       </div>
     )
   }
@@ -43,6 +46,7 @@ export function Chart({ option, height = 320, className, loading, empty }: Chart
         option={option}
         theme={theme === 'dark' ? 'dark' : undefined}
         style={{ height: typeof height === 'number' ? `${height}px` : height, width: '100%' }}
+        onEvents={onEvents}
         notMerge
         lazyUpdate
       />

@@ -87,7 +87,15 @@
     "select": "选择",
     "from": "从",
     "to": "至",
-    "weekdaysShort": ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+    "weekdaysShort": [
+      "周日",
+      "周一",
+      "周二",
+      "周三",
+      "周四",
+      "周五",
+      "周六"
+    ]
   },
   "nav": {
     "dashboard": "仪表板",
@@ -136,7 +144,7 @@
       "upcoming_birthdays": "即将到来的生日",
       "expiring_contracts": "即将到期的合同",
       "pending_leaves": "待处理的休假",
-      "recent_hires": "最近入职",
+      "recent_hires": "实习或试用期",
       "by_status": "状态分布",
       "by_status_description": "当前员工状态概览",
       "by_department_description": "各部门人数分布",
@@ -147,7 +155,17 @@
       "open_payroll": "打开工资单",
       "days_count": "{{count}} 天",
       "days_remaining": "剩余 {{count}} 天",
-      "load_error": "无法加载仪表板。"
+      "load_error": "无法加载仪表板。",
+      "probation_internship": "实习或试用期",
+      "probation_internship_description": "处于实习或试用期的员工",
+      "probation_badge": "试用期",
+      "internship_badge": "实习",
+      "until_date": "至 {{date}}",
+      "upcoming_birthdays_description": "本月及下月最临近的员工生日",
+      "birthday_today": "今天",
+      "birthday_tomorrow": "明天",
+      "birthday_in_days": "{{count}} 天后",
+      "total_label": "总计"
     }
   },
   "employeeDashboard": {
@@ -164,7 +182,7 @@
     "start": "开始",
     "noActiveContract": "没有有效合同"
   },
-  "employeesPage":   {
+  "employeesPage": {
     "title": "员工",
     "totalEmployees": "共 {{count}} 名员工",
     "status": {
@@ -188,7 +206,7 @@
     "clearFilters": "清除筛选",
     "pagination": "第 {{current}} / {{pages}} 页 · 共 {{total}} 条"
   },
-  "employeeDetail":   {
+  "employeeDetail": {
     "status": {
       "active": "在职",
       "inactive": "非在职",
@@ -223,7 +241,9 @@
       "part_time": "兼职",
       "internship": "实习",
       "temporary": "临时工作",
-      "contractor": "服务承包人"
+      "contractor": "服务承包人",
+      "probation": "试用期",
+      "outsourced": "外包"
     },
     "salaryFrequency": {
       "monthly": "按月",
@@ -571,9 +591,18 @@
     "alternativePhone": "备用电话",
     "birthDate": "出生日期",
     "gender": "性别",
-    "genders": { "male": "男", "female": "女", "other": "其他" },
+    "genders": {
+      "male": "男",
+      "female": "女",
+      "other": "其他"
+    },
     "maritalStatus": "婚姻状况",
-    "maritalStatuses": { "single": "未婚", "married": "已婚", "divorced": "离异", "widowed": "丧偶" },
+    "maritalStatuses": {
+      "single": "未婚",
+      "married": "已婚",
+      "divorced": "离异",
+      "widowed": "丧偶"
+    },
     "nationality": "国籍",
     "officialDocuments": "官方证件",
     "documentType": "证件类型",
@@ -588,7 +617,10 @@
     "postalCode": "邮政编码",
     "organization": "组织信息",
     "manager": "经理",
-    "statuses": { "suspended": "已停职", "terminated": "已离职" },
+    "statuses": {
+      "suspended": "已停职",
+      "terminated": "已离职"
+    },
     "probationEnd": "试用期结束日期",
     "saveChanges": "保存更改",
     "undefined": "未设置"
@@ -747,29 +779,241 @@
     "title": "工资",
     "newPeriod": "新周期",
     "periods": "周期",
-    "periodStatuses": { "open": "开放", "processing": "处理中", "completed": "已计算", "failed": "有错误", "pending_validation": "待验证", "pending_approval": "待审批", "approved": "已批准", "paid": "已支付", "closed": "已关闭", "cancelled": "已取消" },
-    "recordStatuses": { "open": "开放", "processing": "处理中", "calculated": "已计算", "failed": "有错误", "pending_validation": "待验证", "pending_approval": "待审批", "approved": "已批准", "paid": "已支付", "closed": "已关闭", "cancelled": "已取消", "rejected": "已驳回", "draft": "草稿" },
-    "periodTypes": { "monthly": "月度", "biweekly": "半月", "weekly": "每周" },
-    "events": { "simulated": "已模拟", "processed": "已处理", "validated": "已验证", "submitted": "已提交", "approved": "已批准", "rejected": "已驳回", "closed": "已关闭", "reopened": "已重新打开", "paid": "已支付" },
+    "periodStatuses": {
+      "open": "开放",
+      "processing": "处理中",
+      "completed": "已计算",
+      "failed": "有错误",
+      "pending_validation": "待验证",
+      "pending_approval": "待审批",
+      "approved": "已批准",
+      "paid": "已支付",
+      "closed": "已关闭",
+      "cancelled": "已取消"
+    },
+    "recordStatuses": {
+      "open": "开放",
+      "processing": "处理中",
+      "calculated": "已计算",
+      "failed": "有错误",
+      "pending_validation": "待验证",
+      "pending_approval": "待审批",
+      "approved": "已批准",
+      "paid": "已支付",
+      "closed": "已关闭",
+      "cancelled": "已取消",
+      "rejected": "已驳回",
+      "draft": "草稿"
+    },
+    "periodTypes": {
+      "monthly": "月度",
+      "biweekly": "半月",
+      "weekly": "每周"
+    },
+    "events": {
+      "simulated": "已模拟",
+      "processed": "已处理",
+      "validated": "已验证",
+      "submitted": "已提交",
+      "approved": "已批准",
+      "rejected": "已驳回",
+      "closed": "已关闭",
+      "reopened": "已重新打开",
+      "paid": "已支付"
+    },
     "detail": {
-      "breadcrumb": "工资", "back": "返回", "paymentDate": "支付日期：", "approvedAt": "批准于", "process": "处理", "processing": "处理中…", "submit": "提交审批", "approve": "批准工资", "reject": "驳回", "close": "关闭周期", "registerPayment": "登记付款", "reopen": "重新打开",
-      "employees": "员工", "grossTotal": "税前合计", "netTotal": "实发合计", "employerCost": "雇主成本", "summaryTab": "摘要", "employeeDetailTab": "员工明细", "validationsTab": "验证", "historyTab": "历史记录",
-      "employee": "员工", "base": "基数", "gross": "税前", "inss": "社保", "irt": "个人所得税", "otherDeductions": "其他扣款", "net": "实发", "status": "状态", "payslip": "工资单", "totals": "合计", "noRecords": "暂无工资记录", "processToGenerate": "处理此周期以生成工资记录。", "noEmployeeRecord": "暂无员工记录可显示。", "employeeSelector": "员工：", "componentDetails": "薪资项目明细", "description": "说明", "category": "类别", "quantity": "数量", "rate": "比率 %", "value": "金额", "type": "类型", "noComponents": "暂无薪资项目明细。", "employerCharges": "雇主缴费", "salaryBase": "基本工资", "salaryGross": "税前工资", "employerContribution": "雇主社保", "totalCost": "总成本", "downloadPayslip": "下载工资单（PDF）", "downloadPeriodPdf": "Folha geral (PDF) / 总工资表 (PDF)", "periodPdfGenerating": "正在生成工资表…", "periodPdfDownloaded": "工资表已下载。", "periodPdfError": "无法下载工资表。", "inssEmployeeTotal": "INSS funcionários (3%) / 员工 INSS（3%）", "inssEmployerTotal": "INSS patronal (empresa) (8%) / 雇主 INSS（公司，8%）", "inssCombinedTotal": "INSS total (11%) / INSS 总额（11%）",
-      "categories": { "earning": "收入", "deduction": "扣款", "tax": "税费", "employer_contribution": "雇主缴费", "employer_cost": "总成本" },
-      "validation": { "blocking": "存在阻止提交的错误。", "warnings": "存在提示性警告。", "confirmed": "已确认。", "confirmWarnings": "提交前请确认已查看警告。", "ready": "验证通过 — 可以提交。", "acknowledge": "我确认已查看警告", "cleanTitle": "没有验证问题", "cleanDescription": "所有记录均有效并可供审批。", "blockingTitle": "阻止性错误", "warningsTitle": "警告", "period": "周期" },
-      "history": { "emptyTitle": "暂无事件", "emptyDescription": "周期状态变更将显示在这里。", "by": "操作人：" },
-      "dialogs": { "approveTitle": "批准工资", "approveDescription": "请先确认以下合计。批准后所有记录将标记为已批准。", "previousRejection": "上次驳回原因：", "cancel": "取消", "approve": "批准", "rejectTitle": "驳回工资", "rejectDescription": "周期将返回待验证状态以便修正。", "reasonRequired": "原因（必填）", "rejectPlaceholder": "请说明需要修正的内容…", "reopenTitle": "重新打开周期", "reopenDescription": "此操作会创建周期的新版本，并保留之前的结果。", "reopenWarning": "周期将返回开放状态以便重新计算。之前批准的合计仍保留在历史记录中。", "reopenPlaceholder": "请输入重新打开的原因…" }
+      "breadcrumb": "工资",
+      "back": "返回",
+      "paymentDate": "支付日期：",
+      "approvedAt": "批准于",
+      "process": "处理",
+      "processing": "处理中…",
+      "submit": "提交审批",
+      "approve": "批准工资",
+      "reject": "驳回",
+      "close": "关闭周期",
+      "registerPayment": "登记付款",
+      "reopen": "重新打开",
+      "employees": "员工",
+      "grossTotal": "税前合计",
+      "netTotal": "实发合计",
+      "employerCost": "雇主成本",
+      "summaryTab": "摘要",
+      "employeeDetailTab": "员工明细",
+      "validationsTab": "验证",
+      "historyTab": "历史记录",
+      "employee": "员工",
+      "base": "基数",
+      "gross": "税前",
+      "inss": "社保",
+      "irt": "个人所得税",
+      "otherDeductions": "其他扣款",
+      "net": "实发",
+      "status": "状态",
+      "payslip": "工资单",
+      "totals": "合计",
+      "noRecords": "暂无工资记录",
+      "processToGenerate": "处理此周期以生成工资记录。",
+      "noEmployeeRecord": "暂无员工记录可显示。",
+      "employeeSelector": "员工：",
+      "componentDetails": "薪资项目明细",
+      "description": "说明",
+      "category": "类别",
+      "quantity": "数量",
+      "rate": "比率 %",
+      "value": "金额",
+      "type": "类型",
+      "noComponents": "暂无薪资项目明细。",
+      "employerCharges": "雇主缴费",
+      "salaryBase": "基本工资",
+      "salaryGross": "税前工资",
+      "employerContribution": "雇主社保",
+      "totalCost": "总成本",
+      "downloadPayslip": "下载工资单（PDF）",
+      "downloadPeriodPdf": "Folha geral (PDF) / 总工资表 (PDF)",
+      "periodPdfGenerating": "正在生成工资表…",
+      "periodPdfDownloaded": "工资表已下载。",
+      "periodPdfError": "无法下载工资表。",
+      "inssEmployeeTotal": "INSS funcionários (3%) / 员工 INSS（3%）",
+      "inssEmployerTotal": "INSS patronal (empresa) (8%) / 雇主 INSS（公司，8%）",
+      "inssCombinedTotal": "INSS total (11%) / INSS 总额（11%）",
+      "categories": {
+        "earning": "收入",
+        "deduction": "扣款",
+        "tax": "税费",
+        "employer_contribution": "雇主缴费",
+        "employer_cost": "总成本"
+      },
+      "validation": {
+        "blocking": "存在阻止提交的错误。",
+        "warnings": "存在提示性警告。",
+        "confirmed": "已确认。",
+        "confirmWarnings": "提交前请确认已查看警告。",
+        "ready": "验证通过 — 可以提交。",
+        "acknowledge": "我确认已查看警告",
+        "cleanTitle": "没有验证问题",
+        "cleanDescription": "所有记录均有效并可供审批。",
+        "blockingTitle": "阻止性错误",
+        "warningsTitle": "警告",
+        "period": "周期"
+      },
+      "history": {
+        "emptyTitle": "暂无事件",
+        "emptyDescription": "周期状态变更将显示在这里。",
+        "by": "操作人："
+      },
+      "dialogs": {
+        "approveTitle": "批准工资",
+        "approveDescription": "请先确认以下合计。批准后所有记录将标记为已批准。",
+        "previousRejection": "上次驳回原因：",
+        "cancel": "取消",
+        "approve": "批准",
+        "rejectTitle": "驳回工资",
+        "rejectDescription": "周期将返回待验证状态以便修正。",
+        "reasonRequired": "原因（必填）",
+        "rejectPlaceholder": "请说明需要修正的内容…",
+        "reopenTitle": "重新打开周期",
+        "reopenDescription": "此操作会创建周期的新版本，并保留之前的结果。",
+        "reopenWarning": "周期将返回开放状态以便重新计算。之前批准的合计仍保留在历史记录中。",
+        "reopenPlaceholder": "请输入重新打开的原因…"
+      }
     },
     "periodsPage": {
-      "emptyTitle": "暂无工资周期", "emptyDescription": "创建新周期以开始处理工资。", "period": "周期", "type": "类型", "range": "期间", "employees": "员工", "grossTotal": "税前合计", "netTotal": "实发合计", "process": "处理", "submit": "提交审批", "approve": "批准", "close": "关闭周期", "registerPayment": "登记付款", "reopen": "重新打开周期", "viewDetails": "查看详情", "reopenTitle": "重新打开周期", "reopenWarning": "周期将返回开放状态以便重新计算。之前批准的合计仍保留在历史记录中。", "reasonRequired": "原因（必填）", "reasonPlaceholder": "请输入重新打开的原因…", "cancel": "取消", "confirmReopen": "重新打开", "newPeriodDescription": "创建新的工资处理周期。", "periodType": "类型", "paymentDate": "支付日期", "start": "开始", "end": "结束", "typeMonthly": "月度", "typeBiweekly": "半月", "typeWeekly": "每周", "create": "创建"
+      "emptyTitle": "暂无工资周期",
+      "emptyDescription": "创建新周期以开始处理工资。",
+      "period": "周期",
+      "type": "类型",
+      "range": "期间",
+      "employees": "员工",
+      "grossTotal": "税前合计",
+      "netTotal": "实发合计",
+      "process": "处理",
+      "submit": "提交审批",
+      "approve": "批准",
+      "close": "关闭周期",
+      "registerPayment": "登记付款",
+      "reopen": "重新打开周期",
+      "viewDetails": "查看详情",
+      "reopenTitle": "重新打开周期",
+      "reopenWarning": "周期将返回开放状态以便重新计算。之前批准的合计仍保留在历史记录中。",
+      "reasonRequired": "原因（必填）",
+      "reasonPlaceholder": "请输入重新打开的原因…",
+      "cancel": "取消",
+      "confirmReopen": "重新打开",
+      "newPeriodDescription": "创建新的工资处理周期。",
+      "periodType": "类型",
+      "paymentDate": "支付日期",
+      "start": "开始",
+      "end": "结束",
+      "typeMonthly": "月度",
+      "typeBiweekly": "半月",
+      "typeWeekly": "每周",
+      "create": "创建"
     },
     "processDialog": {
-      "title": "处理工资", "selectDescription": "选择要纳入本次处理的员工。", "runningDescription": "正在处理周期 — 请在下方查看进度。", "doneDescription": "处理完成。", "errorDescription": "处理失败。", "loadingEmployees": "正在加载员工…", "loadError": "无法加载员工列表。", "noneEligible": "没有符合条件的员工。", "search": "按姓名或编号搜索…", "searchAria": "搜索员工", "selected": "已选择", "all": "全部", "none": "无", "notFound": "未找到员工。", "cancel": "取消", "process": "处理", "progress": "进度", "completed": "已完成", "failed": "失败", "working": "处理中…", "doNotClose": "正在处理 — 请勿关闭此窗口。", "completedSuccess": "周期计算成功。", "completedWarnings": "处理完成但有警告 — 请检查验证信息。", "completedErrors": "处理结束，但存在阻止性错误。", "finalStatus": "最终状态：", "processedCount": "已处理", "tryAgain": "重试", "close": "关闭", "expiredContract": "合同已过期", "salaryUnavailable": "—"
+      "title": "处理工资",
+      "selectDescription": "选择要纳入本次处理的员工。",
+      "runningDescription": "正在处理周期 — 请在下方查看进度。",
+      "doneDescription": "处理完成。",
+      "errorDescription": "处理失败。",
+      "loadingEmployees": "正在加载员工…",
+      "loadError": "无法加载员工列表。",
+      "noneEligible": "没有符合条件的员工。",
+      "search": "按姓名或编号搜索…",
+      "searchAria": "搜索员工",
+      "selected": "已选择",
+      "all": "全部",
+      "none": "无",
+      "notFound": "未找到员工。",
+      "cancel": "取消",
+      "process": "处理",
+      "progress": "进度",
+      "completed": "已完成",
+      "failed": "失败",
+      "working": "处理中…",
+      "doNotClose": "正在处理 — 请勿关闭此窗口。",
+      "completedSuccess": "周期计算成功。",
+      "completedWarnings": "处理完成但有警告 — 请检查验证信息。",
+      "completedErrors": "处理结束，但存在阻止性错误。",
+      "finalStatus": "最终状态：",
+      "processedCount": "已处理",
+      "tryAgain": "重试",
+      "close": "关闭",
+      "expiredContract": "合同已过期",
+      "salaryUnavailable": "—"
     },
-    "feedback": { "approved": "工资已批准", "closed": "周期已关闭", "submitted": "周期已提交审批", "paymentRegistered": "付款已登记", "reopened": "周期已重新打开", "processed": "处理完成" }
+    "feedback": {
+      "approved": "工资已批准",
+      "closed": "周期已关闭",
+      "submitted": "周期已提交审批",
+      "paymentRegistered": "付款已登记",
+      "reopened": "周期已重新打开",
+      "processed": "处理完成"
+    }
   },
   "payslips": {
-    "eyebrow": "工资", "title": "我的工资单", "description": "查看和下载工资单", "totalReceipts": "工资单总数", "totalReceived": "累计实发", "lastPayment": "最近实发", "period": "周期", "paymentDate": "支付日期", "gross": "税前工资", "deductions": "扣款", "net": "实发工资", "status": "状态", "actions": "操作", "paid": "已支付", "view": "查看", "download": "PDF", "generating": "正在生成工资单…", "downloaded": "工资单已下载。", "emptyTitle": "暂无工资单", "emptyDescription": "工资处理完成后，工资单会显示在这里。", "downloadError": "无法下载工资单。", "viewError": "无法打开工资单。"
+    "eyebrow": "工资",
+    "title": "我的工资单",
+    "description": "查看和下载工资单",
+    "totalReceipts": "工资单总数",
+    "totalReceived": "累计实发",
+    "lastPayment": "最近实发",
+    "period": "周期",
+    "paymentDate": "支付日期",
+    "gross": "税前工资",
+    "deductions": "扣款",
+    "net": "实发工资",
+    "status": "状态",
+    "actions": "操作",
+    "paid": "已支付",
+    "view": "查看",
+    "download": "PDF",
+    "generating": "正在生成工资单…",
+    "downloaded": "工资单已下载。",
+    "emptyTitle": "暂无工资单",
+    "emptyDescription": "工资处理完成后，工资单会显示在这里。",
+    "downloadError": "无法下载工资单。",
+    "viewError": "无法打开工资单。"
   },
   "attendance": {
     "title": "考勤",
@@ -887,8 +1131,19 @@
     "componentCode": "代码",
     "componentType": "性质",
     "calculationType": "计算方式",
-    "componentTypes": { "earning": "工资收入", "benefit": "福利", "deduction": "扣款", "tax": "税款", "contribution": "缴费" },
-    "calculationTypes": { "fixed": "固定金额", "percentage": "百分比", "formula": "公式", "hours": "小时" },
+    "componentTypes": {
+      "earning": "工资收入",
+      "benefit": "福利",
+      "deduction": "扣款",
+      "tax": "税款",
+      "contribution": "缴费"
+    },
+    "calculationTypes": {
+      "fixed": "固定金额",
+      "percentage": "百分比",
+      "formula": "公式",
+      "hours": "小时"
+    },
     "documentOptional": "可选。支持不超过 10 MB 的 PDF、PNG 或 JPEG。",
     "noDocument": "未附加文件",
     "documentDownloadError": "无法下载文件。",
@@ -909,8 +1164,18 @@
     "regime": "制度",
     "source": "官方法规或来源",
     "reference": "条款、表格或说明",
-    "applicability": { "unknown": "未指定", "yes": "适用", "no": "不适用" },
-    "statuses": { "draft": "草稿", "validated": "已验证", "active": "已启用", "revoked": "已撤销", "unconfigured": "未配置" },
+    "applicability": {
+      "unknown": "未指定",
+      "yes": "适用",
+      "no": "不适用"
+    },
+    "statuses": {
+      "draft": "草稿",
+      "validated": "已验证",
+      "active": "已启用",
+      "revoked": "已撤销",
+      "unconfigured": "未配置"
+    },
     "saveDraft": "保存草稿",
     "validate": "验证规则",
     "activate": "启用规则",
@@ -1245,8 +1510,16 @@
     "slug": "标识",
     "created": "创建时间",
     "noTenants": "没有租户。",
-    "status": { "active": "启用", "inactive": "停用", "suspended": "已暂停" },
-    "segmentLabels": { "small": "小型（≤10）", "medium": "中型（11–50）", "large": "大型（>50）" },
+    "status": {
+      "active": "启用",
+      "inactive": "停用",
+      "suspended": "已暂停"
+    },
+    "segmentLabels": {
+      "small": "小型（≤10）",
+      "medium": "中型（11–50）",
+      "large": "大型（>50）"
+    },
     "title": "超级管理员仪表盘",
     "subtitle": "所有租户和平台用户的全局视图。",
     "manageTenants": "管理组织",
@@ -1254,7 +1527,8 @@
     "byStatus": "状态分布",
     "segments": "按规模细分",
     "tenantsTable": "租户",
-    "tenantsTableDescription": "平台上的所有租户"
+    "tenantsTableDescription": "平台上的所有租户",
+    "loadError": "无法加载仪表板。"
   },
   "superAdminPage": {
     "title": "平台超级管理员",
@@ -1345,28 +1619,94 @@
       "configure": "配置{{resource}}"
     },
     "permissionResources": {
-      "tenant": { "singular": "公司", "plural": "公司" },
-      "user": { "singular": "用户", "plural": "用户" },
-      "employee": { "singular": "员工", "plural": "员工" },
-      "department": { "singular": "部门", "plural": "部门" },
-      "position": { "singular": "职位", "plural": "职位" },
-      "branch": { "singular": "分支机构", "plural": "分支机构" },
-      "contract": { "singular": "合同", "plural": "合同" },
-      "attendance": { "singular": "考勤记录", "plural": "考勤记录" },
-      "leave": { "singular": "缺勤记录", "plural": "缺勤记录" },
-      "payroll": { "singular": "工资单", "plural": "工资单" },
-      "payslip": { "singular": "工资条", "plural": "工资条" },
-      "salary-component": { "singular": "薪资项目", "plural": "薪资项目" },
-      "benefit": { "singular": "福利", "plural": "福利" },
-      "deduction": { "singular": "扣款", "plural": "扣款" },
-      "recruitment": { "singular": "招聘记录", "plural": "招聘记录" },
-      "document": { "singular": "文档", "plural": "文档" },
-      "performance": { "singular": "绩效评估", "plural": "绩效评估" },
-      "training": { "singular": "培训课程", "plural": "培训课程" },
-      "report": { "singular": "报告", "plural": "报告" },
-      "setting": { "singular": "设置", "plural": "设置" },
-      "audit": { "singular": "审计记录", "plural": "审计记录" },
-      "email-template": { "singular": "邮件模板", "plural": "邮件模板" }
+      "tenant": {
+        "singular": "公司",
+        "plural": "公司"
+      },
+      "user": {
+        "singular": "用户",
+        "plural": "用户"
+      },
+      "employee": {
+        "singular": "员工",
+        "plural": "员工"
+      },
+      "department": {
+        "singular": "部门",
+        "plural": "部门"
+      },
+      "position": {
+        "singular": "职位",
+        "plural": "职位"
+      },
+      "branch": {
+        "singular": "分支机构",
+        "plural": "分支机构"
+      },
+      "contract": {
+        "singular": "合同",
+        "plural": "合同"
+      },
+      "attendance": {
+        "singular": "考勤记录",
+        "plural": "考勤记录"
+      },
+      "leave": {
+        "singular": "缺勤记录",
+        "plural": "缺勤记录"
+      },
+      "payroll": {
+        "singular": "工资单",
+        "plural": "工资单"
+      },
+      "payslip": {
+        "singular": "工资条",
+        "plural": "工资条"
+      },
+      "salary-component": {
+        "singular": "薪资项目",
+        "plural": "薪资项目"
+      },
+      "benefit": {
+        "singular": "福利",
+        "plural": "福利"
+      },
+      "deduction": {
+        "singular": "扣款",
+        "plural": "扣款"
+      },
+      "recruitment": {
+        "singular": "招聘记录",
+        "plural": "招聘记录"
+      },
+      "document": {
+        "singular": "文档",
+        "plural": "文档"
+      },
+      "performance": {
+        "singular": "绩效评估",
+        "plural": "绩效评估"
+      },
+      "training": {
+        "singular": "培训课程",
+        "plural": "培训课程"
+      },
+      "report": {
+        "singular": "报告",
+        "plural": "报告"
+      },
+      "setting": {
+        "singular": "设置",
+        "plural": "设置"
+      },
+      "audit": {
+        "singular": "审计记录",
+        "plural": "审计记录"
+      },
+      "email-template": {
+        "singular": "邮件模板",
+        "plural": "邮件模板"
+      }
     },
     "permissionLabels": {
       "impersonate_user": "以其他用户身份登录",
@@ -1525,81 +1865,133 @@
     "jobStatus": "职位状态",
     "allJobStatuses": "所有状态",
     "jobStatusOptions": {
-      "open": "招聘中", "draft": "草稿", "onHold": "暂停", "closed": "已关闭", "cancelled": "已取消"
+      "open": "招聘中",
+      "draft": "草稿",
+      "onHold": "暂停",
+      "closed": "已关闭",
+      "cancelled": "已取消"
     },
     "publishedJobsHeading": "已发布职位与招聘流程（{{count}}）",
     "loadJobsError": "加载职位失败。",
     "noJobsTitle": "未找到职位",
     "noJobsDescription": "创建职位以接收申请并启动招聘流程。",
-    "jobAndPosition": "职位与岗位", "location": "地点",
-    "openingsAndCandidates": "职位空缺与候选人", "compensation": "薪酬",
-    "status": "状态", "actions": "操作",
+    "jobAndPosition": "职位与岗位",
+    "location": "地点",
+    "openingsAndCandidates": "职位空缺与候选人",
+    "compensation": "薪酬",
+    "status": "状态",
+    "actions": "操作",
     "viewCandidatesAndDetails": "查看候选人与详情",
     "onSite": "现场办公",
-    "openingCountOne": "{{count}} 个职位空缺", "openingCountMany": "{{count}} 个职位空缺",
-    "candidateCountOne": "{{count}} 位候选人", "candidateCountMany": "{{count}} 位候选人",
+    "openingCountOne": "{{count}} 个职位空缺",
+    "openingCountMany": "{{count}} 个职位空缺",
+    "candidateCountOne": "{{count}} 位候选人",
+    "candidateCountMany": "{{count}} 位候选人",
     "salaryNegotiable": "面议",
-    "jobReopenedSuccess": "职位已成功重新开放。", "jobReopenError": "重新开放职位失败。",
-    "jobClosedSuccess": "职位已成功关闭。", "jobCloseError": "关闭职位失败。",
-    "closeJob": "关闭职位", "close": "关闭", "reopenJob": "重新开放职位", "reopen": "重新开放",
-    "newJob": "新建职位", "createJobTitle": "创建新职位",
+    "jobReopenedSuccess": "职位已成功重新开放。",
+    "jobReopenError": "重新开放职位失败。",
+    "jobClosedSuccess": "职位已成功关闭。",
+    "jobCloseError": "关闭职位失败。",
+    "closeJob": "关闭职位",
+    "close": "关闭",
+    "reopenJob": "重新开放职位",
+    "reopen": "重新开放",
+    "newJob": "新建职位",
+    "createJobTitle": "创建新职位",
     "createJobDescription": "发布职位以启动招聘并接收申请。",
-    "jobTitle": "职位名称", "jobTitlePlaceholder": "例如：高级软件工程师",
-    "department": "部门", "selectDepartment": "选择部门…",
-    "associatedPosition": "关联岗位", "selectPosition": "选择岗位…",
-    "locationPlaceholder": "例如：罗安达、塔拉托纳（或远程）", "numberOfOpenings": "职位空缺数量",
+    "jobTitle": "职位名称",
+    "jobTitlePlaceholder": "例如：高级软件工程师",
+    "department": "部门",
+    "selectDepartment": "选择部门…",
+    "associatedPosition": "关联岗位",
+    "selectPosition": "选择岗位…",
+    "locationPlaceholder": "例如：罗安达、塔拉托纳（或远程）",
+    "numberOfOpenings": "职位空缺数量",
     "employmentType": "工作类型",
     "employmentTypes": {
-      "fullTime": "全职", "partTime": "兼职", "contract": "固定期限合同",
-      "temporary": "临时", "internship": "实习"
+      "fullTime": "全职",
+      "partTime": "兼职",
+      "contract": "固定期限合同",
+      "temporary": "临时",
+      "internship": "实习"
     },
     "experienceLevel": "经验级别",
     "experienceLevels": {
-      "intern": "实习生", "junior": "初级", "mid": "中级", "senior": "高级", "lead": "负责人 / 专家"
+      "intern": "实习生",
+      "junior": "初级",
+      "mid": "中级",
+      "senior": "高级",
+      "lead": "负责人 / 专家"
     },
-    "minimumSalary": "最低薪资", "minimumSalaryPlaceholder": "例如：300000",
-    "maximumSalary": "最高薪资", "maximumSalaryPlaceholder": "例如：500000",
+    "minimumSalary": "最低薪资",
+    "minimumSalaryPlaceholder": "例如：300000",
+    "maximumSalary": "最高薪资",
+    "maximumSalaryPlaceholder": "例如：500000",
     "responsibilitiesDescription": "职责描述",
     "responsibilitiesPlaceholder": "描述该岗位的主要职责、任务和目标…",
     "requirementsAndSkills": "任职要求与技能",
     "requirementsPlaceholder": "必备资格、语言、工具…",
-    "cancel": "取消", "saveJob": "保存职位",
-    "jobCreatedSuccess": "职位已成功创建。", "jobCreateError": "创建职位失败。",
+    "cancel": "取消",
+    "saveJob": "保存职位",
+    "jobCreatedSuccess": "职位已成功创建。",
+    "jobCreateError": "创建职位失败。",
     "candidateAddedToJobSuccess": "候选人已成功添加至“{{jobTitle}}”。",
-    "addCandidateShort": "+ 候选人", "addCandidate": "添加候选人",
+    "addCandidateShort": "+ 候选人",
+    "addCandidate": "添加候选人",
     "addCandidateDescription": "将候选人添加到“{{jobTitle}}”职位。",
-    "firstName": "名", "firstNamePlaceholder": "例如：小明",
-    "lastName": "姓", "lastNamePlaceholder": "例如：王",
-    "email": "电子邮箱", "emailPlaceholder": "candidate@example.com",
-    "phone": "电话", "phonePlaceholder": "+244 9...",
-    "yearsExperience": "工作年限", "yearsExperiencePlaceholder": "例如：3",
-    "expectedSalary": "期望薪资", "expectedSalaryPlaceholder": "例如：350000",
+    "firstName": "名",
+    "firstNamePlaceholder": "例如：小明",
+    "lastName": "姓",
+    "lastNamePlaceholder": "例如：王",
+    "email": "电子邮箱",
+    "emailPlaceholder": "candidate@example.com",
+    "phone": "电话",
+    "phonePlaceholder": "+244 9...",
+    "yearsExperience": "工作年限",
+    "yearsExperiencePlaceholder": "例如：3",
+    "expectedSalary": "期望薪资",
+    "expectedSalaryPlaceholder": "例如：350000",
     "notesOrSummary": "备注 / 简介",
     "candidateNotesPlaceholder": "技能或申请来源",
-    "saveCandidate": "保存候选人", "candidateCreateError": "登记候选人失败。",
+    "saveCandidate": "保存候选人",
+    "candidateCreateError": "登记候选人失败。",
     "candidateStatuses": {
-      "applied": "已申请", "screening": "筛选中", "interview": "面试中", "test": "评估中",
-      "offer": "已发出录用通知", "hired": "已录用", "rejected": "已拒绝", "withdrawn": "已撤回"
+      "applied": "已申请",
+      "screening": "筛选中",
+      "interview": "面试中",
+      "test": "评估中",
+      "offer": "已发出录用通知",
+      "hired": "已录用",
+      "rejected": "已拒绝",
+      "withdrawn": "已撤回"
     },
     "candidateMovedSuccess": "{{name}} 已移至{{status}}",
     "candidateMoveError": "移动候选人失败。",
     "confirmDeleteCandidate": "确定要删除候选人 {{name}} 吗？",
-    "candidateRemovedSuccess": "候选人已成功移除。", "candidateDeleteError": "删除候选人失败。",
+    "candidateRemovedSuccess": "候选人已成功移除。",
+    "candidateDeleteError": "删除候选人失败。",
     "hiredThroughRecruitmentNote": "通过招聘流程录用：{{jobTitle}}",
     "candidateHired": "已录用",
     "candidateHiredSuccess": "候选人 {{name}} 已成功录用！{{employeeCode}}",
     "candidateHireError": "录用候选人失败。",
     "candidateRegisteredSuccess": "候选人已成功登记至此职位！",
-    "jobNotFound": "未找到该职位。", "fullTime": "全职",
+    "jobNotFound": "未找到该职位。",
+    "fullTime": "全职",
     "departmentEyebrow": "{{department}} 部门",
     "jobSummary": "{{employmentType}} · {{location}} · {{openings}}",
-    "closedJobNotice": "职位已关闭（不再接受申请）", "backToList": "返回列表",
-    "registeredCandidates": "已登记候选人", "inRecruitmentProcess": "招聘流程中",
-    "hiredCandidates": "已录用", "openJobs": "开放职位", "publishedOn": "发布于 {{date}}",
-    "descriptionLabel": "描述", "requirements": "任职要求",
+    "closedJobNotice": "职位已关闭（不再接受申请）",
+    "backToList": "返回列表",
+    "registeredCandidates": "已登记候选人",
+    "inRecruitmentProcess": "招聘流程中",
+    "hiredCandidates": "已录用",
+    "openJobs": "开放职位",
+    "publishedOn": "发布于 {{date}}",
+    "descriptionLabel": "描述",
+    "requirements": "任职要求",
     "candidatesForJobHeading": "此职位的候选人（{{count}}）",
     "searchCandidatesPlaceholder": "搜索候选人…",
-    "pipelineView": "流程看板视图", "listView": "列表视图",
+    "pipelineView": "流程看板视图",
+    "listView": "列表视图",
     "noCandidatesTitle": "此职位暂无登记的候选人",
     "noCandidatesDescription": "添加候选人以开始筛选、面试和录用流程。",
     "addFirstCandidate": "添加首位候选人",
@@ -1608,22 +2000,39 @@
     "loadCandidatesError": "加载候选人失败。",
     "emptyStage": "暂无候选人",
     "archivedCandidatesHeading": "已归档候选人（{{count}}）— 已拒绝或已撤回",
-    "clickToExpand": "点击展开", "candidate": "候选人", "contact": "联系方式",
-    "experience": "经验", "stageAndStatus": "阶段 / 状态", "appliedOn": "申请日期：{{date}}",
-    "yearsExperienceOne": "{{count}} 年", "yearsExperienceMany": "{{count}} 年",
-    "hire": "录用", "deleteCandidate": "删除候选人",
+    "clickToExpand": "点击展开",
+    "candidate": "候选人",
+    "contact": "联系方式",
+    "experience": "经验",
+    "stageAndStatus": "阶段 / 状态",
+    "appliedOn": "申请日期：{{date}}",
+    "yearsExperienceOne": "{{count}} 年",
+    "yearsExperienceMany": "{{count}} 年",
+    "hire": "录用",
+    "deleteCandidate": "删除候选人",
     "hireCandidateTitle": "录用候选人 — {{name}}",
     "hireCandidateDescription": "确认录用后，{{name}} 将自动登记为系统中的在职员工，并关联至下方的合同。",
     "contractType": "合同类型",
     "contractTypes": {
-      "permanent": "正式 / 无固定期限", "fixedTerm": "固定期限",
-      "temporary": "临时工作", "probation": "试用期",
-      "internship": "职业实习", "outsourced": "服务提供方"
+      "permanent": "正式 / 无固定期限",
+      "fixedTerm": "固定期限",
+      "temporary": "临时工作",
+      "probation": "试用期",
+      "internship": "职业实习",
+      "outsourced": "服务提供方"
     },
-    "baseSalary": "基本工资", "salaryFrequency": "薪资周期",
-    "salaryFrequencies": { "monthly": "每月", "biweekly": "每两周", "weekly": "每周", "hourly": "每小时" },
-    "weeklyWorkHours": "每周工时", "weeklyWorkHoursPlaceholder": "例如：40",
-    "startDate": "入职日期", "endDateOptional": "结束日期（可选）",
+    "baseSalary": "基本工资",
+    "salaryFrequency": "薪资周期",
+    "salaryFrequencies": {
+      "monthly": "每月",
+      "biweekly": "每两周",
+      "weekly": "每周",
+      "hourly": "每小时"
+    },
+    "weeklyWorkHours": "每周工时",
+    "weeklyWorkHoursPlaceholder": "例如：40",
+    "startDate": "入职日期",
+    "endDateOptional": "结束日期（可选）",
     "assignedDepartment": "所属部门",
     "jobDefaultDepartment": "{{department}}（职位默认部门）",
     "noSpecificDepartment": "无指定部门",
@@ -1634,59 +2043,98 @@
     "addCandidateToJobTitle": "添加候选人至职位",
     "addCandidateToJobDescription": "登记新候选人以申请“{{jobTitle}}”职位。",
     "candidateProfilePlaceholder": "候选人简介、关键技能",
-    "registering": "正在登记…", "registerCandidate": "登记候选人",
-    "hireCandidate": "录用候选人", "moveCandidateToStage": "移至{{stage}}",
-    "yearsExperienceShortOne": "{{count}} 年经验", "yearsExperienceShortMany": "{{count}} 年经验"
+    "registering": "正在登记…",
+    "registerCandidate": "登记候选人",
+    "hireCandidate": "录用候选人",
+    "moveCandidateToStage": "移至{{stage}}",
+    "yearsExperienceShortOne": "{{count}} 年经验",
+    "yearsExperienceShortMany": "{{count}} 年经验"
   },
   "organizationPage": {
-    "actions": { "edit": "编辑{{entity}}", "delete": "删除{{entity}}" },
+    "actions": {
+      "edit": "编辑{{entity}}",
+      "delete": "删除{{entity}}"
+    },
     "common": {
-      "cancel": "取消", "delete": "删除", "deleting": "正在删除…", "none": "无",
-      "saveChanges": "保存更改", "saving": "正在保存…", "selectManager": "选择负责人"
+      "cancel": "取消",
+      "delete": "删除",
+      "deleting": "正在删除…",
+      "none": "无",
+      "saveChanges": "保存更改",
+      "saving": "正在保存…",
+      "selectManager": "选择负责人"
     },
     "deleteConfirmation": "确定要删除此{{entity}}吗？",
     "deleteWarning": "此操作将从数据库中永久删除该记录。",
-    "empty": { "filterHint": "请尝试调整搜索筛选条件。" },
+    "empty": {
+      "filterHint": "请尝试调整搜索筛选条件。"
+    },
     "fields": {
-      "branch": "分支机构", "code": "编码", "department": "部门", "description": "描述",
-      "manager": "负责人", "status": "状态"
+      "branch": "分支机构",
+      "code": "编码",
+      "department": "部门",
+      "description": "描述",
+      "manager": "负责人",
+      "status": "状态"
     },
     "filters": {
-      "allBranches": "所有分支机构", "allDepartments": "所有部门", "allStatuses": "所有状态"
+      "allBranches": "所有分支机构",
+      "allDepartments": "所有部门",
+      "allStatuses": "所有状态"
     },
-    "layout": { "description": "公司架构" },
-    "status": { "active": "启用", "inactive": "停用" },
+    "layout": {
+      "description": "公司架构"
+    },
+    "status": {
+      "active": "启用",
+      "inactive": "停用"
+    },
     "toast": {
-      "created": "{{entity}}已成功创建。", "updated": "{{entity}}已成功更新。",
-      "deleted": "{{entity}}已成功删除。", "saveError": "保存{{entity}}失败。",
+      "created": "{{entity}}已成功创建。",
+      "updated": "{{entity}}已成功更新。",
+      "deleted": "{{entity}}已成功删除。",
+      "saveError": "保存{{entity}}失败。",
       "deleteError": "删除{{entity}}失败。"
     },
     "departments": {
-      "title": "部门", "singular": "部门",
+      "title": "部门",
+      "singular": "部门",
       "description": "管理部门及组织内部架构",
-      "new": "新建部门", "searchPlaceholder": "按名称或编码搜索…",
+      "new": "新建部门",
+      "searchPlaceholder": "按名称或编码搜索…",
       "emptyTitle": "未找到部门",
       "emptyDescription": "创建第一个部门以开始使用。",
-      "loadError": "加载部门时出错", "name": "部门名称",
-      "namePlaceholder": "例如：人力资源部、技术部…", "codePlaceholder": "例如：HR、IT、FIN",
-      "validation": { "nameRequired": "部门名称为必填项。" },
+      "loadError": "加载部门时出错",
+      "name": "部门名称",
+      "namePlaceholder": "例如：人力资源部、技术部…",
+      "codePlaceholder": "例如：HR、IT、FIN",
+      "validation": {
+        "nameRequired": "部门名称为必填项。"
+      },
       "createDescription": "请填写信息以登记新部门。",
       "editDescription": "更新所选部门的信息。",
-      "parent": "上级部门", "noParent": "无（顶级）",
-      "selectBranch": "选择分支机构", "costCenter": "成本中心",
+      "parent": "上级部门",
+      "noParent": "无（顶级）",
+      "selectBranch": "选择分支机构",
+      "costCenter": "成本中心",
       "costCenterPlaceholder": "例如：CC-1002",
       "descriptionPlaceholder": "简要描述部门职能与职责范围…",
-      "parentLabel": "上级：{{name}}", "managerLabel": "负责人：{{name}}",
+      "parentLabel": "上级：{{name}}",
+      "managerLabel": "负责人：{{name}}",
       "costCenterLabel": "成本中心：{{code}}",
-      "employeeCount_one": "{{count}} 名员工", "employeeCount_other": "{{count}} 名员工"
+      "employeeCount_one": "{{count}} 名员工",
+      "employeeCount_other": "{{count}} 名员工"
     },
     "positions": {
-      "title": "职位", "singular": "职位",
+      "title": "职位",
+      "singular": "职位",
       "description": "管理职位、管理级别和薪资范围",
-      "new": "新建职位", "searchPlaceholder": "按职位名称或编码搜索…",
+      "new": "新建职位",
+      "searchPlaceholder": "按职位名称或编码搜索…",
       "emptyTitle": "未找到职位",
       "emptyDescription": "登记公司的第一个职位。",
-      "loadError": "加载职位时出错", "titleLabel": "职位名称",
+      "loadError": "加载职位时出错",
+      "titleLabel": "职位名称",
       "titlePlaceholder": "例如：高级软件工程师、人力资源经理…",
       "codePlaceholder": "例如：ENG-01",
       "validation": {
@@ -1695,22 +2143,30 @@
       },
       "createDescription": "设置新职位的详细信息和薪资范围。",
       "editDescription": "更新所选职位的信息。",
-      "noDepartment": "通用（无所属部门）", "selectDepartment": "选择部门", "management": "管理岗位",
+      "noDepartment": "通用（无所属部门）",
+      "selectDepartment": "选择部门",
+      "management": "管理岗位",
       "requirementsLabel": "任职要求：{{requirements}}",
-      "salaryMinimum": "最低薪资（{{currency}}）", "salaryMaximum": "最高薪资（{{currency}}）",
-      "amountPlaceholder": "0.00", "managementLabel": "管理岗位",
+      "salaryMinimum": "最低薪资（{{currency}}）",
+      "salaryMaximum": "最高薪资（{{currency}}）",
+      "amountPlaceholder": "0.00",
+      "managementLabel": "管理岗位",
       "managementDescription": "指示此职位是否包含团队领导职责。",
-      "descriptionLabel": "职位描述", "descriptionPlaceholder": "主要职责与工作内容…",
+      "descriptionLabel": "职位描述",
+      "descriptionPlaceholder": "主要职责与工作内容…",
       "requirements": "任职要求与资格",
       "requirementsPlaceholder": "所需经验、学历、证书…"
     },
     "branches": {
-      "title": "分支机构", "singular": "分支机构",
+      "title": "分支机构",
+      "singular": "分支机构",
       "description": "管理组织总部、分支机构和办公地点",
-      "new": "新建分支机构", "searchPlaceholder": "按名称、编码或城市搜索…",
+      "new": "新建分支机构",
+      "searchPlaceholder": "按名称、编码或城市搜索…",
       "emptyTitle": "未找到分支机构",
       "emptyDescription": "登记公司的总部或第一个分支机构。",
-      "loadError": "加载分支机构时出错", "name": "分支机构名称",
+      "loadError": "加载分支机构时出错",
+      "name": "分支机构名称",
       "namePlaceholder": "例如：罗安达总部、本格拉办事处…",
       "codePlaceholder": "例如：BR-01、HQ",
       "validation": {
@@ -1719,14 +2175,20 @@
       },
       "createDescription": "登记新的总部或公司运营单位。",
       "editDescription": "更新分支机构信息和地址。",
-      "city": "城市", "cityPlaceholder": "例如：罗安达、本格拉、卢班戈…",
-      "phone": "电话", "phonePlaceholder": "+244 9…",
-      "address": "详细地址", "addressPlaceholder": "街道、门牌号、建筑物、街区…",
-      "email": "联系邮箱", "emailPlaceholder": "branch@company.co.ao",
-      "headquartersBadge": "总部", "headquartersLabel": "公司总部",
+      "city": "城市",
+      "cityPlaceholder": "例如：罗安达、本格拉、卢班戈…",
+      "phone": "电话",
+      "phonePlaceholder": "+244 9…",
+      "address": "详细地址",
+      "addressPlaceholder": "街道、门牌号、建筑物、街区…",
+      "email": "联系邮箱",
+      "emailPlaceholder": "branch@company.co.ao",
+      "headquartersBadge": "总部",
+      "headquartersLabel": "公司总部",
       "headquartersDescription": "如果此分支机构是公司的主要总部，请选中此项。",
       "managerLabel": "负责人：{{name}}",
-      "departmentCount_one": "{{count}} 个部门", "departmentCount_other": "{{count}} 个部门"
+      "departmentCount_one": "{{count}} 个部门",
+      "departmentCount_other": "{{count}} 个部门"
     }
   },
   "settingsPage": {

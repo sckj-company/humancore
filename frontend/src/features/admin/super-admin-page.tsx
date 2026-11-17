@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import type { EChartsOption } from 'echarts'
 import {
@@ -341,8 +341,18 @@ export function SuperAdminPage() {
     }).trim()
     return label || t('superAdminPage.permissionFallback', { name, defaultValue: name })
   }
+  const [searchParams] = useSearchParams()
+  const urlStatus = searchParams.get('status')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState(
+    urlStatus && ['all', 'active', 'inactive', 'suspended'].includes(urlStatus) ? urlStatus : 'all',
+  )
+
+  useEffect(() => {
+    if (urlStatus && ['all', 'active', 'inactive', 'suspended'].includes(urlStatus)) {
+      setStatusFilter(urlStatus)
+    }
+  }, [urlStatus])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Tenant | null>(null)
   const [form, setForm] = useState<TenantForm>(emptyForm)
@@ -714,35 +724,50 @@ export function SuperAdminPage() {
     }
   }, [dashboardData])
 
-  const statusOption: EChartsOption = useMemo(() => ({
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: 'var(--popover)',
-      borderColor: 'var(--border)',
-      textStyle: { color: 'var(--popover-foreground)' },
-    },
-    legend: {
-      bottom: 0,
-      textStyle: { fontSize: 11, color: 'var(--muted-foreground)' },
-      itemWidth: 8,
-      itemHeight: 8,
-    },
-    color: ['#10b981', '#94a3b8', '#ef4444'],
-    series: [
-      {
-        name: 'Estado',
-        type: 'pie',
-        radius: ['52%', '74%'],
-        center: ['50%', '44%'],
-        itemStyle: { borderRadius: 4, borderColor: 'var(--card)', borderWidth: 2 },
-        label: { show: false },
-        data: Object.entries(dashboardData?.by_status ?? {}).map(([k, v]) => ({
-          name: k === 'active' ? 'Ativas' : k === 'suspended' ? 'Suspensas' : 'Inativas',
-          value: v,
-        })),
+  const statusOption: EChartsOption = useMemo(() => {
+    const statusItems = Object.entries(dashboardData?.by_status ?? {}).map(([k, v]) => ({
+      name: t(`superAdminDashboard.status.${k}`, {
+        defaultValue: k === 'active' ? 'Ativas' : k === 'suspended' ? 'Suspensas' : 'Inativas',
+      }),
+      value: v,
+    }))
+    return {
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: 'var(--popover)',
+        borderColor: 'var(--border)',
+        textStyle: { color: 'var(--popover-foreground)' },
+        formatter: '{b}: {c} ({d}%)',
       },
-    ],
-  }), [dashboardData])
+      legend: {
+        bottom: 0,
+        textStyle: { fontSize: 11, color: 'var(--muted-foreground)' },
+        itemWidth: 8,
+        itemHeight: 8,
+        formatter: (name: string) => {
+          const item = statusItems.find((entry) => entry.name === name)
+          return item ? `${name}: ${item.value}` : name
+        },
+      },
+      color: ['#10b981', '#94a3b8', '#ef4444'],
+      series: [
+        {
+          name: t('superAdminDashboard.byStatus'),
+          type: 'pie',
+          radius: ['46%', '68%'],
+          center: ['50%', '43%'],
+          itemStyle: { borderRadius: 4, borderColor: 'var(--card)', borderWidth: 2 },
+          label: { show: true, formatter: '{c}', fontSize: 11, fontWeight: 600, color: 'var(--foreground)' },
+          labelLine: { show: true, length: 6, length2: 6 },
+          data: statusItems.map((item) => ({
+            ...item,
+            label: { show: item.value > 0 },
+            labelLine: { show: item.value > 0 },
+          })),
+        },
+      ],
+    }
+  }, [dashboardData, t])
 
   const platformPermissionGroups = (platformUsersQuery.data?.permissions ?? []).reduce<Record<string, PlatformPermission[]>>(
     (groups, permission) => {

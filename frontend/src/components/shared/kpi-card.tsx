@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { type LucideIcon, TrendingUp, TrendingDown } from 'lucide-react'
@@ -12,6 +13,8 @@ interface KpiCardProps {
   accent?: 'primary' | 'success' | 'warning' | 'info' | 'destructive' | 'neutral'
   sparkline?: number[]
   className?: string
+  to?: string
+  onClick?: () => void
 }
 
 const accentMap = {
@@ -23,7 +26,7 @@ const accentMap = {
   neutral: 'bg-muted text-muted-foreground',
 }
 
-export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'primary', sparkline, className }: KpiCardProps) {
+export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'primary', sparkline, className, to, onClick }: KpiCardProps) {
   const { i18n } = useTranslation()
   const formatted = typeof value === 'number'
     ? new Intl.NumberFormat(i18n.language, {
@@ -36,9 +39,25 @@ export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'p
 
   const trendColor = trend?.direction === 'down' ? 'text-destructive' : trend?.direction === 'up' ? 'text-success' : 'text-muted-foreground'
   const TrendIcon = trend?.direction === 'down' ? TrendingDown : TrendingUp
+  const interactive = Boolean(to || onClick)
 
-  return (
-    <Card className={cn('overflow-hidden border-border/50', className)}>
+  const card = (
+    <Card
+      onClick={!to ? onClick : undefined}
+      role={!to && onClick ? 'button' : undefined}
+      tabIndex={!to && onClick ? 0 : undefined}
+      onKeyDown={!to && onClick ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      } : undefined}
+      className={cn(
+        'overflow-hidden border-border/50',
+        interactive && 'cursor-pointer transition-all hover:border-primary/40 hover:shadow-sm',
+        className,
+      )}
+    >
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-1">
@@ -80,4 +99,14 @@ export function KpiCard({ label, value, icon: Icon, trend, currency, accent = 'p
       </CardContent>
     </Card>
   )
+
+  if (to) {
+    return (
+      <Link to={to} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {card}
+      </Link>
+    )
+  }
+
+  return card
 }

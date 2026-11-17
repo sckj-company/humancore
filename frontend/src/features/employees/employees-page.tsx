@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Eye, Filter, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
@@ -40,15 +40,41 @@ function getDisplayStatus(e: EmployeeSummary): string {
 export function EmployeesPage() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const tenantKey = localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id ?? '')
   const { search, status, page, setSearch, setStatus, setPage, syncTenant, resetFilters } = useEmployeesFilterStore()
+  const urlStatus = searchParams.get('status')
 
   useEffect(() => {
     if (tenantKey) {
       syncTenant(tenantKey)
     }
   }, [tenantKey, syncTenant])
+
+  useEffect(() => {
+    if (urlStatus && ['all', 'active', 'inactive', 'terminated', 'suspended'].includes(urlStatus)) {
+      setStatus(urlStatus)
+    }
+  }, [urlStatus, setStatus])
+
+  const handleStatusChange = (value: string) => {
+    setStatus(value)
+    if (searchParams.has('status')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('status')
+      setSearchParams(next, { replace: true })
+    }
+  }
+
+  const handleResetFilters = () => {
+    resetFilters()
+    if (searchParams.has('status')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('status')
+      setSearchParams(next, { replace: true })
+    }
+  }
 
   const hasActiveFilters = search.trim() !== '' || status !== 'all'
 
@@ -91,7 +117,7 @@ export function EmployeesPage() {
               />
             </div>
             <div className="w-full sm:w-48">
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status} onValueChange={handleStatusChange}>
                 <SelectTrigger>
                   <Filter className="mr-2 h-4 w-4" />
                   <SelectValue placeholder={t('common.status')} />
@@ -106,7 +132,7 @@ export function EmployeesPage() {
               </Select>
             </div>
             {hasActiveFilters && (
-              <Button variant="outline" onClick={resetFilters} className="shrink-0">
+              <Button variant="outline" onClick={handleResetFilters} className="shrink-0">
                 <X className="mr-1.5 h-4 w-4" />
                 {t('employeesPage.clearFilters', { defaultValue: 'Limpar filtros' })}
               </Button>

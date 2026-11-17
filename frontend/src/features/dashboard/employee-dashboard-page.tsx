@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Wallet, Calendar, FileText, Cake } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Wallet, Calendar, FileText, Cake, ArrowUpRight } from 'lucide-react'
 import { api } from '@/lib/api'
+import { formatDate } from '@/lib/format'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader, LoadingState, ErrorState } from '@/components/shared/page-header'
@@ -37,6 +39,9 @@ export function EmployeeDashboardPage() {
   if (isError || !data) return <ErrorState message={t('employeeDashboard.loadError')} onRetry={refetch} />
 
   const locale = i18n.language
+  const anniversaryDisplay = data.profile.hired_at
+    ? formatDate(data.profile.hired_at, locale, { day: '2-digit', month: 'long' })
+    : '—'
 
   return (
     <div className="space-y-6">
@@ -49,64 +54,88 @@ export function EmployeeDashboardPage() {
           currency={currency}
           icon={Wallet}
           accent="primary"
+          to="/my-payslips"
         />
         <KpiCard
           label={t('employeeDashboard.remainingLeave')}
           value={`${data.leave.remaining_days}/${data.leave.annual_quota}`}
           icon={Calendar}
           accent="info"
+          to="/leave"
         />
         <KpiCard
           label={t('employeeDashboard.daysUsed')}
           value={data.leave.used_days}
           icon={FileText}
           accent="success"
+          to="/leave"
         />
         <KpiCard
           label={t('employeeDashboard.anniversary')}
-          value={data.profile.hired_at ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'long' }).format(new Date(data.profile.hired_at)) : '—'}
+          value={anniversaryDisplay}
           icon={Cake}
           accent="warning"
+          to="/profile"
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('employeeDashboard.profile')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={t('employees.code')} value={data.profile.employee_code} />
-              <Field label={t('employees.position')} value={data.profile.position} />
-              <Field label={t('employees.department')} value={data.profile.department} />
-              <Field label={t('common.email')} value={data.profile.email} />
-              <Field label={t('common.phone')} value={data.profile.phone} />
-              <Field label={t('employees.hired_at')} value={data.profile.hired_at ? new Intl.DateTimeFormat(locale).format(new Date(data.profile.hired_at)) : '—'} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('employeeDashboard.contract')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.contract ? (
+        <Link to="/profile" className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Card className="h-full transition-colors hover:border-primary/40">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between text-base">
+                <span>{t('employeeDashboard.profile')}</span>
+                <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label={t('employeeDashboard.contractType')} value={data.contract.contract_type} />
-                <Field label={t('employeeDashboard.frequency')} value={data.contract.salary_frequency} />
-                <Field label={t('employeeDashboard.start')} value={new Intl.DateTimeFormat(locale).format(new Date(data.contract.start_date))} />
-                <Field
-                  label={t('employeeDashboard.baseSalary')}
-                  value={new Intl.NumberFormat(locale, { style: 'currency', currency }).format(data.contract.base_salary)}
-                />
+                <Field label={t('employees.code')} value={data.profile.employee_code} />
+                <Field label={t('employees.position')} value={data.profile.position} />
+                <Field label={t('employees.department')} value={data.profile.department} />
+                <Field label={t('common.email')} value={data.profile.email} />
+                <Field label={t('common.phone')} value={data.profile.phone} />
+                <Field label={t('employees.hired_at')} value={data.profile.hired_at ? formatDate(data.profile.hired_at, locale) : '—'} />
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t('employeeDashboard.noActiveContract')}</p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link to="/my-payslips" className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Card className="h-full transition-colors hover:border-primary/40">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between text-base">
+                <span>{t('employeeDashboard.contract')}</span>
+                <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.contract ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field
+                    label={t('employeeDashboard.contractType')}
+                    value={t(`employeeDetail.contractType.${data.contract.contract_type}`, {
+                      defaultValue: data.contract.contract_type,
+                    })}
+                  />
+                  <Field
+                    label={t('employeeDashboard.frequency')}
+                    value={t(`employeeDetail.salaryFrequency.${data.contract.salary_frequency}`, {
+                      defaultValue: data.contract.salary_frequency,
+                    })}
+                  />
+                  <Field label={t('employeeDashboard.start')} value={formatDate(data.contract.start_date, locale)} />
+                  <Field
+                    label={t('employeeDashboard.baseSalary')}
+                    value={new Intl.NumberFormat(locale, { style: 'currency', currency }).format(data.contract.base_salary)}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('employeeDashboard.noActiveContract')}</p>
+              )}
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   )
