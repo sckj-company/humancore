@@ -665,7 +665,10 @@
       "useGlobal": "使用全局值",
       "usingGlobalValue": "当前使用全局标准：{{amount}} Kz",
       "receiptForSignatureLabel": "待签字凭证 (PDF)",
-      "generateReceiptForSignature": "生成待签字凭证 (PDF)"
+      "generateReceiptForSignature": "生成待签字凭证 (PDF)",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "zoomReset": "重置缩放 (100%)"
     }
   },
   "employees": {

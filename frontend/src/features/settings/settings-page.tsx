@@ -5,10 +5,7 @@ import {
   Save,
   Loader2,
   Building2,
-  Clock,
   Wallet,
-  Palmtree,
-  Mail,
   Scale,
   ShieldAlert,
   ListChecks,
@@ -35,13 +32,6 @@ import type { DocumentRequirement, SettingGroups, SettingItem } from '@/types'
 
 type ScalarValue = string | number | boolean
 
-const SETTING_GROUP_META: { key: string; icon: typeof Building2; titleKey: string }[] = [
-  { key: 'company', icon: Building2, titleKey: 'groups.company' },
-  { key: 'hr', icon: Clock, titleKey: 'groups.hr' },
-  { key: 'payroll', icon: Wallet, titleKey: 'groups.payroll' },
-  { key: 'leave', icon: Palmtree, titleKey: 'groups.leave' },
-  { key: 'communication', icon: Mail, titleKey: 'groups.communication' },
-]
 const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string }[] = [
   { key: 'discounts.absence_daily_amount', labelKey: 'discounts.absenceDaily', descriptionKey: 'discounts.absenceDailyDescription' },
   { key: 'discounts.lateness_hourly_amount', labelKey: 'discounts.latenessHourly', descriptionKey: 'discounts.latenessHourlyDescription' },
@@ -51,7 +41,6 @@ const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string
   { key: 'discounts.dayoff_daily_amount', labelKey: 'discounts.dayOffDaily', descriptionKey: 'discounts.dayOffDailyDescription' },
   { key: 'discounts.default_amount', labelKey: 'discounts.default', descriptionKey: 'discounts.defaultDescription' },
 ]
-const GROUP_ORDER = SETTING_GROUP_META.map((g) => g.key)
 const REQUIRED_DOCUMENT_PRESETS: DocumentRequirement[] = ANGOLA_DOCUMENT_PRESETS
 
 // ─── Super-Admin Tenant Banner ─────────────────────────────────────────────────
@@ -115,13 +104,6 @@ export function SettingsPage() {
     const saved = documentSettings?.documents?.find((setting) => setting.key === 'required')?.value
     if (Array.isArray(saved)) setRequiredDocuments(normalizeDocumentRequirements(saved))
   }, [documentSettings])
-
-  const groups = useMemo(() => {
-    if (!data) return []
-    return GROUP_ORDER
-      .map((key) => ({ key, items: data[key] ?? [] }))
-      .filter((group) => group.items.some(isEditable))
-  }, [data])
 
   const payrollDiscountSettings = useMemo(
     () =>
@@ -295,12 +277,8 @@ export function SettingsPage() {
       )}
 
       {/* Master Tabs */}
-      <Tabs defaultValue="general">
+      <Tabs defaultValue="remuneration">
         <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="general" className="gap-2">
-            <Building2 className="h-4 w-4" />
-            {t('settingsPage.tabs.general')}
-          </TabsTrigger>
           <TabsTrigger value="remuneration" className="gap-2">
             <DollarSign className="h-4 w-4" />
             {t('settingsPage.tabs.remuneration')}
@@ -322,80 +300,6 @@ export function SettingsPage() {
             {t('settingsPage.tabs.documents')}
           </TabsTrigger>
         </TabsList>
-
-        {/* ── Tab: Geral ── */}
-        <TabsContent value="general" className="mt-6">
-          {isLoading && <LoadingState />}
-          {isError && <ErrorState message={t('settingsPage.loadError')} onRetry={refetch} />}
-          {!isLoading && !isError && (
-            groups.length === 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('settingsPage.emptyTitle')}</CardTitle>
-                  <CardDescription>{t('settingsPage.emptyDescription')}</CardDescription>
-                </CardHeader>
-              </Card>
-            ) : <Tabs defaultValue={groups[0]?.key} orientation="vertical" className="flex flex-col gap-6">
-              <TabsList className="flex-wrap h-auto justify-start gap-1 bg-transparent p-0">
-                {groups.map(({ key }) => {
-                  const groupMeta = SETTING_GROUP_META.find((g) => g.key === key)
-                  const Icon = groupMeta?.icon ?? Building2
-                  const dirty = dirtyGroups.has(key)
-                  return (
-                    <TabsTrigger
-                      key={key}
-                      value={key}
-                      className="gap-2 data-[state=active]:bg-muted data-[state=active]:shadow-none border border-transparent data-[state=active]:border-border"
-                    >
-                      <Icon className="h-4 w-4" />
-                      {groupMeta ? t(`settingsPage.${groupMeta.titleKey}`) : key}
-                      {dirty && <span className="ml-1 h-2 w-2 rounded-full bg-primary" />}
-                    </TabsTrigger>
-                  )
-                })}
-              </TabsList>
-              {groups.map(({ key, items }) => (
-                <TabsContent key={key} value={key}>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>
-                        {SETTING_GROUP_META.find((g) => g.key === key)
-                          ? t(`settingsPage.${SETTING_GROUP_META.find((g) => g.key === key)!.titleKey}`)
-                          : key}
-                      </CardTitle>
-                      <CardDescription>{t('settingsPage.groupDescription')}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-6 sm:grid-cols-2">
-                      {items
-                        .filter((s) => isEditable(s) && !(s.group === 'payroll' && (s.key.startsWith('remuneration.') || s.key.startsWith('subsidies.'))))
-                        .map((s) => (
-                          <SettingField
-                            key={s.key}
-                            setting={s}
-                            value={edits[`${s.group}.${s.key}`]}
-                            onChange={(v) => update(`${s.group}.${s.key}`, v)}
-                          />
-                        ))}
-                    </CardContent>
-                    <CardFooter className="justify-end border-t px-6 py-4">
-                      <Button
-                        onClick={() => save.mutate(key)}
-                        disabled={save.isPending || !dirtyGroups.has(key)}
-                      >
-                        {save.isPending && save.variables === key ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Save className="mr-2 h-4 w-4" />
-                        )}
-                        {t('settingsPage.save')}
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                </TabsContent>
-              ))}
-            </Tabs>
-          )}
-        </TabsContent>
 
         {/* ── Tab: Remuneração Global ── */}
         <TabsContent value="remuneration" className="mt-6">
@@ -536,6 +440,9 @@ export function SettingsPage() {
 
         {/* ── Tab: Descontos ── */}
         <TabsContent value="discounts" className="mt-6">
+          {isLoading && <LoadingState />}
+          {isError && <ErrorState message={t('settingsPage.loadError')} onRetry={refetch} />}
+          {!isLoading && !isError && (
           <Card>
             <CardHeader>
               <CardTitle>{t('settingsPage.discountTitle')}</CardTitle>
@@ -604,6 +511,7 @@ export function SettingsPage() {
               </Button>
             </CardFooter>
           </Card>
+          )}
         </TabsContent>
 
         {/* ── Tab: Componentes Salariais ── */}

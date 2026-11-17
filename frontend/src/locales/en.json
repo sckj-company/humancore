@@ -668,7 +668,10 @@
       "advanceCreated": "Advance recorded successfully.",
       "noAdvances": "No salary advances or vouchers recorded.",
       "receiptForSignatureLabel": "Receipt for Signature (PDF)",
-      "generateReceiptForSignature": "Generate Receipt to Sign (PDF)"
+      "generateReceiptForSignature": "Generate Receipt to Sign (PDF)",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Reset zoom (100%)"
     }
   },
   "employees": {

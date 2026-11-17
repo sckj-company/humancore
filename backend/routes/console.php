@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('humancore:deactivate-expired-contracts')->dailyAt('00:05');
+Schedule::command('attendance:mark-biometric-absences')->dailyAt('23:50');

@@ -774,7 +774,10 @@
       "advanceCreated": "Adiantamento registado com sucesso.",
       "noAdvances": "Nenhum adiantamento ou vale registado.",
       "receiptForSignatureLabel": "Comprovativo para Assinatura (PDF)",
-      "generateReceiptForSignature": "Gerar Comprovativo para Assinar (PDF)"
+      "generateReceiptForSignature": "Gerar Comprovativo para Assinar (PDF)",
+      "zoomIn": "Aumentar zoom",
+      "zoomOut": "Diminuir zoom",
+      "zoomReset": "Repor zoom (100%)"
     }
   },
   "employees": {

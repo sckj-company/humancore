@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\Employee\EmployeeController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeEducationController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeIdentityOcrController;
 use App\Http\Controllers\Api\V1\Import\EmployeeImportController;
+use App\Http\Controllers\Api\V1\Integration\BiometricIntegrationController;
 use App\Http\Controllers\Api\V1\Leave\LeaveController;
 use App\Http\Controllers\Api\V1\Notification\NotificationController;
 use App\Http\Controllers\Api\V1\Onboarding\OnboardingTaskController;
@@ -181,6 +182,14 @@ Route::prefix('v1')->group(function () {
         // Presenças — QR Code
         Route::post('attendance/qr/issue', [AttendanceQrController::class, 'issue']);
         Route::post('attendance/qr/scan', [AttendanceQrController::class, 'scan']);
+
+        // Integração Biométrica (Terminal / PC da entrada)
+        Route::prefix('integrations/biometric')->group(function () {
+            Route::get('employees', [BiometricIntegrationController::class, 'employees']);
+            Route::post('employees/sync', [BiometricIntegrationController::class, 'syncEmployees']);
+            Route::post('attendance', [BiometricIntegrationController::class, 'attendance']);
+            Route::post('attendance/close-day', [BiometricIntegrationController::class, 'closeDay']);
+        });
 
         // Recrutamento
         Route::apiResource('recruitment/jobs', JobOpeningController::class);

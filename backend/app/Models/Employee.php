@@ -23,6 +23,7 @@ class Employee extends Model
         'position_id',
         'manager_id',
         'employee_code',
+        'biometric_code',
         'first_name',
         'last_name',
         'email',

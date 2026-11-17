@@ -6,7 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Briefcase, Trash2, Eye,
   Download, Plus, Upload, ExternalLink, FileCheck, AlertCircle, Building2, User,
   CreditCard, Clock, CheckCircle2, DollarSign, Loader2, Sun, Moon, UserCheck,
-  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil, UploadCloud, X, FileWarning, FileDown,
+  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil, UploadCloud, X, FileWarning, FileDown, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { compressImageIfNeeded } from '@/lib/file-upload'
@@ -112,6 +112,7 @@ export function EmployeeDetailPage() {
   const qc = useQueryClient()
 
   const [previewDoc, setPreviewDoc] = useState<EmployeeDocument | null>(null)
+  const [previewZoom, setPreviewZoom] = useState(1)
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [uploadFormData, setUploadFormData] = useState({ name: '', document_type: 'other', expiry_date: '', notes: '' })
@@ -1628,19 +1629,89 @@ export function EmployeeDetailPage() {
       </Dialog>
 
       {/* Visualizar Documento */}
-      <Dialog open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)}>
+      <Dialog
+        open={!!previewDoc}
+        onOpenChange={(o) => {
+          if (!o) {
+            setPreviewDoc(null)
+            setPreviewZoom(1)
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl w-[95vw] h-[85vh] max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-xl border border-border bg-background shadow-2xl">
-          <div className="shrink-0 px-6 pt-5 pb-3 border-b border-border/70 pr-12"><DialogTitle className="truncate text-base font-semibold">{previewDoc?.name}</DialogTitle><DialogDescription className="mt-1 text-xs text-muted-foreground">{docTypeLabels[previewDoc?.document_type ?? ''] ?? previewDoc?.document_type}{previewDoc?.size_label && ` · ${previewDoc.size_label}`}</DialogDescription></div>
-          <div className="flex-1 min-h-0 overflow-auto bg-black/5 dark:bg-black/40 p-4 flex items-center justify-center">
-            {previewDoc && isImage(previewDoc.mime_type) && previewDoc.file_url && (<img src={previewDoc.file_url} alt={previewDoc.name} className="max-h-full max-w-full rounded-md object-contain shadow-sm" />)}
-            {previewDoc && isPdf(previewDoc.mime_type) && previewDoc.file_url && (<iframe src={previewDoc.file_url} title={previewDoc.name} className="w-full h-full min-h-[300px] rounded-md border border-border/60 bg-white" />)}
-            {previewDoc && !isImage(previewDoc.mime_type) && !isPdf(previewDoc.mime_type) && (<div className="text-center p-8"><FileCheck className="h-12 w-12 text-primary mx-auto mb-2" /><p className="text-sm font-semibold">{t('employeeDetail.text.previewUnavailable')}</p><p className="text-xs text-muted-foreground mt-1">{t('employeeDetail.text.downloadToView')}</p></div>)}
+          <div className="shrink-0 px-6 pt-5 pb-3 border-b border-border/70 pr-12 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <DialogTitle className="truncate text-base font-semibold">{previewDoc?.name}</DialogTitle>
+              <DialogDescription className="mt-1 text-xs text-muted-foreground">
+                {docTypeLabels[previewDoc?.document_type ?? ''] ?? previewDoc?.document_type}{previewDoc?.size_label && ` · ${previewDoc.size_label}`}
+              </DialogDescription>
+            </div>
+            {previewDoc && (isImage(previewDoc.mime_type) || isPdf(previewDoc.mime_type)) && previewDoc.file_url && (
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  aria-label={t('employeeDetail.text.zoomOut')}
+                  title={t('employeeDetail.text.zoomOut')}
+                  disabled={previewZoom <= 0.5}
+                  onClick={() => setPreviewZoom((z) => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 min-w-[54px] px-2 font-mono text-xs tabular-nums"
+                  title={t('employeeDetail.text.zoomReset')}
+                  onClick={() => setPreviewZoom(1)}
+                >
+                  {Math.round(previewZoom * 100)}%
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  aria-label={t('employeeDetail.text.zoomIn')}
+                  title={t('employeeDetail.text.zoomIn')}
+                  disabled={previewZoom >= 3}
+                  onClick={() => setPreviewZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-h-0 overflow-auto bg-black/5 dark:bg-black/40 p-4 flex">
+            {previewDoc && isImage(previewDoc.mime_type) && previewDoc.file_url && (
+              <img
+                src={previewDoc.file_url}
+                alt={previewDoc.name}
+                style={{ zoom: previewZoom }}
+                onClick={() => setPreviewZoom((z) => (z === 1 ? 1.5 : 1))}
+                className={`m-auto rounded-md object-contain shadow-sm transition-transform ${
+                  previewZoom === 1 ? 'max-h-full max-w-full cursor-zoom-in' : 'max-w-none cursor-zoom-out'
+                }`}
+              />
+            )}
+            {previewDoc && isPdf(previewDoc.mime_type) && previewDoc.file_url && (
+              <iframe
+                src={previewDoc.file_url}
+                title={previewDoc.name}
+                style={{ zoom: previewZoom }}
+                className="m-auto w-full h-full min-h-[300px] rounded-md border border-border/60 bg-white"
+              />
+            )}
+            {previewDoc && !isImage(previewDoc.mime_type) && !isPdf(previewDoc.mime_type) && (<div className="m-auto text-center p-8"><FileCheck className="h-12 w-12 text-primary mx-auto mb-2" /><p className="text-sm font-semibold">{t('employeeDetail.text.previewUnavailable')}</p><p className="text-xs text-muted-foreground mt-1">{t('employeeDetail.text.downloadToView')}</p></div>)}
           </div>
           <div className="shrink-0 px-6 py-3.5 border-t border-border bg-card/80 flex flex-col sm:flex-row items-center justify-between gap-2.5">
             <Button variant="destructive" size="sm" disabled={deleteDoc.isPending} onClick={() => { if (previewDoc && window.confirm(t('employeeDetail.messages.confirmDeleteDocument', { name: previewDoc.name }))) deleteDoc.mutate(previewDoc.id) }}><Trash2 className="mr-1.5 h-3.5 w-3.5" />{t('employeeDetail.text.delete')}</Button>
             <div className="flex items-center gap-2">
               {previewDoc?.file_url && (<><Button variant="default" size="sm" className="gap-1.5" disabled={downloadingId === previewDoc.id} onClick={() => handleDownload(previewDoc.file_url, previewDoc.original_name ?? previewDoc.name, previewDoc.id)}>{downloadingId === previewDoc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}{t('employeeDetail.text.download')}</Button><Button variant="outline" size="sm" asChild><a href={previewDoc.file_url} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />{t('employeeDetail.text.open')}</a></Button></>)}
-              <Button variant="secondary" size="sm" onClick={() => setPreviewDoc(null)}>{t('employeeDetail.text.close')}</Button>
+              <Button variant="secondary" size="sm" onClick={() => { setPreviewDoc(null); setPreviewZoom(1) }}>{t('employeeDetail.text.close')}</Button>
             </div>
           </div>
         </DialogContent>
