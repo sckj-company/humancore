@@ -48,11 +48,20 @@
     "select": "Sélectionner",
     "from": "De",
     "to": "À",
-    "weekdaysShort": ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
+    "weekdaysShort": [
+      "Dim",
+      "Lun",
+      "Mar",
+      "Mer",
+      "Jeu",
+      "Ven",
+      "Sam"
+    ]
   },
   "nav": {
     "dashboard": "Tableau de bord",
     "employees": "Employés",
+    "educations": "Éducation Générale",
     "attendance": "Présence",
     "leave": "Congés",
     "payroll": "Paie",
@@ -138,9 +147,18 @@
     "alternativePhone": "Téléphone secondaire",
     "birthDate": "Date de naissance",
     "gender": "Genre",
-    "genders": { "male": "Masculin", "female": "Féminin", "other": "Autre" },
+    "genders": {
+      "male": "Masculin",
+      "female": "Féminin",
+      "other": "Autre"
+    },
     "maritalStatus": "État civil",
-    "maritalStatuses": { "single": "Célibataire", "married": "Marié(e)", "divorced": "Divorcé(e)", "widowed": "Veuf/veuve" },
+    "maritalStatuses": {
+      "single": "Célibataire",
+      "married": "Marié(e)",
+      "divorced": "Divorcé(e)",
+      "widowed": "Veuf/veuve"
+    },
     "nationality": "Nationalité",
     "officialDocuments": "Documents officiels",
     "documentType": "Type de document",
@@ -155,7 +173,10 @@
     "postalCode": "Code postal",
     "organization": "Informations organisationnelles",
     "manager": "Responsable",
-    "statuses": { "suspended": "Suspendu", "terminated": "Résilié" },
+    "statuses": {
+      "suspended": "Suspendu",
+      "terminated": "Résilié"
+    },
     "probationEnd": "Fin de la période d’essai",
     "saveChanges": "Enregistrer les modifications",
     "undefined": "Non défini"
@@ -195,7 +216,12 @@
       "newPasswordMinimum": "Le nouveau mot de passe doit comporter au moins 8 caractères",
       "passwordsMismatch": "Les mots de passe ne correspondent pas"
     },
-    "languages": { "portuguese": "Português", "english": "English", "chinese": "中文", "bilingual": "Português + 中文" }
+    "languages": {
+      "portuguese": "Português",
+      "english": "English",
+      "chinese": "中文",
+      "bilingual": "Português + 中文"
+    }
   },
   "payroll": {
     "title": "Paie",
@@ -251,7 +277,14 @@
     "justification": "Justificatif",
     "downloadSignedDocument": "Télécharger le document signé",
     "uploadSignedDocument": "Téléverser le document signé",
-    "signed": "Signé"
+    "signed": "Signé",
+    "downloadReceipt": "Télécharger le justificatif à signer",
+    "receiptShort": "Justificatif PDF",
+    "uploadSignedShort": "Importer signé",
+    "replaceSignedShort": "Remplacer signé",
+    "downloadSignedShort": "Télécharger signé",
+    "signedDocumentUploaded": "Document signé importé avec succès.",
+    "receiptDownloadError": "Erreur lors de la génération du PDF."
   },
   "managerDashboard": {
     "title": "Tableau de bord du responsable",
@@ -424,8 +457,19 @@
     "componentCode": "Code",
     "componentType": "Nature",
     "calculationType": "Méthode de calcul",
-    "componentTypes": { "earning": "Rémunération", "benefit": "Avantage", "deduction": "Retenue", "tax": "Impôt", "contribution": "Cotisation" },
-    "calculationTypes": { "fixed": "Montant fixe", "percentage": "Pourcentage", "formula": "Formule", "hours": "Heures" },
+    "componentTypes": {
+      "earning": "Rémunération",
+      "benefit": "Avantage",
+      "deduction": "Retenue",
+      "tax": "Impôt",
+      "contribution": "Cotisation"
+    },
+    "calculationTypes": {
+      "fixed": "Montant fixe",
+      "percentage": "Pourcentage",
+      "formula": "Formule",
+      "hours": "Heures"
+    },
     "documentOptional": "Facultatif. PDF, PNG ou JPEG jusqu'à 10 Mo.",
     "noDocument": "Aucun document joint",
     "documentDownloadError": "Impossible de télécharger le document.",
@@ -446,8 +490,18 @@
     "regime": "Régime",
     "source": "Loi ou source officielle",
     "reference": "Article, tableau ou instruction",
-    "applicability": { "unknown": "Non défini", "yes": "Applicable", "no": "Non applicable" },
-    "statuses": { "draft": "Brouillon", "validated": "Validée", "active": "Active", "revoked": "Révoquée", "unconfigured": "Non configuré" },
+    "applicability": {
+      "unknown": "Non défini",
+      "yes": "Applicable",
+      "no": "Non applicable"
+    },
+    "statuses": {
+      "draft": "Brouillon",
+      "validated": "Validée",
+      "active": "Active",
+      "revoked": "Révoquée",
+      "unconfigured": "Non configuré"
+    },
     "saveDraft": "Enregistrer le brouillon",
     "validate": "Valider la règle",
     "activate": "Activer la règle",
@@ -782,8 +836,16 @@
     "slug": "Identifiant",
     "created": "Créé le",
     "noTenants": "Aucun locataire.",
-    "status": { "active": "Actif", "inactive": "Inactif", "suspended": "Suspendu" },
-    "segmentLabels": { "small": "Petit (≤10)", "medium": "Moyen (11–50)", "large": "Grand (>50)" },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "suspended": "Suspendu"
+    },
+    "segmentLabels": {
+      "small": "Petit (≤10)",
+      "medium": "Moyen (11–50)",
+      "large": "Grand (>50)"
+    },
     "title": "Tableau de bord Super Admin",
     "subtitle": "Vue globale de tous les tenants et utilisateurs de la plateforme.",
     "manageTenants": "Gérer l'organisation",
@@ -889,7 +951,8 @@
       "insurance": "Assurance",
       "garnishment": "Saisie",
       "union_fee": "Cotisation syndicale",
-      "other": "Autre"
+      "other": "Autre",
+      "fine": "Amende"
     },
     "progress": "Progression",
     "recurring": "Récurrente",
@@ -934,5 +997,62 @@
       "contract_expiring": "Contrat expirant",
       "custom": "Personnalisé"
     }
+  },
+  "pdfLanguage": {
+    "title": "Choisir la langue du PDF",
+    "description": "Sélectionnez la langue pour générer le document PDF.",
+    "portuguese": "Portugais (PT)",
+    "portugueseDesc": "Générer le document uniquement en portugais.",
+    "bilingual": "Bilingue (Portugais / Mandarin · 葡语 / 中文)",
+    "bilingualDesc": "Générer le document en portugais et en mandarin."
+  },
+  "employeeEducation": {
+    "title": "Éducation / Avertissements",
+    "generalPageTitle": "Éducation Générale",
+    "generalPageDescription": "Termes d'éducation générale sans employé spécifique, à faire signer par toute l'équipe.",
+    "generalTitle": "Éducation Générale (Tous les employés)",
+    "generalDescription": "Émettez des termes d'éducation générale sans cibler un employé spécifique, pour signature par tous et archivage dans le système.",
+    "generalLink": "Éducation Générale",
+    "newGeneralAction": "Nouvelle Éducation Générale",
+    "generalEmptyDescription": "Lorsque vous devez émettre un avertissement général à signer par toute l'équipe sans identifier un employé précis, créez-le ici et générez le PDF.",
+    "generalDialogDescription": "Renseignez les motifs et l'avertissement général applicable à tous les collaborateurs.",
+    "defaultGeneralRecordTitle": "Éducation Générale #{{id}}",
+    "generalBadge": "Général · Tous",
+    "description": "Enregistrez les situations survenues avec un avertissement de sanction en cas de récidive, téléchargez le justificatif à faire signer par tous et importez le document signé.",
+    "newAction": "Nouvelle éducation",
+    "createTitle": "Nouvelle éducation",
+    "editTitle": "Modifier l'éducation",
+    "dialogDescription": "Renseignez les motifs et l'avertissement pour {{name}}.",
+    "defaultRecordTitle": "Enregistrement d'éducation #{{id}}",
+    "emptyTitle": "Aucun enregistrement d'éducation",
+    "emptyDescription": "Lorsqu'une situation nécessite un avertissement formel et la signature de toutes les personnes concernées, enregistrez les motifs ici.",
+    "subjectLabel": "Objet (optionnel)",
+    "subjectPlaceholder": "Ex : Non-respect d'une procédure interne",
+    "dateLabel": "Date de l'incident",
+    "reasonsLabel": "Motifs / Situation survenue",
+    "reasonsPlaceholder": "Décrivez en détail la situation et les motifs...",
+    "reasonRequired": "Veuillez renseigner les motifs.",
+    "sanctionWarningLabel": "Avertissement de sanction spécifique (optionnel)",
+    "sanctionPlaceholder": "Optionnel : précisez la sanction en cas de récidive.",
+    "attachmentLabel": "Document justificatif (optionnel)",
+    "signedFileLabel": "Document déjà signé (optionnel)",
+    "signedBadge": "Document signé importé",
+    "pendingSignatureBadge": "En attente de signature",
+    "createdBy": "Enregistré par {{name}}",
+    "downloadPdf": "Justificatif PDF",
+    "uploadSigned": "Importer signé",
+    "replaceSigned": "Remplacer signé",
+    "downloadSigned": "Télécharger signé",
+    "downloadAttachment": "Pièce jointe",
+    "created": "Enregistrement d'éducation créé avec succès.",
+    "updated": "Enregistrement d'éducation mis à jour.",
+    "deleted": "Enregistrement d'éducation supprimé.",
+    "saveError": "Impossible d'enregistrer.",
+    "deleteError": "Impossible de supprimer.",
+    "signedUploaded": "Document signé importé avec succès.",
+    "signedUploadError": "Erreur lors de l'import du document signé.",
+    "pdfError": "Erreur lors de la génération du PDF.",
+    "downloadError": "Erreur lors du téléchargement.",
+    "confirmDelete": "Voulez-vous vraiment supprimer cet enregistrement ?"
   }
 }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { CalendarDays, Check, FileDown, Loader2, Search, Users, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -122,6 +123,7 @@ export function AttendanceReportDialog({
   const [departmentId, setDepartmentId] = useState<string>('all')
   const [attendanceStatus, setAttendanceStatus] = useState<string>('all')
   const [downloading, setDownloading] = useState(false)
+  const pdfPrompt = usePdfLanguagePrompt()
 
   useEffect(() => {
     if (open) {
@@ -212,21 +214,23 @@ export function AttendanceReportDialog({
     })
   }
 
-  const handleDownloadPdf = async () => {
-    setDownloading(true)
-    try {
-      const targetTag = selectedEmployeeIds.length === 1
-        ? `funcionario-${selectedEmployeeIds[0]}`
-        : selectedEmployeeIds.length > 1
-          ? `${selectedEmployeeIds.length}-funcionarios`
-          : 'todos'
-      const filename = `relatorio-presencas-${periodType}-${targetTag}.pdf`
-      await api.downloadFile('attendance/report.pdf', filename, queryParams)
-    } catch (e) {
-      toast.error(getApiErrorMessage(e, t('attendanceReport.downloadError', { defaultValue: 'Erro ao gerar PDF de presenças.' })))
-    } finally {
-      setDownloading(false)
-    }
+  const handleDownloadPdf = () => {
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      setDownloading(true)
+      try {
+        const targetTag = selectedEmployeeIds.length === 1
+          ? `funcionario-${selectedEmployeeIds[0]}`
+          : selectedEmployeeIds.length > 1
+            ? `${selectedEmployeeIds.length}-funcionarios`
+            : 'todos'
+        const filename = `relatorio-presencas-${periodType}-${targetTag}.pdf`
+        await api.downloadFile('attendance/report.pdf', filename, { ...queryParams, lang })
+      } catch (e) {
+        toast.error(getApiErrorMessage(e, t('attendanceReport.downloadError', { defaultValue: 'Erro ao gerar PDF de presenças.' })))
+      } finally {
+        setDownloading(false)
+      }
+    })
   }
 
   const getMonthLabel = (m: (typeof MONTH_OPTIONS)[number]) => {
@@ -236,6 +240,7 @@ export function AttendanceReportDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[86vh] min-h-[580px] max-h-[820px] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
         <DialogHeader className="shrink-0 border-b border-border bg-muted/20 px-6 py-4">
@@ -623,5 +628,12 @@ export function AttendanceReportDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <PdfLanguageDialog
+      open={pdfPrompt.open}
+      onOpenChange={pdfPrompt.onOpenChange}
+      onSelect={pdfPrompt.handleSelect}
+    />
+    </>
   )
 }

@@ -1065,3 +1065,26 @@ export interface SuperAdminDashboard {
   tenant_trend: { month: string; label: string; count: number }[]
   segments: { small: number; medium: number; large: number }
 }
+
+export interface EmployeeEducation {
+  id: number
+  tenant_id: number
+  employee_id?: number | null
+  is_general?: boolean
+  title?: string | null
+  reason: string
+  sanction_warning?: string | null
+  occurred_on?: string | null
+  has_document: boolean
+  document_name?: string | null
+  document_mime?: string | null
+  document_url?: string | null
+  has_signed_document: boolean
+  signed_document_name?: string | null
+  signed_document_mime?: string | null
+  signed_document_url?: string | null
+  signed_document_uploaded_at?: string | null
+  creator?: { id: number; name: string } | null
+  created_at?: string
+  updated_at?: string
+}

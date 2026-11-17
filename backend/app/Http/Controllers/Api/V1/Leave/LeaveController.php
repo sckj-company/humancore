@@ -12,12 +12,17 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Notifications\LeaveRequestNotification;
 use App\Services\CloudinaryService;
+use App\Support\PdfDocument;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaveController extends BaseController
@@ -151,10 +156,11 @@ class LeaveController extends BaseController
         $isApprover = auth()->user()?->can('approve_leave');
         $status = $request->input('status', $isApprover ? 'approved' : 'pending');
         $documentFolder = 'humancore/tenants/'.$employee->tenant_id.'/leave-documents';
+        $localFolder = 'tenants/'.$employee->tenant_id.'/leave-documents';
         $justificationFile = $request->file('justification_document');
         $signedFile = $request->file('signed_document');
-        $justificationUrl = $justificationFile ? $cloudinary->upload($justificationFile, $documentFolder, 'auto')['url'] : null;
-        $signedUrl = $signedFile ? $cloudinary->upload($signedFile, $documentFolder, 'auto')['url'] : null;
+        $justificationUrl = $justificationFile ? $this->storeLeaveFile($justificationFile, $cloudinary, $documentFolder, $localFolder) : null;
+        $signedUrl = $signedFile ? $this->storeLeaveFile($signedFile, $cloudinary, $documentFolder, $localFolder) : null;
 
         $leave = LeaveRequest::create([
             'employee_id' => $employee->id,
@@ -213,7 +219,7 @@ class LeaveController extends BaseController
         );
     }
 
-    public function downloadDocument(LeaveRequest $leave, string $kind, CloudinaryService $cloudinary): StreamedResponse|RedirectResponse|JsonResponse
+    public function downloadDocument(LeaveRequest $leave, string $kind, CloudinaryService $cloudinary): Response|StreamedResponse|RedirectResponse|JsonResponse
     {
         $this->authorize('view', $leave);
 
@@ -228,6 +234,22 @@ class LeaveController extends BaseController
         }
 
         if ($cloudinary->isCloudinaryUrl($path)) {
+            try {
+                $remote = Http::timeout(20)->get($path);
+                if ($remote->successful()) {
+                    $ext = pathinfo((string) parse_url($path, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'pdf';
+                    $contentType = $remote->header('Content-Type') ?: 'application/octet-stream';
+                    $filename = "ausencia-{$leave->id}-{$kind}.{$ext}";
+
+                    return response($remote->body(), 200, [
+                        'Content-Type' => $contentType,
+                        'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                    ]);
+                }
+            } catch (\Throwable) {
+                // Fall back to redirect if direct fetch fails
+            }
+
             return redirect()->away($path);
         }
 
@@ -242,12 +264,53 @@ class LeaveController extends BaseController
     {
         $this->authorize('view', $leave);
 
-        $validated = $request->validate([
-            'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-        ]);
         $attribute = $kind === 'justification' ? 'justification_document_path' : 'signed_document_path';
         $oldPath = $leave->{$attribute};
-        $newPath = $cloudinary->upload($validated['document'], 'humancore/tenants/'.$leave->tenant_id.'/leave-documents', 'auto')['url'];
+        $cloudFolder = 'humancore/tenants/'.$leave->tenant_id.'/leave-documents';
+        $localFolder = 'tenants/'.$leave->tenant_id.'/leave-documents';
+
+        if ($request->filled('document_base64')) {
+            $validated = $request->validate([
+                'document_base64' => ['required', 'string'],
+                'document_name' => ['nullable', 'string', 'max:255'],
+                'document_mime' => ['nullable', 'string', 'max:100'],
+            ]);
+
+            $payload = (string) $validated['document_base64'];
+            if (str_contains($payload, ',')) {
+                [, $payload] = explode(',', $payload, 2);
+            }
+            $binary = base64_decode($payload, true);
+            if ($binary === false || strlen($binary) === 0 || strlen($binary) > 10 * 1024 * 1024) {
+                return $this->error('Ficheiro codificado inválido ou superior a 10 MB.', 422);
+            }
+
+            $ext = match (strtolower((string) ($validated['document_mime'] ?? ''))) {
+                'application/pdf' => 'pdf',
+                'image/jpeg', 'image/jpg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                default => strtolower(pathinfo((string) ($validated['document_name'] ?? 'documento.pdf'), PATHINFO_EXTENSION) ?: 'pdf'),
+            };
+            if (! in_array($ext, ['pdf', 'jpg', 'jpeg', 'png', 'webp'], true)) {
+                return $this->error('Formato não suportado. Envie PDF, JPG, PNG ou WEBP.', 422);
+            }
+
+            $relativePath = $localFolder.'/'.uniqid($kind.'_', true).'.'.$ext;
+            Storage::disk('local')->put($relativePath, $binary);
+            $tempFilePath = Storage::disk('local')->path($relativePath);
+            try {
+                $newPath = $cloudinary->upload($tempFilePath, $cloudFolder, 'auto')['url'];
+                Storage::disk('local')->delete($relativePath);
+            } catch (\Throwable) {
+                $newPath = $relativePath;
+            }
+        } else {
+            $validated = $request->validate([
+                'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            ]);
+            $newPath = $this->storeLeaveFile($validated['document'], $cloudinary, $cloudFolder, $localFolder);
+        }
 
         $leave->update([$attribute => $newPath]);
 
@@ -260,6 +323,111 @@ class LeaveController extends BaseController
         }
 
         return $this->success(new LeaveRequestResource($leave->fresh()->load(['employee', 'leaveType'])), 'Documento carregado com sucesso.');
+    }
+
+    public function receiptPdf(Request $request, LeaveRequest $leave): SymfonyResponse
+    {
+        $this->authorize('view', $leave);
+
+        $leave->loadMissing([
+            'tenant',
+            'employee.department',
+            'employee.position',
+            'leaveType',
+            'approvedBy:id,name',
+        ]);
+
+        $pdf = PdfDocument::make(
+            view: 'pdf.leave-receipt',
+            data: [
+                'leave' => $leave,
+                'operatorName' => $request->user()?->name ?? 'Sistema',
+            ],
+            paper: 'a4',
+            orientation: 'portrait',
+            lang: $request->query('lang'),
+        );
+
+        $code = $leave->employee?->employee_code ?? $leave->employee_id;
+        $filename = str_replace(['/', '\\', ' '], '-', "comprovativo-ausencia-{$code}-{$leave->id}.pdf");
+
+        return $pdf->download($filename);
+    }
+
+    public function receiptPreviewPdf(Request $request): SymfonyResponse
+    {
+        $this->authorize('create', LeaveRequest::class);
+
+        $validated = $request->validate([
+            'employee_id' => ['nullable', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
+            'leave_type_id' => ['nullable', 'integer', Rule::exists('leave_types', 'id')->where('tenant_id', tenant_id())],
+            'occurrence_type' => ['nullable', 'in:absence,day_off,vacation,medical,family,maternity,paternity,bereavement,unpaid,personal,training,public_duty,other'],
+            'notice_type' => ['nullable', 'in:anticipated,unanticipated'],
+            'is_justified' => ['nullable', 'boolean'],
+            'deduct_from_salary' => ['nullable', 'boolean'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+            'status' => ['nullable', 'in:pending,approved,rejected'],
+            'lang' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $employeeId = $validated['employee_id'] ?? auth()->user()?->employee?->id;
+        $employee = $employeeId
+            ? Employee::with(['tenant', 'department', 'position'])->find($employeeId)
+            : null;
+        $leaveType = ! empty($validated['leave_type_id'])
+            ? LeaveType::query()->find($validated['leave_type_id'])
+            : null;
+
+        $start = Carbon::parse($validated['start_date']);
+        $end = Carbon::parse($validated['end_date']);
+
+        $preview = new LeaveRequest([
+            'tenant_id' => tenant_id() ?: $employee?->tenant_id,
+            'employee_id' => $employee?->id,
+            'leave_type_id' => $leaveType?->id,
+            'occurrence_type' => $validated['occurrence_type'] ?? 'absence',
+            'notice_type' => $validated['notice_type'] ?? 'anticipated',
+            'is_justified' => (bool) ($validated['is_justified'] ?? false),
+            'deduct_from_salary' => (bool) ($validated['deduct_from_salary'] ?? false),
+            'start_date' => $start->format('Y-m-d'),
+            'end_date' => $end->format('Y-m-d'),
+            'total_days' => (int) $start->diffInDays($end) + 1,
+            'reason' => $validated['reason'] ?? null,
+            'status' => $validated['status'] ?? 'pending',
+        ]);
+        $preview->setRelation('employee', $employee);
+        $preview->setRelation('leaveType', $leaveType);
+        $preview->setRelation('tenant', $employee?->tenant ?? tenant());
+
+        $pdf = PdfDocument::make(
+            view: 'pdf.leave-receipt',
+            data: [
+                'leave' => $preview,
+                'employee' => $employee,
+                'leaveType' => $leaveType,
+                'tenant' => $employee?->tenant ?? tenant(),
+                'operatorName' => $request->user()?->name ?? 'Sistema',
+            ],
+            paper: 'a4',
+            orientation: 'portrait',
+            lang: $validated['lang'] ?? $request->query('lang'),
+        );
+
+        $code = $employee?->employee_code ?? $employee?->id ?? 'rascunho';
+        $filename = str_replace(['/', '\\', ' '], '-', "comprovativo-ausencia-{$code}.pdf");
+
+        return $pdf->download($filename);
+    }
+
+    private function storeLeaveFile(UploadedFile $file, CloudinaryService $cloudinary, string $cloudFolder, string $localFolder): string
+    {
+        try {
+            return $cloudinary->upload($file, $cloudFolder, 'auto')['url'];
+        } catch (\Throwable) {
+            return $file->store($localFolder, 'local');
+        }
     }
 
     public function approve(LeaveRequest $leave): JsonResponse

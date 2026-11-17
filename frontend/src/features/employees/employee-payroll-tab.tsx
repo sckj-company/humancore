@@ -461,11 +461,8 @@ export function EmployeePayrollTab({
 }
 
 const OTHER_DEDUCTION_TYPES: Array<{ value: DeductionType; key: string; fallback: string }> = [
-  { value: 'loan', key: 'deductionsPage.typeOptions.loan', fallback: 'Empréstimo' },
-  { value: 'pension', key: 'deductionsPage.typeOptions.pension', fallback: 'Pensão Alimentícia' },
+  { value: 'fine', key: 'deductionsPage.typeOptions.fine', fallback: 'Multa' },
   { value: 'insurance', key: 'deductionsPage.typeOptions.insurance', fallback: 'Seguro' },
-  { value: 'garnishment', key: 'deductionsPage.typeOptions.garnishment', fallback: 'Penhora' },
-  { value: 'union_fee', key: 'deductionsPage.typeOptions.union_fee', fallback: 'Quota Sindical' },
   { value: 'other', key: 'deductionsPage.typeOptions.other', fallback: 'Outro' },
 ]
 

@@ -6,9 +6,11 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Briefcase, Trash2, Eye,
   Download, Plus, Upload, ExternalLink, FileCheck, AlertCircle, Building2, User,
   CreditCard, Clock, CheckCircle2, DollarSign, Loader2, Sun, Moon, UserCheck,
-  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil, UploadCloud, X,
+  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil, UploadCloud, X, FileWarning, FileDown,
 } from 'lucide-react'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { compressImageIfNeeded } from '@/lib/file-upload'
+import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import { formatMinutesToHours } from '@/lib/format'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,6 +32,7 @@ import { LeaveDocumentActions } from '@/features/leave/leave-document-actions'
 import { LeaveTypeCreateDialog } from '@/features/leave/leave-type-create-dialog'
 import { EmployeeEditDialog } from '@/features/employees/employee-edit-dialog'
 import { EmployeePayrollTab } from '@/features/employees/employee-payroll-tab'
+import { EmployeeEducationTab } from '@/features/employees/components/employee-education-tab'
 
 const statusColors: Record<string, string> = { active: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', inactive: 'bg-muted text-muted-foreground border-border', on_leave: 'bg-blue-500/10 text-blue-600 border-blue-500/20', probation: 'bg-amber-500/10 text-amber-600 border-amber-500/20', suspended: 'bg-rose-500/10 text-rose-600 border-rose-500/20', terminated: 'bg-red-500/10 text-red-600 border-red-500/20' }
 const attendanceStatusColors: Record<string, string> = { present: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', late: 'bg-amber-500/10 text-amber-600 border-amber-500/20', absent: 'bg-red-500/10 text-red-600 border-red-500/20', half_day: 'bg-blue-500/10 text-blue-600 border-blue-500/20', excused: 'bg-gray-500/10 text-gray-600 border-gray-500/20', justified: 'bg-gray-500/10 text-gray-600 border-gray-500/20', vacation: 'bg-sky-500/10 text-sky-600 border-sky-500/20', sick: 'bg-rose-500/10 text-rose-600 border-rose-500/20' }
@@ -146,6 +149,8 @@ export function EmployeeDetailPage() {
   const [manualAttForm, setManualAttForm] = useState({ date: new Date().toISOString().slice(0, 10), shift_id: '', clock_in: '', clock_out: '', status: 'present', deduct_from_salary: false, notes: '' })
   const [isLeaveOpen, setIsLeaveOpen] = useState(false)
   const [editingLeave, setEditingLeave] = useState<LeaveRequest | null>(null)
+  const [isDownloadingLeavePdf, setIsDownloadingLeavePdf] = useState(false)
+  const leavePdfPrompt = usePdfLanguagePrompt()
   const [isEmployeeEditOpen, setIsEmployeeEditOpen] = useState(false)
   const [attendanceShiftId, setAttendanceShiftId] = useState('')
   const [leaveForm, setLeaveForm] = useState({
@@ -158,7 +163,6 @@ export function EmployeeDetailPage() {
     end_date: new Date().toISOString().slice(0, 10),
     reason: '',
     status: 'approved',
-    justification_document: null as File | null,
     signed_document: null as File | null,
   })
   const [isShiftOpen, setIsShiftOpen] = useState(false)
@@ -381,9 +385,9 @@ export function EmployeeDetailPage() {
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.deactivateError')))
   })
   const leaveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (editingLeave) {
-        return api.put(`leaves/${editingLeave.id}`, {
+        const updated = await api.put(`leaves/${editingLeave.id}`, {
           leave_type_id: Number(leaveForm.leave_type_id),
           occurrence_type: leaveForm.occurrence_type,
           notice_type: leaveForm.notice_type,
@@ -393,6 +397,12 @@ export function EmployeeDetailPage() {
           end_date: leaveForm.end_date,
           reason: leaveForm.reason || null,
         })
+        if (leaveForm.signed_document) {
+          const signedFd = new FormData()
+          signedFd.append('document', await compressImageIfNeeded(leaveForm.signed_document))
+          await api.upload(`leave/${editingLeave.id}/documents/signed`, signedFd)
+        }
+        return updated
       }
 
       const fd = new FormData()
@@ -406,21 +416,50 @@ export function EmployeeDetailPage() {
       fd.append('end_date', leaveForm.end_date)
       if (leaveForm.reason) fd.append('reason', leaveForm.reason)
       fd.append('status', leaveForm.status)
-      if (leaveForm.justification_document) fd.append('justification_document', leaveForm.justification_document)
-      if (leaveForm.signed_document) fd.append('signed_document', leaveForm.signed_document)
+      if (leaveForm.signed_document) {
+        fd.append('signed_document', await compressImageIfNeeded(leaveForm.signed_document))
+      }
       return api.upload('leaves', fd)
     },
     onSuccess: () => {
       toast.success(t(editingLeave ? 'employeeDetail.messages.leaveUpdated' : 'employeeDetail.messages.leaveRecorded'))
       setIsLeaveOpen(false)
       setEditingLeave(null)
-      setLeaveForm({ leave_type_id: '', occurrence_type: 'absence', notice_type: 'anticipated', is_justified: false, deduct_from_salary: false, start_date: todayStr, end_date: todayStr, reason: '', status: 'approved', justification_document: null, signed_document: null })
+      setLeaveForm({ leave_type_id: '', occurrence_type: 'absence', notice_type: 'anticipated', is_justified: false, deduct_from_salary: false, start_date: todayStr, end_date: todayStr, reason: '', status: 'approved', signed_document: null })
       refetchLeaves()
       refetchBalance()
       qc.invalidateQueries({ queryKey: ['leave-requests'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.recordError')))
   })
+  const handleDownloadLeaveReceiptPreview = () => {
+    leavePdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      setIsDownloadingLeavePdf(true)
+      try {
+        await api.downloadFilePost(
+          'leave/receipt-preview.pdf',
+          {
+            employee_id: Number(id),
+            leave_type_id: leaveForm.leave_type_id ? Number(leaveForm.leave_type_id) : null,
+            occurrence_type: leaveForm.occurrence_type,
+            notice_type: leaveForm.notice_type,
+            is_justified: leaveForm.is_justified,
+            deduct_from_salary: leaveForm.deduct_from_salary,
+            start_date: leaveForm.start_date,
+            end_date: leaveForm.end_date,
+            reason: leaveForm.reason || null,
+            status: editingLeave?.status ?? leaveForm.status,
+            lang,
+          },
+          `comprovativo-ausencia-${id}.pdf`,
+        )
+      } catch (e) {
+        toast.error(getApiErrorMessage(e, t('leave.receiptDownloadError', { defaultValue: 'Erro ao gerar comprovativo PDF.' })))
+      } finally {
+        setIsDownloadingLeavePdf(false)
+      }
+    })
+  }
   const resolveShiftDates = () => {
     if (shiftForm.period_mode === 'daily') {
       return { effective_from: shiftForm.effective_from, effective_to: shiftForm.effective_from }
@@ -547,7 +586,6 @@ export function EmployeeDetailPage() {
       end_date: leave.end_date,
       reason: leave.reason ?? '',
       status: leave.status === 'approved' ? 'approved' : 'pending',
-      justification_document: null,
       signed_document: null,
     } : {
       leave_type_id: '',
@@ -559,7 +597,6 @@ export function EmployeeDetailPage() {
       end_date: todayStr,
       reason: '',
       status: 'approved',
-      justification_document: null,
       signed_document: null,
     })
     setIsLeaveOpen(true)
@@ -822,6 +859,7 @@ export function EmployeeDetailPage() {
           <TabsTrigger value="attendance" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><UserCheck className="h-3.5 w-3.5" />{t('employeeDetail.text.attendanceTab')}</TabsTrigger>
           <TabsTrigger value="leaves" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><BedDouble className="h-3.5 w-3.5" />{t('employeeDetail.text.leavesTab')}</TabsTrigger>
           <TabsTrigger value="shift" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><RotateCcw className="h-3.5 w-3.5" />{t('employeeDetail.text.shiftTab')}</TabsTrigger>
+          <TabsTrigger value="education" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><FileWarning className="h-3.5 w-3.5" />{t('employeeDetail.text.educationTab', { defaultValue: 'Educação' })}</TabsTrigger>
           <TabsTrigger value="history" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><Calendar className="h-3.5 w-3.5" />{t('employeeDetail.text.historyTab')}</TabsTrigger>
         </TabsList>
 
@@ -1338,6 +1376,15 @@ export function EmployeeDetailPage() {
           </Card>
         </TabsContent>
 
+        {/* Tab: Educação */}
+        <TabsContent value="education" className="mt-6 space-y-4">
+          <EmployeeEducationTab
+            employeeId={Number(id)}
+            employeeName={data.full_name}
+            canManage={hasPermission(user, 'update_employee')}
+          />
+        </TabsContent>
+
         {/* Tab: Histórico */}
         <TabsContent value="history" className="mt-6 space-y-4">
           <Card>
@@ -1767,14 +1814,23 @@ export function EmployeeDetailPage() {
             </label>
             {!editingLeave && <div><Label className="text-xs font-semibold">{t('employeeDetail.text.status')}</Label><Select value={leaveForm.status} onValueChange={(v) => setLeaveForm((p) => ({ ...p, status: v }))}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="approved">{t('employeeDetail.text.approvedDirect')}</SelectItem><SelectItem value="pending">{t('employeeDetail.text.pendingApproval')}</SelectItem></SelectContent></Select></div>}
             <div><Label className="text-xs font-semibold">{t('employeeDetail.text.reasonNotes')}</Label><Input className="mt-1.5" placeholder={t('employeeDetail.text.justificationPlaceholder')} value={leaveForm.reason} onChange={(e) => setLeaveForm((p) => ({ ...p, reason: e.target.value }))} /></div>
-            {!editingLeave && <div className="min-w-0 space-y-2">
-              <Label className="text-xs font-semibold">{t('employeeDetail.text.justificationOptional')}</Label>
-              <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setLeaveForm((p) => ({ ...p, justification_document: e.target.files?.[0] ?? null }))} />
-            </div>}
-            {!editingLeave && <div className="min-w-0 space-y-2">
+            <div className="min-w-0 space-y-2">
+              <Label className="text-xs font-semibold">{t('employeeDetail.text.receiptForSignatureLabel', { defaultValue: 'Comprovativo para Assinatura (PDF)' })}</Label>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start gap-2"
+                disabled={isDownloadingLeavePdf || !leaveForm.start_date || !leaveForm.end_date}
+                onClick={handleDownloadLeaveReceiptPreview}
+              >
+                {isDownloadingLeavePdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                {t('employeeDetail.text.generateReceiptForSignature', { defaultValue: 'Gerar Comprovativo para Assinar (PDF)' })}
+              </Button>
+            </div>
+            <div className="min-w-0 space-y-2">
               <Label className="text-xs font-semibold">{t('employeeDetail.text.signedEmployeeDocumentOptional')}</Label>
-              <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setLeaveForm((p) => ({ ...p, signed_document: e.target.files?.[0] ?? null }))} />
-            </div>}
+              <Input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(e) => setLeaveForm((p) => ({ ...p, signed_document: e.target.files?.[0] ?? null }))} />
+            </div>
           </div>
           <DialogFooter className="shrink-0 flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center"><Button type="button" variant="outline" size="sm" onClick={() => setIsLeaveOpen(false)} disabled={leaveMutation.isPending}>{t('employeeDetail.text.cancel')}</Button><Button type="button" size="sm" onClick={() => leaveMutation.mutate()} disabled={leaveMutation.isPending || !leaveForm.leave_type_id || !leaveForm.start_date || !leaveForm.end_date}>{leaveMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}{t(editingLeave ? 'employeeDetail.text.save' : 'employeeDetail.text.record')}</Button></DialogFooter>
         </DialogContent>
@@ -1994,6 +2050,12 @@ export function EmployeeDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PdfLanguageDialog
+        open={leavePdfPrompt.open}
+        onOpenChange={leavePdfPrompt.onOpenChange}
+        onSelect={leavePdfPrompt.handleSelect}
+      />
     </div>
   )
 }

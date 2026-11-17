@@ -26,8 +26,8 @@ class StoreLeaveRequest extends FormRequest
             'for_another' => ['sometimes', 'boolean'],
             'employee_id' => ['sometimes', 'nullable', 'integer', Rule::exists('employees', 'id')->where('tenant_id', tenant_id())],
             'status' => ['sometimes', 'in:pending,approved,rejected'],
-            'justification_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'signed_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'justification_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'signed_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
         ];
     }
 }

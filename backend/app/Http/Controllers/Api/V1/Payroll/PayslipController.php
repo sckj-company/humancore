@@ -11,7 +11,7 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class PayslipController extends BaseController
 {
-    public function downloadPeriod(PayrollPeriod $period, PayslipPdfService $payslips): SymfonyResponse
+    public function downloadPeriod(Request $request, PayrollPeriod $period, PayslipPdfService $payslips): SymfonyResponse
     {
         $this->authorize('view', $period);
 
@@ -26,7 +26,7 @@ class PayslipController extends BaseController
 
         $filename = 'folha-salarial-'.$period->id.'.pdf';
 
-        return $payslips->renderPeriod($period)->download($filename);
+        return $payslips->renderPeriod($period, $request->query('lang'))->download($filename);
     }
 
     public function show(PayrollRecord $record, Request $request, PayslipPdfService $payslips): SymfonyResponse
@@ -46,7 +46,7 @@ class PayslipController extends BaseController
         $filename = 'recibo-'.$record->employee?->employee_code.'-'.($record->period?->displayName() ?? $record->id).'.pdf';
         $filename = str_replace(['/', '\\', ' '], '-', $filename);
 
-        $pdf = $payslips->render($record);
+        $pdf = $payslips->render($record, $request->query('lang'));
 
         if ($request->boolean('download')) {
             return $pdf->download($filename);
@@ -55,7 +55,7 @@ class PayslipController extends BaseController
         return $pdf->stream($filename);
     }
 
-    public function download(PayrollRecord $record, PayslipPdfService $payslips): SymfonyResponse
+    public function download(PayrollRecord $record, Request $request, PayslipPdfService $payslips): SymfonyResponse
     {
         $this->authorize('view', $record);
 
@@ -72,7 +72,7 @@ class PayslipController extends BaseController
         $filename = 'recibo-'.$record->employee?->employee_code.'-'.($record->period?->displayName() ?? $record->id).'.pdf';
         $filename = str_replace(['/', '\\', ' '], '-', $filename);
 
-        $pdf = $payslips->render($record);
+        $pdf = $payslips->render($record, $request->query('lang'));
 
         return $pdf->download($filename);
     }

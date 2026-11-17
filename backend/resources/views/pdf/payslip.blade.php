@@ -4,8 +4,13 @@
     <meta charset="UTF-8">
     <title>Recibo de Vencimento</title>
     @php
-        $bilingualLabel = static fn (string $portuguese, string $mandarin): string => '<span class="label-pt">'.e($portuguese).'</span><span class="label-zh">'.e($mandarin).'</span>';
-        $bilingualInline = static fn (string $portuguese, string $mandarin): string => e($portuguese).' <span class="zh-inline">/ '.e($mandarin).'</span>';
+        $isBilingual = $isBilingual ?? (($lang ?? 'bilingual') !== 'pt');
+        $bilingualLabel = static fn (string $portuguese, string $mandarin): string => $isBilingual
+            ? '<span class="label-pt">'.e($portuguese).'</span><span class="label-zh">'.e($mandarin).'</span>'
+            : '<span class="label-pt">'.e($portuguese).'</span>';
+        $bilingualInline = static fn (string $portuguese, string $mandarin): string => $isBilingual
+            ? e($portuguese).' <span class="zh-inline">/ '.e($mandarin).'</span>'
+            : e($portuguese);
         $items = collect($record->details['breakdown'] ?? []);
 
         if ($items->isEmpty() && $record->relationLoaded('items')) {
@@ -69,10 +74,10 @@
             ?? $record->approvedBy?->name
             ?? 'Sistema';
         $contractTypeLabel = match ($record->contract->contract_type) {
-            'permanent' => 'Efetivo / 无固定期限',
-            'fixed_term' => 'Termo Certo / 固定期限',
-            'internship' => 'Estágio / 实习',
-            'part_time' => 'Tempo Parcial / 兼职',
+            'permanent' => $isBilingual ? 'Efetivo / 无固定期限' : 'Efetivo',
+            'fixed_term' => $isBilingual ? 'Termo Certo / 固定期限' : 'Termo Certo',
+            'internship' => $isBilingual ? 'Estágio / 实习' : 'Estágio',
+            'part_time' => $isBilingual ? 'Tempo Parcial / 兼职' : 'Tempo Parcial',
             default => $record->contract->contract_type,
         };
     @endphp
@@ -199,10 +204,12 @@
             </td>
             <td class="header-right">
                 <div class="title">RECIBO DE VENCIMENTO</div>
-                <div class="title-zh">工资单</div>
-                <div class="meta">Período / 工资期间: {{ $record->period->displayName() }}</div>
-                <div class="meta">Emitido em / 签发日期: {{ now()->format('d/m/Y') }}</div>
-                <div class="meta">Operador / 操作员: {{ $resolvedOperator }}</div>
+                @if($isBilingual)
+                    <div class="title-zh">工资单</div>
+                @endif
+                <div class="meta">{{ $isBilingual ? 'Período / 工资期间' : 'Período' }}: {{ $record->period->displayName() }}</div>
+                <div class="meta">{{ $isBilingual ? 'Emitido em / 签发日期' : 'Emitido em' }}: {{ now()->format('d/m/Y') }}</div>
+                <div class="meta">{{ $isBilingual ? 'Operador / 操作员' : 'Operador' }}: {{ $resolvedOperator }}</div>
             </td>
         </tr>
     </table>
@@ -234,7 +241,7 @@
             <tbody>
                 @forelse($earnings as $item)
                     <tr>
-                        <td class="col-desc">{{ $item['name'] ?? $item['code'] ?? '—' }} <span class="zh-inline">/ {{ $mandarinName($item) }}</span></td>
+                        <td class="col-desc">{{ $item['name'] ?? $item['code'] ?? '—' }}@if($isBilingual) <span class="zh-inline">/ {{ $mandarinName($item) }}</span>@endif</td>
                         <td class="col-amount">{{ number_format((float) ($item['amount'] ?? 0), 2) }}</td>
                     </tr>
                 @empty
@@ -260,7 +267,7 @@
             <tbody>
                 @forelse($deductions as $item)
                     <tr>
-                        <td class="col-desc">{{ $item['name'] ?? $item['code'] ?? '—' }} <span class="zh-inline">/ {{ $mandarinName($item) }}</span></td>
+                        <td class="col-desc">{{ $item['name'] ?? $item['code'] ?? '—' }}@if($isBilingual) <span class="zh-inline">/ {{ $mandarinName($item) }}</span>@endif</td>
                         <td class="col-amount">- {{ number_format(abs((float) ($item['amount'] ?? 0)), 2) }}</td>
                     </tr>
                 @empty
@@ -272,7 +279,7 @@
                 </tr>
                 @forelse($taxes as $item)
                     <tr>
-                        <td class="col-desc">{{ $item['name'] ?? $item['code'] ?? '—' }} <span class="zh-inline">/ {{ $mandarinName($item) }}</span></td>
+                        <td class="col-desc">{{ $item['name'] ?? $item['code'] ?? '—' }}@if($isBilingual) <span class="zh-inline">/ {{ $mandarinName($item) }}</span>@endif</td>
                         <td class="col-amount">- {{ number_format(abs((float) ($item['amount'] ?? 0)), 2) }}</td>
                     </tr>
                 @empty
@@ -293,7 +300,7 @@
                 <tbody>
                     @foreach($contributions as $item)
                         <tr>
-                            <td class="col-desc">{{ $item['name'] ?? $item['code'] ?? '—' }} <span class="zh-inline">/ {{ $mandarinName($item) }}</span></td>
+                            <td class="col-desc">{{ $item['name'] ?? $item['code'] ?? '—' }}@if($isBilingual) <span class="zh-inline">/ {{ $mandarinName($item) }}</span>@endif</td>
                             <td class="col-amount">{{ number_format((float) ($item['amount'] ?? 0), 2) }}</td>
                         </tr>
                     @endforeach

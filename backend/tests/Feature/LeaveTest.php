@@ -275,4 +275,84 @@ class LeaveTest extends TestCase
         $this->assertNull($leave->fresh()->justification_document_path);
         $this->assertSame([], Storage::disk('local')->allFiles('leave-documents/'.$tenant->id));
     }
+
+    public function test_leave_and_vacation_receipt_pdf_and_preview_support_pt_and_bilingual_and_signed_upload(): void
+    {
+        Storage::fake('local');
+        [$tenant, $employee, $admin, $vacation] = $this->setupEmployeeUser('admin');
+        $this->actingAs($admin, 'sanctum');
+
+        // Preview PDF before saving (for absence and vacation)
+        $previewPt = $this->postJson('/api/v1/leave/receipt-preview.pdf', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $vacation->id,
+            'occurrence_type' => 'vacation',
+            'notice_type' => 'anticipated',
+            'start_date' => '2026-11-20',
+            'end_date' => '2026-11-25',
+            'reason' => 'Férias anuais programadas.',
+            'lang' => 'pt',
+        ])->assertOk();
+        $this->assertStringStartsWith('%PDF-', $previewPt->getContent());
+
+        $previewBi = $this->postJson('/api/v1/leave/receipt-preview.pdf', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $vacation->id,
+            'occurrence_type' => 'absence',
+            'notice_type' => 'unanticipated',
+            'is_justified' => true,
+            'deduct_from_salary' => true,
+            'start_date' => '2026-11-18',
+            'end_date' => '2026-11-18',
+            'reason' => 'Falta por motivo pessoal.',
+            'lang' => 'bilingual',
+        ])->assertOk();
+        $this->assertStringStartsWith('%PDF-', $previewBi->getContent());
+
+        // Saved leave record receipt PDF (PT & Bilingual) + base64 signed upload + download
+        $leave = LeaveRequest::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $vacation->id,
+            'occurrence_type' => 'vacation',
+            'notice_type' => 'anticipated',
+            'start_date' => '2026-11-20',
+            'end_date' => '2026-11-22',
+            'total_days' => 3,
+            'reason' => 'Gozo de férias',
+            'status' => 'approved',
+        ]);
+
+        $savedPt = $this->get("/api/v1/leave/{$leave->id}/receipt.pdf?lang=pt")->assertOk();
+        $this->assertStringStartsWith('%PDF-', $savedPt->getContent());
+
+        $savedBi = $this->get("/api/v1/leave/{$leave->id}/receipt.pdf?lang=bilingual")->assertOk();
+        $this->assertStringStartsWith('%PDF-', $savedBi->getContent());
+
+        $htmlPt = view('pdf.leave-receipt', [
+            'leave' => $leave->loadMissing(['tenant', 'employee.department', 'employee.position', 'leaveType']),
+            'operatorName' => $admin->name,
+            'lang' => 'pt',
+            'isBilingual' => false,
+        ])->render();
+        $this->assertStringContainsString('COMPROVATIVO DE FÉRIAS', $htmlPt);
+        $this->assertStringNotContainsString('休假审批凭证', $htmlPt);
+
+        $htmlBi = view('pdf.leave-receipt', [
+            'leave' => $leave,
+            'operatorName' => $admin->name,
+            'lang' => 'bilingual',
+            'isBilingual' => true,
+        ])->render();
+        $this->assertStringContainsString('休假审批凭证', $htmlBi);
+
+        $base64Pdf = base64_encode("%PDF-1.4\n1 0 obj <<>> endobj\ntrailer <<>>\n%%EOF");
+        $this->postJson("/api/v1/leave/{$leave->id}/documents/signed", [
+            'document_base64' => "data:application/pdf;base64,{$base64Pdf}",
+            'document_name' => 'ferias-assinado.pdf',
+            'document_mime' => 'application/pdf',
+        ])->assertOk()->assertJsonPath('data.has_signed_document', true);
+
+        $this->get("/api/v1/leave/{$leave->id}/documents/signed")->assertOk();
+    }
 }

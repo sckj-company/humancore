@@ -21,6 +21,7 @@ class Deduction extends Model
     public const TYPES = [
         'loan' => 'Empréstimo',
         'advance' => 'Adiantamento',
+        'fine' => 'Multa',
         'pension' => 'Pensão Alimentícia',
         'insurance' => 'Seguro',
         'garnishment' => 'Penhora',

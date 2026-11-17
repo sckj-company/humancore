@@ -81,6 +81,15 @@ class ApiClient {
 
   async downloadFile(url: string, filename?: string, params?: Record<string, unknown>): Promise<void> {
     const response = await this.client.get(url, { params, responseType: 'blob' })
+    this.triggerBlobDownload(response, filename)
+  }
+
+  async downloadFilePost(url: string, data?: unknown, filename?: string, params?: Record<string, unknown>): Promise<void> {
+    const response = await this.client.post(url, data, { params, responseType: 'blob' })
+    this.triggerBlobDownload(response, filename)
+  }
+
+  private triggerBlobDownload(response: { data: Blob; headers: Record<string, unknown> }, filename?: string): void {
     const blob: Blob = response.data
     const disposition = String(response.headers['content-disposition'] ?? '')
     const match = /filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i.exec(disposition)

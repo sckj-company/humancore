@@ -4,9 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Plus, Check, X, Loader2, Pencil } from 'lucide-react'
+import { Plus, Check, X, Loader2, Pencil, FileDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { compressImageIfNeeded } from '@/lib/file-upload'
+import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import { useAuthStore, hasAnyRole, hasPermission } from '@/stores/auth-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -199,6 +201,9 @@ function LeaveRequestDialog({ leave }: { leave?: LeaveRequest }) {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const [open, setOpen] = useState(false)
+  const [signedFile, setSignedFile] = useState<File | null>(null)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
+  const pdfPrompt = usePdfLanguagePrompt()
   const canRequest = hasPermission(user, 'create_leave') || hasAnyRole(user, ['employee'])
   const canUpdate = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_leave')
   const canOpen = leave ? canUpdate : canRequest
@@ -215,7 +220,10 @@ function LeaveRequestDialog({ leave }: { leave?: LeaveRequest }) {
   } = useForm<FormValues>({ resolver: zodResolver(schema) as never, defaultValues: formDefaults(leave) })
 
   useEffect(() => {
-    if (open) reset(formDefaults(leave))
+    if (open) {
+      reset(formDefaults(leave))
+      setSignedFile(null)
+    }
   }, [leave, open, reset])
 
   const { data: types } = useQuery({
@@ -225,24 +233,80 @@ function LeaveRequestDialog({ leave }: { leave?: LeaveRequest }) {
   })
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) => {
-      const payload = {
+    mutationFn: async (values: FormValues) => {
+      if (leave) {
+        const res = await api.put(`leaves/${leave.id}`, {
+          leave_type_id: Number(values.leave_type_id),
+          occurrence_type: values.occurrence_type,
+          start_date: values.start_date,
+          end_date: values.end_date,
+          reason: values.reason || null,
+        })
+        if (signedFile) {
+          const fd = new FormData()
+          fd.append('document', await compressImageIfNeeded(signedFile))
+          await api.upload(`leave/${leave.id}/documents/signed`, fd)
+        }
+        return res
+      }
+
+      if (signedFile) {
+        const fd = new FormData()
+        fd.append('leave_type_id', String(values.leave_type_id))
+        fd.append('occurrence_type', values.occurrence_type)
+        fd.append('start_date', values.start_date)
+        fd.append('end_date', values.end_date)
+        if (values.reason) fd.append('reason', values.reason)
+        fd.append('signed_document', await compressImageIfNeeded(signedFile))
+        return api.upload('leave', fd)
+      }
+
+      return api.post('leave', {
         leave_type_id: Number(values.leave_type_id),
         occurrence_type: values.occurrence_type,
         start_date: values.start_date,
         end_date: values.end_date,
         reason: values.reason || null,
-      }
-      return leave ? api.put(`leaves/${leave.id}`, payload) : api.post('leave', payload)
+      })
     },
     onSuccess: () => {
       toast.success(t(leave ? 'leave.updated' : 'leave.requestCreated'))
       setOpen(false)
+      setSignedFile(null)
       queryClient.invalidateQueries({ queryKey: ['leave-requests'] })
       queryClient.invalidateQueries({ queryKey: ['leave-balance'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t(leave ? 'leave.updateError' : 'leave.createError'))),
   })
+
+  const handleDownloadPreviewPdf = () => {
+    const startDate = watch('start_date')
+    const endDate = watch('end_date')
+    if (!startDate || !endDate) return
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      setIsDownloadingPdf(true)
+      try {
+        await api.downloadFilePost(
+          'leave/receipt-preview.pdf',
+          {
+            employee_id: leave?.employee_id ?? user?.employee?.id ?? null,
+            leave_type_id: watch('leave_type_id') ? Number(watch('leave_type_id')) : null,
+            occurrence_type: watch('occurrence_type'),
+            start_date: startDate,
+            end_date: endDate,
+            reason: watch('reason') || null,
+            status: leave?.status ?? 'pending',
+            lang,
+          },
+          `comprovativo-ausencia-${leave?.id ?? 'novo'}.pdf`,
+        )
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, t('leave.receiptDownloadError', { defaultValue: 'Erro ao gerar comprovativo PDF.' })))
+      } finally {
+        setIsDownloadingPdf(false)
+      }
+    })
+  }
 
   const onSubmit = (values: FormValues) => mutation.mutate(values)
 
@@ -321,6 +385,29 @@ function LeaveRequestDialog({ leave }: { leave?: LeaveRequest }) {
             <Label>Motivo</Label>
             <Textarea {...register('reason')} placeholder="Opcional" rows={3} />
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t('employeeDetail.text.receiptForSignatureLabel', { defaultValue: 'Comprovativo para Assinatura (PDF)' })}</Label>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start gap-2"
+                disabled={isDownloadingPdf || !watch('start_date') || !watch('end_date')}
+                onClick={handleDownloadPreviewPdf}
+              >
+                {isDownloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                {t('employeeDetail.text.generateReceiptForSignature', { defaultValue: 'Gerar Comprovativo para Assinar (PDF)' })}
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('employeeDetail.text.signedEmployeeDocumentOptional')}</Label>
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(e) => setSignedFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancelar
@@ -332,6 +419,12 @@ function LeaveRequestDialog({ leave }: { leave?: LeaveRequest }) {
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <PdfLanguageDialog
+        open={pdfPrompt.open}
+        onOpenChange={pdfPrompt.onOpenChange}
+        onSelect={pdfPrompt.handleSelect}
+      />
     </Dialog>
   )
 }

@@ -40,12 +40,9 @@ import {
 import type { Deduction, DeductionType, DeductionStatus, AmountType, Paginated, EmployeeSummary } from '@/types'
 
 const deductionTypeOptions: DeductionType[] = [
-  'loan',
   'advance',
-  'pension',
+  'fine',
   'insurance',
-  'garnishment',
-  'union_fee',
   'other',
 ]
 const customTypeValue = '__custom__'

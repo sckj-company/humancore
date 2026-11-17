@@ -497,10 +497,10 @@ export function TenantAccessScopeEditor({
                         value={access.role_name}
                         onChange={(e) => updateAccess(index, { role_name: e.target.value })}
                       >
-                        <option value="admin">Admin</option>
-                        <option value="hr-manager">HR Manager</option>
-                        <option value="manager">Manager</option>
-                        <option value="employee">Employee</option>
+                        <option value="admin">{t('superAdminPage.roles.admin')}</option>
+                        <option value="hr-manager">{t('superAdminPage.roles.hr-manager')}</option>
+                        <option value="manager">{t('superAdminPage.roles.manager')}</option>
+                        <option value="employee">{t('superAdminPage.roles.employee')}</option>
                       </select>
                     </div>
                     <Button

@@ -391,4 +391,74 @@ class OperationsEnhancementsFlowTest extends TestCase
         $this->assertSame($employeeA->id, $recordsByDept[0]['employee_id']);
         $this->assertSame('Engenharia', $recordsByDept[0]['employee']['department']);
     }
+
+    public function test_deduction_installments_strictly_require_exact_sum_matching_total(): void
+    {
+        [, $user, $employeeA] = $this->setupTenantAdmin();
+        $this->actingAs($user);
+
+        // 99.96% (formerly passed with 0.05 tolerance) must now be rejected strictly
+        $this->postJson('/api/v1/deductions', [
+            'employee_id' => $employeeA->id,
+            'name' => 'Multa com parcelas incompletas',
+            'deduction_type' => 'fine',
+            'amount_type' => 'fixed',
+            'total_amount' => 100000,
+            'installments' => [
+                ['reference_month' => '2026-11', 'percentage' => 49.98],
+                ['reference_month' => '2026-12', 'percentage' => 49.98],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['installments']);
+
+        // Mismatched explicit installment amount * count vs total_amount without schedule must also be rejected
+        $this->postJson('/api/v1/deductions', [
+            'employee_id' => $employeeA->id,
+            'name' => 'Multa valor divergente',
+            'deduction_type' => 'fine',
+            'amount_type' => 'fixed',
+            'amount' => 4000,
+            'total_amount' => 10000,
+            'installment_count' => 2,
+        ])->assertStatus(422)->assertJsonValidationErrors(['total_amount']);
+
+        // Explicit per-installment amounts not matching total_amount must also be rejected
+        $this->postJson('/api/v1/deductions', [
+            'employee_id' => $employeeA->id,
+            'name' => 'Desconto com valores divergentes',
+            'deduction_type' => 'other',
+            'amount_type' => 'fixed',
+            'total_amount' => 10000,
+            'installments' => [
+                ['reference_month' => '2026-11', 'percentage' => 50, 'amount' => 4500],
+                ['reference_month' => '2026-12', 'percentage' => 50, 'amount' => 5000],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['installments']);
+
+        // Exact 3-way split (33.33 + 33.33 + 33.34 = 100.00%) succeeds and installment sum equals total
+        $valid = $this->postJson('/api/v1/deductions', [
+            'employee_id' => $employeeA->id,
+            'name' => 'Multa 3 parcelas exatas',
+            'deduction_type' => 'fine',
+            'amount_type' => 'fixed',
+            'total_amount' => 10000,
+            'installments' => [
+                ['reference_month' => '2026-11', 'percentage' => 33.33],
+                ['reference_month' => '2026-12', 'percentage' => 33.33],
+                ['reference_month' => '2027-01', 'percentage' => 33.34],
+            ],
+        ])->assertCreated();
+
+        $createdId = $valid->json('data.id');
+        $sum = (float) collect($valid->json('data.installments'))->sum('amount');
+        $this->assertEqualsWithDelta(10000.0, $sum, 0.001);
+
+        // Updating with invalid percentage sum (99.99%) is also rejected
+        $this->putJson("/api/v1/deductions/{$createdId}", [
+            'total_amount' => 10000,
+            'installments' => [
+                ['reference_month' => '2026-11', 'percentage' => 50],
+                ['reference_month' => '2026-12', 'percentage' => 49.99],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['installments']);
+    }
 }

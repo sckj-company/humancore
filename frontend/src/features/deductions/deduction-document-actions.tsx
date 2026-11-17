@@ -6,65 +6,9 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { cloudinaryAttachmentUrl } from '@/lib/cloudinary'
+import { compressImageIfNeeded, MAX_MULTIPART_SAFE_BYTES, readFileAsDataUrl } from '@/lib/file-upload'
+import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import type { Deduction } from '@/types'
-
-const MAX_MULTIPART_SAFE_BYTES = 1_800_000
-
-async function compressImageIfNeeded(file: File): Promise<File> {
-  if (!file.type.startsWith('image/') || file.size <= MAX_MULTIPART_SAFE_BYTES) {
-    return file
-  }
-
-  return new Promise((resolve) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      const maxDim = 1600
-      let { width, height } = img
-      if (width > maxDim || height > maxDim) {
-        const ratio = Math.min(maxDim / width, maxDim / height)
-        width = Math.round(width * ratio)
-        height = Math.round(height * ratio)
-      }
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        resolve(file)
-        return
-      }
-      ctx.drawImage(img, 0, 0, width, height)
-      canvas.toBlob(
-        (blob) => {
-          if (!blob || blob.size >= file.size) {
-            resolve(file)
-            return
-          }
-          const cleanName = file.name.replace(/\.[^.]+$/, '') + '.jpg'
-          resolve(new File([blob], cleanName, { type: 'image/jpeg' }))
-        },
-        'image/jpeg',
-        0.84,
-      )
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      resolve(file)
-    }
-    img.src = url
-  })
-}
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
-}
 
 export function DeductionDocumentActions({
   deduction,
@@ -79,6 +23,7 @@ export function DeductionDocumentActions({
   const qc = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
   const [downloading, setDownloading] = useState<'receipt' | 'signed' | null>(null)
+  const pdfPrompt = usePdfLanguagePrompt()
 
   const upload = useMutation({
     mutationFn: async (rawFile: File) => {
@@ -97,7 +42,7 @@ export function DeductionDocumentActions({
         }
       }
 
-      const dataUrl = await readAsDataUrl(file)
+      const dataUrl = await readFileAsDataUrl(file)
       return api.post(`deductions/${deduction.id}/signed-document`, {
         document_base64: dataUrl,
         document_name: file.name,
@@ -112,15 +57,21 @@ export function DeductionDocumentActions({
     onError: (e) => toast.error(getApiErrorMessage(e, t('deductionsPage.signedDocumentError', { defaultValue: 'Erro ao carregar comprovativo assinado.' }))),
   })
 
-  const handleDownloadReceipt = async () => {
-    setDownloading('receipt')
-    try {
-      await api.downloadFile(`deductions/${deduction.id}/receipt.pdf`, `comprovativo-${deduction.deduction_type}-${deduction.id}.pdf`)
-    } catch (e) {
-      toast.error(getApiErrorMessage(e, t('deductionsPage.receiptDownloadError', { defaultValue: 'Erro ao baixar comprovativo.' })))
-    } finally {
-      setDownloading(null)
-    }
+  const handleDownloadReceipt = () => {
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      setDownloading('receipt')
+      try {
+        await api.downloadFile(
+          `deductions/${deduction.id}/receipt.pdf`,
+          `comprovativo-${deduction.deduction_type}-${deduction.id}.pdf`,
+          { lang },
+        )
+      } catch (e) {
+        toast.error(getApiErrorMessage(e, t('deductionsPage.receiptDownloadError', { defaultValue: 'Erro ao baixar comprovativo.' })))
+      } finally {
+        setDownloading(null)
+      }
+    })
   }
 
   const handleDownloadSigned = async () => {
@@ -198,6 +149,12 @@ export function DeductionDocumentActions({
           {t('deductionsPage.downloadSignedShort', { defaultValue: 'Baixar Assinado' })}
         </Button>
       )}
+
+      <PdfLanguageDialog
+        open={pdfPrompt.open}
+        onOpenChange={pdfPrompt.onOpenChange}
+        onSelect={pdfPrompt.handleSelect}
+      />
     </div>
   )
 }

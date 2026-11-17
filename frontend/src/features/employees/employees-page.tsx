@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, Eye, Filter, X, CalendarCheck2 } from 'lucide-react'
+import { Plus, Search, Eye, Filter, X, CalendarCheck2, FileWarning } from 'lucide-react'
 import { api } from '@/lib/api'
 import { hasFieldPermission, useAuthStore } from '@/stores/auth-store'
 import { useEmployeesFilterStore } from '@/stores/employees-filter-store'
@@ -105,6 +105,12 @@ export function EmployeesPage() {
         description={t('employeesPage.totalEmployees', { count: data?.meta?.total ?? 0 })}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link to="/educations">
+                <FileWarning className="mr-2 h-4 w-4 shrink-0" />
+                {t('employeeEducation.generalPageTitle', { defaultValue: 'Educação Geral' })}
+              </Link>
+            </Button>
             <Button
               type="button"
               variant="outline"

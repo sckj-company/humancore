@@ -2,9 +2,15 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Folha salarial / 工资表</title>
+    <title>{{ ($isBilingual ?? (($lang ?? 'bilingual') !== 'pt')) ? 'Folha salarial / 工资表' : 'Folha salarial' }}</title>
     @php
-        $bilingualLabel = static fn (string $portuguese, string $mandarin): string => '<span class="pt">'.e($portuguese).'</span><span class="zh">'.e($mandarin).'</span>';
+        $isBilingual = $isBilingual ?? (($lang ?? 'bilingual') !== 'pt');
+        $bilingualLabel = static fn (string $portuguese, string $mandarin): string => $isBilingual
+            ? '<span class="pt">'.e($portuguese).'</span><span class="zh">'.e($mandarin).'</span>'
+            : '<span class="pt">'.e($portuguese).'</span>';
+        $bilingualInline = static fn (string $portuguese, string $mandarin): string => $isBilingual
+            ? e($portuguese).' / '.e($mandarin)
+            : e($portuguese);
         $classifyItem = static function ($item): string {
             $text = mb_strtolower(str_replace(['_', '-'], ' ', $item->code.' '.$item->name));
 
@@ -49,10 +55,12 @@
         $approvedByName = $period->approvedBy?->name;
         $employeeInssTotal = 0.0;
         $employerInssTotal = 0.0;
+        $irtTotal = 0.0;
         $otherDeductionsTotal = 0.0;
         foreach ($period->records as $record) {
             $items = $recordItems($record);
             $irtAmount = $itemTotal($items, 'irt') ?: (float) $record->total_taxes;
+            $irtTotal += $irtAmount;
             $employeeInssTotal += $itemTotal($items, 'inss');
             $employerInssTotal += abs((float) ($items->firstWhere('code', 'employer_inss')?->amount ?? $record->employer_inss ?? 0));
             $otherDeductionsTotal += max(
@@ -91,7 +99,7 @@
         .zh { color: #475569; font-size: 5.3px; margin-top: 1px; }
         .emp-code { display: block; color: #475569; font-size: 5.2px; margin-top: 1px; white-space: nowrap; }
         .totals { margin: 6px 0 0; page-break-inside: avoid; }
-        .totals td { width: 25%; padding: 3.5px 6px; border: 1px solid #cbd5e1; }
+        .totals td { width: 20%; padding: 3.5px 6px; border: 1px solid #cbd5e1; }
         .total-label { color: #475569; }
         .total-value { font-size: 8.5px; font-weight: bold; margin-top: 1.5px; }
         .records { table-layout: fixed; width: 100%; }
@@ -122,10 +130,10 @@
                 <div class="meta" style="text-align:left">NIF: {{ $period->tenant->tax_id }}</div>
             </td>
             <td>
-                <div class="title">FOLHA DE REMUNERAÇÃO / 工资表</div>
-                <div class="meta">Período / 工资期间: {{ $period->displayName() }}</div>
-                <div class="meta">Emitido em / 签发日期: {{ now()->format('d/m/Y') }}</div>
-                <div class="meta">Operador / 操作员: {{ $resolvedOperator }}</div>
+                <div class="title">{{ $bilingualInline('FOLHA DE REMUNERAÇÃO', '工资表') }}</div>
+                <div class="meta">{{ $bilingualInline('Período', '工资期间') }}: {{ $period->displayName() }}</div>
+                <div class="meta">{{ $bilingualInline('Emitido em', '签发日期') }}: {{ now()->format('d/m/Y') }}</div>
+                <div class="meta">{{ $bilingualInline('Operador', '操作员') }}: {{ $resolvedOperator }}</div>
             </td>
         </tr>
     </table>
@@ -247,6 +255,7 @@
             <td><div class="total-label">{!! $bilingualLabel('INSS dos funcionários (3%)', '员工 INSS（3%）') !!}</div><div class="total-value">{{ number_format($employeeInssTotal, 2) }} {{ $currency }}</div></td>
             <td><div class="total-label">{!! $bilingualLabel('INSS patronal (8%)', '雇主 INSS（8%）') !!}</div><div class="total-value">{{ number_format($employerInssTotal, 2) }} {{ $currency }}</div></td>
             <td><div class="total-label">{!! $bilingualLabel('INSS total (11%)', 'INSS 总额（11%）') !!}</div><div class="total-value">{{ number_format($employeeInssTotal + $employerInssTotal, 2) }} {{ $currency }}</div></td>
+            <td><div class="total-label">{!! $bilingualLabel('IRT total', '工资所得税总额') !!}</div><div class="total-value">{{ number_format($irtTotal, 2) }} {{ $currency }}</div></td>
             <td><div class="total-label">{!! $bilingualLabel('Total líquido a pagar', '应付净额') !!}</div><div class="total-value">{{ number_format((float) $period->records->sum('net_salary'), 2) }} {{ $currency }}</div></td>
         </tr>
     </table>

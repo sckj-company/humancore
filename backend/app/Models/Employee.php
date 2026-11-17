@@ -149,6 +149,11 @@ class Employee extends Model
         return $this->hasMany(LeaveRequest::class);
     }
 
+    public function educations()
+    {
+        return $this->hasMany(EmployeeEducation::class);
+    }
+
     public function payrollRecords()
     {
         return $this->hasMany(PayrollRecord::class);

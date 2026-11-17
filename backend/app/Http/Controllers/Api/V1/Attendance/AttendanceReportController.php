@@ -6,10 +6,9 @@ use App\Http\Controllers\Api\V1\BaseController;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Services\Attendance\AttendanceReportService;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\PdfDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class AttendanceReportController extends BaseController
@@ -30,22 +29,20 @@ class AttendanceReportController extends BaseController
 
         $report = $service->build($request, $request->user());
 
-        $fontCache = storage_path('framework/cache/dompdf/fonts');
-        File::ensureDirectoryExists($fontCache);
-
         $isSingleEmployee = count($report['employees']) === 1 || ! empty($report['filters']['employee_id']);
         $orientation = $isSingleEmployee ? 'portrait' : 'landscape';
 
-        $pdf = Pdf::setOption([
-            'font_dir' => $fontCache,
-            'font_cache' => $fontCache,
-            'chroot' => base_path(),
-            'default_font' => 'Droid Sans Fallback',
-        ])->loadView('pdf.attendance-report', [
-            'report' => $report,
-            'operatorName' => $request->user()?->name ?? 'Sistema',
-            'isSingleEmployee' => $isSingleEmployee,
-        ])->setPaper('a4', $orientation);
+        $pdf = PdfDocument::make(
+            view: 'pdf.attendance-report',
+            data: [
+                'report' => $report,
+                'operatorName' => $request->user()?->name ?? 'Sistema',
+                'isSingleEmployee' => $isSingleEmployee,
+            ],
+            paper: 'a4',
+            orientation: $orientation,
+            lang: $request->query('lang'),
+        );
 
         $scope = ! empty($report['filters']['employee_name'])
             ? str_replace(' ', '-', strtolower((string) $report['filters']['employee_name']))

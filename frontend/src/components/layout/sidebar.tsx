@@ -26,6 +26,7 @@ import {
   UserRound,
   Receipt,
   ClipboardCheck,
+  FileWarning,
 } from 'lucide-react'
 import { useUiStore } from '@/stores/ui-store'
 import { hasAnyRole, hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
@@ -87,6 +88,7 @@ const sections: NavSection[] = [
     titleKey: 'nav.section_people',
     items: [
       { titleKey: 'nav.employees', href: '/employees', icon: Users, permission: 'view_any_employee' },
+      { titleKey: 'nav.educations', href: '/educations', icon: FileWarning, permission: 'view_any_employee' },
       { titleKey: 'nav.organization', href: '/organization', icon: Building2, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_department' },
       { titleKey: 'nav.recruitment', href: '/recruitment', icon: UserPlus, roles: ['admin', 'hr-manager', 'manager'], permission: 'view_any_recruitment' },
     ],

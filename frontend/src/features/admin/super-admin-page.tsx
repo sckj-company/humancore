@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -63,74 +64,86 @@ const ANGOLA_PROVINCES = [
   'Namibe', 'Uíge', 'Zaire',
 ]
 
-const LEGAL_ENTITY_TYPES = [
-  { value: 'lda', label: 'Sociedade por Quotas (Lda.)' },
-  { value: 'sa', label: 'Sociedade Anónima (S.A.)' },
-  { value: 'unipessoal', label: 'Sociedade Unipessoal' },
-  { value: 'em', label: 'Empresa em Nome Individual' },
-  { value: 'cooperativa', label: 'Cooperativa' },
-  { value: 'epe', label: 'Empresa Pública (E.P.E.)' },
-  { value: 'ong', label: 'ONG / Associação' },
-  { value: 'outro', label: 'Outro' },
-]
+const LEGAL_ENTITY_TYPE_VALUES = [
+  'lda',
+  'sa',
+  'unipessoal',
+  'em',
+  'cooperativa',
+  'epe',
+  'ong',
+  'outro',
+] as const
 
 const ECONOMIC_SECTORS = [
-  'Agricultura e Pecuária',
-  'Pesca',
-  'Mineração e Recursos Naturais',
-  'Petróleo e Gás',
-  'Indústria Transformadora',
-  'Construção Civil',
-  'Comércio e Distribuição',
-  'Transportes e Logística',
-  'Tecnologia e Telecomunicações',
-  'Serviços Financeiros e Banca',
-  'Saúde',
-  'Educação',
-  'Hotelaria e Turismo',
-  'Serviços Gerais',
-  'Administração Pública',
-  'Outro',
-]
+  { value: 'Agricultura e Pecuária', key: 'agriculture' },
+  { value: 'Pesca', key: 'fishing' },
+  { value: 'Mineração e Recursos Naturais', key: 'mining' },
+  { value: 'Petróleo e Gás', key: 'oil_gas' },
+  { value: 'Indústria Transformadora', key: 'manufacturing' },
+  { value: 'Construção Civil', key: 'construction' },
+  { value: 'Comércio e Distribuição', key: 'commerce' },
+  { value: 'Transportes e Logística', key: 'transport' },
+  { value: 'Tecnologia e Telecomunicações', key: 'tech' },
+  { value: 'Serviços Financeiros e Banca', key: 'finance' },
+  { value: 'Saúde', key: 'health' },
+  { value: 'Educação', key: 'education' },
+  { value: 'Hotelaria e Turismo', key: 'tourism' },
+  { value: 'Serviços Gerais', key: 'services' },
+  { value: 'Administração Pública', key: 'public_admin' },
+  { value: 'Outro', key: 'other' },
+] as const
+
+const CURRENCY_CODES = ['AOA', 'USD', 'EUR', 'ZAR', 'CNY'] as const
+const LOCALE_CODES = ['pt', 'en', 'zh'] as const
+const TIMEZONE_IDS = [
+  'Africa/Luanda',
+  'Africa/Johannesburg',
+  'Africa/Nairobi',
+  'UTC',
+  'Europe/Lisbon',
+] as const
 
 const STATUS_VARIANT = { active: 'success', inactive: 'secondary', suspended: 'warning' } as const
 
 // ── Schema de validação ───────────────────────────────────────────────────────
 
-const tenantSchema = z.object({
-  // Identificação
-  name: z.string().min(2, 'Nome é obrigatório'),
-  slug: z.string().min(2).regex(/^[a-z0-9-]+$/, 'Slug inválido (minúsculas, números, hífens)'),
-  legal_entity_type: z.string().optional().or(z.literal('')),
-  tax_id: z.string().optional().or(z.literal('')),          // NIF angolano
-  inss_number: z.string().optional().or(z.literal('')),     // Nº INSS
-  economic_sector: z.string().optional().or(z.literal('')),
+function createTenantSchema(t: TFunction) {
+  return z.object({
+    // Identificação
+    name: z.string().min(2, t('superAdminPage.validation.nameRequired')),
+    slug: z.string().min(2, t('superAdminPage.validation.slugInvalid')).regex(/^[a-z0-9-]+$/, t('superAdminPage.validation.slugInvalid')),
+    legal_entity_type: z.string().optional().or(z.literal('')),
+    tax_id: z.string().optional().or(z.literal('')),
+    inss_number: z.string().optional().or(z.literal('')),
+    economic_sector: z.string().optional().or(z.literal('')),
 
-  // Contactos
-  email: z.string().email('Email inválido').optional().or(z.literal('')),
-  phone: z.string().optional().or(z.literal('')),
-  website: z.string().url('URL inválido').optional().or(z.literal('')),
+    // Contactos
+    email: z.string().email(t('superAdminPage.validation.invalidEmail')).optional().or(z.literal('')),
+    phone: z.string().optional().or(z.literal('')),
+    website: z.string().url(t('superAdminPage.validation.invalidUrl')).optional().or(z.literal('')),
 
-  // Morada
-  address: z.string().optional().or(z.literal('')),
-  city: z.string().optional().or(z.literal('')),
-  province: z.string().optional().or(z.literal('')),
-  country: z.string().optional().or(z.literal('')),
-  postal_code: z.string().optional().or(z.literal('')),
+    // Morada
+    address: z.string().optional().or(z.literal('')),
+    city: z.string().optional().or(z.literal('')),
+    province: z.string().optional().or(z.literal('')),
+    country: z.string().optional().or(z.literal('')),
+    postal_code: z.string().optional().or(z.literal('')),
 
-  // Configurações
-  currency: z.string().length(3).optional().or(z.literal('')),
-  locale: z.string().optional().or(z.literal('')),
-  timezone: z.string().optional().or(z.literal('')),
-  status: z.enum(['active', 'inactive', 'suspended']),
+    // Configurações
+    currency: z.string().length(3, t('superAdminPage.validation.currencyLength')).optional().or(z.literal('')),
+    locale: z.string().optional().or(z.literal('')),
+    timezone: z.string().optional().or(z.literal('')),
+    status: z.enum(['active', 'inactive', 'suspended']),
 
-  // Admin inicial
-  admin_name: z.string().optional().or(z.literal('')),
-  admin_email: z.string().email('Email inválido').optional().or(z.literal('')),
-  admin_password: z.string().min(8, 'Mínimo 8 caracteres').optional().or(z.literal('')),
-})
+    // Admin inicial
+    admin_name: z.string().optional().or(z.literal('')),
+    admin_email: z.string().email(t('superAdminPage.validation.invalidEmail')).optional().or(z.literal('')),
+    admin_password: z.string().min(8, t('superAdminPage.validation.passwordMin')).optional().or(z.literal('')),
+  })
+}
 
-type TenantForm = z.infer<typeof tenantSchema>
+type TenantForm = z.infer<ReturnType<typeof createTenantSchema>>
 
 const emptyForm: TenantForm = {
   name: '',
@@ -242,14 +255,16 @@ const emptyPlatformUser: NewPlatformUser = {
   permissions: ['view_any_tenant'],
 }
 
-const userSchema = z.object({
-  name: z.string().min(2, 'Nome obrigatório'),
-  email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Mínimo 8 caracteres'),
-  role: z.enum(['admin', 'hr-manager', 'manager', 'employee']),
-  permissions: z.array(z.string()).default([]),
-})
-type UserForm = z.infer<typeof userSchema>
+function createUserSchema(t: TFunction) {
+  return z.object({
+    name: z.string().min(2, t('superAdminPage.validation.nameRequired')),
+    email: z.string().email(t('superAdminPage.validation.invalidEmail')),
+    password: z.string().min(8, t('superAdminPage.validation.passwordMin')),
+    role: z.enum(['admin', 'hr-manager', 'manager', 'employee']),
+    permissions: z.array(z.string()).default([]),
+  })
+}
+type UserForm = z.infer<ReturnType<typeof createUserSchema>>
 const emptyUserForm: UserForm = { name: '', email: '', password: '', role: 'admin', permissions: [] }
 
 function toTenantAccessDrafts(accesses?: TenantAccessSummary[]): TenantAccessDraft[] {
@@ -314,7 +329,7 @@ function CopyPermissionsControls({
 export function SuperAdminPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const currentUser = useAuthStore((state) => state.user)
   const canManagePlatformUsers = currentUser?.roles.includes('super-admin') || hasPermission(currentUser, 'manage_super_admins')
   const canCreateTenant = hasPermission(currentUser, 'create_tenant')
@@ -474,12 +489,12 @@ export function SuperAdminPage() {
         ? api.put<Tenant>(`superadmin/tenants/${editing.id}`, data)
         : api.post<Tenant>('superadmin/tenants', data),
     onSuccess: () => {
-      toast.success(editing ? 'Empresa atualizada com sucesso' : 'Empresa criada com sucesso')
+      toast.success(editing ? t('superAdminPage.companyUpdated') : t('superAdminPage.companyCreated'))
       setDialogOpen(false)
       invalidate()
     },
     onError: (e) => {
-      const msg = getApiErrorMessage(e, 'Erro ao guardar empresa')
+      const msg = getApiErrorMessage(e, t('superAdminPage.companySaveError'))
       setErrors({ form: msg })
       toast.error(msg)
     },
@@ -488,14 +503,14 @@ export function SuperAdminPage() {
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: number; status: Tenant['status'] }) =>
       api.put<Tenant>(`superadmin/tenants/${id}`, { status }),
-    onSuccess: () => { toast.success('Estado atualizado'); invalidate() },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro')),
+    onSuccess: () => { toast.success(t('superAdminPage.companyStatusUpdated')); invalidate() },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('common.error'))),
   })
 
   const deleteTenant = useMutation({
     mutationFn: (id: number) => api.delete(`superadmin/tenants/${id}`),
-    onSuccess: () => { toast.success('Empresa eliminada'); invalidate() },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao eliminar empresa')),
+    onSuccess: () => { toast.success(t('superAdminPage.companyDeleted')); invalidate() },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('superAdminPage.companyDeleteError'))),
   })
 
   const createUser = useMutation({
@@ -629,7 +644,7 @@ export function SuperAdminPage() {
   })
 
   const handleSubmit = () => {
-    const parsed = tenantSchema.safeParse(form)
+    const parsed = createTenantSchema(t).safeParse(form)
     if (!parsed.success) {
       const errs: Record<string, string> = {}
       parsed.error.issues.forEach((i) => { errs[i.path[0] as string] = i.message })
@@ -641,7 +656,7 @@ export function SuperAdminPage() {
   }
 
   const handleUserSubmit = () => {
-    const parsed = userSchema.safeParse(userForm)
+    const parsed = createUserSchema(t).safeParse(userForm)
     if (!parsed.success) {
       const errs: Record<string, string> = {}
       parsed.error.issues.forEach((i) => { errs[i.path[0] as string] = i.message })
@@ -723,7 +738,7 @@ export function SuperAdminPage() {
       sourceUserName: u.name,
       permissions,
     })
-    toast.success(`Permissões de ${u.name} copiadas (${permissions.length}).`)
+    toast.success(t('superAdminPage.permissionsCopied', { name: u.name, count: permissions.length }))
   }
 
   const copyPlatformUserPermissions = (u: PlatformUser) => {
@@ -738,7 +753,16 @@ export function SuperAdminPage() {
 
   const dashboardData = dashboardQuery.data
   const trendOption: EChartsOption = useMemo(() => {
-    const labels = (dashboardData?.tenant_trend ?? []).map((d) => d.label)
+    const labels = (dashboardData?.tenant_trend ?? []).map((d) => {
+      if (!d.month) return d.label
+      const dt = new Date(`${d.month}-01T00:00:00`)
+      if (Number.isNaN(dt.getTime())) return d.label
+      try {
+        return new Intl.DateTimeFormat(i18n.language, { month: 'short', year: '2-digit' }).format(dt)
+      } catch {
+        return d.label
+      }
+    })
     const values = (dashboardData?.tenant_trend ?? []).map((d) => d.count)
     return {
       tooltip: {
@@ -766,7 +790,7 @@ export function SuperAdminPage() {
       },
       series: [
         {
-          name: 'Empresas',
+          name: t('superAdminPage.companiesSeries'),
           type: 'bar',
           barWidth: '45%',
           data: values,
@@ -774,7 +798,7 @@ export function SuperAdminPage() {
         },
       ],
     }
-  }, [dashboardData])
+  }, [dashboardData, t, i18n.language])
 
   const statusOption: EChartsOption = useMemo(() => {
     const statusItems = Object.entries(dashboardData?.by_status ?? {}).map(([k, v]) => ({
@@ -827,18 +851,18 @@ export function SuperAdminPage() {
   const scopeTenantsList = allTenantsQuery.data?.data ?? tenants?.data ?? []
 
   const tabs = [
-    { id: 'info' as const, label: 'Identificação' },
-    { id: 'address' as const, label: 'Localização' },
-    { id: 'config' as const, label: 'Configurações' },
-    ...(!editing ? [{ id: 'admin' as const, label: 'Admin Inicial' }] : []),
+    { id: 'info' as const, label: t('superAdminPage.formTabs.info') },
+    { id: 'address' as const, label: t('superAdminPage.formTabs.address') },
+    { id: 'config' as const, label: t('superAdminPage.formTabs.config') },
+    ...(!editing ? [{ id: 'admin' as const, label: t('superAdminPage.formTabs.admin') }] : []),
   ]
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="SUPER ADMIN"
-        title="Gestão de Empresas & Painel Global"
-        description="Monitorize a plataforma, gira empresas (tenants), utilizadores e permissões"
+        eyebrow={t('superAdminPage.eyebrow')}
+        title={t('superAdminPage.pageTitle')}
+        description={t('superAdminPage.pageDescription')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canManagePlatformUsers && (
@@ -850,7 +874,7 @@ export function SuperAdminPage() {
             {canCreateTenant && (
               <Button size="sm" onClick={openCreate}>
                 <Plus className="mr-1.5 h-4 w-4" />
-                Nova empresa
+                {t('superAdminPage.newCompany')}
               </Button>
             )}
           </div>
@@ -860,25 +884,25 @@ export function SuperAdminPage() {
       {/* ── Dashboard do Super Admin ─────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label={`Total de Empresas (${dashboardData?.kpis.active_tenants ?? 0} ativas)`}
+          label={t('superAdminPage.kpiCompanies', { active: dashboardData?.kpis.active_tenants ?? 0 })}
           value={dashboardData?.kpis.total_tenants ?? tenants?.meta?.total ?? 0}
           icon={Building2}
           accent="primary"
         />
         <KpiCard
-          label={`Funcionários (${dashboardData?.kpis.active_employees ?? 0} ativos)`}
+          label={t('superAdminPage.kpiEmployees', { active: dashboardData?.kpis.active_employees ?? 0 })}
           value={dashboardData?.kpis.total_employees ?? 0}
           icon={Users}
           accent="success"
         />
         <KpiCard
-          label={`Utilizadores (${dashboardData?.kpis.super_admins ?? 0} super-admins)`}
+          label={t('superAdminPage.kpiUsers', { superAdmins: dashboardData?.kpis.super_admins ?? 0 })}
           value={dashboardData?.kpis.total_users ?? 0}
           icon={UserCog}
           accent="info"
         />
         <KpiCard
-          label="Empresas Suspensas"
+          label={t('superAdminPage.kpiSuspended')}
           value={dashboardData?.kpis.suspended_tenants ?? 0}
           icon={AlertTriangle}
           accent={(dashboardData?.kpis.suspended_tenants ?? 0) > 0 ? 'warning' : 'neutral'}
@@ -891,9 +915,9 @@ export function SuperAdminPage() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Activity className="h-4 w-4 text-primary" />
-                Crescimento de Empresas (12 meses)
+                {t('superAdminPage.trendTitle')}
               </CardTitle>
-              <CardDescription>Novas empresas registadas por mês</CardDescription>
+              <CardDescription>{t('superAdminPage.trendDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 pt-2">
               <Chart option={trendOption} height={220} />
@@ -904,23 +928,23 @@ export function SuperAdminPage() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Globe2 className="h-4 w-4 text-primary" />
-                Estado & Porte
+                {t('superAdminPage.statusAndSizeTitle')}
               </CardTitle>
-              <CardDescription>Distribuição atual das empresas</CardDescription>
+              <CardDescription>{t('superAdminPage.statusAndSizeDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col justify-between gap-3 pt-2">
               <Chart option={statusOption} height={175} />
               <div className="grid grid-cols-3 gap-2 border-t pt-3 text-center text-xs">
                 <div>
-                  <p className="text-muted-foreground">Pequenas</p>
+                  <p className="text-muted-foreground">{t('superAdminPage.sizeSmall')}</p>
                   <p className="font-semibold tabular-nums">{dashboardData.segments.small}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Médias</p>
+                  <p className="text-muted-foreground">{t('superAdminPage.sizeMedium')}</p>
                   <p className="font-semibold tabular-nums">{dashboardData.segments.medium}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Grandes</p>
+                  <p className="text-muted-foreground">{t('superAdminPage.sizeLarge')}</p>
                   <p className="font-semibold tabular-nums">{dashboardData.segments.large}</p>
                 </div>
               </div>
@@ -952,13 +976,13 @@ export function SuperAdminPage() {
           <Card>
             <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle className="text-base">Empresas registadas</CardTitle>
-                <CardDescription>Selecione uma empresa para abrir o painel operacional ou gerir os seus utilizadores e permissões</CardDescription>
+                <CardTitle className="text-base">{t('superAdminPage.registeredTenantsTab')}</CardTitle>
+                <CardDescription>{t('superAdminPage.registeredTenantsDescription')}</CardDescription>
               </div>
               {canCreateTenant && (
                 <Button size="sm" className="shrink-0" onClick={openCreate}>
                   <Plus className="mr-1.5 h-4 w-4" />
-                  Nova empresa
+                  {t('superAdminPage.newCompany')}
                 </Button>
               )}
             </CardHeader>
@@ -969,7 +993,7 @@ export function SuperAdminPage() {
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     className="pl-9"
-                    placeholder="Pesquisar por nome, NIF ou email..."
+                    placeholder={t('superAdminPage.searchTenantsPlaceholder')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -979,10 +1003,10 @@ export function SuperAdminPage() {
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                 >
-                  <option value="all">Todos os estados</option>
-                  <option value="active">Ativa</option>
-                  <option value="inactive">Inativa</option>
-                  <option value="suspended">Suspensa</option>
+                  <option value="all">{t('superAdminPage.allStatuses')}</option>
+                  <option value="active">{t('superAdminPage.tenantStatuses.active')}</option>
+                  <option value="inactive">{t('superAdminPage.tenantStatuses.inactive')}</option>
+                  <option value="suspended">{t('superAdminPage.tenantStatuses.suspended')}</option>
                 </select>
               </div>
 
@@ -994,14 +1018,14 @@ export function SuperAdminPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-left">
                       <tr className="text-xs text-muted-foreground">
-                        <th className="px-3 py-2.5 font-medium">Empresa</th>
-                        <th className="px-3 py-2.5 font-medium">NIF</th>
-                        <th className="px-3 py-2.5 font-medium">Localização</th>
-                        <th className="px-3 py-2.5 font-medium">Estado</th>
-                        <th className="px-3 py-2.5 font-medium">Funcionários</th>
-                        <th className="px-3 py-2.5 font-medium">Departamentos</th>
-                        <th className="px-3 py-2.5 font-medium">Criada em</th>
-                        <th className="px-3 py-2.5 text-right font-medium">Ações</th>
+                        <th className="px-3 py-2.5 font-medium">{t('superAdminPage.companyLabel')}</th>
+                        <th className="px-3 py-2.5 font-medium">{t('superAdminPage.taxIdShort')}</th>
+                        <th className="px-3 py-2.5 font-medium">{t('superAdminPage.locationLabel')}</th>
+                        <th className="px-3 py-2.5 font-medium">{t('superAdminPage.status')}</th>
+                        <th className="px-3 py-2.5 font-medium">{t('superAdminPage.employeesCol')}</th>
+                        <th className="px-3 py-2.5 font-medium">{t('superAdminPage.departmentsCol')}</th>
+                        <th className="px-3 py-2.5 font-medium">{t('superAdminPage.createdAtCol')}</th>
+                        <th className="px-3 py-2.5 text-right font-medium">{t('superAdminPage.actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -1029,7 +1053,7 @@ export function SuperAdminPage() {
                           </td>
                           <td className="px-3 py-2.5">
                             <Badge variant={STATUS_VARIANT[tenantItem.status] ?? 'secondary'}>
-                              {tenantItem.status === 'active' ? 'Ativa' : tenantItem.status === 'suspended' ? 'Suspensa' : 'Inativa'}
+                              {t(`superAdminPage.tenantStatuses.${tenantItem.status}`, { defaultValue: tenantItem.status })}
                             </Badge>
                           </td>
                           <td className="px-3 py-2.5">
@@ -1045,14 +1069,15 @@ export function SuperAdminPage() {
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-muted-foreground">
-                            {tenantItem.created_at ? new Date(tenantItem.created_at).toLocaleDateString('pt') : '—'}
+                            {tenantItem.created_at ? new Date(tenantItem.created_at).toLocaleDateString(i18n.language) : '—'}
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex justify-end gap-1">
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                title="Abrir painel desta empresa"
+                                title={t('superAdminPage.openTenantPanel')}
+                                aria-label={t('superAdminPage.openTenantPanel')}
                                 onClick={() => {
                                   localStorage.setItem('hrms_selected_tenant', String(tenantItem.id))
                                   navigate('/')
@@ -1062,18 +1087,31 @@ export function SuperAdminPage() {
                                 <ArrowUpRight className="h-3.5 w-3.5" />
                               </Button>
                               {canViewTenantUsers && (
-                                <Button size="sm" variant="ghost" title="Gerir utilizadores e permissões" onClick={() => openUsers(tenantItem)}>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  title={t('superAdminPage.manageUsersPermissions')}
+                                  aria-label={t('superAdminPage.manageUsersPermissions')}
+                                  onClick={() => openUsers(tenantItem)}
+                                >
                                   <Users className="h-3.5 w-3.5" />
                                 </Button>
                               )}
                               {canUpdateTenant && (
                                 <>
-                                  <Button size="sm" variant="ghost" title="Editar empresa" onClick={() => openEdit(tenantItem)}>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    title={t('superAdminPage.editCompany')}
+                                    aria-label={t('superAdminPage.editCompany')}
+                                    onClick={() => openEdit(tenantItem)}
+                                  >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
                                   <Button
                                     size="sm" variant="ghost"
-                                    title={tenantItem.status === 'suspended' ? 'Reativar empresa' : 'Suspender empresa'}
+                                    title={tenantItem.status === 'suspended' ? t('superAdminPage.reactivateCompany') : t('superAdminPage.suspendCompany')}
+                                    aria-label={tenantItem.status === 'suspended' ? t('superAdminPage.reactivateCompany') : t('superAdminPage.suspendCompany')}
                                     disabled={setStatus.isPending}
                                     onClick={() => setStatus.mutate({ id: tenantItem.id, status: tenantItem.status === 'suspended' ? 'active' : 'suspended' })}
                                   >
@@ -1084,8 +1122,10 @@ export function SuperAdminPage() {
                               {canDeleteTenant && (
                                 <Button
                                   size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+                                  title={t('superAdminPage.deleteCompany')}
+                                  aria-label={t('superAdminPage.deleteCompany')}
                                   disabled={deleteTenant.isPending}
-                                  onClick={() => { if (window.confirm(`Eliminar a empresa "${tenantItem.name}"?`)) deleteTenant.mutate(tenantItem.id) }}
+                                  onClick={() => { if (window.confirm(t('superAdminPage.confirmDeleteCompany', { name: tenantItem.name }))) deleteTenant.mutate(tenantItem.id) }}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -1097,7 +1137,7 @@ export function SuperAdminPage() {
                       {!loadingTenants && (tenants?.data ?? []).length === 0 && (
                         <tr>
                           <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
-                            Nenhuma empresa encontrada.
+                            {t('superAdminPage.noCompaniesFound')}
                           </td>
                         </tr>
                       )}
@@ -1343,11 +1383,13 @@ export function SuperAdminPage() {
           {/* Header fixo */}
           <div className="px-6 pt-6 pb-3 border-b bg-background shrink-0">
             <DialogHeader className="mb-3">
-              <DialogTitle className="text-lg">{editing ? 'Editar empresa' : 'Registar nova empresa'}</DialogTitle>
+              <DialogTitle className="text-lg">
+                {editing ? t('superAdminPage.editCompany') : t('superAdminPage.registerCompany')}
+              </DialogTitle>
               <DialogDescription className="text-xs">
                 {editing
-                  ? 'Atualize os dados de registo da empresa.'
-                  : 'Preencha os dados para registar uma nova empresa na plataforma.'}
+                  ? t('superAdminPage.editCompanyDescription')
+                  : t('superAdminPage.registerCompanyDescription')}
               </DialogDescription>
             </DialogHeader>
 
@@ -1377,9 +1419,9 @@ export function SuperAdminPage() {
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label>Nome da empresa *</Label>
+                    <Label>{t('superAdminPage.companyNameLabel')} *</Label>
                     <Input
-                      placeholder="Ex: Empresa Exemplo, Lda."
+                      placeholder={t('superAdminPage.companyNamePlaceholder')}
                       value={form.name}
                       onChange={(e) => {
                         const name = e.target.value
@@ -1390,9 +1432,9 @@ export function SuperAdminPage() {
                     {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Slug (identificador único) *</Label>
+                    <Label>{t('superAdminPage.slugLabel')} *</Label>
                     <Input
-                      placeholder="ex: empresa-exemplo"
+                      placeholder={t('superAdminPage.slugPlaceholder')}
                       value={form.slug}
                       disabled={!!editing}
                       onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
@@ -1403,28 +1445,28 @@ export function SuperAdminPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label>Tipo de pessoa jurídica</Label>
+                    <Label>{t('superAdminPage.legalEntityTypeLabel')}</Label>
                     <select
                       className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                       value={form.legal_entity_type}
                       onChange={(e) => setForm({ ...form, legal_entity_type: e.target.value })}
                     >
-                      <option value="">Selecione...</option>
-                      {LEGAL_ENTITY_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
+                      <option value="">{t('superAdminPage.selectPlaceholder')}</option>
+                      {LEGAL_ENTITY_TYPE_VALUES.map((val) => (
+                        <option key={val} value={val}>{t(`superAdminPage.legalEntityTypes.${val}`)}</option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Sector de actividade</Label>
+                    <Label>{t('superAdminPage.economicSectorLabel')}</Label>
                     <select
                       className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                       value={form.economic_sector}
                       onChange={(e) => setForm({ ...form, economic_sector: e.target.value })}
                     >
-                      <option value="">Selecione...</option>
+                      <option value="">{t('superAdminPage.selectPlaceholder')}</option>
                       {ECONOMIC_SECTORS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
+                        <option key={s.value} value={s.value}>{t(`superAdminPage.economicSectors.${s.key}`)}</option>
                       ))}
                     </select>
                   </div>
@@ -1434,26 +1476,26 @@ export function SuperAdminPage() {
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5">
                       <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-                      NIF (Nº de Identificação Fiscal)
+                      {t('superAdminPage.taxIdLabel')}
                     </Label>
                     <Input
-                      placeholder="Ex: 5000012345"
+                      placeholder={t('superAdminPage.taxIdPlaceholder')}
                       value={form.tax_id}
                       onChange={(e) => setForm({ ...form, tax_id: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                     />
-                    <p className="text-[10px] text-muted-foreground">10 dígitos numéricos (AGT Angola)</p>
+                    <p className="text-[10px] text-muted-foreground">{t('superAdminPage.taxIdHint')}</p>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5">
                       <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-                      Nº INSS
+                      {t('superAdminPage.inssNumberLabel')}
                     </Label>
                     <Input
-                      placeholder="Ex: 123456789"
+                      placeholder={t('superAdminPage.inssNumberPlaceholder')}
                       value={form.inss_number}
                       onChange={(e) => setForm({ ...form, inss_number: e.target.value })}
                     />
-                    <p className="text-[10px] text-muted-foreground">Nº de inscrição no INSS</p>
+                    <p className="text-[10px] text-muted-foreground">{t('superAdminPage.inssNumberHint')}</p>
                   </div>
                 </div>
 
@@ -1461,7 +1503,7 @@ export function SuperAdminPage() {
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5">
                       <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                      Email
+                      {t('superAdminPage.email')}
                     </Label>
                     <Input type="email" placeholder="geral@empresa.ao" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                     {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
@@ -1469,7 +1511,7 @@ export function SuperAdminPage() {
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5">
                       <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                      Telefone
+                      {t('superAdminPage.phoneLabel')}
                     </Label>
                     <Input placeholder="+244 222 000 000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                   </div>
@@ -1477,20 +1519,20 @@ export function SuperAdminPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label>Website</Label>
+                    <Label>{t('superAdminPage.websiteLabel')}</Label>
                     <Input placeholder="https://empresa.ao" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
                     {errors.website && <p className="text-xs text-destructive">{errors.website}</p>}
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Estado da empresa</Label>
+                    <Label>{t('superAdminPage.companyStatusLabel')}</Label>
                     <select
                       className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                       value={form.status}
                       onChange={(e) => setForm({ ...form, status: e.target.value as Tenant['status'] })}
                     >
-                      <option value="active">Ativa</option>
-                      <option value="inactive">Inativa</option>
-                      <option value="suspended">Suspensa</option>
+                      <option value="active">{t('superAdminPage.tenantStatuses.active')}</option>
+                      <option value="inactive">{t('superAdminPage.tenantStatuses.inactive')}</option>
+                      <option value="suspended">{t('superAdminPage.tenantStatuses.suspended')}</option>
                     </select>
                   </div>
                 </div>
@@ -1498,7 +1540,7 @@ export function SuperAdminPage() {
                 {!editing && (
                   <p className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
                     <ChevronRight className="h-3.5 w-3.5 text-primary" />
-                    Utilize as abas acima para configurar a localização, moeda e administrador inicial.
+                    {t('superAdminPage.createTabsHint')}
                   </p>
                 )}
               </div>
@@ -1510,45 +1552,45 @@ export function SuperAdminPage() {
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                    Endereço
+                    {t('superAdminPage.addressLabel')}
                   </Label>
-                  <Input placeholder="Rua, Nº, Bairro" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                  <Input placeholder={t('superAdminPage.addressPlaceholder')} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label>Município / Cidade</Label>
-                    <Input placeholder="Ex: Luanda, Talatona" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                    <Label>{t('superAdminPage.cityLabel')}</Label>
+                    <Input placeholder={t('superAdminPage.cityPlaceholder')} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Código Postal</Label>
+                    <Label>{t('superAdminPage.postalCodeLabel')}</Label>
                     <Input placeholder="Ex: 1104" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} />
                   </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label>Província</Label>
+                    <Label>{t('superAdminPage.provinceLabel')}</Label>
                     <select
                       className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                       value={form.province}
                       onChange={(e) => setForm({ ...form, province: e.target.value })}
                     >
-                      <option value="">Selecione a província...</option>
+                      <option value="">{t('superAdminPage.selectProvincePlaceholder')}</option>
                       {ANGOLA_PROVINCES.map((p) => (
                         <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>País</Label>
+                    <Label>{t('superAdminPage.countryLabel')}</Label>
                     <Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
                   </div>
                 </div>
 
                 <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
-                  <p className="font-medium text-foreground">Registo Geográfico em Angola</p>
-                  <p>As 18 províncias e respectivos municípios seguem a divisão político-administrativa da República de Angola.</p>
+                  <p className="font-medium text-foreground">{t('superAdminPage.geoBoxTitle')}</p>
+                  <p>{t('superAdminPage.geoBoxDescription')}</p>
                 </div>
               </div>
             )}
@@ -1558,52 +1600,48 @@ export function SuperAdminPage() {
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-1.5">
-                    <Label>Moeda</Label>
+                    <Label>{t('superAdminPage.currencyLabel')}</Label>
                     <select
                       className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                       value={form.currency}
                       onChange={(e) => setForm({ ...form, currency: e.target.value })}
                     >
-                      <option value="AOA">AOA — Kwanza angolano</option>
-                      <option value="USD">USD — Dólar americano</option>
-                      <option value="EUR">EUR — Euro</option>
-                      <option value="ZAR">ZAR — Rand sul-africano</option>
-                      <option value="CNY">CNY — Yuan chinês</option>
+                      {CURRENCY_CODES.map((code) => (
+                        <option key={code} value={code}>{t(`superAdminPage.currencies.${code}`)}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Idioma (Locale)</Label>
+                    <Label>{t('superAdminPage.localeLabel')}</Label>
                     <select
                       className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                       value={form.locale}
                       onChange={(e) => setForm({ ...form, locale: e.target.value })}
                     >
-                      <option value="pt">Português</option>
-                      <option value="en">English</option>
-                      <option value="zh">中文</option>
+                      {LOCALE_CODES.map((code) => (
+                        <option key={code} value={code}>{t(`superAdminPage.languages.${code}`)}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Fuso horário</Label>
+                    <Label>{t('superAdminPage.timezoneLabel')}</Label>
                     <select
                       className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                       value={form.timezone}
                       onChange={(e) => setForm({ ...form, timezone: e.target.value })}
                     >
-                      <option value="Africa/Luanda">África/Luanda (WAT +01:00)</option>
-                      <option value="Africa/Johannesburg">África/Joanesburgo (SAST +02:00)</option>
-                      <option value="Africa/Nairobi">África/Nairobi (EAT +03:00)</option>
-                      <option value="UTC">UTC +00:00</option>
-                      <option value="Europe/Lisbon">Europa/Lisboa (WET)</option>
+                      {TIMEZONE_IDS.map((tz) => (
+                        <option key={tz} value={tz}>{t(`superAdminPage.timezones.${tz}`)}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
 
                 <div className="rounded-lg bg-muted/40 p-4 text-xs text-muted-foreground space-y-1.5">
-                  <p className="font-medium text-foreground">Padrão de Configuração Fiscal em Angola</p>
-                  <p>• Moeda oficial: Kwanza (AOA)</p>
-                  <p>• Fuso horário: Horário da África Ocidental (WAT, UTC+1)</p>
-                  <p>• O ano fiscal em Angola coincide com o ano civil (01 de Janeiro a 31 de Dezembro).</p>
+                  <p className="font-medium text-foreground">{t('superAdminPage.fiscalBoxTitle')}</p>
+                  <p>• {t('superAdminPage.fiscalBulletCurrency')}</p>
+                  <p>• {t('superAdminPage.fiscalBulletTimezone')}</p>
+                  <p>• {t('superAdminPage.fiscalBulletFiscalYear')}</p>
                 </div>
               </div>
             )}
@@ -1612,20 +1650,20 @@ export function SuperAdminPage() {
             {activeTab === 'admin' && !editing && (
               <div className="space-y-4">
                 <div className="rounded-lg bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
-                  Crie o primeiro utilizador administrador com acesso total a esta empresa. Se optar por não preencher agora, poderá criar e associar utilizadores posteriormente.
+                  {t('superAdminPage.initialAdminBanner')}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Nome do administrador</Label>
-                  <Input value={form.admin_name} onChange={(e) => setForm({ ...form, admin_name: e.target.value })} placeholder="Ex: João Silva" />
+                  <Label>{t('superAdminPage.adminNameLabel')}</Label>
+                  <Input value={form.admin_name} onChange={(e) => setForm({ ...form, admin_name: e.target.value })} placeholder={t('superAdminPage.adminNamePlaceholder')} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Email do administrador</Label>
+                  <Label>{t('superAdminPage.adminEmailLabel')}</Label>
                   <Input type="email" value={form.admin_email} onChange={(e) => setForm({ ...form, admin_email: e.target.value })} placeholder="admin@empresa.ao" />
                   {errors.admin_email && <p className="text-xs text-destructive">{errors.admin_email}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Palavra-passe</Label>
-                  <Input type="password" value={form.admin_password} onChange={(e) => setForm({ ...form, admin_password: e.target.value })} placeholder="Mínimo 8 caracteres" />
+                  <Label>{t('superAdminPage.adminPasswordLabel')}</Label>
+                  <Input type="password" value={form.admin_password} onChange={(e) => setForm({ ...form, admin_password: e.target.value })} placeholder={t('superAdminPage.adminPasswordPlaceholder')} />
                   {errors.admin_password && <p className="text-xs text-destructive">{errors.admin_password}</p>}
                 </div>
               </div>
@@ -1646,7 +1684,7 @@ export function SuperAdminPage() {
                     setActiveTab(tabs[idx - 1].id)
                   }}
                 >
-                  Anterior
+                  {t('common.previous')}
                 </Button>
               )}
               {tabs.indexOf(tabs.find((t) => t.id === activeTab)!) < tabs.length - 1 && (
@@ -1657,15 +1695,15 @@ export function SuperAdminPage() {
                     setActiveTab(tabs[idx + 1].id)
                   }}
                 >
-                  Próximo
+                  {t('common.next')}
                 </Button>
               )}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleSubmit} disabled={saveTenant.isPending}>
                 {saveTenant.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                {editing ? 'Guardar alterações' : 'Registar empresa'}
+                {editing ? t('superAdminPage.saveChanges') : t('superAdminPage.registerCompanyButton')}
               </Button>
             </div>
           </div>
@@ -1678,20 +1716,23 @@ export function SuperAdminPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
-              Utilizadores — {selectedTenant?.name}
+              {t('superAdminPage.tenantUsersDialogTitle', { tenant: selectedTenant?.name ?? '' })}
             </DialogTitle>
-            <DialogDescription>Gerir os utilizadores, papéis e permissões desta empresa.</DialogDescription>
+            <DialogDescription>{t('superAdminPage.tenantUsersDialogDescription')}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             {copiedTenantPermissions ? (
               <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs">
                 <ClipboardPaste className="h-3.5 w-3.5 text-primary" />
                 <span>
-                  Permissões copiadas de <strong>{copiedTenantPermissions.sourceUserName}</strong> ({copiedTenantPermissions.permissions.length})
+                  {t('superAdminPage.permissionsCopied', {
+                    name: copiedTenantPermissions.sourceUserName,
+                    count: copiedTenantPermissions.permissions.length,
+                  })}
                 </span>
                 <button
                   type="button"
-                  aria-label="Limpar permissões copiadas"
+                  aria-label={t('superAdminPage.clearCopiedPermissions')}
                   className="text-muted-foreground hover:text-foreground"
                   onClick={() => setCopiedTenantPermissions(null)}
                 >
@@ -1709,7 +1750,7 @@ export function SuperAdminPage() {
                 setUserDialogOpen(true)
               }}
             >
-              <UserPlus className="mr-1.5 h-4 w-4" /> Novo utilizador
+              <UserPlus className="mr-1.5 h-4 w-4" /> {t('superAdminPage.newUserButton')}
             </Button>
           </div>
           {loadingUsers ? (
@@ -1719,11 +1760,11 @@ export function SuperAdminPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr className="text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2.5 font-medium">Nome</th>
-                    <th className="px-3 py-2.5 font-medium">Papel</th>
-                    <th className="px-3 py-2.5 font-medium">Permissões</th>
-                    <th className="px-3 py-2.5 font-medium">Estado</th>
-                    <th className="px-3 py-2.5 text-right font-medium">Ações</th>
+                    <th className="px-3 py-2.5 font-medium">{t('superAdminPage.name')}</th>
+                    <th className="px-3 py-2.5 font-medium">{t('superAdminPage.roleLabel')}</th>
+                    <th className="px-3 py-2.5 font-medium">{t('superAdminPage.permissions')}</th>
+                    <th className="px-3 py-2.5 font-medium">{t('superAdminPage.status')}</th>
+                    <th className="px-3 py-2.5 text-right font-medium">{t('superAdminPage.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -1734,23 +1775,29 @@ export function SuperAdminPage() {
                         <p className="text-xs text-muted-foreground">{u.email}</p>
                       </td>
                       <td className="px-3 py-2.5">
-                        {u.roles.map((r) => <Badge key={r} variant="secondary" className="text-xs">{r}</Badge>)}
+                        {u.roles.map((r) => (
+                          <Badge key={r} variant="secondary" className="text-xs">
+                            {t(`superAdminPage.roles.${r}`, { defaultValue: r })}
+                          </Badge>
+                        ))}
                       </td>
                       <td className="px-3 py-2.5">
                         <Badge variant="outline" className="text-xs">
-                          {(u.permissions ?? []).length} permissões
+                          {t('superAdminPage.permissionsCountBadge', { count: (u.permissions ?? []).length })}
                         </Badge>
                       </td>
                       <td className="px-3 py-2.5">
-                        <Badge variant={u.is_active ? 'success' : 'secondary'}>{u.is_active ? 'Ativo' : 'Inativo'}</Badge>
+                        <Badge variant={u.is_active ? 'success' : 'secondary'}>
+                          {u.is_active ? t('superAdminPage.active') : t('superAdminPage.inactive')}
+                        </Badge>
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <div className="flex justify-end gap-1">
                           <Button
                             size="sm"
                             variant="ghost"
-                            aria-label={`Copiar permissões de ${u.name}`}
-                            title="Copiar permissões"
+                            aria-label={t('superAdminPage.copyPermissionsFor', { name: u.name })}
+                            title={t('superAdminPage.copyPermissions')}
                             onClick={() => copyTenantUserPermissions(u)}
                           >
                             <Copy className="h-3.5 w-3.5" />
@@ -1758,7 +1805,8 @@ export function SuperAdminPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            title="Editar papel e permissões"
+                            title={t('superAdminPage.editRoleAndPermissions')}
+                            aria-label={t('superAdminPage.editRoleAndPermissions')}
                             onClick={() => openTenantUserEdit(u)}
                           >
                             <ShieldCheck className="h-3.5 w-3.5" />
@@ -1776,8 +1824,10 @@ export function SuperAdminPage() {
                           )}
                           <Button
                             size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+                            title={t('superAdminPage.deleteUser')}
+                            aria-label={t('superAdminPage.deleteUser')}
                             disabled={deleteUser.isPending}
-                            onClick={() => { if (window.confirm(`Eliminar utilizador "${u.name}"?`)) deleteUser.mutate({ userId: u.id }) }}
+                            onClick={() => { if (window.confirm(t('superAdminPage.confirmDelete', { name: u.name }))) deleteUser.mutate({ userId: u.id }) }}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -1786,7 +1836,7 @@ export function SuperAdminPage() {
                     </tr>
                   ))}
                   {(tenantUsers ?? []).length === 0 && (
-                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Nenhum utilizador encontrado.</td></tr>
+                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">{t('superAdminPage.noUsersFound')}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1973,10 +2023,10 @@ export function SuperAdminPage() {
                   value={userForm.role}
                   onChange={(e) => handleNewUserRoleChange(e.target.value as UserForm['role'])}
                 >
-                  <option value="admin">Admin</option>
-                  <option value="hr-manager">HR Manager</option>
-                  <option value="manager">Manager</option>
-                  <option value="employee">Employee</option>
+                  <option value="admin">{t('superAdminPage.roles.admin')}</option>
+                  <option value="hr-manager">{t('superAdminPage.roles.hr-manager')}</option>
+                  <option value="manager">{t('superAdminPage.roles.manager')}</option>
+                  <option value="employee">{t('superAdminPage.roles.employee')}</option>
                 </select>
               </div>
             </div>
@@ -2075,10 +2125,10 @@ export function SuperAdminPage() {
                   value={tenantUserRole}
                   onChange={(e) => handleTenantUserRoleChange(e.target.value as UserForm['role'])}
                 >
-                  <option value="admin">Admin</option>
-                  <option value="hr-manager">HR Manager</option>
-                  <option value="manager">Manager</option>
-                  <option value="employee">Employee</option>
+                  <option value="admin">{t('superAdminPage.roles.admin')}</option>
+                  <option value="hr-manager">{t('superAdminPage.roles.hr-manager')}</option>
+                  <option value="manager">{t('superAdminPage.roles.manager')}</option>
+                  <option value="employee">{t('superAdminPage.roles.employee')}</option>
                 </select>
               </div>
               <div className="flex items-end pb-1">

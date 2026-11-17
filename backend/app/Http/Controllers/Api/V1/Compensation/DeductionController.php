@@ -88,6 +88,7 @@ class DeductionController extends BaseController
             'installments' => ['sometimes', 'nullable', 'array', 'min:1', 'max:60'],
             'installments.*.reference_month' => ['required_with:installments', 'date_format:Y-m'],
             'installments.*.percentage' => ['required_with:installments', 'numeric', 'gt:0', 'lte:100'],
+            'installments.*.amount' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'is_recurring' => ['nullable', 'boolean'],
             'is_mandatory' => ['nullable', 'boolean'],
             'legal_basis' => ['nullable', 'string', 'max:1000'],
@@ -128,10 +129,19 @@ class DeductionController extends BaseController
             $data['amount'] = $data['amount_type'] === 'fixed' ? $data['installment_amount'] : (float) ($data['amount'] ?? 0);
             $data['is_recurring'] = false;
         } elseif (($data['amount_type'] ?? '') === 'fixed' && filled($data['installment_count'] ?? null)) {
+            $count = (int) $data['installment_count'];
+            if (filled($data['total_amount'] ?? null) && filled($data['amount'] ?? null) && (float) $data['amount'] > 0) {
+                $expectedPerInstallment = round((float) $data['total_amount'] / $count, 2);
+                if (abs($expectedPerInstallment - round((float) $data['amount'], 2)) > 0.01) {
+                    throw ValidationException::withMessages([
+                        'total_amount' => 'A soma das parcelas não corresponde ao valor total do desconto.',
+                    ]);
+                }
+            }
             $data['total_amount'] = filled($data['total_amount'] ?? null)
                 ? (float) $data['total_amount']
-                : round((float) ($data['amount'] ?? 0) * (int) $data['installment_count'], 2);
-            $data['installment_amount'] = round($data['total_amount'] / (int) $data['installment_count'], 2);
+                : round((float) ($data['amount'] ?? 0) * $count, 2);
+            $data['installment_amount'] = round($data['total_amount'] / $count, 2);
             $data['amount'] = $data['installment_amount'];
         } else {
             $data['amount'] = $data['amount'] ?? 0;
@@ -188,6 +198,7 @@ class DeductionController extends BaseController
             'installments' => ['sometimes', 'nullable', 'array', 'min:1', 'max:60'],
             'installments.*.reference_month' => ['required_with:installments', 'date_format:Y-m'],
             'installments.*.percentage' => ['required_with:installments', 'numeric', 'gt:0', 'lte:100'],
+            'installments.*.amount' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'is_recurring' => ['nullable', 'boolean'],
             'is_mandatory' => ['sometimes', 'boolean'],
             'legal_basis' => ['nullable', 'string', 'max:1000'],
@@ -230,11 +241,20 @@ class DeductionController extends BaseController
             $data['amount'] = $amountType === 'fixed' ? $data['installment_amount'] : ($data['amount'] ?? $deduction->amount);
             $data['is_recurring'] = false;
         } elseif ($amountType === 'fixed' && filled($installmentCount)) {
+            $count = (int) $installmentCount;
+            if (filled($totalAmount) && filled($data['amount'] ?? null) && (float) $data['amount'] > 0) {
+                $expectedPerInstallment = round((float) $totalAmount / $count, 2);
+                if (abs($expectedPerInstallment - round((float) $data['amount'], 2)) > 0.01) {
+                    throw ValidationException::withMessages([
+                        'total_amount' => 'A soma das parcelas não corresponde ao valor total do desconto.',
+                    ]);
+                }
+            }
             $totalAmount = filled($totalAmount)
                 ? (float) $totalAmount
-                : round((float) ($data['amount'] ?? $deduction->amount) * (int) $installmentCount, 2);
+                : round((float) ($data['amount'] ?? $deduction->amount) * $count, 2);
             $data['total_amount'] = $totalAmount;
-            $data['installment_amount'] = round(((float) $totalAmount) / ((int) $installmentCount), 2);
+            $data['installment_amount'] = round(((float) $totalAmount) / $count, 2);
             $data['amount'] = $data['installment_amount'];
         } else {
             $data['installment_amount'] = null;
@@ -338,18 +358,16 @@ class DeductionController extends BaseController
             'installments.payrollPeriod:id,name',
         ]);
 
-        $fontCache = storage_path('framework/cache/dompdf/fonts');
-        File::ensureDirectoryExists($fontCache);
-
-        $pdf = Pdf::setOption([
-            'font_dir' => $fontCache,
-            'font_cache' => $fontCache,
-            'chroot' => base_path(),
-            'default_font' => 'Droid Sans Fallback',
-        ])->loadView('pdf.deduction-receipt', [
-            'deduction' => $deduction,
-            'operatorName' => $request->user()?->name ?? 'Sistema',
-        ])->setPaper('a4', 'portrait');
+        $pdf = \App\Support\PdfDocument::make(
+            view: 'pdf.deduction-receipt',
+            data: [
+                'deduction' => $deduction,
+                'operatorName' => $request->user()?->name ?? 'Sistema',
+            ],
+            paper: 'a4',
+            orientation: 'portrait',
+            lang: $request->query('lang'),
+        );
 
         $code = $deduction->employee?->employee_code ?? $deduction->employee_id;
         $filename = str_replace(['/', '\\', ' '], '-', "comprovativo-{$deduction->deduction_type}-{$code}-{$deduction->id}.pdf");
@@ -509,20 +527,57 @@ class DeductionController extends BaseController
     }
 
     /**
-     * @param  array<int, array{reference_month: string, percentage: numeric}>  $rows
+     * @param  array<int, array{reference_month: string, percentage: numeric, amount?: numeric|null}>  $rows
      */
     private function validateInstallmentsSchedule(array $rows, float $totalAmount): void
     {
-        if ($totalAmount <= 0) {
+        $resolvedTotal = round($totalAmount, 2);
+        if ($resolvedTotal <= 0) {
             throw ValidationException::withMessages([
                 'total_amount' => 'Indique um valor total superior a zero para definir parcelas.',
             ]);
         }
 
-        $totalPct = round(collect($rows)->sum(fn ($r) => (float) $r['percentage']), 2);
-        if (abs($totalPct - 100.0) > 0.05) {
+        $totalPct = round(collect($rows)->sum(fn ($r) => round((float) $r['percentage'], 2)), 2);
+        if (abs($totalPct - 100.0) > 0.001) {
             throw ValidationException::withMessages([
-                'installments' => "A soma das percentagens das parcelas deve totalizar 100% (atual: {$totalPct}%).",
+                'installments' => "A soma das parcelas deve ser exatamente igual ao total do desconto (100% / {$resolvedTotal} Kz; soma atual: {$totalPct}%).",
+            ]);
+        }
+
+        $hasExplicitAmounts = collect($rows)->every(fn ($r) => isset($r['amount']) && $r['amount'] !== null);
+        if ($hasExplicitAmounts) {
+            $explicitSum = round(collect($rows)->sum(fn ($r) => round((float) $r['amount'], 2)), 2);
+            if (abs($explicitSum - $resolvedTotal) > 0.001) {
+                throw ValidationException::withMessages([
+                    'installments' => "A soma dos valores das parcelas ({$explicitSum}) deve ser exatamente igual ao total do desconto ({$resolvedTotal}).",
+                ]);
+            }
+        }
+
+        // Simulate resulting installment amounts and ensure every installment is positive and sums to total_amount
+        $sorted = collect($rows)->sortBy('reference_month')->values();
+        $count = $sorted->count();
+        $accumulated = 0.0;
+        $computedSum = 0.0;
+        foreach ($sorted as $index => $row) {
+            $pct = round((float) $row['percentage'], 2);
+            $isLast = $index === ($count - 1);
+            $amount = $isLast
+                ? round(max(0, $resolvedTotal - $accumulated), 2)
+                : round($resolvedTotal * ($pct / 100), 2);
+            if ($amount <= 0) {
+                throw ValidationException::withMessages([
+                    'installments' => 'Todas as parcelas devem resultar num valor superior a zero e somar exatamente ao total do desconto.',
+                ]);
+            }
+            $accumulated = round($accumulated + $amount, 2);
+            $computedSum = round($computedSum + $amount, 2);
+        }
+
+        if (abs($computedSum - $resolvedTotal) > 0.001) {
+            throw ValidationException::withMessages([
+                'installments' => "A soma das parcelas ({$computedSum}) não coincide com o total do desconto ({$resolvedTotal}).",
             ]);
         }
     }

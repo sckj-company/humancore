@@ -14,6 +14,7 @@ const SuperAdminDashboardPage = lazy(() => import('@/features/dashboard/super-ad
 const EmployeesPage = lazy(() => import('@/features/employees/employees-page').then((m) => ({ default: m.EmployeesPage })))
 const EmployeeDetailPage = lazy(() => import('@/features/employees/employee-detail-page').then((m) => ({ default: m.EmployeeDetailPage })))
 const EmployeeCreatePage = lazy(() => import('@/features/employees/employee-create-page').then((m) => ({ default: m.EmployeeCreatePage })))
+const GeneralEducationsPage = lazy(() => import('@/features/employees/general-educations-page').then((m) => ({ default: m.GeneralEducationsPage })))
 const OrganizationLayout = lazy(() => import('@/features/organization/organization-layout').then((m) => ({ default: m.OrganizationLayout })))
 const DepartmentsPage = lazy(() => import('@/features/organization/departments-page').then((m) => ({ default: m.DepartmentsPage })))
 const PositionsPage = lazy(() => import('@/features/organization/positions-page').then((m) => ({ default: m.PositionsPage })))
@@ -106,6 +107,7 @@ export function AppRouter() {
           <Route path="/employees" element={<TenantRoute><EmployeesPage /></TenantRoute>} />
           <Route path="/employees/new" element={<TenantRoute><EmployeeCreatePage /></TenantRoute>} />
           <Route path="/employees/:id" element={<TenantRoute><EmployeeDetailPage /></TenantRoute>} />
+          <Route path="/educations" element={<TenantRoute><GeneralEducationsPage /></TenantRoute>} />
 
           <Route path="/organization" element={<TenantRoute><OrganizationLayout /></TenantRoute>}>
             <Route index element={<DepartmentsPage />} />

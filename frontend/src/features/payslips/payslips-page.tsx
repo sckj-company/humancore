@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { FileText, Download, Calendar, TrendingUp, DollarSign, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -79,6 +81,21 @@ export function PayslipsPage() {
 
   const totalPaid = payslips?.data.reduce((sum, p) => sum + p.net_salary, 0) ?? 0
   const currency = user?.tenant?.currency ?? 'AOA'
+  const pdfPrompt = usePdfLanguagePrompt()
+  const [downloadingId, setDownloadingId] = useState<number | null>(null)
+
+  const handleDownloadPayslip = (recordId: number, fileName: string) => {
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      setDownloadingId(recordId)
+      try {
+        await api.downloadFile(`payroll/records/${recordId}/payslip.pdf`, fileName, { lang })
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, t('payslips.downloadError')))
+      } finally {
+        setDownloadingId(null)
+      }
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -197,28 +214,33 @@ export function PayslipsPage() {
             id: 'actions',
             header: t('payslips.actions'),
             align: 'right',
-            cell: (r) => <PayslipDownloadButton recordId={r.id} fileName={`recibo-${r.employee_id}-${r.id}.pdf`} />,
+            cell: (r) => (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={downloadingId === r.id}
+                onClick={() => handleDownloadPayslip(r.id, `recibo-${r.employee_id}-${r.id}.pdf`)}
+              >
+                {downloadingId === r.id ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {t('payslips.download')}
+              </Button>
+            ),
           },
         ]}
         emptyTitle={t('payslips.emptyTitle')}
         emptyDescription={t('payslips.emptyDescription')}
       />
+
+      <PdfLanguageDialog
+        open={pdfPrompt.open}
+        onOpenChange={pdfPrompt.onOpenChange}
+        onSelect={pdfPrompt.handleSelect}
+      />
     </div>
-  )
-}
-
-function PayslipDownloadButton({ recordId, fileName }: { recordId: number; fileName: string }) {
-  const { t } = useTranslation()
-  const mutation = useMutation({
-    mutationFn: () => api.downloadFile(`payroll/records/${recordId}/payslip.pdf`, fileName),
-    onError: (error) => toast.error(getApiErrorMessage(error, t('payslips.downloadError'))),
-  })
-
-  return (
-    <Button size="sm" variant="ghost" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-      {mutation.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
-      {t('payslips.download')}
-    </Button>
   )
 }
 

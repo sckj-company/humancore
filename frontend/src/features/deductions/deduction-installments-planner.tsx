@@ -52,14 +52,43 @@ export function rebalanceEvenPercentages(rows: InstallmentDraftRow[]): Installme
 }
 
 export function getInstallmentsPercentageSum(rows: InstallmentDraftRow[]): number {
-  return Number(rows.reduce((sum, r) => sum + (Number(r.percentage) || 0), 0).toFixed(2))
+  return Number(rows.reduce((sum, r) => sum + Number((Number(r.percentage) || 0).toFixed(2)), 0).toFixed(2))
+}
+
+export function getInstallmentAmounts(rows: InstallmentDraftRow[], totalAmount: number): number[] {
+  const validTotal = Number.isFinite(totalAmount) && totalAmount > 0 ? Number(totalAmount.toFixed(2)) : 0
+  if (validTotal <= 0 || rows.length === 0) return rows.map(() => 0)
+
+  const pctSum = getInstallmentsPercentageSum(rows)
+  const exactTotal = Math.abs(pctSum - 100) <= 0.001
+  let accumulated = 0
+
+  return rows.map((row, idx) => {
+    const pct = Number((Number(row.percentage) || 0).toFixed(2))
+    const isLast = idx === rows.length - 1
+    if (exactTotal && isLast) {
+      return Number(Math.max(0, validTotal - accumulated).toFixed(2))
+    }
+    const amt = Number(((validTotal * pct) / 100).toFixed(2))
+    accumulated = Number((accumulated + amt).toFixed(2))
+    return amt
+  })
+}
+
+export function getInstallmentsAmountSum(rows: InstallmentDraftRow[], totalAmount: number): number {
+  return Number(getInstallmentAmounts(rows, totalAmount).reduce((sum, amt) => sum + amt, 0).toFixed(2))
 }
 
 export function areInstallmentsValid(rows: InstallmentDraftRow[], totalAmount: number): boolean {
   if (!Number.isFinite(totalAmount) || totalAmount <= 0 || rows.length === 0) return false
   const sum = getInstallmentsPercentageSum(rows)
-  if (Math.abs(sum - 100) > 0.05) return false
-  return rows.every((r) => /^\d{4}-(0[1-9]|1[0-2])$/.test(r.reference_month) && Number(r.percentage) > 0)
+  if (Math.abs(sum - 100) > 0.001) return false
+  if (!rows.every((r) => /^\d{4}-(0[1-9]|1[0-2])$/.test(r.reference_month) && Number(r.percentage) > 0)) {
+    return false
+  }
+  const amounts = getInstallmentAmounts(rows, totalAmount)
+  const amountSum = Number(amounts.reduce((acc, v) => acc + v, 0).toFixed(2))
+  return amounts.every((amt) => amt > 0) && Math.abs(amountSum - Number(totalAmount.toFixed(2))) <= 0.001
 }
 
 export function DeductionInstallmentsPlanner({
@@ -75,8 +104,12 @@ export function DeductionInstallmentsPlanner({
 }) {
   const { t, i18n } = useTranslation()
   const totalPct = getInstallmentsPercentageSum(rows)
-  const isSumOk = Math.abs(totalPct - 100) <= 0.05
-  const validTotal = Number.isFinite(totalAmount) && totalAmount > 0 ? totalAmount : 0
+  const validTotal = Number.isFinite(totalAmount) && totalAmount > 0 ? Number(totalAmount.toFixed(2)) : 0
+  const amounts = getInstallmentAmounts(rows, validTotal)
+  const totalInstallmentsAmount = Number(amounts.reduce((acc, v) => acc + v, 0).toFixed(2))
+  const isPctOk = Math.abs(totalPct - 100) <= 0.001
+  const isAmountOk = validTotal > 0 && amounts.every((amt) => amt > 0) && Math.abs(totalInstallmentsAmount - validTotal) <= 0.001
+  const isSumOk = isPctOk && isAmountOk
 
   const handleAddRow = () => {
     const lastMonth = rows[rows.length - 1]?.reference_month ?? new Date().toISOString().slice(0, 7)
@@ -93,13 +126,18 @@ export function DeductionInstallmentsPlanner({
   return (
     <div className="space-y-2.5 rounded-lg border border-border bg-muted/20 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Label className="text-xs font-semibold uppercase tracking-wide text-foreground">
             {t('deductionsPage.installmentsScheduleTitle', { defaultValue: 'Plano de Parcelas por Mês e Percentagem' })}
           </Label>
-          <Badge variant={isSumOk ? 'secondary' : 'destructive'} className="text-xs">
+          <Badge variant={isPctOk ? 'secondary' : 'destructive'} className="text-xs">
             {t('deductionsPage.percentageSum', { defaultValue: 'Soma' })}: {totalPct.toFixed(2)}% / 100%
           </Badge>
+          {validTotal > 0 && (
+            <Badge variant={isAmountOk ? 'secondary' : 'destructive'} className="text-xs font-mono">
+              {totalInstallmentsAmount.toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {validTotal.toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kz
+            </Badge>
+          )}
         </div>
         {!disabled && (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -141,8 +179,7 @@ export function DeductionInstallmentsPlanner({
           </thead>
           <tbody className="divide-y divide-border">
             {rows.map((row, idx) => {
-              const pct = Number(row.percentage) || 0
-              const computed = validTotal > 0 ? validTotal * (pct / 100) : 0
+              const computed = amounts[idx] ?? 0
               return (
                 <tr key={idx}>
                   <td className="px-2.5 py-1.5 text-center font-mono text-muted-foreground">{idx + 1}</td>
@@ -199,7 +236,7 @@ export function DeductionInstallmentsPlanner({
       </div>
       {!isSumOk && (
         <p className="text-xs text-destructive">
-          {t('deductionsPage.percentageSumError', { defaultValue: 'A soma das percentagens das parcelas deve ser exatamente 100% para cobrir o valor total.' })}
+          {t('deductionsPage.percentageSumError', { defaultValue: 'A soma das parcelas deve ser exatamente igual ao total do desconto (100% / valor total) para poder guardar.' })}
         </p>
       )}
     </div>

@@ -4,17 +4,32 @@
     <meta charset="UTF-8">
     <title>{{ $report['period']['label'] }}</title>
     @php
+        $isBilingual = $isBilingual ?? (($lang ?? 'bilingual') !== 'pt');
+        $bi = static fn (string $pt, string $zh): string => $isBilingual
+            ? e($pt).' <span class="zh-inline">/ '.e($zh).'</span>'
+            : e($pt);
+        $biBlock = static fn (string $pt, string $zh): string => $isBilingual
+            ? '<span class="pt">'.e($pt).'</span><span class="zh-sub">'.e($zh).'</span>'
+            : '<span class="pt">'.e($pt).'</span>';
         $tenant = $report['tenant'] ?? null;
         $period = $report['period'];
         $filters = $report['filters'];
         $totals = $report['totals'];
         $employees = $report['employees'];
         $entries = $report['entries'];
-        $periodTypeLabel = match ($period['type']) {
-            'daily' => 'Diário',
-            'weekly' => 'Semanal',
-            'monthly' => 'Mensal',
-            default => 'Personalizado',
+        [$periodTypePt, $periodTypeZh] = match ($period['type']) {
+            'daily' => ['Diário', '日报'],
+            'weekly' => ['Semanal', '周报'],
+            'monthly' => ['Mensal', '月报'],
+            default => ['Personalizado', '自定义'],
+        };
+        $statusZh = static fn (string $status): string => match ($status) {
+            'present' => '出勤',
+            'late' => '迟到',
+            'absent' => '缺勤',
+            'on_leave' => '请假/休假',
+            'half_day' => '半天',
+            default => $status,
         };
     @endphp
     <style>
@@ -48,7 +63,12 @@
         .company { font-size: 12px; font-weight: bold; color: #0f172a; }
         .company-sub { font-size: 8px; color: #64748b; }
         .report-title { font-size: 12px; font-weight: bold; color: #1d4ed8; text-align: right; }
+        .report-title-zh { font-size: 9.5px; color: #475569; text-align: right; margin-top: 1px; }
         .report-sub { font-size: 8px; color: #475569; text-align: right; margin-top: 2px; }
+        .zh-inline { color: #64748b; font-size: 7.5px; font-weight: normal; }
+        .pt { display: block; }
+        .zh-sub { display: block; color: #94a3b8; font-size: 6.5px; font-weight: normal; margin-top: 1px; }
+        .kpi-row .zh-sub { color: #64748b; }
 
         .filters-bar {
             background: #f8fafc;
@@ -137,57 +157,64 @@
                 </div>
             </td>
             <td style="width: 45%;">
-                <div class="report-title">RELATÓRIO DE PRESENÇAS ({{ strtoupper($periodTypeLabel) }})</div>
+                <div class="report-title">RELATÓRIO DE PRESENÇAS ({{ strtoupper($periodTypePt) }})</div>
+                @if($isBilingual)
+                    <div class="report-title-zh">考勤报告（{{ $periodTypeZh }}）</div>
+                @endif
                 <div class="report-sub">
-                    Período: {{ \Carbon\Carbon::parse($period['start_date'])->format('d/m/Y') }}
+                    {!! $bi('Período', '期间') !!}: {{ \Carbon\Carbon::parse($period['start_date'])->format('d/m/Y') }}
                     @if($period['start_date'] !== $period['end_date'])
                         a {{ \Carbon\Carbon::parse($period['end_date'])->format('d/m/Y') }}
                     @endif
-                    ({{ $period['days_count'] }} dia(s))
+                    ({{ $period['days_count'] }} {!! $bi('dia(s)', '天') !!})
                 </div>
             </td>
         </tr>
     </table>
 
     <div class="filters-bar">
-        <strong>Filtros aplicados:</strong>
-        Modalidade: <strong>{{ $periodTypeLabel }}</strong>
-        @if(! empty($filters['employee_name'])) · Funcionário: <strong>{{ $filters['employee_name'] }}</strong> @else · Âmbito: <strong>Todos os funcionários filtrados ({{ $totals['employees_count'] }})</strong> @endif
-        @if(! empty($filters['department_name'])) · Departamento: <strong>{{ $filters['department_name'] }}</strong> @endif
-        @if(! empty($filters['employee_status']) && $filters['employee_status'] !== 'all') · Estado do Funcionário: <strong>{{ $filters['employee_status'] }}</strong> @endif
-        @if(! empty($filters['attendance_status']) && $filters['attendance_status'] !== 'all') · Estado de Presença: <strong>{{ \App\Services\Attendance\AttendanceReportService::STATUS_LABELS[$filters['attendance_status']] ?? $filters['attendance_status'] }}</strong> @endif
-        @if(! empty($filters['search'])) · Pesquisa: <strong>"{{ $filters['search'] }}"</strong> @endif
+        <strong>{!! $bi('Filtros aplicados', '筛选条件') !!}:</strong>
+        {!! $bi('Modalidade', '类型') !!}: <strong>{{ $periodTypePt }}@if($isBilingual) / {{ $periodTypeZh }}@endif</strong>
+        @if(! empty($filters['employee_name']))
+            · {!! $bi('Funcionário', '员工') !!}: <strong>{{ $filters['employee_name'] }}</strong>
+        @else
+            · {!! $bi('Âmbito', '范围') !!}: <strong>{!! $bi('Todos os funcionários filtrados', '全部符合条件员工') !!} ({{ $totals['employees_count'] }})</strong>
+        @endif
+        @if(! empty($filters['department_name'])) · {!! $bi('Departamento', '部门') !!}: <strong>{{ $filters['department_name'] }}</strong> @endif
+        @if(! empty($filters['employee_status']) && $filters['employee_status'] !== 'all') · {!! $bi('Estado do Funcionário', '员工状态') !!}: <strong>{{ $filters['employee_status'] }}</strong> @endif
+        @if(! empty($filters['attendance_status']) && $filters['attendance_status'] !== 'all') · {!! $bi('Estado de Presença', '考勤状态') !!}: <strong>{{ \App\Services\Attendance\AttendanceReportService::STATUS_LABELS[$filters['attendance_status']] ?? $filters['attendance_status'] }}</strong> @endif
+        @if(! empty($filters['search'])) · {!! $bi('Pesquisa', '搜索') !!}: <strong>"{{ $filters['search'] }}"</strong> @endif
     </div>
 
     <table class="kpi-row">
         <tr>
-            <td><span class="kpi-label">Funcionários</span><span class="kpi-val">{{ $totals['employees_count'] }}</span></td>
-            <td><span class="kpi-label">Presenças</span><span class="kpi-val" style="color:#166534;">{{ $totals['present_count'] }}</span></td>
-            <td><span class="kpi-label">Atrasos</span><span class="kpi-val" style="color:#b45309;">{{ $totals['late_count'] }} ({{ $totals['total_late_minutes'] }} min)</span></td>
-            <td><span class="kpi-label">Faltas</span><span class="kpi-val" style="color:#b91c1c;">{{ $totals['absent_count'] }}</span></td>
-            <td><span class="kpi-label">Ausências / Férias</span><span class="kpi-val" style="color:#1d4ed8;">{{ $totals['on_leave_count'] }}</span></td>
-            <td><span class="kpi-label">Horas Trabalhadas</span><span class="kpi-val">{{ number_format($totals['total_worked_hours'], 2, ',', '.') }} h</span></td>
-            <td><span class="kpi-label">Horas Extras</span><span class="kpi-val">{{ number_format($totals['total_overtime_hours'], 2, ',', '.') }} h</span></td>
-            <td><span class="kpi-label">Assiduidade</span><span class="kpi-val">{{ number_format($totals['attendance_rate'], 1, ',', '.') }}%</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Funcionários', '员工人数') !!}</span><span class="kpi-val">{{ $totals['employees_count'] }}</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Presenças', '出勤次数') !!}</span><span class="kpi-val" style="color:#166534;">{{ $totals['present_count'] }}</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Atrasos', '迟到次数') !!}</span><span class="kpi-val" style="color:#b45309;">{{ $totals['late_count'] }} ({{ $totals['total_late_minutes'] }} min)</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Faltas', '缺勤次数') !!}</span><span class="kpi-val" style="color:#b91c1c;">{{ $totals['absent_count'] }}</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Ausências / Férias', '请假 / 休假') !!}</span><span class="kpi-val" style="color:#1d4ed8;">{{ $totals['on_leave_count'] }}</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Horas Trabalhadas', '工作总工时') !!}</span><span class="kpi-val">{{ number_format($totals['total_worked_hours'], 2, ',', '.') }} h</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Horas Extras', '加班工时') !!}</span><span class="kpi-val">{{ number_format($totals['total_overtime_hours'], 2, ',', '.') }} h</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Assiduidade', '出勤率') !!}</span><span class="kpi-val">{{ number_format($totals['attendance_rate'], 1, ',', '.') }}%</span></td>
         </tr>
     </table>
 
-    <div class="section-title">1. Resumo Consolidado por Funcionário</div>
+    <div class="section-title">{!! $bi('1. Resumo Consolidado por Funcionário', '1. 员工考勤汇总') !!}</div>
     <table class="data-table">
         <thead>
             <tr>
-                <th>Código</th>
-                <th>Nome do Funcionário</th>
-                <th>Departamento</th>
-                <th>Cargo</th>
-                <th class="center">Presente</th>
-                <th class="center">Atrasos</th>
-                <th class="center">Faltas</th>
-                <th class="center">Férias/Aus.</th>
-                <th class="num">Min. Atraso</th>
-                <th class="num">Horas Trab.</th>
-                <th class="num">H. Extras</th>
-                <th class="num">Assiduidade</th>
+                <th>{!! $biBlock('Código', '工号') !!}</th>
+                <th>{!! $biBlock('Nome do Funcionário', '员工姓名') !!}</th>
+                <th>{!! $biBlock('Departamento', '部门') !!}</th>
+                <th>{!! $biBlock('Cargo', '职位') !!}</th>
+                <th class="center">{!! $biBlock('Presente', '出勤') !!}</th>
+                <th class="center">{!! $biBlock('Atrasos', '迟到') !!}</th>
+                <th class="center">{!! $biBlock('Faltas', '缺勤') !!}</th>
+                <th class="center">{!! $biBlock('Férias/Aus.', '请假') !!}</th>
+                <th class="num">{!! $biBlock('Min. Atraso', '迟到(分)') !!}</th>
+                <th class="num">{!! $biBlock('Horas Trab.', '工时(小时)') !!}</th>
+                <th class="num">{!! $biBlock('H. Extras', '加班(小时)') !!}</th>
+                <th class="num">{!! $biBlock('Assiduidade', '出勤率') !!}</th>
             </tr>
         </thead>
         <tbody>
@@ -208,30 +235,30 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="12" class="center">Nenhum funcionário encontrado para os filtros aplicados.</td>
+                    <td colspan="12" class="center">{!! $bi('Nenhum funcionário encontrado para os filtros aplicados.', '未找到符合筛选条件的员工。') !!}</td>
                 </tr>
             @endforelse
         </tbody>
     </table>
 
-    <div class="section-title">2. Registos Diários Detalhados ({{ count($entries) }} registo(s))</div>
+    <div class="section-title">{!! $bi('2. Registos Diários Detalhados', '2. 每日考勤明细') !!} ({{ count($entries) }})</div>
     <table class="data-table">
         <thead>
             <tr>
-                <th>Data</th>
+                <th>{!! $biBlock('Data', '日期') !!}</th>
                 @if(! $isSingleEmployee)
-                    <th>Código</th>
-                    <th>Funcionário</th>
-                    <th>Departamento</th>
+                    <th>{!! $biBlock('Código', '工号') !!}</th>
+                    <th>{!! $biBlock('Funcionário', '员工') !!}</th>
+                    <th>{!! $biBlock('Departamento', '部门') !!}</th>
                 @endif
-                <th>Turno</th>
-                <th class="center">Entrada</th>
-                <th class="center">Saída</th>
-                <th class="num">Horas</th>
-                <th class="num">Atraso (min)</th>
-                <th class="num">Extras (h)</th>
-                <th class="center">Estado</th>
-                <th>Observações</th>
+                <th>{!! $biBlock('Turno', '班次') !!}</th>
+                <th class="center">{!! $biBlock('Entrada', '上班打卡') !!}</th>
+                <th class="center">{!! $biBlock('Saída', '下班打卡') !!}</th>
+                <th class="num">{!! $biBlock('Horas', '工时') !!}</th>
+                <th class="num">{!! $biBlock('Atraso (min)', '迟到(分)') !!}</th>
+                <th class="num">{!! $biBlock('Extras (h)', '加班(小时)') !!}</th>
+                <th class="center">{!! $biBlock('Estado', '状态') !!}</th>
+                <th>{!! $biBlock('Observações', '备注') !!}</th>
             </tr>
         </thead>
         <tbody>
@@ -250,20 +277,22 @@
                     <td class="num">{{ $entry['late_minutes'] }}</td>
                     <td class="num">{{ number_format($entry['overtime_hours'], 2, ',', '.') }}h</td>
                     <td class="center">
-                        <span class="badge st-{{ $entry['status'] }}">{{ $entry['status_label'] }}</span>
+                        <span class="badge st-{{ $entry['status'] }}">
+                            {{ $entry['status_label'] }}@if($isBilingual) / {{ $statusZh($entry['status']) }}@endif
+                        </span>
                     </td>
                     <td>{{ $entry['notes'] ?? '—' }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="{{ $isSingleEmployee ? 9 : 12 }}" class="center">Sem marcações de presença registadas neste período.</td>
+                    <td colspan="{{ $isSingleEmployee ? 9 : 12 }}" class="center">{!! $bi('Sem marcações de presença registadas neste período.', '该期间暂无考勤打卡记录。') !!}</td>
                 </tr>
             @endforelse
         </tbody>
     </table>
 
     <div class="footer">
-        Gerado por {{ $operatorName }} em {{ now()->format('d/m/Y H:i') }} · {{ config('app.name', 'HumanCore') }}
+        {!! $bi('Gerado por', '生成人') !!}: {{ $operatorName }} · {{ now()->format('d/m/Y H:i') }} · {{ config('app.name', 'HumanCore') }}
     </div>
 </body>
 </html>

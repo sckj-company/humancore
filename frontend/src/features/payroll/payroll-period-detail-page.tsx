@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
+import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import { ProcessPeriodDialog } from '@/features/payroll/process-period-dialog'
 import type {
   PayrollPeriod,
@@ -145,6 +146,7 @@ export function PayrollPeriodDetailPage() {
   const [reopenReason, setReopenReason] = useState('')
   const [warningsAck, setWarningsAck] = useState(false)
   const [processOpen, setProcessOpen] = useState(false)
+  const pdfPrompt = usePdfLanguagePrompt()
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['payroll-period', id],
@@ -241,24 +243,28 @@ export function PayrollPeriodDetailPage() {
     onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.recalculateError'))),
   })
 
-  const downloadPayslip = async (recordId: number, filename: string) => {
-    const tid = toast.loading(t('payroll.detail.payslipGenerating'))
-    try {
-      await api.downloadFile(`payroll/records/${recordId}/payslip.pdf`, filename)
-      toast.success(t('payslips.downloaded'), { id: tid })
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, t('payslips.downloadError')), { id: tid })
-    }
+  const downloadPayslip = (recordId: number, filename: string) => {
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      const tid = toast.loading(t('payroll.detail.payslipGenerating'))
+      try {
+        await api.downloadFile(`payroll/records/${recordId}/payslip.pdf`, filename, { lang })
+        toast.success(t('payslips.downloaded'), { id: tid })
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, t('payslips.downloadError')), { id: tid })
+      }
+    })
   }
 
-  const downloadPeriodPayroll = async (filename: string) => {
-    const tid = toast.loading(t('payroll.detail.periodPdfGenerating'))
-    try {
-      await api.downloadFile(`payroll/periods/${id}/payslip.pdf`, filename)
-      toast.success(t('payroll.detail.periodPdfDownloaded'), { id: tid })
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, t('payroll.detail.periodPdfError')), { id: tid })
-    }
+  const downloadPeriodPayroll = (filename: string) => {
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      const tid = toast.loading(t('payroll.detail.periodPdfGenerating'))
+      try {
+        await api.downloadFile(`payroll/periods/${id}/payslip.pdf`, filename, { lang })
+        toast.success(t('payroll.detail.periodPdfDownloaded'), { id: tid })
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, t('payroll.detail.periodPdfError')), { id: tid })
+      }
+    })
   }
 
   if (isLoading) return <LoadingState />
@@ -680,6 +686,12 @@ export function PayrollPeriodDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PdfLanguageDialog
+        open={pdfPrompt.open}
+        onOpenChange={pdfPrompt.onOpenChange}
+        onSelect={pdfPrompt.handleSelect}
+      />
     </div>
   )
 }
@@ -1510,11 +1522,21 @@ function SummaryTab({
         </div>
         </CardContent>
       </Card>
-      {canViewInss && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <InssTotalCard label={t('payroll.detail.inssEmployeeTotal')} value={totalsInss} />
-          <InssTotalCard label={t('payroll.detail.inssEmployerTotal')} value={totalsEmployerInss} />
-          <InssTotalCard label={t('payroll.detail.inssCombinedTotal')} value={totalsInss + totalsEmployerInss} />
+      {(canViewInss || canViewIrt) && (
+        <div className={`grid gap-3 sm:grid-cols-2 ${canViewInss && canViewIrt ? 'lg:grid-cols-4' : canViewInss ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
+          {canViewInss && (
+            <>
+              <InssTotalCard label={t('payroll.detail.inssEmployeeTotal')} value={totalsInss} />
+              <InssTotalCard label={t('payroll.detail.inssEmployerTotal')} value={totalsEmployerInss} />
+              <InssTotalCard label={t('payroll.detail.inssCombinedTotal')} value={totalsInss + totalsEmployerInss} />
+            </>
+          )}
+          {canViewIrt && (
+            <InssTotalCard
+              label={t('payroll.detail.irtTotal', { defaultValue: 'IRT total / 工资所得税总额' })}
+              value={totalsIrt}
+            />
+          )}
         </div>
       )}
     </div>

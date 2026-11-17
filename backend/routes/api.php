@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\Contract\ContractController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Document\EmployeeDocumentController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
+use App\Http\Controllers\Api\V1\Employee\EmployeeEducationController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeIdentityOcrController;
 use App\Http\Controllers\Api\V1\Import\EmployeeImportController;
 use App\Http\Controllers\Api\V1\Leave\LeaveController;
@@ -78,6 +79,26 @@ Route::prefix('v1')->group(function () {
         Route::get('employees/{employee}/contracts', [EmployeeController::class, 'contracts']);
         Route::get('employees/{employee}/timeline', [EmployeeController::class, 'timeline']);
         Route::post('employees/{employee}/contracts', [EmployeeController::class, 'storeContract']);
+
+        // Educação / Advertências do funcionário
+        Route::get('employees/{employee}/educations', [EmployeeEducationController::class, 'index']);
+        Route::post('employees/{employee}/educations', [EmployeeEducationController::class, 'store']);
+        Route::put('employees/{employee}/educations/{education}', [EmployeeEducationController::class, 'update']);
+        Route::delete('employees/{employee}/educations/{education}', [EmployeeEducationController::class, 'destroy']);
+        Route::get('employees/{employee}/educations/{education}/receipt.pdf', [EmployeeEducationController::class, 'receiptPdf']);
+        Route::post('employees/{employee}/educations/{education}/document', [EmployeeEducationController::class, 'uploadDocument']);
+        Route::post('employees/{employee}/educations/{education}/signed-document', [EmployeeEducationController::class, 'uploadSignedDocument']);
+        Route::get('employees/{employee}/educations/{education}/documents/{kind}', [EmployeeEducationController::class, 'downloadDocument'])->whereIn('kind', ['attachment', 'signed']);
+
+        // Educação Geral (sem funcionário específico, para assinatura de todos)
+        Route::get('educations', [EmployeeEducationController::class, 'indexGeneral']);
+        Route::post('educations', [EmployeeEducationController::class, 'storeGeneral']);
+        Route::put('educations/{education}', [EmployeeEducationController::class, 'updateGeneral']);
+        Route::delete('educations/{education}', [EmployeeEducationController::class, 'destroyGeneral']);
+        Route::get('educations/{education}/receipt.pdf', [EmployeeEducationController::class, 'receiptPdfGeneral']);
+        Route::post('educations/{education}/document', [EmployeeEducationController::class, 'uploadDocumentGeneral']);
+        Route::post('educations/{education}/signed-document', [EmployeeEducationController::class, 'uploadSignedDocumentGeneral']);
+        Route::get('educations/{education}/documents/{kind}', [EmployeeEducationController::class, 'downloadDocumentGeneral'])->whereIn('kind', ['attachment', 'signed']);
 
         // Importação de Funcionários via Excel
         Route::post('imports/employees/preview', [EmployeeImportController::class, 'preview']);
@@ -179,6 +200,8 @@ Route::prefix('v1')->group(function () {
         Route::get('leave', [LeaveController::class, 'index']);
         Route::post('leave', [LeaveController::class, 'store']);
         Route::put('leave/{leave}', [LeaveController::class, 'update']);
+        Route::get('leave/{leave}/receipt.pdf', [LeaveController::class, 'receiptPdf']);
+        Route::post('leave/receipt-preview.pdf', [LeaveController::class, 'receiptPreviewPdf']);
         Route::get('leave/{leave}/documents/{kind}', [LeaveController::class, 'downloadDocument'])->whereIn('kind', ['justification', 'signed']);
         Route::post('leave/{leave}/documents/{kind}', [LeaveController::class, 'uploadDocument'])->whereIn('kind', ['justification', 'signed']);
         Route::post('leave/{leave}/approve', [LeaveController::class, 'approve']);
@@ -190,6 +213,8 @@ Route::prefix('v1')->group(function () {
         Route::get('leaves', [LeaveController::class, 'index']);
         Route::post('leaves', [LeaveController::class, 'store']);
         Route::put('leaves/{leave}', [LeaveController::class, 'update']);
+        Route::get('leaves/{leave}/receipt.pdf', [LeaveController::class, 'receiptPdf']);
+        Route::post('leaves/receipt-preview.pdf', [LeaveController::class, 'receiptPreviewPdf']);
 
         // Settings
         Route::get('settings', [SettingController::class, 'index']);
