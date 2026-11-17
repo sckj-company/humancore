@@ -195,7 +195,8 @@
       "terminated": "Terminated",
       "expired_contract": "Contract Expired",
       "on_leave": "On Leave",
-      "probation": "On Probation"
+      "probation": "On Probation",
+      "pending": "Pending Approval"
     },
     "loadError": "Could not load employees.",
     "emptyTitle": "No employees found",
@@ -207,7 +208,11 @@
     "salary": "Salary",
     "viewEmployee": "View {{name}}’s profile",
     "clearFilters": "Clear filters",
-    "pagination": "Page {{current}} of {{pages}} · {{total}} total"
+    "pagination": "Page {{current}} of {{pages}} · {{total}} total",
+    "approval": {
+      "pending": "Pending",
+      "approved": "Approved"
+    }
   },
   "employeeDetail": {
     "status": {
@@ -319,7 +324,13 @@
       "downloading": "Downloading “{{name}}”…",
       "downloadComplete": "Download complete!",
       "downloadStarted": "Download started!",
-      "confirmDeleteDocument": "Delete “{{name}}”?"
+      "confirmDeleteDocument": "Delete “{{name}}”?",
+      "documentVerified": "Document verified and approved.",
+      "documentUnverified": "Document verification removed.",
+      "verifyError": "Could not verify document.",
+      "employeeApproved": "Employee approved and enabled for operations.",
+      "employeeSetPending": "Employee moved to Pending status.",
+      "approvalError": "Could not update approval status."
     },
     "text": {
       "absences": "Absences",
@@ -476,7 +487,7 @@
       "christmasAllowance": "Christmas allowance",
       "familyAllowance": "Family allowance",
       "additionalAllowance": "Additional allowance",
-      "bonusAllowance": "Bonus",
+      "bonusAllowance": "Performance bonus",
       "usingGlobalValue": "Using global value: {{amount}}",
       "customValueBadge": "Custom",
       "globalValueBadge": "Global",
@@ -636,7 +647,15 @@
       "weeklyHours": "Weekly Hours",
       "workdayAlreadyClosed": "Workday Already Closed",
       "workdayComplete": "Workday Complete",
-      "working": "Working"
+      "working": "Working",
+      "approveEmployee": "Approve Employee",
+      "setEmployeePending": "Set as Pending",
+      "pendingApprovalBanner": "This employee is PENDING. Verify attached documents in the Documents tab and approve them to unlock payroll, attendance, and other operations.",
+      "reviewDocuments": "Verify Documents",
+      "documentVerifiedBadge": "Verified",
+      "documentUnverifiedBadge": "Pending verification",
+      "verifiedAction": "Verified",
+      "verifyAction": "Verify"
     }
   },
   "employees": {
@@ -695,7 +714,8 @@
     },
     "probationEnd": "Probation end date",
     "saveChanges": "Save changes",
-    "undefined": "Not set"
+    "undefined": "Not set",
+    "approvalStatus": "Approval Status"
   },
   "profilePage": {
     "eyebrow": "ACCOUNT",
@@ -2514,7 +2534,10 @@
     "remove": "Remove",
     "saveDocuments": "Save documents",
     "selectAllDocuments": "Select all",
-    "clearDocuments": "Clear selection"
+    "clearDocuments": "Clear selection",
+    "documentMandatory": "Required",
+    "documentOptional": "Optional",
+    "toggleMandatoryAria": "Toggle required document"
   },
   "payrollTaxRulesPage": {
     "inssCreated": "INSS rule created as a draft.",
@@ -2790,7 +2813,20 @@
       "previewTitle": "Preview document",
       "deleteTitle": "Delete this file to replace",
       "namePlaceholder": "Document name",
-      "addedCount": "{{count}} document(s) added."
+      "addedCount": "{{count}} document(s) added.",
+      "rowsHeading": "Documents ({{count}}) — choose type on the right and upload file on the left",
+      "selectTypeFirst": "Select document type on the right first",
+      "selectTypePlaceholder": "Select type...",
+      "addDocumentRow": "Add another document",
+      "addCustomTypeTitle": "Add new document type",
+      "requiredProgress": "Required: {{done}}/{{total}}",
+      "colFileInput": "File / Document",
+      "colDocumentType": "Document Type",
+      "noRowsYet": "No documents in the list yet. Add one below.",
+      "replaceFile": "Change",
+      "uploadButton": "Upload",
+      "colRequirement": "Requirement",
+      "toggleRequiredHint": "Click to toggle between Required and Optional"
     },
     "footer": {
       "step1": "Step 1 of 2: Basic Data",

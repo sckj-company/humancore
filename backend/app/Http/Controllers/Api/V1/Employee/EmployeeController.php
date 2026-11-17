@@ -30,7 +30,15 @@ class EmployeeController extends BaseController
             ->with(['department', 'position', 'activeContract', 'latestContract'])
             ->when($allowedDeptIds !== null, fn ($q) => $q->whereIn('department_id', $allowedDeptIds))
             ->when($request->filled('search'), fn ($q) => $q->search($request->string('search')))
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
+            ->when($request->filled('approval_status'), fn ($q) => $q->where('approval_status', $request->string('approval_status')))
+            ->when($request->filled('status'), function ($q) use ($request) {
+                $statusFilter = $request->string('status')->toString();
+                if ($statusFilter === 'pending') {
+                    $q->where('approval_status', 'pending');
+                } else {
+                    $q->where('status', $statusFilter);
+                }
+            })
             ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
             ->when($request->filled('position_id'), fn ($q) => $q->where('position_id', $request->integer('position_id')))
             ->orderBy($request->string('sort_by', 'first_name'), $request->string('sort_dir', 'asc'))
@@ -83,6 +91,9 @@ class EmployeeController extends BaseController
             }
 
             /** @var Employee $employee */
+            $employeeData['approval_status'] = 'pending';
+            $employeeData['approved_by'] = null;
+            $employeeData['approved_at'] = null;
             $employee = Employee::query()->create($employeeData);
 
             // 1. Criar contrato caso tenham sido preenchidas informações de contrato
@@ -134,6 +145,7 @@ class EmployeeController extends BaseController
                         'mime_type' => $contractFile->getMimeType(),
                         'file_size' => $contractFile->getSize(),
                         'is_confidential' => false,
+                        'is_verified' => false,
                     ]);
                 }
             }
@@ -161,6 +173,7 @@ class EmployeeController extends BaseController
                         'mime_type' => $docFile->getMimeType(),
                         'file_size' => $uploadRes['bytes'] ?? $docFile->getSize(),
                         'is_confidential' => false,
+                        'is_verified' => false,
                     ]);
                 }
             }
@@ -225,9 +238,50 @@ class EmployeeController extends BaseController
             $data['photo_path'] = $cld['url'];
         }
 
+        if (array_key_exists('approval_status', $data) && $data['approval_status'] !== ($employee->approval_status ?? 'approved')) {
+            if ($data['approval_status'] === 'approved' && $employee->documents()->where('is_verified', false)->exists()) {
+                return $this->error('Verifique todos os documentos anexados antes de aprovar o funcionário.', 422);
+            }
+            $data['approved_by'] = $data['approval_status'] === 'approved' ? $user->id : null;
+            $data['approved_at'] = $data['approval_status'] === 'approved' ? now() : null;
+        }
+
         $employee->update($data);
 
-        return $this->success(new EmployeeResource($employee->fresh()->load('department', 'position', 'manager')), 'Funcionário atualizado com sucesso.');
+        return $this->success(new EmployeeResource($employee->fresh()->load('department', 'position', 'manager', 'activeContract', 'latestContract', 'activeSchedule.shift')), 'Funcionário atualizado com sucesso.');
+    }
+
+    public function updateApproval(Request $request, Employee $employee): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->can('approve_employee') && ! $user->can('update_employee') && ! $user->hasRole('super-admin')) {
+            $this->authorize('update', $employee);
+        }
+
+        $allowedDeptIds = $user->allowedDepartmentIds();
+        if ($allowedDeptIds !== null && ! in_array((int) $employee->department_id, $allowedDeptIds, true)) {
+            return $this->error('Sem permissão para aprovar funcionários fora dos departamentos atribuídos.', 403);
+        }
+
+        $validated = $request->validate([
+            'approval_status' => ['required', 'in:pending,approved'],
+        ]);
+
+        $targetStatus = $validated['approval_status'];
+        if ($targetStatus === 'approved' && $employee->documents()->where('is_verified', false)->exists()) {
+            return $this->error('Todos os documentos anexados devem ser verificados antes de aprovar o funcionário.', 422);
+        }
+
+        $employee->update([
+            'approval_status' => $targetStatus,
+            'approved_by' => $targetStatus === 'approved' ? $user->id : null,
+            'approved_at' => $targetStatus === 'approved' ? now() : null,
+        ]);
+
+        return $this->success(
+            new EmployeeResource($employee->fresh()->load('department', 'position', 'manager', 'activeContract', 'latestContract', 'activeSchedule.shift')),
+            $targetStatus === 'approved' ? 'Funcionário aprovado com sucesso.' : 'Funcionário movido para pendente.',
+        );
     }
 
     public function destroy(Employee $employee): JsonResponse
@@ -252,6 +306,10 @@ class EmployeeController extends BaseController
     public function storeContract(StoreContractRequest $request, Employee $employee): JsonResponse
     {
         $this->authorize('create', EmployeeContract::class);
+
+        if (! $employee->isApproved()) {
+            return $this->error('O funcionário aguarda aprovação e verificação dos documentos.', 422);
+        }
 
         $data = $request->validated();
         $data['employee_id'] = $employee->id;

@@ -36,10 +36,10 @@ interface AllowanceValue {
 interface EmployeePayrollSettings {
   has_active_contract: boolean
   global_overtime_hourly_rate?: number
-  advance_monthly_limit: number
-  advance_monthly_used: number
-  advance_monthly_reserved: number
-  advance_monthly_remaining: number
+  advance_monthly_limit?: number | null
+  advance_monthly_used?: number
+  advance_monthly_reserved?: number
+  advance_monthly_remaining?: number | null
   allowances: Record<AllowanceKey, AllowanceValue>
 }
 
@@ -247,7 +247,6 @@ export function EmployeePayrollTab({
   }
 
   const globalOvertimeRate = settings.data.global_overtime_hourly_rate ?? 0
-  const plannedAdvanceInstallment = Number(deductionTotal) / Math.max(1, Number(installmentCount))
 
   return (
     <div className="mt-6 space-y-6">
@@ -436,27 +435,6 @@ export function EmployeePayrollTab({
                     <p className="text-xs text-muted-foreground">{t('employeeDetail.text.deductionStartPeriodDescription')}</p>
                   </div>
                 </div>
-                {deductionType === 'advance' && settings.data && (
-                  <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
-                    <p className="font-medium">
-                      {t('employeeDetail.text.advanceMonthlyLimit', {
-                        amount: settings.data.advance_monthly_limit.toLocaleString(undefined, { minimumFractionDigits: 2 }),
-                      })}
-                    </p>
-                    <p className="mt-1 text-muted-foreground">
-                      {t('employeeDetail.text.advanceMonthlyRemaining', {
-                        amount: settings.data.advance_monthly_remaining.toLocaleString(undefined, { minimumFractionDigits: 2 }),
-                      })}
-                    </p>
-                    {plannedAdvanceInstallment > settings.data.advance_monthly_remaining && (
-                      <p className="mt-1 text-xs text-amber-700">
-                        {t('employeeDetail.text.advanceInstallmentCapped', {
-                          amount: settings.data.advance_monthly_remaining.toLocaleString(undefined, { minimumFractionDigits: 2 }),
-                        })}
-                      </p>
-                    )}
-                  </div>
-                )}
                 <div className="flex justify-end">
                   <Button
                     onClick={() => createDeduction.mutate()}
@@ -464,7 +442,6 @@ export function EmployeePayrollTab({
                       createDeduction.isPending
                       || !deductionName.trim()
                       || !deductionTotal
-                      || (deductionType === 'advance' && settings.data.advance_monthly_remaining <= 0)
                     }
                   >
                     <Plus className="mr-2 h-4 w-4" />{t('employeeDetail.text.addDeduction')}

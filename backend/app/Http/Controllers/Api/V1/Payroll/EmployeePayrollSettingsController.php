@@ -213,10 +213,10 @@ class EmployeePayrollSettingsController extends BaseController
             'allowances' => $allowances,
             'global_overtime_hourly_rate' => $globalDefaults['overtime_hourly_rate'],
             'advance_month' => $monthStart->format('Y-m'),
-            'advance_monthly_limit' => $advanceMonthlyLimit,
+            'advance_monthly_limit' => null,
             'advance_monthly_used' => $advanceMonthlyUsed,
             'advance_monthly_reserved' => $advanceMonthlyReserved,
-            'advance_monthly_remaining' => max(0, $advanceMonthlyLimit - $advanceMonthlyUsed - $advanceMonthlyReserved),
+            'advance_monthly_remaining' => null,
         ];
     }
 }

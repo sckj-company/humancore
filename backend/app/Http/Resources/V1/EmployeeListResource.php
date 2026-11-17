@@ -23,6 +23,8 @@ class EmployeeListResource extends JsonResource
             'phone' => $canContact ? $this->phone : null,
             'photo_path' => $this->photo_path,
             'status' => $this->status,
+            'approval_status' => $this->approval_status ?? 'approved',
+            'approved_at' => $this->approved_at?->toIso8601String(),
             'hired_at' => $canOrg ? $this->hired_at?->format('Y-m-d') : null,
             'department' => $canOrg ? $this->whenLoaded('department', fn () => $this->department?->name) : null,
             'position' => $canOrg ? $this->whenLoaded('position', fn () => $this->position?->title) : null,

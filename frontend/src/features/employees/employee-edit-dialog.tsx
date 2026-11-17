@@ -40,6 +40,7 @@ type EmployeeEditForm = Record<
   | 'tax_id'
   | 'social_security_id'
   | 'status'
+  | 'approval_status'
   | 'hired_at'
   | 'probation_end'
   | 'department_id'
@@ -92,7 +93,7 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
     setForm((current) => ({ ...current, [key]: value }))
   }
 
-  const selectValue = (key: 'gender' | 'marital_status' | 'status' | 'department_id' | 'position_id' | 'manager_id') =>
+  const selectValue = (key: 'gender' | 'marital_status' | 'status' | 'approval_status' | 'department_id' | 'position_id' | 'manager_id') =>
     form[key] || 'none'
   const setSelectValue = (key: keyof EmployeeEditForm, value: string) => update(key, value === 'none' ? '' : value)
   const handleOpenChange = (nextOpen: boolean) => {
@@ -160,6 +161,16 @@ export function EmployeeEditDialog({ employee, open, onOpenChange }: EmployeeEdi
                 <SelectField label={t('common.status')} value={selectValue('status')} onChange={(value) => setSelectValue('status', value)} allowClear={false} options={[
                   ['active', t('common.active')], ['inactive', t('common.inactive')], ['suspended', t('employeeEdit.statuses.suspended')], ['terminated', t('employeeEdit.statuses.terminated')],
                 ]} />
+                <SelectField
+                  label={t('employeeEdit.approvalStatus', { defaultValue: 'Estado de Aprovação' })}
+                  value={selectValue('approval_status')}
+                  onChange={(value) => setSelectValue('approval_status', value)}
+                  allowClear={false}
+                  options={[
+                    ['approved', t('employeesPage.approval.approved', { defaultValue: 'Aprovado' })],
+                    ['pending', t('employeesPage.approval.pending', { defaultValue: 'Pendente' })],
+                  ]}
+                />
                 <TextField label={t('employees.hired_at')} type="date" value={form.hired_at} onChange={(value) => update('hired_at', value)} />
                 <TextField label={t('employeeEdit.probationEnd')} type="date" value={form.probation_end} onChange={(value) => update('probation_end', value)} />
               </div>
@@ -256,6 +267,7 @@ function createForm(employee: Employee): EmployeeEditForm {
     tax_id: employee.tax_id ?? '',
     social_security_id: employee.social_security_id ?? '',
     status: employee.status ?? 'active',
+    approval_status: employee.approval_status ?? 'approved',
     hired_at: toFormValue(employee.hired_at),
     probation_end: toFormValue(employee.probation_end),
     department_id: toFormValue(employee.department_id),

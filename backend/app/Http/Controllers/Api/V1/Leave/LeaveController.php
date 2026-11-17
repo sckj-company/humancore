@@ -140,6 +140,9 @@ class LeaveController extends BaseController
         if (! $employee) {
             return $this->error('Funcionário não encontrado.', 422);
         }
+        if (! $employee->isApproved()) {
+            return $this->error('Funcionário aguarda aprovação e verificação dos documentos.', 422);
+        }
 
         $start = Carbon::parse($validated['start_date']);
         $end = Carbon::parse($validated['end_date']);

@@ -71,6 +71,10 @@ class StoreEmployeeRequest extends FormRequest
             'document_names.*' => ['nullable', 'string', 'max:255'],
             'document_types' => ['nullable', 'array'],
             'document_types.*' => ['nullable', 'string', 'max:50'],
+            'optional_document_types' => ['nullable', 'array'],
+            'optional_document_types.*' => ['nullable', 'string', 'max:50'],
+            'required_document_types' => ['nullable', 'array'],
+            'required_document_types.*' => ['nullable', 'string', 'max:50'],
         ];
     }
 
@@ -86,13 +90,22 @@ class StoreEmployeeRequest extends FormRequest
                 ->where('key', 'required')
                 ->first()?->value ?? [];
 
-            if (! is_array($requiredDocuments)) {
-                return;
-            }
+            $settingsRequiredTypes = is_array($requiredDocuments)
+                ? collect($requiredDocuments)
+                    ->filter(fn ($document) => is_array($document) ? (bool) ($document['required'] ?? true) : true)
+                    ->map(fn ($document) => is_array($document) ? ($document['type'] ?? null) : $document)
+                    ->filter(fn ($type) => is_string($type) && $type !== '')
+                : collect();
 
-            $requiredTypes = collect($requiredDocuments)
-                ->map(fn ($document) => is_array($document) ? ($document['type'] ?? null) : $document)
-                ->filter(fn ($type) => is_string($type) && $type !== '')
+            $optionalOverrides = collect($this->input('optional_document_types', []))
+                ->filter(fn ($type) => is_string($type) && $type !== '');
+            $requiredOverrides = collect($this->input('required_document_types', []))
+                ->filter(fn ($type) => is_string($type) && $type !== '');
+
+            $requiredTypes = $settingsRequiredTypes
+                ->reject(fn (string $type) => $optionalOverrides->contains($type))
+                ->merge($requiredOverrides)
+                ->unique()
                 ->values();
 
             if ($requiredTypes->isEmpty()) {

@@ -67,6 +67,11 @@ class DeductionController extends BaseController
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
 
+        $employee = \App\Models\Employee::find($data['employee_id']);
+        if ($employee && ! $employee->isApproved()) {
+            return $this->error('Funcionário aguarda aprovação e verificação dos documentos.', 422);
+        }
+
         $data['tenant_id'] = tenant_id();
         $data['status'] = $data['status'] ?? 'active';
         $data['paid_amount'] = 0;

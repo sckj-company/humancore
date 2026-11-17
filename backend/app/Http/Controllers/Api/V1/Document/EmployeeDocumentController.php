@@ -27,7 +27,7 @@ class EmployeeDocumentController extends BaseController
         $allowedDepartmentIds = $user->allowedDepartmentIds();
 
         $documents = EmployeeDocument::query()
-            ->with('employee')
+            ->with(['employee', 'verifier:id,name'])
             ->when($scopedToOwn, fn ($q) => $q->where('employee_id', $user->employee_id))
             ->when($allowedDepartmentIds !== null && ! $scopedToOwn, fn ($q) => $q->whereHas('employee', fn ($e) => $e->whereIn('department_id', $allowedDepartmentIds)))
             ->when(
@@ -69,12 +69,53 @@ class EmployeeDocumentController extends BaseController
             'expiry_date' => $validated['expiry_date'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'is_confidential' => $request->boolean('is_confidential', false),
+            'is_verified' => false,
         ]);
 
         return $this->success(
-            new EmployeeDocumentResource($document->load('employee')),
+            new EmployeeDocumentResource($document->load(['employee', 'verifier:id,name'])),
             'Documento carregado com sucesso.',
             201
+        );
+    }
+
+    public function toggleVerify(Request $request, EmployeeDocument $document): JsonResponse
+    {
+        $user = $request->user();
+        if (
+            ! $user->hasRole('super-admin')
+            && ! $user->can('approve_document')
+            && ! $user->can('update_document')
+            && ! $user->can('approve_employee')
+            && ! $user->can('update_employee')
+        ) {
+            $this->authorize('view', $document);
+            return $this->error('Sem permissão para verificar documentos.', 403);
+        }
+
+        $employee = $document->employee;
+        $allowedDeptIds = $user->allowedDepartmentIds();
+        if ($employee && $allowedDeptIds !== null && ! in_array((int) $employee->department_id, $allowedDeptIds, true)) {
+            return $this->error('Sem permissão para verificar documentos fora dos departamentos atribuídos.', 403);
+        }
+
+        $data = $request->validate([
+            'is_verified' => ['sometimes', 'boolean'],
+        ]);
+
+        $verified = array_key_exists('is_verified', $data)
+            ? (bool) $data['is_verified']
+            : ! ((bool) $document->is_verified);
+
+        $document->update([
+            'is_verified' => $verified,
+            'verified_by' => $verified ? $user->id : null,
+            'verified_at' => $verified ? now() : null,
+        ]);
+
+        return $this->success(
+            new EmployeeDocumentResource($document->fresh()->load(['employee', 'verifier:id,name'])),
+            $verified ? 'Documento verificado e aprovado.' : 'Verificação do documento removida.',
         );
     }
 

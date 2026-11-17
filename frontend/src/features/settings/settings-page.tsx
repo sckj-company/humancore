@@ -43,7 +43,6 @@ const SETTING_GROUP_META: { key: string; icon: typeof Building2; titleKey: strin
   { key: 'communication', icon: Mail, titleKey: 'groups.communication' },
 ]
 const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string }[] = [
-  { key: 'advance.monthly_limit', labelKey: 'discounts.advanceMonthlyLimit', descriptionKey: 'discounts.advanceMonthlyLimitDescription' },
   { key: 'discounts.absence_daily_amount', labelKey: 'discounts.absenceDaily', descriptionKey: 'discounts.absenceDailyDescription' },
   { key: 'discounts.lateness_hourly_amount', labelKey: 'discounts.latenessHourly', descriptionKey: 'discounts.latenessHourlyDescription' },
   { key: 'discounts.lateness_accumulation_amount', labelKey: 'discounts.latenessThresholdAmount', descriptionKey: 'discounts.latenessThresholdAmountDescription' },
@@ -127,7 +126,7 @@ export function SettingsPage() {
   const payrollDiscountSettings = useMemo(
     () =>
       (data?.payroll ?? [])
-        .filter((s) => (s.key.startsWith('discounts.') && s.key !== 'discounts.lateness_minute_amount') || s.key === 'advance.monthly_limit')
+        .filter((s) => s.key.startsWith('discounts.') && s.key !== 'discounts.lateness_minute_amount')
         .sort((a, b) => a.key.localeCompare(b.key)),
     [data],
   )
@@ -636,8 +635,10 @@ export function SettingsPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setRequiredDocuments((current) => {
+                    const existingByType = new Map(current.map((d) => [d.type, d]))
+                    const presets = REQUIRED_DOCUMENT_PRESETS.map((p) => existingByType.get(p.type) ?? { ...p, required: true })
                     const customDocs = current.filter((d) => !REQUIRED_DOCUMENT_PRESETS.some((p) => p.type === d.type))
-                    return [...REQUIRED_DOCUMENT_PRESETS, ...customDocs]
+                    return [...presets, ...customDocs]
                   })}
                 >
                   {t('settingsPage.selectAllDocuments', { defaultValue: 'Selecionar todos' })}
@@ -652,23 +653,46 @@ export function SettingsPage() {
                 </Button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {REQUIRED_DOCUMENT_PRESETS.map((document) => (
-                  <label key={document.type} className="flex items-center gap-3 border border-border p-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={requiredDocuments.some((required) => required.type === document.type)}
-                      onChange={(event) => setRequiredDocuments((current) => event.target.checked
-                        ? [...current, document]
-                        : current.filter((required) => required.type !== document.type))}
-                      className="h-4 w-4 accent-primary"
-                    />
-                    <span>
-                      {REQUIRED_DOCUMENT_PRESETS.some((preset) => preset.type === document.type)
-                        ? t(`settingsPage.documentTypes.${document.type}`)
-                        : document.label}
-                    </span>
-                  </label>
-                ))}
+                {REQUIRED_DOCUMENT_PRESETS.map((document) => {
+                  const selectedDoc = requiredDocuments.find((required) => required.type === document.type)
+                  const isVisible = !!selectedDoc
+                  const isMandatory = selectedDoc ? (selectedDoc.required ?? true) : true
+                  return (
+                    <div key={document.type} className="flex flex-col justify-between gap-2 rounded-lg border border-border p-3 text-sm">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isVisible}
+                          onChange={(event) => setRequiredDocuments((current) => event.target.checked
+                            ? [...current, { ...document, required: true }]
+                            : current.filter((required) => required.type !== document.type))}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span className="font-medium">
+                          {t(`settingsPage.documentTypes.${document.type}`)}
+                        </span>
+                      </label>
+                      {isVisible && (
+                        <div className="flex items-center justify-between border-t border-border/60 pt-2 text-xs">
+                          <span className={isMandatory ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                            {isMandatory
+                              ? t('settingsPage.documentMandatory', { defaultValue: 'Obrigatório' })
+                              : t('settingsPage.documentOptional', { defaultValue: 'Opcional' })}
+                          </span>
+                          <Switch
+                            checked={isMandatory}
+                            onCheckedChange={(checked) => setRequiredDocuments((current) =>
+                              current.map((item) => item.type === document.type ? { ...item, required: checked } : item),
+                            )}
+                            aria-label={t('settingsPage.toggleMandatoryAria', {
+                              defaultValue: 'Tornar obrigatório',
+                            })}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -683,9 +707,9 @@ export function SettingsPage() {
                   variant="outline"
                   onClick={() => {
                     const label = newDocumentName.trim()
-                    const type = `custom_${label.toLocaleLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+                    const type = `custom_${label.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
                     if (!label || requiredDocuments.some((document) => document.type === type)) return
-                    setRequiredDocuments((current) => [...current, { type, label }])
+                    setRequiredDocuments((current) => [...current, { type, label, required: true }])
                     setNewDocumentName('')
                   }}
                 >
@@ -693,19 +717,37 @@ export function SettingsPage() {
                 </Button>
               </div>
 
-              {requiredDocuments.filter((document) => document.type.startsWith('custom_')).map((document) => (
-                <div key={document.type} className="flex items-center justify-between border border-border px-3 py-2 text-sm">
-                  <span>{document.label}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setRequiredDocuments((current) => current.filter((item) => item.type !== document.type))}
-                  >
-                    {t('settingsPage.remove')}
-                  </Button>
-                </div>
-              ))}
+              {requiredDocuments.filter((document) => document.type.startsWith('custom_')).map((document) => {
+                const isMandatory = document.required ?? true
+                return (
+                  <div key={document.type} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                    <span className="font-medium">{document.label}</span>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-xs">
+                        <span className={isMandatory ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                          {isMandatory
+                            ? t('settingsPage.documentMandatory', { defaultValue: 'Obrigatório' })
+                            : t('settingsPage.documentOptional', { defaultValue: 'Opcional' })}
+                        </span>
+                        <Switch
+                          checked={isMandatory}
+                          onCheckedChange={(checked) => setRequiredDocuments((current) =>
+                            current.map((item) => item.type === document.type ? { ...item, required: checked } : item),
+                          )}
+                        />
+                      </label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRequiredDocuments((current) => current.filter((item) => item.type !== document.type))}
+                      >
+                        {t('settingsPage.remove')}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
             </CardContent>
             <CardFooter className="justify-end border-t px-6 py-4">
               <Button onClick={() => saveRequiredDocuments.mutate()} disabled={saveRequiredDocuments.isPending}>
@@ -801,11 +843,13 @@ function humanize(key: string): string {
 function normalizeDocumentRequirements(values: unknown[]): DocumentRequirement[] {
   return values.flatMap((value) => {
     if (typeof value === 'string') {
-      return [{ type: value, label: REQUIRED_DOCUMENT_PRESETS.find((item) => item.type === value)?.label ?? value }]
+      return [{ type: value, label: REQUIRED_DOCUMENT_PRESETS.find((item) => item.type === value)?.label ?? value, required: true }]
     }
     if (value && typeof value === 'object' && 'type' in value && 'label' in value) {
-      const { type, label } = value as { type: unknown; label: unknown }
-      if (typeof type === 'string' && typeof label === 'string') return [{ type, label }]
+      const { type, label, required } = value as { type: unknown; label: unknown; required?: unknown }
+      if (typeof type === 'string' && typeof label === 'string') {
+        return [{ type, label, required: typeof required === 'boolean' ? required : true }]
+      }
     }
     return []
   })

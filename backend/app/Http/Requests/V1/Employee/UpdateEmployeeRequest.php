@@ -46,6 +46,7 @@ class UpdateEmployeeRequest extends FormRequest
             'overtime_hourly_rate' => ['nullable', 'numeric', 'min:0'],
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'status' => ['sometimes', Rule::in(['active', 'inactive', 'suspended', 'terminated'])],
+            'approval_status' => ['sometimes', Rule::in(['pending', 'approved'])],
             'hired_at' => ['nullable', 'date'],
             'probation_end' => ['nullable', 'date', 'after_or_equal:hired_at'],
             'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('tenant_id', tenant_id())],

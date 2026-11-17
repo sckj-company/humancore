@@ -29,6 +29,9 @@ class AttendanceController extends BaseController
         if (! $employee) {
             return $this->error('Funcionário não encontrado.', 422);
         }
+        if (! $employee->isApproved()) {
+            return $this->error('Funcionário aguarda aprovação e verificação dos documentos.', 422);
+        }
 
         $today = $validated['date'] ?? now()->toDateString();
         if (Carbon::parse($today)->startOfDay()->isFuture()) {
@@ -114,6 +117,9 @@ class AttendanceController extends BaseController
         }
 
         $employee = Employee::findOrFail($validated['employee_id']);
+        if (! $employee->isApproved()) {
+            return $this->error('Funcionário aguarda aprovação e verificação dos documentos.', 422);
+        }
         $schedule = $this->scheduleForDate($employee, $validated['date'], $validated['shift_id'] ?? null);
         $shiftId = $schedule?->shift_id;
         $existing = $this->recordForShift($employee->id, $validated['date'], $shiftId)->first();

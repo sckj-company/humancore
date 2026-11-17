@@ -17,6 +17,7 @@ import { EmployeeImportModal } from '@/features/employees/components/employee-im
 import type { Paginated, EmployeeSummary } from '@/types'
 
 const statusColor: Record<string, string> = {
+  pending: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   active: 'bg-success/10 text-success',
   inactive: 'bg-muted text-muted-foreground',
   suspended: 'bg-warning/10 text-warning',
@@ -25,6 +26,10 @@ const statusColor: Record<string, string> = {
 }
 
 function getDisplayStatus(e: EmployeeSummary): string {
+  if (e.approval_status === 'pending') {
+    return 'pending'
+  }
+
   const contractEnded =
     e.status === 'active' &&
     !!e.active_contract?.end_date &&
@@ -53,7 +58,7 @@ export function EmployeesPage() {
   }, [tenantKey, syncTenant])
 
   useEffect(() => {
-    if (urlStatus && ['all', 'active', 'inactive', 'terminated', 'suspended'].includes(urlStatus)) {
+    if (urlStatus && ['all', 'pending', 'active', 'inactive', 'terminated', 'suspended'].includes(urlStatus)) {
       setStatus(urlStatus)
     }
   }, [urlStatus, setStatus])
@@ -127,6 +132,7 @@ export function EmployeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('common.all')}</SelectItem>
+                  <SelectItem value="pending">{t('employeesPage.status.pending', { defaultValue: 'Pendente (Aguardando Aprovação)' })}</SelectItem>
                   <SelectItem value="active">{t('employeesPage.status.active')}</SelectItem>
                   <SelectItem value="inactive">{t('employeesPage.status.inactive')}</SelectItem>
                   <SelectItem value="terminated">{t('employeesPage.status.terminated')}</SelectItem>

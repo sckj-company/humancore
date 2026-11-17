@@ -301,7 +301,8 @@
       "terminated": "Desligado",
       "expired_contract": "Contrato Expirado",
       "on_leave": "Em Licença",
-      "probation": "Em Probatório"
+      "probation": "Em Probatório",
+      "pending": "Pendente (Aguardando Aprovação)"
     },
     "loadError": "Não foi possível carregar os funcionários.",
     "emptyTitle": "Nenhum funcionário encontrado",
@@ -313,7 +314,11 @@
     "salary": "Salário",
     "viewEmployee": "Ver perfil de {{name}}",
     "clearFilters": "Limpar filtros",
-    "pagination": "Página {{current}} de {{pages}} · {{total}} no total"
+    "pagination": "Página {{current}} de {{pages}} · {{total}} no total",
+    "approval": {
+      "pending": "Pendente",
+      "approved": "Aprovado"
+    }
   },
   "employeeDetail": {
     "status": {
@@ -425,7 +430,13 @@
       "downloading": "A transferir “{{name}}”…",
       "downloadComplete": "Download concluído!",
       "downloadStarted": "Download iniciado!",
-      "confirmDeleteDocument": "Eliminar “{{name}}”?"
+      "confirmDeleteDocument": "Eliminar “{{name}}”?",
+      "documentVerified": "Documento verificado e aprovado.",
+      "documentUnverified": "Verificação do documento removida.",
+      "verifyError": "Não foi possível verificar o documento.",
+      "employeeApproved": "Funcionário aprovado e disponível para operações.",
+      "employeeSetPending": "Funcionário movido para estado Pendente.",
+      "approvalError": "Não foi possível alterar o estado de aprovação."
     },
     "text": {
       "absences": "Faltas",
@@ -582,7 +593,7 @@
       "christmasAllowance": "Subsídio de Natal",
       "familyAllowance": "Abono de família",
       "additionalAllowance": "Abono adicional",
-      "bonusAllowance": "Bónus",
+      "bonusAllowance": "Bónus de desempenho",
       "usingGlobalValue": "A usar valor global: {{amount}} Kz",
       "customValueBadge": "Personalizado",
       "globalValueBadge": "Global",
@@ -742,7 +753,15 @@
       "weeklyHours": "Carga Horária Semanal",
       "workdayAlreadyClosed": "Jornada Já Fechada",
       "workdayComplete": "Jornada Concluída",
-      "working": "Em Trabalho"
+      "working": "Em Trabalho",
+      "approveEmployee": "Aprovar Funcionário",
+      "setEmployeePending": "Mover para Pendente",
+      "pendingApprovalBanner": "Este funcionário está PENDENTE. Verifique os documentos anexados no separador Documentos e aprove-o para liberar folha salarial, presenças e restantes operações.",
+      "reviewDocuments": "Verificar Documentos",
+      "documentVerifiedBadge": "Verificado",
+      "documentUnverifiedBadge": "Por verificar",
+      "verifiedAction": "Verificado",
+      "verifyAction": "Verificar"
     }
   },
   "employees": {
@@ -801,7 +820,8 @@
     },
     "probationEnd": "Fim do período probatório",
     "saveChanges": "Guardar alterações",
-    "undefined": "Não definido"
+    "undefined": "Não definido",
+    "approvalStatus": "Estado de Aprovação"
   },
   "profilePage": {
     "eyebrow": "CONTA",
@@ -2514,7 +2534,10 @@
     "remove": "Remover",
     "saveDocuments": "Guardar documentos",
     "selectAllDocuments": "Selecionar todos",
-    "clearDocuments": "Limpar seleção"
+    "clearDocuments": "Limpar seleção",
+    "documentMandatory": "Obrigatório",
+    "documentOptional": "Opcional",
+    "toggleMandatoryAria": "Alternar obrigatoriedade do documento"
   },
   "payrollTaxRulesPage": {
     "inssCreated": "Regra INSS criada como rascunho.",
@@ -2790,7 +2813,20 @@
       "previewTitle": "Pré-visualizar documento",
       "deleteTitle": "Eliminar este ficheiro para substituir por outro",
       "namePlaceholder": "Nome do documento",
-      "addedCount": "{{count}} documento(s) adicionado(s)."
+      "addedCount": "{{count}} documento(s) adicionado(s).",
+      "rowsHeading": "Documentos ({{count}}) — escolha o tipo à direita e carregue o ficheiro à esquerda",
+      "selectTypeFirst": "Escolha primeiro o tipo de documento à direita",
+      "selectTypePlaceholder": "Escolher tipo...",
+      "addDocumentRow": "Adicionar outro documento",
+      "addCustomTypeTitle": "Adicionar novo tipo de documento",
+      "requiredProgress": "Obrigatórios: {{done}}/{{total}}",
+      "colFileInput": "Ficheiro / Documento",
+      "colDocumentType": "Tipo de Documento",
+      "noRowsYet": "Nenhum documento na lista. Adicione um abaixo.",
+      "replaceFile": "Alterar",
+      "uploadButton": "Carregar",
+      "colRequirement": "Exigência",
+      "toggleRequiredHint": "Clique para alternar entre Obrigatório e Opcional"
     },
     "footer": {
       "step1": "Passo 1 de 2: Dados Básicos",

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -55,15 +55,17 @@ import {
   ANGOLA_DOCUMENT_TYPE_KEYS,
 } from '@/lib/document-presets'
 import { toast } from 'sonner'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentRequirement, Paginated, SettingGroups } from '@/types'
 
-interface UploadedDoc {
+interface DocumentRow {
   id: string
-  file: File
+  file: File | null
   name: string
   document_type: string
   previewUrl?: string
+  isRequired: boolean
+  isConfigured: boolean
 }
 
 interface IdentityOcrFields {
@@ -79,16 +81,18 @@ interface IdentityOcrFields {
 export function EmployeeCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const currency = user?.tenant?.currency ?? 'AOA'
   const canCreate = hasPermission(user, 'create_employee')
+  const canUpdateDocumentSettings = hasPermission(user, 'update_setting') || hasPermission(user, 'configure_setting')
 
   const [activeTab, setActiveTab] = useState<'dados-basicos' | 'contrato'>('dados-basicos')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   // Preview Dialog state for uploaded files
-  const [previewDoc, setPreviewDoc] = useState<UploadedDoc | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<DocumentRow | null>(null)
 
   // Photo
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -140,8 +144,12 @@ export function EmployeeCreatePage() {
     contract_notes: '',
   })
 
-  // Tab 2: Documentos do Funcionário (PDFs ou Imagens)
-  const [documents, setDocuments] = useState<UploadedDoc[]>([])
+  // Tab 2: Documentos do Funcionário (linhas unificadas: input à esquerda + tipo à direita)
+  const [documentRows, setDocumentRows] = useState<DocumentRow[]>([])
+  const [customDocumentTypes, setCustomDocumentTypes] = useState<DocumentRequirement[]>([])
+  const [newDocumentTypeName, setNewDocumentTypeName] = useState('')
+  const [newDocumentRequired, setNewDocumentRequired] = useState(false)
+  const [hasInitializedConfiguredDocs, setHasInitializedConfiguredDocs] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch Departments, Positions, and Managers
@@ -181,12 +189,38 @@ export function EmployeeCreatePage() {
         })
       : (fallback || type)
 
-  const requiredDocuments = normalizeDocumentRequirements(
-    documentSettings?.documents?.find((setting) => setting.key === 'required')?.value,
-  ).map((document) => ({
-    ...document,
-    label: getDocumentTypeLabel(document.type, document.label),
-  }))
+  const configuredDocuments = useMemo(
+    () =>
+      normalizeDocumentRequirements(
+        documentSettings?.documents?.find((setting) => setting.key === 'required')?.value,
+      ).map((document) => ({
+        ...document,
+        label: getDocumentTypeLabel(document.type, document.label),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [documentSettings, t],
+  )
+
+  useEffect(() => {
+    if (hasInitializedConfiguredDocs || !documentSettings) return
+    setHasInitializedConfiguredDocs(true)
+    if (configuredDocuments.length === 0) return
+
+    setDocumentRows((current) => {
+      const existingTypes = new Set(current.map((row) => row.document_type).filter(Boolean))
+      const initialRows: DocumentRow[] = configuredDocuments
+        .filter((doc) => !existingTypes.has(doc.type))
+        .map((doc) => ({
+          id: `cfg-${doc.type}`,
+          file: null,
+          name: doc.label,
+          document_type: doc.type,
+          isRequired: doc.required !== false,
+          isConfigured: true,
+        }))
+      return [...initialRows, ...current]
+    })
+  }, [documentSettings, configuredDocuments, hasInitializedConfiguredDocs])
 
   const documentTypeOptions = [...new Map(
     [
@@ -194,14 +228,24 @@ export function EmployeeCreatePage() {
         type: document.type,
         label: getDocumentTypeLabel(document.type, document.label),
       })),
-      ...requiredDocuments,
+      ...configuredDocuments,
+      ...customDocumentTypes,
       { type: 'other', label: getDocumentTypeLabel('other', 'Outro Documento') },
     ].map((document) => [document.type, document]),
   ).values()]
 
-  const missingRequiredDocuments = requiredDocuments.filter(
-    (requirement) => !documents.some((document) => document.document_type === requirement.type),
-  )
+  const uploadedDocuments = documentRows.filter((row): row is DocumentRow & { file: File } => row.file !== null)
+  const documents = uploadedDocuments
+
+  const missingRequiredDocuments = documentRows
+    .filter((row) => row.isRequired && row.file === null)
+    .map((row) => ({
+      type: row.document_type,
+      label: row.name || getDocumentTypeLabel(row.document_type, row.document_type),
+      required: true,
+    }))
+  const totalRequiredCount = documentRows.filter((row) => row.isRequired).length
+  const requiredDoneCount = Math.max(0, totalRequiredCount - missingRequiredDocuments.length)
   const isCreateDisabled = isSubmitting
     || isLoadingDocumentSettings
     || hasDocumentSettingsError
@@ -259,11 +303,107 @@ export function EmployeeCreatePage() {
     }
   }
 
-  // Handle Document uploads (PDFs / Images)
+  const handleAddEmptyDocumentRow = () => {
+    setDocumentRows((prev) => [
+      ...prev,
+      {
+        id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        file: null,
+        name: '',
+        document_type: '',
+        isRequired: false,
+        isConfigured: false,
+      },
+    ])
+  }
+
+  const syncDocumentSettings = (nextRows: DocumentRow[]) => {
+    if (!canUpdateDocumentSettings) return
+
+    const syncedMap = new Map<string, DocumentRequirement>()
+    configuredDocuments.forEach((doc) => {
+      syncedMap.set(doc.type, { ...doc })
+    })
+    nextRows.forEach((row) => {
+      if (!row.document_type) return
+      if (row.isConfigured || syncedMap.has(row.document_type) || row.document_type.startsWith('custom_')) {
+        syncedMap.set(row.document_type, {
+          type: row.document_type,
+          label: row.name.trim() || getDocumentTypeLabel(row.document_type, row.document_type),
+          required: row.isRequired,
+        })
+      }
+    })
+
+    const payload = [...syncedMap.values()]
+    api.put('settings/bulk', {
+      group: 'documents',
+      values: { required: payload },
+    })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['settings'] })
+      })
+      .catch(() => {
+        // Silencioso para não interromper o preenchimento; a criação usa override explícito por pedido.
+      })
+  }
+
+  const handleAddCustomDocumentType = () => {
+    const label = newDocumentTypeName.trim()
+    if (!label) return
+    const type = `custom_${label.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+    if (!type || type === 'custom_') return
+
+    if (!documentTypeOptions.some((opt) => opt.type === type)) {
+      setCustomDocumentTypes((prev) => [...prev, { type, label, required: newDocumentRequired }])
+    }
+
+    const nextRows: DocumentRow[] = [
+      ...documentRows,
+      {
+        id: `custom-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        file: null,
+        name: label,
+        document_type: type,
+        isRequired: newDocumentRequired,
+        isConfigured: true,
+      },
+    ]
+    setDocumentRows(nextRows)
+    syncDocumentSettings(nextRows)
+    setNewDocumentTypeName('')
+    setNewDocumentRequired(false)
+  }
+
+  const handleRowFileChange = (rowId: string, file: File | undefined) => {
+    if (!file) return
+    const isImg = file.type.startsWith('image/')
+    const isPdf = file.type === 'application/pdf'
+    const isDoc = /\.docx?$/i.test(file.name)
+    if (!isImg && !isPdf && !isDoc) {
+      toast.error(t('employeeCreate.errors.unsupportedFile', { name: file.name }))
+      return
+    }
+
+    setDocumentRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== rowId) return row
+        if (row.previewUrl) URL.revokeObjectURL(row.previewUrl)
+        return {
+          ...row,
+          file,
+          name: row.name || file.name.replace(/\.[^/.]+$/, ''),
+          previewUrl: isImg || isPdf ? URL.createObjectURL(file) : undefined,
+        }
+      }),
+    )
+  }
+
+  // Handle Document uploads (PDFs / Images via dropzone)
   const handleFilesAdded = (files: FileList | null) => {
     if (!files || files.length === 0) return
 
-    const newDocs: UploadedDoc[] = []
+    const newDocs: DocumentRow[] = []
     Array.from(files).forEach((file) => {
       const isImg = file.type.startsWith('image/')
       const isPdf = file.type === 'application/pdf'
@@ -299,54 +439,54 @@ export function EmployeeCreatePage() {
         name: file.name.replace(/\.[^/.]+$/, ''),
         document_type: defaultType,
         previewUrl: isImg || isPdf ? URL.createObjectURL(file) : undefined,
+        isRequired: false,
+        isConfigured: false,
       })
     })
 
     if (newDocs.length > 0) {
-      setDocuments((prev) => [...prev, ...newDocs])
+      setDocumentRows((prev) => [...prev, ...newDocs])
       toast.success(t('employeeCreate.documents.addedCount', { count: newDocs.length }))
     }
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleRemoveDocument = (id: string) => {
-    setDocuments((prev) => {
-      const doc = prev.find((d) => d.id === id)
-      if (doc?.previewUrl) URL.revokeObjectURL(doc.previewUrl)
-      return prev.filter((d) => d.id !== id)
-    })
+    setDocumentRows((prev) =>
+      prev.flatMap((row) => {
+        if (row.id !== id) return [row]
+        if (row.previewUrl) URL.revokeObjectURL(row.previewUrl)
+        if (row.isConfigured) {
+          return [{ ...row, file: null, previewUrl: undefined }]
+        }
+        return []
+      }),
+    )
     if (previewDoc?.id === id) setPreviewDoc(null)
   }
 
-  const handleRequiredDocumentChange = (requirement: DocumentRequirement, file: File | undefined) => {
-    if (!file) return
-    const isImg = file.type.startsWith('image/')
-    const isPdf = file.type === 'application/pdf'
-    const isDoc = /\.docx?$/i.test(file.name)
-    if (!isImg && !isPdf && !isDoc) {
-      toast.error(t('employeeCreate.errors.unsupportedFile', { name: file.name }))
-      return
-    }
-
-    setDocuments((current) => {
-      const previous = current.filter((document) => document.document_type !== requirement.type)
-      current.filter((document) => document.document_type === requirement.type).forEach((document) => {
-        if (document.previewUrl) URL.revokeObjectURL(document.previewUrl)
-      })
-      return [...previous, {
-        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        file,
-        name: requirement.label,
-        document_type: requirement.type,
-        previewUrl: isImg || isPdf ? URL.createObjectURL(file) : undefined,
-      }]
-    })
+  const handleUpdateDocumentMeta = (id: string, field: 'name' | 'document_type', val: string) => {
+    setDocumentRows((prev) =>
+      prev.map((d) => {
+        if (d.id !== id) return d
+        if (field === 'document_type') {
+          const optLabel = documentTypeOptions.find((o) => o.type === val)?.label
+          return { ...d, document_type: val, name: d.name || optLabel || '' }
+        }
+        return { ...d, [field]: val }
+      }),
+    )
   }
 
-  const handleUpdateDocumentMeta = (id: string, field: 'name' | 'document_type', val: string) => {
-    setDocuments((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, [field]: val } : d)),
+  const handleToggleRowRequired = (id: string) => {
+    const nextRows = documentRows.map((row) =>
+      row.id === id ? { ...row, isRequired: !row.isRequired } : row,
     )
+    setDocumentRows(nextRows)
+    const changed = nextRows.find((row) => row.id === id)
+    if (changed && (changed.isConfigured || changed.document_type.startsWith('custom_'))) {
+      syncDocumentSettings(nextRows)
+    }
   }
 
   // Filter positions by selected department
@@ -388,13 +528,13 @@ export function EmployeeCreatePage() {
       setFormErrors(errors)
       // Switch to the tab with errors
       if (errors.first_name || errors.last_name || errors.email) {
-        setActiveTab('dados-basicos')
+        switchTab('dados-basicos')
         toast.error(t('employeeCreate.validation.fillRequiredBasicFields'))
       } else if (errors.contract_end_date) {
-        setActiveTab('contrato')
+        switchTab('contrato')
         toast.error(errors.contract_end_date)
       } else if (errors.documents) {
-        setActiveTab('contrato')
+        switchTab('contrato')
         toast.error(errors.documents)
       }
       return
@@ -428,12 +568,22 @@ export function EmployeeCreatePage() {
       if (contractData.contract_signed_at) formData.append('contract_signed_at', contractData.contract_signed_at)
       if (contractData.contract_notes) formData.append('contract_notes', contractData.contract_notes)
 
-      // Documents List (PDFs or Images)
+      // Documents List (PDFs or Images) + overrides bilaterais de obrigatoriedade
       documents.forEach((doc) => {
         formData.append('documents[]', doc.file)
         formData.append('document_names[]', doc.name || doc.file.name)
         formData.append('document_types[]', doc.document_type || 'other')
       })
+      documentRows
+        .filter((row) => row.document_type && !row.isRequired)
+        .forEach((row) => {
+          formData.append('optional_document_types[]', row.document_type)
+        })
+      documentRows
+        .filter((row) => row.document_type && row.isRequired)
+        .forEach((row) => {
+          formData.append('required_document_types[]', row.document_type)
+        })
 
       await api.upload('employees', formData)
 
@@ -444,6 +594,13 @@ export function EmployeeCreatePage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const switchTab = (tab: 'dados-basicos' | 'contrato') => {
+    setActiveTab(tab)
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    })
   }
 
   const formatFileSize = (bytes: number) => {
@@ -473,7 +630,7 @@ export function EmployeeCreatePage() {
 
       {/* Main Two-Tab Form */}
       <form onSubmit={handleSaveAll} className="space-y-6">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'dados-basicos' | 'contrato')}>
+        <Tabs value={activeTab} onValueChange={(v) => switchTab(v as 'dados-basicos' | 'contrato')}>
           <TabsList className="grid w-full grid-cols-2 max-w-md h-11 p-1 bg-muted">
             <TabsTrigger value="dados-basicos" className="gap-2 text-sm font-medium">
               <User className="h-4 w-4" />
@@ -1170,203 +1327,320 @@ export function EmployeeCreatePage() {
 
             {/* Card 2: Upload de Documentos (PDFs ou Imagens) */}
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
+              <CardHeader className="border-b border-border/60 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <CardTitle className="text-base flex items-center gap-2">
                       <FileCheck className="h-4 w-4 text-primary" />
                       {t('employeeCreate.documents.title')}
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="mt-1">
                       {t('employeeCreate.documents.description')}
                     </CardDescription>
                   </div>
-                  <Badge variant="outline" className="font-mono">
-                    {t('employeeCreate.documents.fileCount', { count: documents.length })}
-                  </Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {totalRequiredCount > 0 && (
+                      <Badge
+                        variant={missingRequiredDocuments.length === 0 ? 'outline' : 'secondary'}
+                        className={`font-mono text-xs ${
+                          missingRequiredDocuments.length === 0
+                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                        }`}
+                      >
+                        {t('employeeCreate.documents.requiredProgress', {
+                          done: requiredDoneCount,
+                          total: totalRequiredCount,
+                          defaultValue: 'Obrigatórios: {{done}}/{{total}}',
+                        })}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {t('employeeCreate.documents.fileCount', { count: uploadedDocuments.length })}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
 
-              <CardContent className="space-y-4">
+              <CardContent className="pt-5 space-y-5">
                 {isLoadingDocumentSettings && (
-                  <p role="status" className="text-sm text-muted-foreground">
-                    {t('employeeCreate.documents.loadingRequired')}
-                  </p>
+                  <div role="status" className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{t('employeeCreate.documents.loadingRequired')}</span>
+                  </div>
                 )}
                 {hasDocumentSettingsError && (
-                  <div role="alert" className="flex items-center justify-between gap-3 text-sm text-destructive">
+                  <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
                     <span>{t('employeeCreate.documents.loadError')}</span>
                     <Button type="button" size="sm" variant="outline" onClick={() => void refetchDocumentSettings()}>
                       {t('employeeCreate.documents.retry')}
                     </Button>
                   </div>
                 )}
-                {!isLoadingDocumentSettings && !hasDocumentSettingsError && missingRequiredDocuments.length > 0 && (
-                  <p role="status" className="text-sm text-muted-foreground">
-                    {t('employeeCreate.documents.attachAllRequiredHint')}
-                  </p>
-                )}
-                {requiredDocuments.length > 0 && (
-                  <section className="space-y-3" aria-labelledby="required-documents-heading">
-                    <div>
-                      <h4 id="required-documents-heading" className="text-sm font-semibold">{t('employeeCreate.documents.requiredHeading')}</h4>
-                      <p className="text-xs text-muted-foreground">{t('employeeCreate.documents.requiredDescription')}</p>
+
+                {/* Tabela / Lista alinhada: Input de documento à Esquerda | Exigência | Tipo à Direita | Ações */}
+                <div className="rounded-xl border border-border overflow-hidden bg-card">
+                  <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_124px_225px_76px] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span>{t('employeeCreate.documents.colFileInput', { defaultValue: 'Ficheiro / Documento' })}</span>
+                    <span className="text-center">{t('employeeCreate.documents.colRequirement', { defaultValue: 'Exigência' })}</span>
+                    <span>{t('employeeCreate.documents.colDocumentType', { defaultValue: 'Tipo de Documento' })}</span>
+                    <span className="text-right">{t('common.actions')}</span>
+                  </div>
+
+                  {documentRows.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 px-4 text-center text-sm text-muted-foreground">
+                      <FileText className="h-8 w-8 mb-2 opacity-40" />
+                      <p>{t('employeeCreate.documents.noRowsYet', { defaultValue: 'Nenhum documento na lista. Adicione um abaixo.' })}</p>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {requiredDocuments.map((requirement) => {
-                        const uploaded = documents.find((document) => document.document_type === requirement.type)
+                  ) : (
+                    <div className="divide-y divide-border/70">
+                      {documentRows.map((row) => {
+                        const hasType = row.document_type.trim() !== ''
+                        const isImg = row.file?.type.startsWith('image/') ?? false
+                        const isPdf = row.file?.type === 'application/pdf'
+                        const fileInputId = `emp-create-doc-${row.id}`
+
                         return (
-                          <label key={requirement.type} className="flex min-w-0 flex-col gap-2 border border-border p-3 rounded-lg">
-                            <span className="text-sm font-medium">{requirement.label} <span className="text-destructive">*</span></span>
-                            <input
-                              type="file"
-                              accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx"
-                              onChange={(event) => handleRequiredDocumentChange(requirement, event.target.files?.[0])}
-                              className="w-full text-xs file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium"
-                              aria-label={t('employeeCreate.documents.attachAria', { label: requirement.label })}
-                            />
-                            <span className={`truncate text-xs ${uploaded ? 'text-success' : 'text-muted-foreground'}`}>
-                              {uploaded
-                                ? t('employeeCreate.documents.attachedFile', { name: uploaded.file.name })
-                                : t('employeeCreate.documents.notAttached')}
-                            </span>
-                          </label>
+                          <div
+                            key={row.id}
+                            className={`grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_124px_225px_76px] items-center gap-3 px-4 py-3 transition-colors ${
+                              row.file
+                                ? 'bg-emerald-500/[0.03]'
+                                : row.isRequired
+                                  ? 'bg-amber-500/[0.02]'
+                                  : 'hover:bg-muted/20'
+                            }`}
+                          >
+                            {/* Coluna 1 (Esquerda): Controlo de Upload Limpo + Nome/Estado */}
+                            <div className="flex items-center gap-3 min-w-0">
+                              {/* Miniatura / Ícone */}
+                              {row.previewUrl && isImg ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc(row)}
+                                  title={t('employeeCreate.documents.zoomTitle')}
+                                  className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-muted hover:opacity-85 transition-opacity"
+                                >
+                                  <img src={row.previewUrl} alt={row.name} className="h-full w-full object-cover" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={!row.previewUrl}
+                                  onClick={() => row.previewUrl && setPreviewDoc(row)}
+                                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                                    row.file
+                                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                      : 'border-border bg-muted/40 text-muted-foreground'
+                                  } ${row.previewUrl ? 'cursor-pointer hover:bg-primary/10' : 'cursor-default'}`}
+                                >
+                                  {isPdf ? (
+                                    <FileText className="h-5 w-5 text-red-500" />
+                                  ) : row.file ? (
+                                    <CheckCircle2 className="h-5 w-5" />
+                                  ) : (
+                                    <FileCheck className="h-5 w-5" />
+                                  )}
+                                </button>
+                              )}
+
+                              {/* Input Box integrado */}
+                              <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-input bg-background px-3 py-2 shadow-2xs">
+                                <div className="min-w-0 flex-1">
+                                  <input
+                                    type="text"
+                                    value={row.name}
+                                    onChange={(e) => handleUpdateDocumentMeta(row.id, 'name', e.target.value)}
+                                    placeholder={t('employeeCreate.documents.namePlaceholder')}
+                                    className="w-full min-w-0 bg-transparent text-xs font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none truncate"
+                                  />
+                                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                                    {row.file ? (
+                                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                                        {row.file.name} · {formatFileSize(row.file.size)}
+                                      </span>
+                                    ) : !hasType ? (
+                                      <span className="text-amber-600 dark:text-amber-400">
+                                        {t('employeeCreate.documents.selectTypeFirst')}
+                                      </span>
+                                    ) : (
+                                      <span>{t('employeeCreate.documents.notAttached')}</span>
+                                    )}
+                                  </p>
+                                </div>
+
+                                <input
+                                  id={fileInputId}
+                                  type="file"
+                                  disabled={!hasType}
+                                  accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx"
+                                  onChange={(e) => handleRowFileChange(row.id, e.target.files?.[0])}
+                                  aria-label={t('employeeCreate.documents.attachAria', { label: row.name || row.document_type || 'documento' })}
+                                  className="sr-only"
+                                />
+                                <label
+                                  htmlFor={hasType ? fileInputId : undefined}
+                                  className={`shrink-0 inline-flex h-9 min-w-[132px] items-center justify-center gap-2 rounded-md px-4 text-xs font-semibold transition-all ${
+                                    !hasType
+                                      ? 'cursor-not-allowed bg-muted text-muted-foreground/60 border border-border/60'
+                                      : row.file
+                                        ? 'cursor-pointer border border-border bg-secondary text-foreground hover:bg-secondary/80'
+                                        : 'cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs ring-1 ring-primary/20'
+                                  }`}
+                                >
+                                  <Upload className="h-3.5 w-3.5" />
+                                  {row.file
+                                    ? t('employeeCreate.documents.replaceFile', { defaultValue: 'Alterar' })
+                                    : t('employeeCreate.documents.uploadButton', { defaultValue: 'Carregar' })}
+                                </label>
+                              </div>
+                            </div>
+
+                            {/* Coluna 2: Badge Alinhado de Obrigatoriedade (bilateral em qualquer linha) */}
+                            <div className="flex items-center md:justify-center">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleRowRequired(row.id)}
+                                title={t('employeeCreate.documents.toggleRequiredHint', {
+                                  defaultValue: 'Clique para alternar entre Obrigatório e Opcional',
+                                })}
+                                className={`inline-flex h-7 w-[110px] items-center justify-center gap-1 rounded-md border px-2.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+                                  row.isRequired
+                                    ? 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15'
+                                    : 'border-border bg-muted/60 text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                                }`}
+                              >
+                                {row.isRequired
+                                  ? t('settingsPage.documentMandatory', { defaultValue: 'Obrigatório' })
+                                  : t('settingsPage.documentOptional', { defaultValue: 'Opcional' })}
+                              </button>
+                            </div>
+
+                            {/* Coluna 3 (Direita): Select de Tipo de Documento */}
+                            <div className="w-full">
+                              <Select
+                                value={row.document_type || '__unset'}
+                                onValueChange={(val) =>
+                                  handleUpdateDocumentMeta(row.id, 'document_type', val === '__unset' ? '' : val)
+                                }
+                              >
+                                <SelectTrigger className={`h-11 w-full text-xs ${!hasType ? 'border-amber-500/60 ring-1 ring-amber-500/20' : ''}`}>
+                                  <SelectValue placeholder={t('employeeCreate.documents.selectTypePlaceholder')} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__unset" disabled>
+                                    {t('employeeCreate.documents.selectTypePlaceholder')}
+                                  </SelectItem>
+                                  {documentTypeOptions.map((option) => (
+                                    <SelectItem key={option.type} value={option.type}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Coluna Ações */}
+                            <div className="flex items-center justify-end gap-1">
+                              {row.previewUrl ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => setPreviewDoc(row)}
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                  title={t('employeeCreate.documents.previewTitle')}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <span className="w-8" />
+                              )}
+
+                              {(!row.isConfigured || row.file !== null) ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => handleRemoveDocument(row.id)}
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  title={t('employeeCreate.documents.deleteTitle')}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <span className="w-8" />
+                              )}
+                            </div>
+                          </div>
                         )
                       })}
                     </div>
-                  </section>
-                )}
+                  )}
 
-                {/* Drag & Drop Upload Zone */}
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center border-2 border-dashed border-border/80 hover:border-primary/60 rounded-xl p-6 text-center cursor-pointer transition-colors bg-muted/20 hover:bg-muted/40"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary mb-3">
-                    <Upload className="h-6 w-6" />
+                  {/* Rodapé da tabela: Adicionar nova linha + Carregar múltiplos */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/20 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" variant="secondary" size="sm" onClick={handleAddEmptyDocumentRow}>
+                        <Plus className="mr-1.5 h-3.5 w-3.5" />
+                        {t('employeeCreate.documents.addDocumentRow')}
+                      </Button>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        multiple
+                        accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx"
+                        onChange={(e) => handleFilesAdded(e.target.files)}
+                        className="hidden"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="mr-1.5 h-3.5 w-3.5" />
+                        {t('employeeCreate.documents.chooseFiles')}
+                      </Button>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">
+                      PDF, JPG, PNG, WebP, DOCX (máx. 10 MB)
+                    </span>
                   </div>
-                  <p className="text-sm font-medium text-foreground">
-                    {t('employeeCreate.documents.dropzoneTitle')}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t('employeeCreate.documents.dropzoneHint')}
-                  </p>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    multiple
-                    accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx"
-                    onChange={(e) => handleFilesAdded(e.target.files)}
-                    className="hidden"
-                  />
-                  <Button type="button" variant="secondary" size="sm" className="mt-3">
-                    <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('employeeCreate.documents.chooseFiles')}
-                  </Button>
                 </div>
 
-                {/* Uploaded Documents List */}
-                {documents.length > 0 && (
-                  <div className="space-y-3 pt-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {t('employeeCreate.documents.listHeading', { count: documents.length })}
-                    </h4>
-
-                    <div className="space-y-2.5">
-                      {documents.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg border border-border bg-card shadow-xs transition-all hover:border-border/80"
-                        >
-                          {/* File Icon / Preview & Title */}
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            {doc.previewUrl && doc.file.type.startsWith('image/') ? (
-                              <img
-                                src={doc.previewUrl}
-                                alt={doc.name}
-                                className="h-10 w-10 shrink-0 rounded object-cover border border-border cursor-pointer hover:opacity-80"
-                                onClick={() => setPreviewDoc(doc)}
-                                title={t('employeeCreate.documents.zoomTitle')}
-                              />
-                            ) : (
-                              <div
-                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"
-                                onClick={() => setPreviewDoc(doc)}
-                                title={t('employeeCreate.documents.previewTitle')}
-                              >
-                                {doc.file.type === 'application/pdf' ? (
-                                  <FileText className="h-5 w-5 text-red-500" />
-                                ) : (
-                                  <FileCheck className="h-5 w-5 text-primary" />
-                                )}
-                              </div>
-                            )}
-
-                            <div className="space-y-1 min-w-0 flex-1">
-                              <Input
-                                value={doc.name}
-                                onChange={(e) =>
-                                  handleUpdateDocumentMeta(doc.id, 'name', e.target.value)
-                                }
-                                placeholder={t('employeeCreate.documents.namePlaceholder')}
-                                className="h-8 text-xs font-medium"
-                              />
-                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground truncate">
-                                <span>{doc.file.name}</span>
-                                <span>•</span>
-                                <span className="font-mono">{formatFileSize(doc.file.size)}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Document Type Select, Preview & Delete Buttons */}
-                          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
-                            <Select
-                              value={doc.document_type}
-                              onValueChange={(val) =>
-                                handleUpdateDocumentMeta(doc.id, 'document_type', val)
-                              }
-                            >
-                              <SelectTrigger className="h-8 text-xs w-[190px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {documentTypeOptions.map((option) => (
-                                  <SelectItem key={option.type} value={option.type}>{option.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-
-                            {/* Preview Button */}
-                            {doc.previewUrl && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-sm"
-                                onClick={() => setPreviewDoc(doc)}
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                title={t('employeeCreate.documents.previewTitle')}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            )}
-
-                            {/* Delete Button to allow replacing with another file */}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => handleRemoveDocument(doc.id)}
-                              className="text-muted-foreground hover:text-destructive h-8 w-8"
-                              title={t('employeeCreate.documents.deleteTitle')}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Barra compacta: Criar novo tipo de documento */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 rounded-xl border border-dashed border-border bg-muted/15 px-4 py-3">
+                  <span className="text-xs font-medium text-muted-foreground shrink-0">
+                    {t('employeeCreate.documents.addCustomTypeTitle')}:
+                  </span>
+                  <Input
+                    value={newDocumentTypeName}
+                    onChange={(e) => setNewDocumentTypeName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleAddCustomDocumentType()
+                      }
+                    }}
+                    placeholder={t('settingsPage.customDocumentPlaceholder')}
+                    aria-label={t('settingsPage.customDocumentAriaLabel')}
+                    className="h-8 text-xs flex-1 bg-background"
+                  />
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 cursor-pointer">
+                    <Checkbox
+                      checked={newDocumentRequired}
+                      onCheckedChange={(checked) => setNewDocumentRequired(checked === true)}
+                    />
+                    <span>{t('settingsPage.documentMandatory')}</span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddCustomDocumentType}
+                    disabled={!newDocumentTypeName.trim()}
+                    className="h-8 shrink-0"
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    {t('settingsPage.add')}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1391,7 +1665,7 @@ export function EmployeeCreatePage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setActiveTab('contrato')}
+                onClick={() => switchTab('contrato')}
               >
                 {t('employeeCreate.footer.nextStep')}
               </Button>
@@ -1399,7 +1673,7 @@ export function EmployeeCreatePage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setActiveTab('dados-basicos')}
+                onClick={() => switchTab('dados-basicos')}
               >
                 {t('employeeCreate.footer.prevStep')}
               </Button>
@@ -1442,16 +1716,16 @@ export function EmployeeCreatePage() {
           <DialogHeader>
             <div className="flex items-center justify-between pr-6">
               <DialogTitle className="truncate">
-                {previewDoc?.name || previewDoc?.file.name}
+                {previewDoc?.name || previewDoc?.file?.name}
               </DialogTitle>
             </div>
             <DialogDescription>
-              {previewDoc?.file.name} • {previewDoc && formatFileSize(previewDoc.file.size)}
+              {previewDoc?.file?.name} • {previewDoc?.file && formatFileSize(previewDoc.file.size)}
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-2">
-            {previewDoc?.file.type.startsWith('image/') && previewDoc.previewUrl && (
+            {previewDoc?.file?.type.startsWith('image/') && previewDoc.previewUrl && (
               <div className="flex items-center justify-center rounded-lg bg-black/5 dark:bg-black/40 p-2 overflow-hidden max-h-[65vh]">
                 <img
                   src={previewDoc.previewUrl}
@@ -1461,7 +1735,7 @@ export function EmployeeCreatePage() {
               </div>
             )}
 
-            {previewDoc?.file.type === 'application/pdf' && previewDoc.previewUrl && (
+            {previewDoc?.file?.type === 'application/pdf' && previewDoc.previewUrl && (
               <div className="rounded-lg overflow-hidden border border-border h-[65vh] w-full bg-muted/20">
                 <iframe
                   src={previewDoc.previewUrl}
@@ -1471,13 +1745,13 @@ export function EmployeeCreatePage() {
               </div>
             )}
 
-            {!previewDoc?.file.type.startsWith('image/') && previewDoc?.file.type !== 'application/pdf' && (
+            {!previewDoc?.file?.type.startsWith('image/') && previewDoc?.file?.type !== 'application/pdf' && (
               <div className="flex flex-col items-center justify-center p-8 text-center bg-muted/20 rounded-lg">
                 <FileCheck className="h-16 w-16 text-primary mb-3" />
-                <p className="text-sm font-medium">{previewDoc?.file.name}</p>
+                <p className="text-sm font-medium">{previewDoc?.file?.name}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {t('employeeCreate.preview.readyToUpload', {
-                    size: previewDoc ? formatFileSize(previewDoc.file.size) : '',
+                    size: previewDoc?.file ? formatFileSize(previewDoc.file.size) : '',
                   })}
                 </p>
               </div>
@@ -1531,12 +1805,16 @@ function normalizeDocumentRequirements(value: unknown): DocumentRequirement[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
     if (typeof item === 'string') {
-      return [{ type: item, label: ANGOLA_DOCUMENT_LABELS[item] ?? item }]
+      return [{ type: item, label: ANGOLA_DOCUMENT_LABELS[item] ?? item, required: true }]
     }
     if (item && typeof item === 'object' && 'type' in item && 'label' in item) {
-      const requirement = item as { type: unknown; label: unknown }
+      const requirement = item as { type: unknown; label: unknown; required?: unknown }
       if (typeof requirement.type === 'string' && typeof requirement.label === 'string') {
-        return [{ type: requirement.type, label: requirement.label }]
+        return [{
+          type: requirement.type,
+          label: requirement.label,
+          required: typeof requirement.required === 'boolean' ? requirement.required : true,
+        }]
       }
     }
     return []

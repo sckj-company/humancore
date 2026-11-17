@@ -49,7 +49,7 @@ class RemunerationDefaultsService
         ],
         'bonus' => [
             'code' => 'bonus',
-            'name' => 'Bónus',
+            'name' => 'Bónus de Desempenho',
             'period' => 'fixed',
             'amount_key' => 'remuneration.bonus.amount',
         ],

@@ -31,6 +31,9 @@ class EmployeeDocument extends Model
         'expiry_date',
         'notes',
         'is_confidential',
+        'is_verified',
+        'verified_by',
+        'verified_at',
     ];
 
     protected function casts(): array
@@ -38,7 +41,14 @@ class EmployeeDocument extends Model
         return [
             'expiry_date' => 'date',
             'is_confidential' => 'boolean',
+            'is_verified' => 'boolean',
+            'verified_at' => 'datetime',
         ];
+    }
+
+    public function verifier()
+    {
+        return $this->belongsTo(User::class, 'verified_by');
     }
 
     public function employee()

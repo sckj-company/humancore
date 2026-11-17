@@ -45,6 +45,9 @@ class Employee extends Model
         'overtime_hourly_rate',
         'photo_path',
         'status',
+        'approval_status',
+        'approved_by',
+        'approved_at',
         'hired_at',
         'probation_end',
         'termination_at',
@@ -59,8 +62,19 @@ class Employee extends Model
             'hired_at' => 'date',
             'probation_end' => 'date',
             'termination_at' => 'date',
+            'approved_at' => 'datetime',
             'overtime_hourly_rate' => 'decimal:2',
         ];
+    }
+
+    public function isApproved(): bool
+    {
+        return ($this->approval_status ?? 'approved') === 'approved';
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     public function tenant()

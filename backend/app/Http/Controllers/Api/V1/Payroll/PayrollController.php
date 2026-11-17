@@ -217,6 +217,7 @@ class PayrollController extends BaseController
         $employees = Employee::query()
             ->where('tenant_id', $period->tenant_id)
             ->where('status', 'active')
+            ->where('approval_status', 'approved')
             ->when($allowedDeptIds !== null, fn ($q) => $q->whereIn('department_id', $allowedDeptIds))
             ->with('activeContract')
             ->orderBy('first_name')

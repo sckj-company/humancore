@@ -55,6 +55,8 @@ export interface EmployeeSummary {
   state?: string
   postal_code?: string
   status: EmployeeStatus
+  approval_status?: 'pending' | 'approved'
+  approved_at?: string | null
   hired_at?: string
   active_contract?: {
     id?: number
@@ -104,6 +106,10 @@ export interface Employee {
   photo_path?: string
   photo_url?: string
   status: EmployeeStatus
+  approval_status?: 'pending' | 'approved'
+  approved_at?: string | null
+  unverified_documents_count?: number
+  documents_count?: number
   hired_at?: string
   probation_end?: string
   termination_at?: string
@@ -554,6 +560,7 @@ export type SettingGroups = Record<string, SettingItem[]>
 export interface DocumentRequirement {
   type: string
   label: string
+  required?: boolean
 }
 
 export interface EmployeeDocument {
@@ -572,6 +579,9 @@ export interface EmployeeDocument {
   is_expired?: boolean
   notes?: string | null
   is_confidential: boolean
+  is_verified?: boolean
+  verified_at?: string | null
+  verified_by?: { id: number; name: string } | null
   created_at?: string
   employee?: Pick<EmployeeSummary, 'id' | 'full_name' | 'employee_code'>
 }

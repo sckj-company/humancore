@@ -729,7 +729,7 @@ const STANDARD_COMPONENTS = [
   { code: 'christmas_subsidy', label: 'Subsídio de Natal' },
   { code: 'family_allowance', label: 'Abono de Família' },
   { code: 'additional_allowance', label: 'Abono Adicional' },
-  { code: 'bonus', label: 'Bónus' },
+  { code: 'bonus', label: 'Bónus de Desempenho' },
 ]
 
 const NON_EDITABLE_CODES = new Set(['base_salary', 'inss', 'irt', 'employer_inss'])

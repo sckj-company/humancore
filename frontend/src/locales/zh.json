@@ -195,7 +195,8 @@
       "terminated": "已离职",
       "expired_contract": "合同已过期",
       "on_leave": "休假中",
-      "probation": "试用期"
+      "probation": "试用期",
+      "pending": "待审批"
     },
     "loadError": "无法加载员工。",
     "emptyTitle": "未找到员工",
@@ -207,7 +208,11 @@
     "salary": "薪资",
     "viewEmployee": "查看 {{name}} 的档案",
     "clearFilters": "清除筛选",
-    "pagination": "第 {{current}} / {{pages}} 页 · 共 {{total}} 条"
+    "pagination": "第 {{current}} / {{pages}} 页 · 共 {{total}} 条",
+    "approval": {
+      "pending": "待审批",
+      "approved": "已批准"
+    }
   },
   "employeeDetail": {
     "status": {
@@ -316,7 +321,13 @@
       "downloading": "正在下载“{{name}}”…",
       "downloadComplete": "下载完成！",
       "downloadStarted": "已开始下载！",
-      "confirmDeleteDocument": "要删除“{{name}}”吗？"
+      "confirmDeleteDocument": "要删除“{{name}}”吗？",
+      "documentVerified": "文档已核验通过。",
+      "documentUnverified": "已取消文档核验状态。",
+      "verifyError": "无法核验该文档。",
+      "employeeApproved": "员工已批准并可参与各项操作。",
+      "employeeSetPending": "员工已切换为待审批状态。",
+      "approvalError": "无法更新审批状态。"
     },
     "text": {
       "absences": "缺勤",
@@ -567,7 +578,16 @@
       "weeklyHours": "每周工时",
       "workdayAlreadyClosed": "工作日已关闭",
       "workdayComplete": "工作日已完成",
-      "working": "工作中"
+      "working": "工作中",
+      "bonusAllowance": "绩效奖金",
+      "approveEmployee": "批准员工",
+      "setEmployeePending": "设为待审批",
+      "pendingApprovalBanner": "该员工当前为待审批（PENDENTE）。请先在“文档”标签页核验附件并批准，之后方可执行考勤、休假及薪资操作。",
+      "reviewDocuments": "核验文档",
+      "documentVerifiedBadge": "已核验",
+      "documentUnverifiedBadge": "待核验",
+      "verifiedAction": "已核验",
+      "verifyAction": "核验"
     }
   },
   "employees": {
@@ -626,7 +646,8 @@
     },
     "probationEnd": "试用期结束日期",
     "saveChanges": "保存更改",
-    "undefined": "未设置"
+    "undefined": "未设置",
+    "approvalStatus": "审批状态"
   },
   "profilePage": {
     "eyebrow": "账户",
@@ -2388,7 +2409,10 @@
     "remove": "移除",
     "saveDocuments": "保存文件",
     "selectAllDocuments": "全选",
-    "clearDocuments": "清空选择"
+    "clearDocuments": "清空选择",
+    "documentMandatory": "必填",
+    "documentOptional": "可选",
+    "toggleMandatoryAria": "切换是否为必填文件"
   },
   "payrollTaxRulesPage": {
     "inssCreated": "INSS 规则已创建为草稿。",
@@ -2664,7 +2688,20 @@
       "previewTitle": "预览文档",
       "deleteTitle": "删除此文件并更换",
       "namePlaceholder": "文档名称",
-      "addedCount": "已添加 {{count}} 份文档。"
+      "addedCount": "已添加 {{count}} 份文档。",
+      "rowsHeading": "文档 ({{count}}) — 请先在右侧选择类型，再在左侧上传文件",
+      "selectTypeFirst": "请先在右侧选择文档类型",
+      "selectTypePlaceholder": "选择类型...",
+      "addDocumentRow": "添加其他文档",
+      "addCustomTypeTitle": "添加新文档类型",
+      "requiredProgress": "必填：{{done}}/{{total}}",
+      "colFileInput": "文件 / 文档",
+      "colDocumentType": "文档类型",
+      "noRowsYet": "列表中暂无文档，请在下方添加。",
+      "replaceFile": "更换",
+      "uploadButton": "上传",
+      "colRequirement": "要求",
+      "toggleRequiredHint": "点击切换必填或可选"
     },
     "footer": {
       "step1": "第 1 步 / 共 2 步：基本信息",

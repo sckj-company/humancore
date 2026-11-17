@@ -257,7 +257,7 @@ class PayrollTest extends TestCase
         $this->assertSame(-10000.0, (float) $followingInstallment->items()->where('deduction_id', $deduction->id)->value('amount'));
     }
 
-    public function test_advance_deductions_are_capped_across_payroll_periods_in_same_month(): void
+    public function test_advance_deductions_have_no_monthly_limit_across_payroll_periods(): void
     {
         [$tenant, $employee] = $this->setupTenantWithEmployee();
         Setting::updateOrCreate(
@@ -299,16 +299,12 @@ class PayrollTest extends TestCase
         $secondRecord = app(PayrollEngineService::class)->calculateForEmployee($secondPeriod, $employee);
 
         $this->assertSame(-7000.0, (float) $firstRecord->items()->where('deduction_id', $deduction->id)->value('amount'));
-        $this->assertSame(-3000.0, (float) $secondRecord->items()->where('deduction_id', $deduction->id)->value('amount'));
+        $this->assertSame(-7000.0, (float) $secondRecord->items()->where('deduction_id', $deduction->id)->value('amount'));
     }
 
-    public function test_employee_payroll_settings_reserve_monthly_advance_capacity_when_registered(): void
+    public function test_employee_payroll_settings_report_unlimited_advances_when_registered(): void
     {
         [$tenant, $employee, $user] = $this->setupTenantWithEmployee();
-        Setting::updateOrCreate(
-            ['tenant_id' => $tenant->id, 'group' => 'payroll', 'key' => 'advance.monthly_limit'],
-            ['value' => 10000],
-        );
         Deduction::create([
             'tenant_id' => $tenant->id,
             'employee_id' => $employee->id,
@@ -329,7 +325,8 @@ class PayrollTest extends TestCase
             ->getJson("/api/v1/employees/{$employee->id}/payroll-settings?period=2026-11")
             ->assertOk()
             ->assertJsonPath('data.advance_monthly_reserved', 6000)
-            ->assertJsonPath('data.advance_monthly_remaining', 4000);
+            ->assertJsonPath('data.advance_monthly_limit', null)
+            ->assertJsonPath('data.advance_monthly_remaining', null);
     }
 
     public function test_deduction_api_saves_starting_payroll_period(): void

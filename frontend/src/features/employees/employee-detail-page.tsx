@@ -103,6 +103,8 @@ export function EmployeeDetailPage() {
   const canCreateContracts = hasPermission(user, 'create_contract')
   const canUpdateContracts = hasPermission(user, 'update_contract')
   const canUpdateLeaves = hasPermission(user, 'update_leave')
+  const canApproveEmployee = hasPermission(user, 'approve_employee') || hasPermission(user, 'update_employee')
+  const canVerifyDocuments = hasPermission(user, 'approve_document') || hasPermission(user, 'update_document') || canApproveEmployee
   const locale = i18n.language || 'pt-PT'
   const qc = useQueryClient()
 
@@ -245,7 +247,36 @@ export function EmployeeDetailPage() {
   const isManualDateFuture = manualAttForm.date > todayStr
   const isManualDateClosed = !manualAttRecordId && !!(selectedManualRecord?.clock_in && selectedManualRecord?.clock_out)
 
-  const deleteDoc = useMutation({ mutationFn: (docId: number) => api.delete(`documents/${docId}`), onSuccess: () => { toast.success(t('employeeDetail.messages.documentDeleted')); setPreviewDoc(null); qc.invalidateQueries({ queryKey: ['employee-documents', id] }) }, onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.deleteError'))) })
+  const deleteDoc = useMutation({ mutationFn: (docId: number) => api.delete(`documents/${docId}`), onSuccess: () => { toast.success(t('employeeDetail.messages.documentDeleted')); setPreviewDoc(null); qc.invalidateQueries({ queryKey: ['employee-documents', id] }); qc.invalidateQueries({ queryKey: ['employees', id] }) }, onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.deleteError'))) })
+  const verifyDocMutation = useMutation({
+    mutationFn: ({ docId, is_verified }: { docId: number; is_verified: boolean }) =>
+      api.patch(`documents/${docId}/verify`, { is_verified }),
+    onSuccess: (_res, vars) => {
+      toast.success(
+        vars.is_verified
+          ? t('employeeDetail.messages.documentVerified', { defaultValue: 'Documento verificado e aprovado.' })
+          : t('employeeDetail.messages.documentUnverified', { defaultValue: 'Verificação do documento removida.' }),
+      )
+      qc.invalidateQueries({ queryKey: ['employee-documents', id] })
+      qc.invalidateQueries({ queryKey: ['employees', id] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.verifyError', { defaultValue: 'Não foi possível verificar o documento.' }))),
+  })
+  const approvalMutation = useMutation({
+    mutationFn: (approval_status: 'pending' | 'approved') =>
+      api.patch(`employees/${id}/approval`, { approval_status }),
+    onSuccess: (_res, approval_status) => {
+      toast.success(
+        approval_status === 'approved'
+          ? t('employeeDetail.messages.employeeApproved', { defaultValue: 'Funcionário aprovado e disponível para operações.' })
+          : t('employeeDetail.messages.employeeSetPending', { defaultValue: 'Funcionário movido para estado Pendente.' }),
+      )
+      qc.invalidateQueries({ queryKey: ['employees', id] })
+      qc.invalidateQueries({ queryKey: ['employees'] })
+      qc.invalidateQueries({ queryKey: ['hr-dashboard'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.approvalError', { defaultValue: 'Não foi possível alterar o estado de aprovação.' }))),
+  })
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (!uploadFile) throw new Error(t('employeeDetail.messages.selectFile'))
@@ -553,6 +584,18 @@ export function EmployeeDetailPage() {
                   <h1 className="text-2xl font-bold tracking-tight text-foreground">{data.full_name}</h1>
                   <Badge variant="outline" className="font-mono text-xs">{data.employee_code}</Badge>
                   <Badge variant="outline" className={`font-medium ${statusColors[data.status] ?? ''}`}>{statusLabels[data.status] ?? data.status}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={`font-medium ${
+                      data.approval_status === 'pending'
+                        ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400'
+                        : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                    }`}
+                  >
+                    {data.approval_status === 'pending'
+                      ? t('employeesPage.approval.pending', { defaultValue: 'Pendente' })
+                      : t('employeesPage.approval.approved', { defaultValue: 'Aprovado' })}
+                  </Badge>
                   {activeShift && (
                     <Badge variant="outline" className="gap-1 font-medium" style={{ borderColor: activeShift.color ?? undefined, color: activeShift.color ?? undefined }}>
                       <Clock className="h-3 w-3" />{activeShift.name}
@@ -573,6 +616,31 @@ export function EmployeeDetailPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 shrink-0 [&>button]:h-auto [&>button]:min-h-9 [&>button]:whitespace-normal [&>button]:text-center">
+              {canApproveEmployee && (
+                data.approval_status === 'pending' ? (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    disabled={approvalMutation.isPending}
+                    onClick={() => approvalMutation.mutate('approved')}
+                  >
+                    {approvalMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    {t('employeeDetail.text.approveEmployee', { defaultValue: 'Aprovar Funcionário' })}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    disabled={approvalMutation.isPending}
+                    onClick={() => approvalMutation.mutate('pending')}
+                  >
+                    {approvalMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
+                    {t('employeeDetail.text.setEmployeePending', { defaultValue: 'Mover para Pendente' })}
+                  </Button>
+                )
+              )}
               {hasPermission(user, 'update_employee') && (
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setIsEmployeeEditOpen(true)}>
                   <Pencil className="h-3.5 w-3.5" />{t('employeeDetail.text.editEmployee')}
@@ -586,7 +654,7 @@ export function EmployeeDetailPage() {
                   setSearchParams({ tab: 'attendance' }, { replace: true })
                   if (!isClockedOut) toggleAttendance.mutate()
                 }}
-                disabled={toggleAttendance.isPending || isClockedOut}
+                disabled={toggleAttendance.isPending || isClockedOut || data.approval_status === 'pending'}
               >
                 {toggleAttendance.isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -599,14 +667,49 @@ export function EmployeeDetailPage() {
                 )}
                 {isClockedIn ? t('employeeDetail.text.clockOutAction') : isClockedOut ? t('employeeDetail.text.workdayComplete') : t('employeeDetail.text.clockInAction')}
               </Button>
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setSearchParams({ tab: 'leaves' }, { replace: true }); setIsLeaveOpen(true) }}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={data.approval_status === 'pending'}
+                onClick={() => { setSearchParams({ tab: 'leaves' }, { replace: true }); setIsLeaveOpen(true) }}
+              >
                 <BedDouble className="h-3.5 w-3.5" />{t('employeeDetail.text.recordAbsence')}
               </Button>
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setSearchParams({ tab: 'shift' }, { replace: true }); setIsShiftOpen(true) }}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={data.approval_status === 'pending'}
+                onClick={() => { setSearchParams({ tab: 'shift' }, { replace: true }); setIsShiftOpen(true) }}
+              >
                 <RotateCcw className="h-3.5 w-3.5" />{t('employeeDetail.text.changeShift')}
               </Button>
             </div>
           </div>
+          {data.approval_status === 'pending' && (
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span>
+                  {t('employeeDetail.text.pendingApprovalBanner', {
+                    count: documents?.filter((doc) => !doc.is_verified).length ?? data.unverified_documents_count ?? 0,
+                    defaultValue: 'Este funcionário está PENDENTE. Verifique os documentos anexados no separador Documentos e aprove-o para liberar folha salarial, presenças e restantes operações.',
+                  })}
+                </span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="shrink-0 bg-background"
+                onClick={() => setSearchParams({ tab: 'documents' }, { replace: true })}
+              >
+                <FileCheck className="mr-1.5 h-3.5 w-3.5" />
+                {t('employeeDetail.text.reviewDocuments', { defaultValue: 'Verificar Documentos' })}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -888,18 +991,53 @@ export function EmployeeDetailPage() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary" title={doc.name} onClick={() => (isImg || isPd) && setPreviewDoc(doc)}>{doc.name}</p>
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">{docTypeLabels[doc.document_type] ?? doc.document_type}</p>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">{t(`settingsPage.documentTypes.${doc.document_type}`, { defaultValue: docTypeLabels[doc.document_type] ?? doc.document_type })}</p>
                               <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
                                 {doc.size_label && <span>{doc.size_label}</span>}
                                 {doc.created_at && (<><span>·</span><span>{formatDate(doc.created_at)}</span></>)}
                               </div>
                             </div>
                           </div>
-                          {(doc.is_expired || doc.is_expiring) && (<div className="mt-2.5">{doc.is_expired ? (<Badge variant="destructive" className="text-[10px] py-0 px-2 gap-1"><AlertCircle className="h-3 w-3" />{t('employeeDetail.text.expiredOn', { date: formatDate(doc.expiry_date) })}</Badge>) : (<Badge variant="secondary" className="bg-amber-500/15 text-amber-600 text-[10px] py-0 px-2 gap-1"><Clock className="h-3 w-3" />{t('employeeDetail.text.expiresOn', { date: formatDate(doc.expiry_date) })}</Badge>)}</div>)}
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                            <Badge
+                              variant={doc.is_verified ? 'outline' : 'secondary'}
+                              className={`text-[10px] py-0 px-2 gap-1 ${
+                                doc.is_verified
+                                  ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                              }`}
+                            >
+                              {doc.is_verified ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                              {doc.is_verified
+                                ? t('employeeDetail.text.documentVerifiedBadge', { defaultValue: 'Verificado' })
+                                : t('employeeDetail.text.documentUnverifiedBadge', { defaultValue: 'Por verificar' })}
+                            </Badge>
+                            {doc.is_verified && doc.verified_by?.name && (
+                              <span className="text-[10px] text-muted-foreground">{doc.verified_by.name}</span>
+                            )}
+                            {doc.is_expired && (<Badge variant="destructive" className="text-[10px] py-0 px-2 gap-1"><AlertCircle className="h-3 w-3" />{t('employeeDetail.text.expiredOn', { date: formatDate(doc.expiry_date) })}</Badge>)}
+                            {!doc.is_expired && doc.is_expiring && (<Badge variant="secondary" className="bg-amber-500/15 text-amber-600 text-[10px] py-0 px-2 gap-1"><Clock className="h-3 w-3" />{t('employeeDetail.text.expiresOn', { date: formatDate(doc.expiry_date) })}</Badge>)}
+                          </div>
                           {doc.notes && <p className="mt-2 text-xs text-muted-foreground italic line-clamp-2">{doc.notes}</p>}
                         </div>
-                        <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between gap-1">
-                          {(isImg || isPd) ? (<Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setPreviewDoc(doc)}><Eye className="mr-1 h-3.5 w-3.5" />{t('employeeDetail.text.view')}</Button>) : (<span className="text-xs text-muted-foreground">{t('employeeDetail.text.file')}</span>)}
+                        <div className="mt-4 pt-3 border-t border-border/60 flex flex-wrap items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1">
+                            {(isImg || isPd) ? (<Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setPreviewDoc(doc)}><Eye className="mr-1 h-3.5 w-3.5" />{t('employeeDetail.text.view')}</Button>) : (<span className="text-xs text-muted-foreground px-1">{t('employeeDetail.text.file')}</span>)}
+                            {canVerifyDocuments && (
+                              <Button
+                                size="sm"
+                                variant={doc.is_verified ? 'outline' : 'default'}
+                                className={`h-8 px-2.5 text-xs gap-1 ${doc.is_verified ? 'border-emerald-500/40 text-emerald-600 hover:text-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
+                                disabled={verifyDocMutation.isPending}
+                                onClick={() => verifyDocMutation.mutate({ docId: doc.id, is_verified: !doc.is_verified })}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                {doc.is_verified
+                                  ? t('employeeDetail.text.verifiedAction', { defaultValue: 'Verificado' })
+                                  : t('employeeDetail.text.verifyAction', { defaultValue: 'Verificar' })}
+                              </Button>
+                            )}
+                          </div>
                           <div className="flex items-center gap-1">
                             {doc.file_url && (<Button size="sm" variant="outline" className="h-8 px-2.5 text-xs gap-1" disabled={isDl} onClick={() => handleDownload(doc.file_url, doc.original_name ?? doc.name, doc.id)}>{isDl ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 text-primary" />}{t('employeeDetail.text.download')}</Button>)}
                             {doc.file_url && (<Button size="icon-sm" variant="ghost" className="h-8 w-8" aria-label={t('employeeDetail.text.open')} asChild><a href={doc.file_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5" /></a></Button>)}

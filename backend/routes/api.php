@@ -73,6 +73,7 @@ Route::prefix('v1')->group(function () {
         // Funcionários
         Route::post('employees/ocr-id', EmployeeIdentityOcrController::class)->middleware('throttle:10,1');
         Route::apiResource('employees', EmployeeController::class);
+        Route::patch('employees/{employee}/approval', [EmployeeController::class, 'updateApproval']);
         Route::get('employees/{employee}/contracts', [EmployeeController::class, 'contracts']);
         Route::get('employees/{employee}/timeline', [EmployeeController::class, 'timeline']);
         Route::post('employees/{employee}/contracts', [EmployeeController::class, 'storeContract']);
@@ -195,6 +196,7 @@ Route::prefix('v1')->group(function () {
         // Documentos
         Route::get('documents', [EmployeeDocumentController::class, 'index']);
         Route::post('documents', [EmployeeDocumentController::class, 'store']);
+        Route::patch('documents/{document}/verify', [EmployeeDocumentController::class, 'toggleVerify']);
         Route::get('documents/{document}/download', [EmployeeDocumentController::class, 'download']);
         Route::delete('documents/{document}', [EmployeeDocumentController::class, 'destroy']);
 

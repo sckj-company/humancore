@@ -25,6 +25,12 @@ class EmployeeDocumentResource extends JsonResource
             'is_expired' => $this->isExpired(),
             'notes' => $this->notes,
             'is_confidential' => $this->is_confidential,
+            'is_verified' => (bool) ($this->is_verified ?? false),
+            'verified_at' => $this->verified_at?->toIso8601String(),
+            'verified_by' => $this->whenLoaded('verifier', fn () => $this->verifier ? [
+                'id' => $this->verifier->id,
+                'name' => $this->verifier->name,
+            ] : null),
             'created_at' => $this->created_at?->toIso8601String(),
             'employee' => $this->whenLoaded('employee', fn () => [
                 'id' => $this->employee->id,
