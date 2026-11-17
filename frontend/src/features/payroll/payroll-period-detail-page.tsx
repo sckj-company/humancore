@@ -49,7 +49,7 @@ function formatDate(date?: string | null, locale = 'pt-AO'): string {
   const raw = String(date).trim().split('T')[0]
   const [y, m, d] = raw.split('-').map(Number)
   if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-    return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(
+    return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'long', year: 'numeric' }).format(
       new Date(y, m - 1, d),
     )
   }

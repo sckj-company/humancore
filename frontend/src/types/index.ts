@@ -302,7 +302,7 @@ export interface PayrollPeriod {
   id: number
   tenant_id: number
   name: string
-  period_type: 'monthly' | 'biweekly' | 'weekly'
+  period_type: 'monthly' | 'quarterly' | 'custom' | 'biweekly' | 'weekly'
   period_start: string
   period_end: string
   payment_date?: string

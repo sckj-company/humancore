@@ -95,3 +95,51 @@ export function formatMinutesToHours(minutes?: number | null): string {
 
   return `${hours}h ${remainingMinutes} min`
 }
+
+const FULL_MONTHS_PT = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+]
+
+const FULL_MONTHS_EN = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+export function formatDayMonthLong(ymd: string, language: string, referenceYear?: number): string {
+  const parts = ymd.slice(0, 10).split('-').map(Number)
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return '—'
+  const [yr, m, d] = parts
+  const dt = new Date(yr, m - 1, d)
+  const day = String(dt.getDate()).padStart(2, '0')
+  const monthIdx = dt.getMonth()
+  const yearSuffix = referenceYear != null && dt.getFullYear() !== referenceYear ? ` (${dt.getFullYear()})` : ''
+
+  if (language.startsWith('en')) {
+    return `${FULL_MONTHS_EN[monthIdx]} ${day}${yearSuffix}`
+  }
+  if (language.startsWith('zh')) {
+    return `${monthIdx + 1}月${day}日${yearSuffix}`
+  }
+  return `${day} de ${FULL_MONTHS_PT[monthIdx]}${yearSuffix}`
+}

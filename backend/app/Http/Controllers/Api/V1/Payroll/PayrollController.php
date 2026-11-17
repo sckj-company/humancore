@@ -61,15 +61,48 @@ class PayrollController extends BaseController
         $this->authorize('create', PayrollPeriod::class);
 
         $data = $request->validated();
-        if (! isset($data['name'])) {
-            $data['name'] = Carbon::parse($data['period_start'])
-                ->locale('pt_BR')
-                ->translatedFormat('F/Y');
+        $referenceYear = $data['year'] ?? null;
+        unset($data['year']);
+
+        if (empty($data['name'])) {
+            $start = Carbon::parse($data['period_start']);
+            $end = Carbon::parse($data['period_end']);
+
+            $data['name'] = match ($data['period_type']) {
+                'quarterly' => $this->formatQuarterlyName($start, $end, $referenceYear ? (int) $referenceYear : null),
+                'custom', 'biweekly', 'weekly' => sprintf(
+                    '%s – %s%s',
+                    $start->locale('pt_BR')->translatedFormat('d \d\e F \d\e Y'),
+                    $end->locale('pt_BR')->translatedFormat('d \d\e F \d\e Y'),
+                    $referenceYear && (int) $referenceYear !== $start->year ? " ({$referenceYear})" : '',
+                ),
+                default => $start->locale('pt_BR')->translatedFormat('F/Y'),
+            };
         }
 
         $period = PayrollPeriod::query()->create($data);
 
         return $this->success(new PayrollPeriodResource($period), 'Período criado com sucesso.', 201);
+    }
+
+    private function formatQuarterlyName(Carbon $start, Carbon $end, ?int $referenceYear = null): string
+    {
+        $year = $referenceYear ?? $start->year;
+        $quarterMap = [1 => 1, 4 => 2, 7 => 3, 10 => 4];
+
+        if ($start->day === 1 && isset($quarterMap[$start->month])) {
+            $expectedEnd = $start->copy()->addMonths(2)->endOfMonth();
+            if ($end->isSameDay($expectedEnd)) {
+                return "{$quarterMap[$start->month]}º Trimestre/{$year}";
+            }
+        }
+
+        return sprintf(
+            '%s – %s/%d',
+            ucfirst($start->locale('pt_BR')->translatedFormat('F')),
+            ucfirst($end->locale('pt_BR')->translatedFormat('F')),
+            $year,
+        );
     }
 
     public function show(Request $request, PayrollPeriod $period): JsonResponse
@@ -152,8 +185,8 @@ class PayrollController extends BaseController
         $data = $request->validate([
             'records' => ['required', 'array', 'min:1'],
             'records.*.employee_id' => ['required', 'integer', 'exists:employees,id'],
-            'records.*.work_days' => ['nullable', 'numeric', 'min:0', 'max:31'],
-            'records.*.absent_days' => ['nullable', 'numeric', 'min:0', 'max:31'],
+            'records.*.work_days' => ['nullable', 'numeric', 'min:0', 'max:366'],
+            'records.*.absent_days' => ['nullable', 'numeric', 'min:0', 'max:366'],
             'records.*.overtime_hours' => ['nullable', 'numeric', 'min:0', 'max:500'],
             'records.*.late_minutes' => ['nullable', 'integer', 'min:0', 'max:10000'],
             'records.*.components' => ['sometimes', 'array'],

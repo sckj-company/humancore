@@ -1087,4 +1087,51 @@ class PayrollTest extends TestCase
         $this->assertArrayHasKey('total_employer_cost', $freshPeriod->totals_snapshot);
         $this->assertGreaterThan(0, (float) $freshPeriod->totals_snapshot['total_employer_cost']);
     }
+
+    public function test_can_create_monthly_quarterly_and_custom_date_payroll_periods(): void
+    {
+        [, , $user] = $this->setupTenantWithEmployee();
+        $this->actingAs($user, 'sanctum');
+
+        // Monthly without payment_date
+        $monthly = $this->postJson('/api/v1/payroll/periods', [
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+        ]);
+        $monthly->assertCreated()
+            ->assertJsonPath('data.period_type', 'monthly')
+            ->assertJsonPath('data.name', 'novembro/2026');
+
+        // Quarterly (Q4 2026 = 92 days)
+        $quarterly = $this->postJson('/api/v1/payroll/periods', [
+            'period_type' => 'quarterly',
+            'period_start' => '2026-10-01',
+            'period_end' => '2026-12-31',
+            'year' => 2026,
+        ]);
+        $quarterly->assertCreated()
+            ->assertJsonPath('data.period_type', 'quarterly')
+            ->assertJsonPath('data.name', '4º Trimestre/2026');
+
+        // Custom date range ("Data")
+        $custom = $this->postJson('/api/v1/payroll/periods', [
+            'period_type' => 'custom',
+            'period_start' => '2026-05-01',
+            'period_end' => '2026-06-15',
+            'year' => 2026,
+        ]);
+        $custom->assertCreated()
+            ->assertJsonPath('data.period_type', 'custom')
+            ->assertJsonPath('data.name', '01 de maio de 2026 – 15 de junho de 2026');
+
+        // Custom exceeds 366 days -> rejected
+        $tooLong = $this->postJson('/api/v1/payroll/periods', [
+            'period_type' => 'custom',
+            'period_start' => '2025-01-01',
+            'period_end' => '2026-12-31',
+            'year' => 2026,
+        ]);
+        $tooLong->assertUnprocessable();
+    }
 }

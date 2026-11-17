@@ -18,10 +18,11 @@ class StorePeriodRequest extends FormRequest
     {
         return [
             'name' => ['nullable', 'string', 'max:255'],
-            'period_type' => ['required', Rule::in(['monthly', 'biweekly', 'weekly'])],
+            'period_type' => ['required', Rule::in(['monthly', 'quarterly', 'custom', 'biweekly', 'weekly'])],
             'period_start' => ['required', 'date'],
             'period_end' => ['required', 'date', 'after_or_equal:period_start'],
             'payment_date' => ['nullable', 'date'],
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
         ];
     }
 
@@ -45,6 +46,9 @@ class StorePeriodRequest extends FormRequest
             $maxDays = match ($type) {
                 'weekly' => 7,
                 'biweekly' => 16,
+                'monthly' => 31,
+                'quarterly' => 92,
+                'custom' => 366,
                 default => 31,
             };
 
