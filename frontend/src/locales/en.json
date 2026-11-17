@@ -53,7 +53,8 @@
     "backToLogin": "Back to sign in",
     "changePasswordFor": "Change password for {{name}}",
     "adminChangeDescription": "Set a new password for {{name}}. This will sign out all of this user's active sessions.",
-    "savePassword": "Save password"
+    "savePassword": "Save password",
+    "updated": "Password updated successfully."
   },
   "common": {
     "save": "Save",
@@ -95,7 +96,9 @@
       "Thu",
       "Fri",
       "Sat"
-    ]
+    ],
+    "description": "Description",
+    "error": "Error"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -1826,13 +1829,125 @@
       "manage_platform": "Manage the platform",
       "manage_super_admins": "Manage super admins",
       "view_system_logs": "View system logs"
+    },
+    "activeUser": "Active user",
+    "addCompanyScope": "Add company",
+    "allDepartments": "All departments",
+    "applyRolePermissions": "Apply role defaults",
+    "companyAccessDescription": "Define which companies the user can access, their permission group, and allowed departments.",
+    "companyAccessTitle": "Company & Department Access",
+    "companyLabel": "Company",
+    "companyPermissionsLabel": "Company-specific permissions",
+    "confirmDeletePermissionGroup": "Are you sure you want to delete this permission group?",
+    "createPermissionGroup": "New Permission Group",
+    "customPermissions": "Custom (by role/permissions)",
+    "departmentScope": "Allowed departments",
+    "editPermissionGroup": "Edit Permission Group",
+    "editTenantUserDescription": "Edit user details, permissions, and company/department scopes.",
+    "fieldPermissionsHeading": "Field Permissions (Columns)",
+    "moduleActionsHeading": "Module Actions",
+    "newTenantUserDescription": "Create a user assigned to one or more companies and configure permissions.",
+    "newTenantUserTitle": "New User",
+    "noCompanyScopes": "No companies configured. User will only access the primary company.",
+    "noDepartmentsForTenant": "No departments registered in this company.",
+    "noPermissionGroups": "No permission groups created yet.",
+    "permissionFallback": "Other permission",
+    "permissionGroupDeleted": "Permission group deleted.",
+    "permissionGroupLabel": "Permission Group",
+    "permissionGroupModalDescription": "Set a name and select the module actions and fields included in this reusable profile.",
+    "permissionGroupNamePlaceholder": "e.g., Payroll Operator (No Salaries)",
+    "permissionGroupSaveError": "Could not save the permission group.",
+    "permissionGroupSaved": "Permission group saved successfully.",
+    "permissionGroupsDescription": "Create reusable permission profiles (modules and fields) to link to users per company.",
+    "permissionGroupsTab": "Permission Groups",
+    "permissionGroupsTitle": "Permission Groups",
+    "registeredTenantsTab": "Registered Companies",
+    "restoreRolePermissions": "Restore role permissions",
+    "roleLabel": "Base role",
+    "searchPermissions": "Search permissions or fields...",
+    "selectedCount": "{{count}} selected",
+    "tenantUserCreateError": "Could not create the user.",
+    "tenantUserCreated": "User created successfully.",
+    "tenantUserDeleted": "User deleted.",
+    "tenantUserUpdateError": "Could not update the user.",
+    "tenantUserUpdated": "User updated successfully.",
+    "permissionShortActions": {
+      "view_any": "List",
+      "view": "View",
+      "create": "Create",
+      "update": "Edit",
+      "delete": "Delete",
+      "restore": "Restore",
+      "force_delete": "Force delete",
+      "approve": "Approve",
+      "reject": "Reject",
+      "process": "Process",
+      "close": "Close",
+      "export": "Export",
+      "print": "Print",
+      "configure": "Configure"
+    },
+    "fieldModes": {
+      "view": "View",
+      "edit": "Edit"
+    },
+    "fieldPermissions": {
+      "payroll": {
+        "base_salary": "Base salary",
+        "gross_salary": "Gross salary",
+        "allowances": "Allowances",
+        "inss": "INSS (Social Security)",
+        "irt": "IRT (Income Tax)",
+        "deductions": "Deductions",
+        "net_salary": "Net salary",
+        "employer_cost": "Employer cost",
+        "attendance_metrics": "Attendance metrics"
+      },
+      "employee": {
+        "salary": "Salary / Compensation",
+        "personal_identity": "Personal identity & ID",
+        "fiscal_ids": "NIF & INSS numbers",
+        "contact_address": "Contact & address",
+        "organization": "Organizational placement"
+      },
+      "contract": {
+        "base_salary": "Contract base salary",
+        "compensation_terms": "Frequency & weekly hours",
+        "dates_notes": "Dates & notes"
+      },
+      "attendance": {
+        "clock_times": "Clock-in / clock-out times",
+        "overtime_lateness": "Overtime & lateness",
+        "salary_deduction": "Salary deduction"
+      },
+      "leave": {
+        "balances": "Leave day balances",
+        "documents": "Supporting documents & notes"
+      },
+      "benefit": {
+        "amounts": "Benefit amounts & caps"
+      },
+      "deduction": {
+        "amounts": "Deduction amounts & rates"
+      },
+      "payslip": {
+        "salary_details": "Payslip salary breakdown"
+      },
+      "report": {
+        "salary_costs": "Salary costs in reports"
+      }
     }
   },
   "tenant": {
     "current": "Current company",
     "switch": "Switch company",
     "search": "Search company…",
-    "new": "New company"
+    "new": "New company",
+    "label": "Company",
+    "select": "Select company",
+    "selectDescription": "Choose the company you want to operate in.",
+    "globalView": "Global View (All)",
+    "globalViewDescription": "Administrative mode without company filter."
   },
   "command": {
     "placeholder": "Type a command or search…",
@@ -2372,18 +2487,34 @@
     "documentTitle": "Required admission documents",
     "documentDescription": "Select the documents that must be attached when registering an employee. Registration is blocked while any are missing.",
     "documentTypes": {
-      "cv": "Resume (CV)",
-      "criminal_record": "Criminal record",
-      "term": "Responsibility statement",
-      "contract": "Employment contract",
-      "medical": "Medical certificate",
-      "bank_proof": "Bank proof",
-      "id_card": "Identity card"
+      "cv": "Curriculum Vitae (CV)",
+      "criminal_record": "Criminal Record",
+      "term": "Liability Waiver / Undertaking",
+      "contract": "Employment Contract",
+      "medical": "Medical Fitness Certificate",
+      "bank_proof": "Bank Account Proof (IBAN)",
+      "id_card": "National ID Card (BI)",
+      "passport": "Passport",
+      "work_visa": "Work Visa / Resident Card",
+      "nif_card": "Taxpayer Card (NIF)",
+      "inss_card": "Social Security Card / Proof (INSS)",
+      "certificate": "Academic Certificate / Diploma",
+      "vaccination_card": "Vaccination Card",
+      "residence_proof": "Proof of Residence",
+      "driver_license": "Driver License",
+      "work_card": "Professional License / Card",
+      "photo": "Passport Photo",
+      "military_record": "Military Service Record",
+      "family_proof": "Birth Certificate / Household Proof",
+      "previous_employment_letter": "Previous Employment Reference",
+      "other": "Other Document"
     },
     "customDocumentPlaceholder": "Other document (e.g. professional certificate)",
     "customDocumentAriaLabel": "Name of custom required document",
     "remove": "Remove",
-    "saveDocuments": "Save documents"
+    "saveDocuments": "Save documents",
+    "selectAllDocuments": "Select all",
+    "clearDocuments": "Clear selection"
   },
   "payrollTaxRulesPage": {
     "inssCreated": "INSS rule created as a draft.",
@@ -2503,5 +2634,190 @@
     "revocationReasonRequired": "Reason for Revocation (Required)",
     "revocationReasonPlaceholder": "E.g. Publication of a new official rate by decree...",
     "revokeRule": "Revoke Rule"
+  },
+  "employeeCreate": {
+    "noPermission": "You do not have permission to create employees.",
+    "breadcrumb": "New Employee",
+    "pageDescription": "Full onboarding form: personal details, organization, contract, and attached documents.",
+    "saveSuccess": "Employee, contract, and documents registered successfully!",
+    "saveError": "Error creating employee record.",
+    "tabs": {
+      "basicData": "1. Basic Data",
+      "contractDocuments": "2. Contract & Documents"
+    },
+    "sections": {
+      "personalId": {
+        "title": "Personal Identification",
+        "description": "Civil identification, birth details, and profile photo."
+      },
+      "contactAddress": {
+        "title": "Contact & Address",
+        "description": "Contact methods and employee residential location."
+      },
+      "organization": {
+        "title": "Organizational Placement",
+        "description": "Department, position, reporting manager, and company status."
+      },
+      "contract": {
+        "title": "Contract Information",
+        "description": "Employment contract setup, base salary, and payment frequency."
+      }
+    },
+    "photo": {
+      "title": "Employee Photo",
+      "hint": "Supported formats: JPG, PNG or WebP. Max 2MB.",
+      "change": "Change Photo",
+      "upload": "Upload Photo",
+      "remove": "Remove"
+    },
+    "ocr": {
+      "title": "Fill from National ID (BI)",
+      "description": "Upload an image or scanned PDF (max 5 MB). Recognized fields are suggestions and must be confirmed before saving.",
+      "maxSizeError": "Document cannot exceed 5 MB.",
+      "changeFile": "Change ID document",
+      "selectFile": "Select ID image or PDF",
+      "consent": "I confirm I have the holder permission to process the ID document. The file will be sent to OCR.space, an external service, for reading.",
+      "reading": "Reading document…",
+      "readButton": "Read ID data",
+      "success": "Data extracted. Confirm and verify fields before continuing.",
+      "error": "Could not read the document."
+    },
+    "fields": {
+      "firstName": "First Name",
+      "lastName": "Last Name",
+      "gender": "Gender",
+      "birthDate": "Date of Birth",
+      "maritalStatus": "Marital Status",
+      "nationality": "Nationality",
+      "idDocumentType": "Document Type",
+      "idDocumentNumber": "Document Number",
+      "idDocumentExpiry": "Document Expiry",
+      "taxId": "Tax ID (NIF)",
+      "socialSecurityId": "Social Security No. (INSS)",
+      "email": "Work / Primary Email",
+      "phone": "Primary Phone",
+      "alternativePhone": "Alternative / Emergency Phone",
+      "address": "Residential Address",
+      "city": "City",
+      "state": "Province / State",
+      "country": "Country",
+      "postalCode": "Postal Code",
+      "department": "Department",
+      "position": "Position",
+      "manager": "Line Manager / Supervisor",
+      "hiredAt": "Hire Date",
+      "probationEnd": "Probation End Date",
+      "status": "Initial Status",
+      "contractType": "Contract Type",
+      "baseSalary": "Base Salary ({{currency}})",
+      "salaryFrequency": "Payment Frequency",
+      "workHoursPerWeek": "Weekly Hours",
+      "contractStartDate": "Contract Start Date",
+      "contractEndDate": "End Date (if applicable)",
+      "contractSignedAt": "Signature Date",
+      "contractNotes": "Notes & Special Clauses"
+    },
+    "placeholders": {
+      "firstName": "e.g., João",
+      "lastName": "e.g., Silva",
+      "nationality": "e.g., Angolan",
+      "idDocumentNumber": "e.g., 004928123LA042",
+      "taxId": "e.g., 5418291024",
+      "socialSecurityId": "e.g., 92837192",
+      "email": "employee@company.co.ao",
+      "phone": "+244 9...",
+      "address": "Street, number, building, neighborhood...",
+      "city": "e.g., Luanda",
+      "state": "e.g., Luanda, Benguela...",
+      "country": "e.g., Angola",
+      "postalCode": "e.g., 1000",
+      "selectDepartment": "Select department",
+      "selectPosition": "Select position",
+      "selectManager": "Select manager",
+      "contractNotes": "Additional details, agreed allowances, confidentiality clauses..."
+    },
+    "options": {
+      "none": "None",
+      "gender": {
+        "male": "Male",
+        "female": "Female",
+        "other": "Other"
+      },
+      "maritalStatus": {
+        "single": "Single",
+        "married": "Married",
+        "divorced": "Divorced",
+        "widowed": "Widowed"
+      },
+      "idDocumentType": {
+        "BI": "National ID (BI)",
+        "passport": "Passport",
+        "residentCard": "Resident Card",
+        "other": "Other"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive",
+        "suspended": "Suspended",
+        "terminated": "Terminated"
+      },
+      "salaryFrequency": {
+        "monthly": "Monthly",
+        "biweekly": "Biweekly",
+        "weekly": "Weekly",
+        "hourly": "Hourly"
+      }
+    },
+    "documents": {
+      "title": "Attached Documents (Images or PDFs)",
+      "description": "Attach signed contract, ID copy, CV, certificates, or proofs.",
+      "fileCount": "{{count}} file(s)",
+      "loadingRequired": "Loading required documents list...",
+      "loadError": "Could not load required documents. Registration is blocked until settings load.",
+      "loadErrorShort": "Could not load required documents.",
+      "retry": "Try again",
+      "attachAllRequiredHint": "Attach all required documents to create the employee.",
+      "requiredHeading": "Required documents",
+      "requiredDescription": "All documents below must be attached to register the employee.",
+      "attachAria": "Attach {{label}}",
+      "attachedFile": "Attached: {{name}}",
+      "notAttached": "Not attached yet",
+      "dropzoneTitle": "Click to upload or drag files here",
+      "dropzoneHint": "Supports PDF, JPG, PNG, WebP, and DOCX files (up to 10MB each)",
+      "chooseFiles": "Choose Files",
+      "listHeading": "Files to attach ({{count}}) — click preview or delete to replace",
+      "zoomTitle": "Click to enlarge",
+      "previewTitle": "Preview document",
+      "deleteTitle": "Delete this file to replace",
+      "namePlaceholder": "Document name",
+      "addedCount": "{{count}} document(s) added."
+    },
+    "footer": {
+      "step1": "Step 1 of 2: Basic Data",
+      "step2": "Step 2 of 2: Contract and Documents ({{count}} attachment(s))",
+      "nextStep": "Next: Contract →",
+      "prevStep": "← Back to Basic Data",
+      "saving": "Saving...",
+      "submit": "Save Employee"
+    },
+    "preview": {
+      "readyToUpload": "Document ready to upload ({{size}})",
+      "deleteToReplace": "Delete to replace",
+      "openInNewTab": "Open in new tab",
+      "close": "Close"
+    },
+    "validation": {
+      "firstNameRequired": "First name is required.",
+      "lastNameRequired": "Last name is required.",
+      "emailRequired": "Email is required.",
+      "emailInvalid": "Enter a valid email address.",
+      "contractEndBeforeStart": "End date must be on or after start date.",
+      "missingRequiredDocuments": "Attach required documents: {{documents}}.",
+      "fillRequiredBasicFields": "Fill in required fields in the Basic Data tab."
+    },
+    "errors": {
+      "invalidPhoto": "Please select a valid image (JPG, PNG, WebP).",
+      "unsupportedFile": "File {{name}} is not supported. Use PDF, images, or documents."
+    }
   }
 }

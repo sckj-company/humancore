@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use App\Services\Tenant\TenantManager;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Support\ServiceProvider;
@@ -25,6 +27,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::before(function ($user, string $ability, array $arguments = []): ?bool {
+            if (! $user instanceof User || $arguments !== [] || $user->hasRole('super-admin')) {
+                return null;
+            }
+
+            if ($user->hasTenantScopedAccess()) {
+                return $user->hasEffectivePermission($ability);
+            }
+
+            return null;
+        });
+
         RateLimiter::for('login', function ($job) {
             return Limit::perMinute(10)->by($job->ip());
         });

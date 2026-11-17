@@ -23,33 +23,41 @@ class DashboardController extends BaseController
 
         $tenantId = $this->tenantManager->id();
 
+        $user = $request->user();
+        $allowedDeptIds = $user?->allowedDepartmentIds();
+        $scopeEmployees = fn ($q) => $allowedDeptIds !== null ? $q->whereIn('department_id', $allowedDeptIds) : $q;
+        $canViewSalaryCost = ! $user
+            || $user->hasFieldPermission('payroll', 'base_salary', 'view')
+            || $user->hasFieldPermission('employee', 'salary', 'view')
+            || $user->hasFieldPermission('report', 'salary_costs', 'view');
+
         $today = Carbon::today();
         $monthStart = $today->copy()->startOfMonth();
 
-        $totalActive = Employee::query()->where('status', 'active')->count();
-        $totalEmployees = Employee::query()->count();
+        $totalActive = $scopeEmployees(Employee::query())->where('status', 'active')->count();
+        $totalEmployees = $scopeEmployees(Employee::query())->count();
 
-        $hiredThisMonth = Employee::query()
+        $hiredThisMonth = $scopeEmployees(Employee::query())
             ->whereBetween('hired_at', [$monthStart, $today])
             ->count();
 
-        $terminatedThisMonth = Employee::query()
+        $terminatedThisMonth = $scopeEmployees(Employee::query())
             ->where('status', 'terminated')
             ->whereBetween('termination_at', [$monthStart, $today])
             ->count();
 
-        $averageHires = max(1, Employee::query()->where('hired_at', '>=', now()->subYear())->count() / 12);
+        $averageHires = max(1, $scopeEmployees(Employee::query())->where('hired_at', '>=', now()->subYear())->count() / 12);
         $turnoverRate = $totalEmployees > 0
             ? round(($terminatedThisMonth / max($averageHires, $totalActive)) * 100, 2)
             : 0;
 
         // Evolução do headcount (últimos 12 meses)
         $headcountTrend = collect(range(11, 0))
-            ->map(function ($monthsAgo) {
+            ->map(function ($monthsAgo) use ($scopeEmployees) {
                 $month = now()->startOfMonth()->subMonths($monthsAgo);
                 $nextMonth = $month->copy()->addMonth();
 
-                $count = Employee::query()
+                $count = $scopeEmployees(Employee::query())
                     ->where(function ($q) use ($month) {
                         $q->where('hired_at', '<', $month)
                             ->orWhereNull('hired_at');
@@ -69,6 +77,7 @@ class DashboardController extends BaseController
 
         // Distribuição por departamento
         $byDepartment = Department::query()
+            ->when($allowedDeptIds !== null, fn ($q) => $q->whereIn('id', $allowedDeptIds))
             ->withCount('employees')
             ->get()
             ->map(fn ($dept) => [
@@ -82,6 +91,7 @@ class DashboardController extends BaseController
             ->where('is_active', true)
             ->whereNotNull('end_date')
             ->whereBetween('end_date', [now(), now()->addDays(90)])
+            ->when($allowedDeptIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDeptIds)))
             ->with(['employee:id,first_name,last_name,employee_code'])
             ->orderBy('end_date')
             ->limit(10)
@@ -98,6 +108,7 @@ class DashboardController extends BaseController
         // Férias pendentes
         $pendingLeaves = LeaveRequest::query()
             ->pending()
+            ->when($allowedDeptIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDeptIds)))
             ->with(['employee:id,first_name,last_name', 'leaveType:id,name'])
             ->orderBy('created_at')
             ->limit(10)
@@ -116,7 +127,7 @@ class DashboardController extends BaseController
         $currentMonth = $today->month;
         $nextMonth = $nextMonthDate->month;
 
-        $birthdays = Employee::query()
+        $birthdays = $scopeEmployees(Employee::query())
             ->where('status', 'active')
             ->whereNotNull('birth_date')
             ->where(function ($q) use ($currentMonth, $nextMonth) {
@@ -151,12 +162,15 @@ class DashboardController extends BaseController
             ->values();
 
         // Custo salarial (soma de salários base ativos)
-        $payrollCost = EmployeeContract::query()
-            ->where('is_active', true)
-            ->sum('base_salary');
+        $payrollCost = $canViewSalaryCost
+            ? (float) EmployeeContract::query()
+                ->where('is_active', true)
+                ->when($allowedDeptIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDeptIds)))
+                ->sum('base_salary')
+            : null;
 
         // Funcionários em estágio ou período experimental
-        $probationInternship = Employee::query()
+        $probationInternship = $scopeEmployees(Employee::query())
             ->where('status', 'active')
             ->where(function ($q) use ($today) {
                 $q->whereDate('probation_end', '>=', $today)
@@ -205,10 +219,10 @@ class DashboardController extends BaseController
 
         // Distribuição de estados
         $byStatus = collect([
-            'active' => Employee::query()->where('status', 'active')->count(),
-            'inactive' => Employee::query()->where('status', 'inactive')->count(),
-            'suspended' => Employee::query()->where('status', 'suspended')->count(),
-            'terminated' => Employee::query()->where('status', 'terminated')->count(),
+            'active' => $scopeEmployees(Employee::query())->where('status', 'active')->count(),
+            'inactive' => $scopeEmployees(Employee::query())->where('status', 'inactive')->count(),
+            'suspended' => $scopeEmployees(Employee::query())->where('status', 'suspended')->count(),
+            'terminated' => $scopeEmployees(Employee::query())->where('status', 'terminated')->count(),
         ]);
 
         // Próximo período de payroll
@@ -231,7 +245,7 @@ class DashboardController extends BaseController
                 'hired_this_month' => $hiredThisMonth,
                 'terminated_this_month' => $terminatedThisMonth,
                 'turnover_rate' => $turnoverRate,
-                'monthly_payroll_cost' => (float) $payrollCost,
+                'monthly_payroll_cost' => $payrollCost,
             ],
             'headcount_trend' => $headcountTrend,
             'by_department' => $byDepartment,

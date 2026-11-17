@@ -12,11 +12,18 @@ class AuthResource extends JsonResource
     public function toArray(Request $request): array
     {
         /** @var User $this */
+        $activeTenantId = $this->activeTenantId();
         $tenant = null;
 
-        if ($this->tenant_id) {
-            $tenant = Tenant::query()->find($this->tenant_id);
+        if ($activeTenantId) {
+            $tenant = Tenant::query()->find($activeTenantId);
         }
+
+        $activeAccess = $this->activeTenantAccess($activeTenantId);
+        $accessibleTenants = $this->accessibleTenants();
+        $roles = $activeAccess?->role_name
+            ? collect([$activeAccess->role_name])
+            : $this->getRoleNames();
 
         return [
             'id' => $this->id,
@@ -25,7 +32,7 @@ class AuthResource extends JsonResource
             'locale' => $this->locale,
             'timezone' => $this->timezone,
             'is_active' => $this->is_active,
-            'tenant_id' => $this->tenant_id,
+            'tenant_id' => $activeTenantId ?? $this->tenant_id,
             'tenant' => $tenant ? [
                 'id' => $tenant->id,
                 'name' => $tenant->name,
@@ -35,6 +42,9 @@ class AuthResource extends JsonResource
                 'timezone' => $tenant->timezone,
                 'logo_path' => $tenant->logo_path,
             ] : null,
+            'accessible_tenants' => $accessibleTenants->values(),
+            'active_department_ids' => $this->allowedDepartmentIds($activeTenantId),
+            'active_permission_group_id' => $activeAccess?->permission_group_id,
             'employee_id' => $this->employee_id,
             'employee' => $this->whenLoaded('employee', fn () => [
                 'id' => $this->employee->id,
@@ -44,8 +54,8 @@ class AuthResource extends JsonResource
                 'position' => $this->employee->position?->title,
                 'department' => $this->employee->department?->name,
             ]),
-            'roles' => $this->getRoleNames(),
-            'permissions' => $this->getAllPermissions()->pluck('name'),
+            'roles' => $roles->values(),
+            'permissions' => $this->effectivePermissions($activeTenantId)->values(),
         ];
     }
 }

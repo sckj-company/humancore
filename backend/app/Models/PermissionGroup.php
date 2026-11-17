@@ -1,0 +1,37 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class PermissionGroup extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'name',
+        'description',
+        'permissions',
+        'is_system',
+        'created_by',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'permissions' => 'array',
+            'is_system' => 'boolean',
+        ];
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function userTenantAccesses()
+    {
+        return $this->hasMany(UserTenantAccess::class);
+    }
+}

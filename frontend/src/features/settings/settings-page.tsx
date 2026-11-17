@@ -28,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader, LoadingState, ErrorState } from '@/components/shared/page-header'
+import { ANGOLA_DOCUMENT_PRESETS } from '@/lib/document-presets'
 import { SalaryComponentRegulationsPage } from '@/features/settings/salary-component-regulations-page'
 import { PayrollTaxRulesPage } from '@/features/settings/payroll-tax-rules-page'
 import type { DocumentRequirement, SettingGroups, SettingItem } from '@/types'
@@ -52,15 +53,7 @@ const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string
   { key: 'discounts.default_amount', labelKey: 'discounts.default', descriptionKey: 'discounts.defaultDescription' },
 ]
 const GROUP_ORDER = SETTING_GROUP_META.map((g) => g.key)
-const REQUIRED_DOCUMENT_PRESETS: DocumentRequirement[] = [
-  { type: 'cv', label: 'Currículo (CV)' },
-  { type: 'criminal_record', label: 'Registo criminal' },
-  { type: 'term', label: 'Termo de responsabilidade' },
-  { type: 'contract', label: 'Contrato de trabalho' },
-  { type: 'medical', label: 'Atestado médico' },
-  { type: 'bank_proof', label: 'Comprovativo bancário' },
-  { type: 'id_card', label: 'Bilhete de identidade (BI)' },
-]
+const REQUIRED_DOCUMENT_PRESETS: DocumentRequirement[] = ANGOLA_DOCUMENT_PRESETS
 
 // ─── Super-Admin Tenant Banner ─────────────────────────────────────────────────
 function SuperAdminTenantBanner() {
@@ -637,7 +630,28 @@ export function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRequiredDocuments((current) => {
+                    const customDocs = current.filter((d) => !REQUIRED_DOCUMENT_PRESETS.some((p) => p.type === d.type))
+                    return [...REQUIRED_DOCUMENT_PRESETS, ...customDocs]
+                  })}
+                >
+                  {t('settingsPage.selectAllDocuments', { defaultValue: 'Selecionar todos' })}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRequiredDocuments([])}
+                >
+                  {t('settingsPage.clearDocuments', { defaultValue: 'Limpar seleção' })}
+                </Button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {REQUIRED_DOCUMENT_PRESETS.map((document) => (
                   <label key={document.type} className="flex items-center gap-3 border border-border p-3 text-sm">
                     <input

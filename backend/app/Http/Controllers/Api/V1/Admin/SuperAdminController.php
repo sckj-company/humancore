@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\TenantResource;
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveType;
+use App\Models\PermissionGroup;
 use App\Models\SalaryComponent;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\UserTenantAccess;
 use App\Services\Audit\AuditService;
 use App\Services\Tenant\TenantManager;
 use Illuminate\Http\JsonResponse;
@@ -116,7 +119,7 @@ class SuperAdminController extends BaseController
 
         $users = User::query()
             ->whereHas('roles', fn ($query) => $query->whereIn('name', ['super-admin', 'super-admin-limited']))
-            ->with(['roles', 'permissions'])
+            ->with(['roles', 'permissions', 'tenantAccesses.tenant:id,name,slug', 'tenantAccesses.permissionGroup:id,name'])
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
@@ -126,6 +129,7 @@ class SuperAdminController extends BaseController
                 'is_active' => $user->is_active,
                 'roles' => $user->getRoleNames(),
                 'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                'tenant_accesses' => $this->formatTenantAccesses($user),
             ]);
 
         $permissions = Permission::query()
@@ -152,10 +156,18 @@ class SuperAdminController extends BaseController
             'password' => ['required', 'string', 'min:8'],
             'permissions' => ['required', 'array'],
             'permissions.*' => ['required', 'string', 'distinct', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+            'tenant_accesses' => ['sometimes', 'array'],
+            'tenant_accesses.*.tenant_id' => ['required', 'integer', 'exists:tenants,id'],
+            'tenant_accesses.*.permission_group_id' => ['nullable', 'integer', 'exists:permission_groups,id'],
+            'tenant_accesses.*.role_name' => ['nullable', 'string', 'in:admin,hr-manager,manager,employee'],
+            'tenant_accesses.*.permissions' => ['nullable', 'array'],
+            'tenant_accesses.*.permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+            'tenant_accesses.*.department_ids' => ['nullable', 'array'],
+            'tenant_accesses.*.department_ids.*' => ['integer'],
         ]);
         $this->validateAssignablePlatformUserPermissions($request, $data['permissions']);
 
-        $user = DB::transaction(function () use ($data): User {
+        $user = DB::transaction(function () use ($request, $data): User {
             $restrictedRole = Role::query()->firstOrCreate(
                 ['name' => 'super-admin-limited', 'guard_name' => 'web'],
                 [
@@ -177,8 +189,14 @@ class SuperAdminController extends BaseController
             $user->assignRole($restrictedRole);
             $user->syncPermissions($data['permissions']);
 
+            if (array_key_exists('tenant_accesses', $data)) {
+                $this->syncUserTenantAccesses($request, $user, $data['tenant_accesses'], true);
+            }
+
             return $user;
         });
+
+        $user->load(['roles', 'permissions', 'tenantAccesses.tenant:id,name,slug', 'tenantAccesses.permissionGroup:id,name']);
 
         return $this->success([
             'id' => $user->id,
@@ -187,6 +205,7 @@ class SuperAdminController extends BaseController
             'is_active' => $user->is_active,
             'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+            'tenant_accesses' => $this->formatTenantAccesses($user),
         ], 'Super-admin limitado criado com sucesso.', 201);
     }
 
@@ -204,9 +223,26 @@ class SuperAdminController extends BaseController
         $data = $request->validate([
             'permissions' => ['required', 'array'],
             'permissions.*' => ['required', 'string', 'distinct', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+            'tenant_accesses' => ['sometimes', 'array'],
+            'tenant_accesses.*.tenant_id' => ['required', 'integer', 'exists:tenants,id'],
+            'tenant_accesses.*.permission_group_id' => ['nullable', 'integer', 'exists:permission_groups,id'],
+            'tenant_accesses.*.role_name' => ['nullable', 'string', 'in:admin,hr-manager,manager,employee'],
+            'tenant_accesses.*.permissions' => ['nullable', 'array'],
+            'tenant_accesses.*.permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+            'tenant_accesses.*.department_ids' => ['nullable', 'array'],
+            'tenant_accesses.*.department_ids.*' => ['integer'],
         ]);
         $this->validateAssignablePlatformUserPermissions($request, $data['permissions']);
-        $user->syncPermissions($data['permissions']);
+
+        DB::transaction(function () use ($request, $user, $data): void {
+            $user->syncPermissions($data['permissions']);
+
+            if (array_key_exists('tenant_accesses', $data)) {
+                $this->syncUserTenantAccesses($request, $user, $data['tenant_accesses'], true);
+            }
+        });
+
+        $user->refresh()->load(['roles', 'permissions', 'tenantAccesses.tenant:id,name,slug', 'tenantAccesses.permissionGroup:id,name']);
 
         return $this->success([
             'id' => $user->id,
@@ -215,6 +251,7 @@ class SuperAdminController extends BaseController
             'is_active' => $user->is_active,
             'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+            'tenant_accesses' => $this->formatTenantAccesses($user),
         ], 'Permissões do super-admin atualizadas com sucesso.');
     }
 
@@ -426,8 +463,11 @@ class SuperAdminController extends BaseController
         $this->authorize('view', $tenant);
 
         $users = User::query()
-            ->where('tenant_id', $tenant->id)
-            ->with(['roles', 'permissions'])
+            ->where(function ($query) use ($tenant) {
+                $query->where('tenant_id', $tenant->id)
+                    ->orWhereHas('tenantAccesses', fn ($aq) => $aq->where('tenant_id', $tenant->id));
+            })
+            ->with(['roles', 'permissions', 'tenantAccesses.tenant:id,name,slug', 'tenantAccesses.permissionGroup:id,name'])
             ->orderBy('name')
             ->get()
             ->map(fn (User $u) => [
@@ -438,6 +478,7 @@ class SuperAdminController extends BaseController
                 'roles'              => $u->roles->pluck('name')->values(),
                 'permissions'        => $u->getAllPermissions()->pluck('name')->values(),
                 'direct_permissions' => $u->getDirectPermissions()->pluck('name')->values(),
+                'tenant_accesses'    => $this->formatTenantAccesses($u),
                 'created_at'         => $u->created_at?->toIso8601String(),
             ]);
 
@@ -456,13 +497,21 @@ class SuperAdminController extends BaseController
             'is_active'     => ['sometimes', 'boolean'],
             'permissions'   => ['sometimes', 'array'],
             'permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+            'tenant_accesses' => ['sometimes', 'array'],
+            'tenant_accesses.*.tenant_id' => ['required', 'integer', 'exists:tenants,id'],
+            'tenant_accesses.*.permission_group_id' => ['nullable', 'integer', 'exists:permission_groups,id'],
+            'tenant_accesses.*.role_name' => ['nullable', 'string', 'in:admin,hr-manager,manager,employee'],
+            'tenant_accesses.*.permissions' => ['nullable', 'array'],
+            'tenant_accesses.*.permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+            'tenant_accesses.*.department_ids' => ['nullable', 'array'],
+            'tenant_accesses.*.department_ids.*' => ['integer'],
         ]);
 
         if (isset($data['permissions'])) {
             $this->validateTenantAssignablePermissions($data['permissions']);
         }
 
-        $user = DB::transaction(function () use ($tenant, $data) {
+        $user = DB::transaction(function () use ($request, $tenant, $data) {
             $user = User::query()->create([
                 'tenant_id'         => $tenant->id,
                 'name'              => $data['name'],
@@ -479,8 +528,14 @@ class SuperAdminController extends BaseController
                 $user->syncPermissions($data['permissions']);
             }
 
+            if (array_key_exists('tenant_accesses', $data)) {
+                $this->syncUserTenantAccesses($request, $user, $data['tenant_accesses'], false);
+            }
+
             return $user;
         });
+
+        $user->load(['roles', 'permissions', 'tenantAccesses.tenant:id,name,slug', 'tenantAccesses.permissionGroup:id,name']);
 
         return $this->success([
             'id'                 => $user->id,
@@ -490,6 +545,7 @@ class SuperAdminController extends BaseController
             'roles'              => $user->roles->pluck('name')->values(),
             'permissions'        => $user->getAllPermissions()->pluck('name')->values(),
             'direct_permissions' => $user->getDirectPermissions()->pluck('name')->values(),
+            'tenant_accesses'    => $this->formatTenantAccesses($user),
         ], 'Utilizador criado com sucesso.', 201);
     }
 
@@ -497,7 +553,10 @@ class SuperAdminController extends BaseController
     {
         $this->authorize('update', $tenant);
 
-        if ($user->tenant_id !== $tenant->id) {
+        $belongsToTenant = $user->tenant_id === $tenant->id
+            || $user->tenantAccesses()->where('tenant_id', $tenant->id)->exists();
+
+        if (! $belongsToTenant) {
             return $this->error('Utilizador não pertence a esta empresa.', 403);
         }
 
@@ -510,13 +569,21 @@ class SuperAdminController extends BaseController
             'is_active'     => ['sometimes', 'boolean'],
             'permissions'   => ['sometimes', 'array'],
             'permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+            'tenant_accesses' => ['sometimes', 'array'],
+            'tenant_accesses.*.tenant_id' => ['required', 'integer', 'exists:tenants,id'],
+            'tenant_accesses.*.permission_group_id' => ['nullable', 'integer', 'exists:permission_groups,id'],
+            'tenant_accesses.*.role_name' => ['nullable', 'string', 'in:admin,hr-manager,manager,employee'],
+            'tenant_accesses.*.permissions' => ['nullable', 'array'],
+            'tenant_accesses.*.permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+            'tenant_accesses.*.department_ids' => ['nullable', 'array'],
+            'tenant_accesses.*.department_ids.*' => ['integer'],
         ]);
 
         if (isset($data['permissions'])) {
             $this->validateTenantAssignablePermissions($data['permissions']);
         }
 
-        DB::transaction(function () use ($user, $data): void {
+        DB::transaction(function () use ($request, $user, $data): void {
             if (array_key_exists('is_active', $data)) {
                 $user->update(['is_active' => $data['is_active']]);
             }
@@ -528,9 +595,13 @@ class SuperAdminController extends BaseController
             if (array_key_exists('permissions', $data)) {
                 $user->syncPermissions($data['permissions']);
             }
+
+            if (array_key_exists('tenant_accesses', $data)) {
+                $this->syncUserTenantAccesses($request, $user, $data['tenant_accesses'], false);
+            }
         });
 
-        $user->refresh();
+        $user->refresh()->load(['roles', 'permissions', 'tenantAccesses.tenant:id,name,slug', 'tenantAccesses.permissionGroup:id,name']);
 
         return $this->success([
             'id'                 => $user->id,
@@ -540,7 +611,166 @@ class SuperAdminController extends BaseController
             'roles'              => $user->roles->pluck('name')->values(),
             'permissions'        => $user->getAllPermissions()->pluck('name')->values(),
             'direct_permissions' => $user->getDirectPermissions()->pluck('name')->values(),
+            'tenant_accesses'    => $this->formatTenantAccesses($user),
         ], 'Utilizador atualizado com sucesso.');
+    }
+
+    public function tenantDepartments(Tenant $tenant): JsonResponse
+    {
+        $this->authorize('view', $tenant);
+
+        $departments = Department::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'tenant_id']);
+
+        return $this->success($departments);
+    }
+
+    public function permissionGroups(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Tenant::class);
+
+        $groups = PermissionGroup::query()
+            ->orderBy('name')
+            ->get();
+
+        return $this->success($groups);
+    }
+
+    public function storePermissionGroup(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Tenant::class);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:150', 'unique:permission_groups,name'],
+            'description' => ['nullable', 'string', 'max:500'],
+            'permissions' => ['required', 'array', 'min:1'],
+            'permissions.*' => ['required', 'string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+        ]);
+
+        $this->validateTenantAssignablePermissions($data['permissions']);
+
+        $group = PermissionGroup::query()->create([
+            'name' => $data['name'],
+            'description' => $data['description'] ?? null,
+            'permissions' => array_values(array_unique($data['permissions'])),
+            'created_by' => $request->user()->id,
+        ]);
+
+        return $this->success($group, 'Grupo de permissões criado com sucesso.', 201);
+    }
+
+    public function updatePermissionGroup(Request $request, PermissionGroup $group): JsonResponse
+    {
+        $this->authorize('viewAny', Tenant::class);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:150', Rule::unique('permission_groups', 'name')->ignore($group->id)],
+            'description' => ['nullable', 'string', 'max:500'],
+            'permissions' => ['required', 'array', 'min:1'],
+            'permissions.*' => ['required', 'string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
+        ]);
+
+        $this->validateTenantAssignablePermissions($data['permissions']);
+
+        $group->update([
+            'name' => $data['name'],
+            'description' => $data['description'] ?? null,
+            'permissions' => array_values(array_unique($data['permissions'])),
+        ]);
+
+        return $this->success($group->fresh(), 'Grupo de permissões atualizado com sucesso.');
+    }
+
+    public function destroyPermissionGroup(PermissionGroup $group): JsonResponse
+    {
+        $this->authorize('viewAny', Tenant::class);
+
+        $group->delete();
+
+        return $this->success(null, 'Grupo de permissões eliminado com sucesso.');
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $tenantAccesses
+     */
+    private function syncUserTenantAccesses(Request $request, User $user, array $tenantAccesses, bool $isPlatformUser): void
+    {
+        $actorPermissions = $request->user()->hasRole('super-admin')
+            ? null
+            : $request->user()->getAllPermissions()->pluck('name')->all();
+
+        $normalized = [];
+
+        foreach ($tenantAccesses as $entry) {
+            $tenantId = (int) $entry['tenant_id'];
+            $groupId = isset($entry['permission_group_id']) && $entry['permission_group_id'] !== null
+                ? (int) $entry['permission_group_id']
+                : null;
+            $roleName = $entry['role_name'] ?? null;
+            $perms = array_key_exists('permissions', $entry) && is_array($entry['permissions'])
+                ? array_values(array_unique(array_map('strval', $entry['permissions'])))
+                : null;
+
+            if ($perms !== null) {
+                $this->validateTenantAssignablePermissions($perms);
+                if ($isPlatformUser && $actorPermissions !== null && array_diff($perms, $actorPermissions)) {
+                    abort(403, 'Não pode atribuir permissões que não possui.');
+                }
+            }
+
+            $deptIds = array_values(array_unique(array_map('intval', $entry['department_ids'] ?? [])));
+            if ($deptIds !== []) {
+                $validDeptIds = Department::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->whereIn('id', $deptIds)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+
+                if (count($validDeptIds) !== count($deptIds)) {
+                    abort(422, 'Um ou mais departamentos não pertencem à empresa selecionada.');
+                }
+                $deptIds = $validDeptIds;
+            }
+
+            $normalized[$tenantId] = [
+                'permission_group_id' => $groupId,
+                'role_name' => $roleName,
+                'permissions' => $perms,
+                'department_ids' => $deptIds === [] ? null : $deptIds,
+            ];
+        }
+
+        $keepTenantIds = array_keys($normalized);
+        $user->tenantAccesses()->whereNotIn('tenant_id', $keepTenantIds === [] ? [0] : $keepTenantIds)->delete();
+
+        foreach ($normalized as $tenantId => $payload) {
+            UserTenantAccess::query()->updateOrCreate(
+                ['user_id' => $user->id, 'tenant_id' => $tenantId],
+                $payload,
+            );
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function formatTenantAccesses(User $user): array
+    {
+        return $user->tenantAccesses->map(fn (UserTenantAccess $access) => [
+            'id' => $access->id,
+            'tenant_id' => $access->tenant_id,
+            'tenant_name' => $access->tenant?->name,
+            'tenant_slug' => $access->tenant?->slug,
+            'permission_group_id' => $access->permission_group_id,
+            'permission_group_name' => $access->permissionGroup?->name,
+            'role_name' => $access->role_name,
+            'permissions' => $access->permissions,
+            'resolved_permissions' => $access->resolvedPermissions(),
+            'department_ids' => $access->department_ids ?? [],
+        ])->values()->all();
     }
 
     /**

@@ -98,9 +98,11 @@ class LeaveController extends BaseController
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', LeaveRequest::class);
+        $allowedDepartmentIds = $request->user()?->allowedDepartmentIds();
 
         $requests = LeaveRequest::query()
             ->with(['employee', 'leaveType', 'approvedBy'])
+            ->when($allowedDepartmentIds !== null, fn ($q) => $q->whereHas('employee', fn ($e) => $e->whereIn('department_id', $allowedDepartmentIds)))
             ->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))
             ->when($request->string('status')->toString(), fn ($q, $s) => $q->where('status', $s))
             ->orderByDesc('created_at')

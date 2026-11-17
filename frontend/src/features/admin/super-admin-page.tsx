@@ -46,6 +46,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/shared/page-header'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { Chart } from '@/components/charts/chart'
+import {
+  PermissionSelector,
+  TenantAccessScopeEditor,
+  type PermissionGroupRecord,
+  type TenantAccessDraft,
+} from '@/features/admin/permissions-editor'
 import type { Paginated, Tenant } from '@/types'
 
 // ── Constantes Angola ─────────────────────────────────────────────────────────
@@ -152,6 +158,19 @@ const emptyForm: TenantForm = {
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
+interface TenantAccessSummary {
+  id?: number
+  tenant_id: number
+  tenant_name?: string | null
+  tenant_slug?: string | null
+  permission_group_id: number | null
+  permission_group_name?: string | null
+  role_name?: string | null
+  permissions?: string[] | null
+  resolved_permissions?: string[]
+  department_ids?: number[]
+}
+
 interface TenantUser {
   id: number
   name: string
@@ -160,6 +179,7 @@ interface TenantUser {
   roles: string[]
   permissions?: string[]
   direct_permissions?: string[]
+  tenant_accesses?: TenantAccessSummary[]
   created_at?: string
 }
 
@@ -195,6 +215,7 @@ interface PlatformUser {
   is_active: boolean
   roles: string[]
   permissions: string[]
+  tenant_accesses?: TenantAccessSummary[]
 }
 
 interface PasswordTarget {
@@ -221,21 +242,6 @@ const emptyPlatformUser: NewPlatformUser = {
   permissions: ['view_any_tenant'],
 }
 
-function togglePermissionGroup(
-  currentPermissions: string[],
-  groupPermissions: PlatformPermission[],
-  selected: boolean,
-): string[] {
-  const permissions = new Set(currentPermissions)
-  for (const { name } of groupPermissions) {
-    if (name === 'view_any_tenant') continue
-    if (selected) permissions.add(name)
-    else permissions.delete(name)
-  }
-  permissions.add('view_any_tenant')
-  return [...permissions]
-}
-
 const userSchema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
   email: z.string().email('Email inválido'),
@@ -246,17 +252,14 @@ const userSchema = z.object({
 type UserForm = z.infer<typeof userSchema>
 const emptyUserForm: UserForm = { name: '', email: '', password: '', role: 'admin', permissions: [] }
 
-function toggleTenantPermissionGroup(
-  currentPermissions: string[],
-  groupPermissions: PlatformPermission[],
-  selected: boolean,
-): string[] {
-  const permissions = new Set(currentPermissions)
-  for (const { name } of groupPermissions) {
-    if (selected) permissions.add(name)
-    else permissions.delete(name)
-  }
-  return [...permissions]
+function toTenantAccessDrafts(accesses?: TenantAccessSummary[]): TenantAccessDraft[] {
+  return (accesses ?? []).map((a) => ({
+    tenant_id: a.tenant_id,
+    permission_group_id: a.permission_group_id ?? null,
+    role_name: a.role_name || 'employee',
+    permissions: a.permissions ?? a.resolved_permissions ?? [],
+    department_ids: a.department_ids ?? [],
+  }))
 }
 
 function CopyPermissionsControls({
@@ -319,28 +322,6 @@ export function SuperAdminPage() {
   const canDeleteTenant = hasPermission(currentUser, 'delete_tenant')
   const canViewTenantUsers = canUpdateTenant && hasPermission(currentUser, 'view_tenant')
   const canSetUserPassword = currentUser?.roles.includes('super-admin') ?? false
-  const getPermissionLabel = (name: string) => {
-    const globalLabel = t(`superAdminPage.permissionLabels.${name}`, { defaultValue: '' }).trim()
-    if (globalLabel) return globalLabel
-
-    const action = ['force_delete', 'view_any', 'view', 'create', 'update', 'delete', 'restore', 'approve', 'reject', 'process', 'close', 'export', 'print', 'configure']
-      .find((candidate) => name.startsWith(`${candidate}_`))
-    const resource = action ? name.slice(action.length + 1) : ''
-    const normalizedResource = resource.replaceAll('_', '-')
-    const resourceForm = action === 'view_any' ? 'plural' : 'singular'
-    const resourceLabel = normalizedResource
-      ? t(`superAdminPage.permissionResources.${normalizedResource}.${resourceForm}`, { defaultValue: '' }).trim()
-      : ''
-    if (!action || !resourceLabel) {
-      return t('superAdminPage.permissionFallback', { name, defaultValue: name })
-    }
-
-    const label = t(`superAdminPage.permissionActions.${action}`, {
-      resource: resourceLabel,
-      defaultValue: '',
-    }).trim()
-    return label || t('superAdminPage.permissionFallback', { name, defaultValue: name })
-  }
   const [searchParams] = useSearchParams()
   const urlStatus = searchParams.get('status')
   const [search, setSearch] = useState('')
@@ -363,15 +344,26 @@ export function SuperAdminPage() {
   const [usersDialogOpen, setUsersDialogOpen] = useState(false)
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [userForm, setUserForm] = useState<UserForm>(emptyUserForm)
+  const [userTenantAccesses, setUserTenantAccesses] = useState<TenantAccessDraft[]>([])
   const [userErrors, setUserErrors] = useState<Record<string, string>>({})
   const [editingTenantUser, setEditingTenantUser] = useState<TenantUser | null>(null)
   const [tenantUserRole, setTenantUserRole] = useState<UserForm['role']>('employee')
   const [tenantUserActive, setTenantUserActive] = useState(true)
   const [tenantUserPermissions, setTenantUserPermissions] = useState<string[]>([])
+  const [editingTenantUserAccesses, setEditingTenantUserAccesses] = useState<TenantAccessDraft[]>([])
   const [platformUserDialogOpen, setPlatformUserDialogOpen] = useState(false)
   const [platformUserForm, setPlatformUserForm] = useState<NewPlatformUser>(emptyPlatformUser)
+  const [platformUserAccesses, setPlatformUserAccesses] = useState<TenantAccessDraft[]>([])
   const [editingPlatformUser, setEditingPlatformUser] = useState<PlatformUser | null>(null)
   const [platformUserPermissions, setPlatformUserPermissions] = useState<string[]>([])
+  const [editingPlatformUserAccesses, setEditingPlatformUserAccesses] = useState<TenantAccessDraft[]>([])
+  const [permissionGroupDialogOpen, setPermissionGroupDialogOpen] = useState(false)
+  const [editingPermissionGroup, setEditingPermissionGroup] = useState<PermissionGroupRecord | null>(null)
+  const [permissionGroupForm, setPermissionGroupForm] = useState<{
+    name: string
+    description: string
+    permissions: string[]
+  }>({ name: '', description: '', permissions: [] })
   const [copiedTenantPermissions, setCopiedTenantPermissions] = useState<{
     sourceUserId: number
     sourceUserName: string
@@ -410,7 +402,17 @@ export function SuperAdminPage() {
   const tenantPermissionsQuery = useQuery<TenantPermissionsResponse>({
     queryKey: ['superadmin', 'tenant-permissions'],
     queryFn: () => api.get<TenantPermissionsResponse>('superadmin/tenant-permissions'),
-    enabled: usersDialogOpen || userDialogOpen || !!editingTenantUser,
+    enabled: usersDialogOpen || userDialogOpen || !!editingTenantUser || permissionGroupDialogOpen || platformUserDialogOpen || !!editingPlatformUser,
+  })
+
+  const permissionGroupsQuery = useQuery({
+    queryKey: ['superadmin', 'permission-groups'],
+    queryFn: () => api.get<PermissionGroupRecord[]>('superadmin/permission-groups'),
+  })
+
+  const allTenantsQuery = useQuery({
+    queryKey: ['superadmin', 'all-tenants-for-scopes'],
+    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
   })
 
   const platformUsersQuery = useQuery({
@@ -497,67 +499,97 @@ export function SuperAdminPage() {
   })
 
   const createUser = useMutation({
-    mutationFn: (data: UserForm) =>
+    mutationFn: (data: UserForm & { tenant_accesses?: TenantAccessDraft[] }) =>
       api.post<TenantUser>(`superadmin/tenants/${selectedTenant!.id}/users`, data),
     onSuccess: () => {
-      toast.success('Utilizador criado com sucesso')
+      toast.success(t('superAdminPage.tenantUserCreated', { defaultValue: 'Utilizador criado com sucesso' }))
       setUserDialogOpen(false)
       setUserForm(emptyUserForm)
+      setUserTenantAccesses([])
       qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao criar utilizador')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('superAdminPage.tenantUserCreateError', { defaultValue: 'Erro ao criar utilizador' }))),
   })
 
   const updateTenantUser = useMutation({
-    mutationFn: ({ userId, role, is_active, permissions }: { userId: number; role: UserForm['role']; is_active: boolean; permissions: string[] }) =>
-      api.put<TenantUser>(`superadmin/tenants/${selectedTenant!.id}/users/${userId}`, { role, is_active, permissions }),
+    mutationFn: ({
+      userId,
+      role,
+      is_active,
+      permissions,
+      tenant_accesses,
+    }: {
+      userId: number
+      role: UserForm['role']
+      is_active: boolean
+      permissions: string[]
+      tenant_accesses?: TenantAccessDraft[]
+    }) =>
+      api.put<TenantUser>(`superadmin/tenants/${selectedTenant!.id}/users/${userId}`, {
+        role,
+        is_active,
+        permissions,
+        tenant_accesses,
+      }),
     onSuccess: () => {
-      toast.success('Utilizador e permissões atualizados com sucesso')
+      toast.success(t('superAdminPage.tenantUserUpdated', { defaultValue: 'Utilizador e permissões atualizados com sucesso' }))
       setEditingTenantUser(null)
+      setEditingTenantUserAccesses([])
       qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao atualizar utilizador')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('superAdminPage.tenantUserUpdateError', { defaultValue: 'Erro ao atualizar utilizador' }))),
   })
 
   const deleteUser = useMutation({
     mutationFn: ({ userId }: { userId: number }) =>
       api.delete(`superadmin/tenants/${selectedTenant!.id}/users/${userId}`),
     onSuccess: () => {
-      toast.success('Utilizador eliminado')
+      toast.success(t('superAdminPage.tenantUserDeleted', { defaultValue: 'Utilizador eliminado' }))
       qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('common.error', { defaultValue: 'Erro' }))),
   })
 
   const updateUserPassword = useMutation({
     mutationFn: ({ userId, password, password_confirmation }: { userId: number; password: string; password_confirmation: string }) =>
       api.put(`superadmin/users/${userId}/password`, { password, password_confirmation }),
     onSuccess: () => {
-      toast.success('Palavra-passe atualizada com sucesso')
+      toast.success(t('passwordReset.updated', { defaultValue: 'Palavra-passe atualizada com sucesso' }))
       setPasswordTarget(null)
       setNewPassword('')
       setPasswordConfirmation('')
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Erro ao atualizar palavra-passe')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('common.error', { defaultValue: 'Erro ao atualizar palavra-passe' }))),
   })
 
   const createPlatformUser = useMutation({
-    mutationFn: (data: NewPlatformUser) => api.post<PlatformUser>('superadmin/platform-users', data),
+    mutationFn: (data: NewPlatformUser & { tenant_accesses?: TenantAccessDraft[] }) =>
+      api.post<PlatformUser>('superadmin/platform-users', data),
     onSuccess: () => {
       toast.success(t('superAdminPage.created'))
       setPlatformUserDialogOpen(false)
       setPlatformUserForm(emptyPlatformUser)
+      setPlatformUserAccesses([])
       qc.invalidateQueries({ queryKey: ['superadmin', 'platform-users'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('superAdminPage.createError'))),
   })
 
   const updatePlatformUser = useMutation({
-    mutationFn: ({ id, permissions }: { id: number; permissions: string[] }) =>
-      api.put<PlatformUser>(`superadmin/platform-users/${id}`, { permissions }),
+    mutationFn: ({
+      id,
+      permissions,
+      tenant_accesses,
+    }: {
+      id: number
+      permissions: string[]
+      tenant_accesses?: TenantAccessDraft[]
+    }) =>
+      api.put<PlatformUser>(`superadmin/platform-users/${id}`, { permissions, tenant_accesses }),
     onSuccess: () => {
       toast.success(t('superAdminPage.permissionsUpdated'))
       setEditingPlatformUser(null)
+      setEditingPlatformUserAccesses([])
       qc.invalidateQueries({ queryKey: ['superadmin', 'platform-users'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('superAdminPage.updateError'))),
@@ -570,6 +602,30 @@ export function SuperAdminPage() {
       qc.invalidateQueries({ queryKey: ['superadmin', 'platform-users'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('superAdminPage.deleteError'))),
+  })
+
+  const savePermissionGroup = useMutation({
+    mutationFn: (payload: { id?: number; name: string; description: string; permissions: string[] }) =>
+      payload.id
+        ? api.put<PermissionGroupRecord>(`superadmin/permission-groups/${payload.id}`, payload)
+        : api.post<PermissionGroupRecord>('superadmin/permission-groups', payload),
+    onSuccess: () => {
+      toast.success(t('superAdminPage.permissionGroupSaved', { defaultValue: 'Grupo de permissões guardado com sucesso.' }))
+      setPermissionGroupDialogOpen(false)
+      setEditingPermissionGroup(null)
+      setPermissionGroupForm({ name: '', description: '', permissions: [] })
+      qc.invalidateQueries({ queryKey: ['superadmin', 'permission-groups'] })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, t('superAdminPage.permissionGroupSaveError', { defaultValue: 'Erro ao guardar grupo de permissões.' }))),
+  })
+
+  const deletePermissionGroup = useMutation({
+    mutationFn: (id: number) => api.delete(`superadmin/permission-groups/${id}`),
+    onSuccess: () => {
+      toast.success(t('superAdminPage.permissionGroupDeleted', { defaultValue: 'Grupo de permissões eliminado.' }))
+      qc.invalidateQueries({ queryKey: ['superadmin', 'permission-groups'] })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, t('common.error', { defaultValue: 'Erro' }))),
   })
 
   const handleSubmit = () => {
@@ -593,7 +649,7 @@ export function SuperAdminPage() {
       return
     }
     setUserErrors({})
-    createUser.mutate(parsed.data)
+    createUser.mutate({ ...parsed.data, tenant_accesses: userTenantAccesses })
   }
 
   const handlePlatformUserSubmit = () => {
@@ -605,12 +661,13 @@ export function SuperAdminPage() {
       toast.error(t('superAdminPage.tenantPermissionRequired'))
       return
     }
-    createPlatformUser.mutate(platformUserForm)
+    createPlatformUser.mutate({ ...platformUserForm, tenant_accesses: platformUserAccesses })
   }
 
   const openPlatformUserEdit = (user: PlatformUser) => {
     setEditingPlatformUser(user)
     setPlatformUserPermissions([...user.permissions])
+    setEditingPlatformUserAccesses(toTenantAccessDrafts(user.tenant_accesses))
   }
 
   const handlePlatformUserPermissionsSubmit = () => {
@@ -619,7 +676,11 @@ export function SuperAdminPage() {
       toast.error(t('superAdminPage.tenantPermissionRequired'))
       return
     }
-    updatePlatformUser.mutate({ id: editingPlatformUser.id, permissions: platformUserPermissions })
+    updatePlatformUser.mutate({
+      id: editingPlatformUser.id,
+      permissions: platformUserPermissions,
+      tenant_accesses: editingPlatformUserAccesses,
+    })
   }
 
   const openTenantUserEdit = (u: TenantUser) => {
@@ -628,6 +689,7 @@ export function SuperAdminPage() {
     setTenantUserRole(currentRole)
     setTenantUserActive(u.is_active)
     setTenantUserPermissions([...(u.permissions ?? [])])
+    setEditingTenantUserAccesses(toTenantAccessDrafts(u.tenant_accesses))
   }
 
   const handleTenantUserRoleChange = (role: UserForm['role']) => {
@@ -673,16 +735,6 @@ export function SuperAdminPage() {
     })
     toast.success(t('superAdminPage.permissionsCopied', { name: u.name, count: permissions.length }))
   }
-
-  const tenantPermissionGroups = (tenantPermissionsQuery.data?.permissions ?? []).reduce<Record<string, PlatformPermission[]>>(
-    (groups, permission) => {
-      const group = permission.group_name ?? 'outros'
-      groups[group] ??= []
-      groups[group].push(permission)
-      return groups
-    },
-    {},
-  )
 
   const dashboardData = dashboardQuery.data
   const trendOption: EChartsOption = useMemo(() => {
@@ -769,15 +821,10 @@ export function SuperAdminPage() {
     }
   }, [dashboardData, t])
 
-  const platformPermissionGroups = (platformUsersQuery.data?.permissions ?? []).reduce<Record<string, PlatformPermission[]>>(
-    (groups, permission) => {
-      const group = permission.group_name ?? 'outros'
-      groups[group] ??= []
-      groups[group].push(permission)
-      return groups
-    },
-    {},
-  )
+  const platformPermissionList = platformUsersQuery.data?.permissions ?? []
+  const tenantPermissionList = tenantPermissionsQuery.data?.permissions ?? []
+  const permissionGroupsList = permissionGroupsQuery.data ?? []
+  const scopeTenantsList = allTenantsQuery.data?.data ?? tenants?.data ?? []
 
   const tabs = [
     { id: 'info' as const, label: 'Identificação' },
@@ -887,7 +934,11 @@ export function SuperAdminPage() {
         <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-fit">
           <TabsTrigger value="tenants" className="gap-2">
             <Building2 className="h-4 w-4" />
-            Empresas registadas
+            {t('superAdminPage.registeredTenantsTab', { defaultValue: 'Empresas registadas' })}
+          </TabsTrigger>
+          <TabsTrigger value="permission-groups" className="gap-2">
+            <Layers className="h-4 w-4" />
+            {t('superAdminPage.permissionGroupsTab', { defaultValue: 'Grupos de permissões' })}
           </TabsTrigger>
           {canManagePlatformUsers && (
             <TabsTrigger value="platform-users" className="gap-2">
@@ -1057,6 +1108,106 @@ export function SuperAdminPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+          <TabsContent value="permission-groups">
+            <Card>
+              <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-base">
+                    {t('superAdminPage.permissionGroupsTitle', { defaultValue: 'Grupos de Permissões Reutilizáveis' })}
+                  </CardTitle>
+                  <CardDescription>
+                    {t('superAdminPage.permissionGroupsDescription', {
+                      defaultValue: 'Crie perfis de permissões (incluindo permissões por campo e salários) para vincular rapidamente a empresas e departamentos.',
+                    })}
+                  </CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    setEditingPermissionGroup(null)
+                    setPermissionGroupForm({ name: '', description: '', permissions: [] })
+                    setPermissionGroupDialogOpen(true)
+                  }}
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  {t('superAdminPage.createPermissionGroup', { defaultValue: 'Novo grupo' })}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {permissionGroupsQuery.isLoading ? (
+                  <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2.5 font-medium">{t('superAdminPage.name')}</th>
+                          <th className="px-3 py-2.5 font-medium">{t('common.description', { defaultValue: 'Descrição' })}</th>
+                          <th className="px-3 py-2.5 font-medium">{t('superAdminPage.assignedPermissions')}</th>
+                          <th className="px-3 py-2.5 text-right font-medium">{t('superAdminPage.actions')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {permissionGroupsList.map((group) => (
+                          <tr key={group.id} className="hover:bg-muted/30">
+                            <td className="px-3 py-2.5 font-medium">{group.name}</td>
+                            <td className="px-3 py-2.5 text-xs text-muted-foreground">{group.description || '—'}</td>
+                            <td className="px-3 py-2.5">
+                              <Badge variant="outline" className="text-xs">
+                                {group.permissions.length}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  title={t('common.edit')}
+                                  onClick={() => {
+                                    setEditingPermissionGroup(group)
+                                    setPermissionGroupForm({
+                                      name: group.name,
+                                      description: group.description ?? '',
+                                      permissions: [...group.permissions],
+                                    })
+                                    setPermissionGroupDialogOpen(true)
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                  disabled={deletePermissionGroup.isPending}
+                                  onClick={() => {
+                                    if (window.confirm(t('superAdminPage.confirmDeletePermissionGroup', { name: group.name, defaultValue: `Eliminar o grupo "${group.name}"?` }))) {
+                                      deletePermissionGroup.mutate(group.id)
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {permissionGroupsList.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
+                              {t('superAdminPage.noPermissionGroups', { defaultValue: 'Nenhum grupo de permissões criado.' })}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
         {canManagePlatformUsers && (
           <TabsContent value="platform-users">
@@ -1644,9 +1795,9 @@ export function SuperAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialog: Adicionar Utilizador ─────────────────────────────── */}
+      {/* ── Dialog: Adicionar Utilizador Plataforma ───────────────────── */}
       <Dialog open={platformUserDialogOpen} onOpenChange={setPlatformUserDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{t('superAdminPage.dialogTitle')}</DialogTitle>
             <DialogDescription>
@@ -1692,53 +1843,24 @@ export function SuperAdminPage() {
                   toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedPlatformPermissions.sourceUserName }))
                 }}
               />
-              <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border p-3">
-                {Object.entries(platformPermissionGroups).map(([group, permissions]) => (
-                  <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
-                    <details className="min-w-0 flex-1">
-                      <summary className="cursor-pointer text-sm font-medium">
-                        {t(`superAdminPage.permissionGroups.${group}`, { defaultValue: t('superAdminPage.otherPermissions') })}{' '}
-                        <span className="text-xs font-normal text-muted-foreground">({permissions.length})</span>
-                      </summary>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        {permissions.map((permission) => {
-                          const checked = platformUserForm.permissions.includes(permission.name)
-                          const required = permission.name === 'view_any_tenant'
-                          return (
-                            <label key={permission.name} className="flex items-start gap-2 text-xs">
-                              <input
-                                type="checkbox"
-                                className="mt-0.5"
-                                checked={checked}
-                                disabled={required}
-                                onChange={(event) => setPlatformUserForm((current) => ({
-                                  ...current,
-                                  permissions: event.target.checked
-                                    ? [...current.permissions, permission.name]
-                                    : current.permissions.filter((name) => name !== permission.name),
-                                }))}
-                              />
-                              <span>{getPermissionLabel(permission.name)}{required ? ` (${t('superAdminPage.required')})` : ''}</span>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    </details>
-                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={permissions.every(({ name }) => platformUserForm.permissions.includes(name))}
-                        onChange={(event) => setPlatformUserForm((current) => ({
-                          ...current,
-                          permissions: togglePermissionGroup(current.permissions, permissions, event.target.checked),
-                        }))}
-                      />
-                      {t('superAdminPage.selectAllGroup')}
-                    </label>
-                  </div>
-                ))}
-              </div>
+              <PermissionSelector
+                permissions={platformPermissionList}
+                selectedPermissions={platformUserForm.permissions}
+                lockedPermissions={['view_any_tenant']}
+                onChange={(permissions) => setPlatformUserForm((current) => ({ ...current, permissions }))}
+              />
             </div>
+
+            <TenantAccessScopeEditor
+              tenants={scopeTenantsList}
+              permissionGroups={permissionGroupsList}
+              allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : platformPermissionList}
+              accesses={platformUserAccesses}
+              onChange={setPlatformUserAccesses}
+              defaultRole="hr-manager"
+              basePermissions={platformUserForm.permissions}
+            />
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setPlatformUserDialogOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handlePlatformUserSubmit} disabled={createPlatformUser.isPending}>
@@ -1756,7 +1878,7 @@ export function SuperAdminPage() {
           if (!open) setEditingPlatformUser(null)
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{t('superAdminPage.editDialogTitle')}</DialogTitle>
             <DialogDescription>
@@ -1787,50 +1909,25 @@ export function SuperAdminPage() {
                 }}
               />
             </div>
-            <div className="max-h-[60vh] space-y-2 overflow-y-auto rounded-md border p-3">
-              {Object.entries(platformPermissionGroups).map(([group, permissions]) => (
-                <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
-                  <details className="min-w-0 flex-1">
-                    <summary className="cursor-pointer text-sm font-medium">
-                      {t(`superAdminPage.permissionGroups.${group}`, { defaultValue: t('superAdminPage.otherPermissions') })}{' '}
-                      <span className="text-xs font-normal text-muted-foreground">({permissions.length})</span>
-                    </summary>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      {permissions.map((permission) => {
-                        const checked = platformUserPermissions.includes(permission.name)
-                        const required = permission.name === 'view_any_tenant'
-                        return (
-                          <label key={permission.name} className="flex items-start gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5"
-                              checked={checked}
-                              disabled={required}
-                              onChange={(event) => setPlatformUserPermissions((current) => (
-                                event.target.checked
-                                  ? [...current, permission.name]
-                                  : current.filter((name) => name !== permission.name)
-                              ))}
-                            />
-                            <span>{getPermissionLabel(permission.name)}{required ? ` (${t('superAdminPage.required')})` : ''}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  </details>
-                  <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={permissions.every(({ name }) => platformUserPermissions.includes(name))}
-                      onChange={(event) => setPlatformUserPermissions((current) => (
-                        togglePermissionGroup(current, permissions, event.target.checked)
-                      ))}
-                    />
-                    {t('superAdminPage.selectAllGroup')}
-                  </label>
-                </div>
-              ))}
-            </div>
+
+            <PermissionSelector
+              permissions={platformPermissionList}
+              selectedPermissions={platformUserPermissions}
+              lockedPermissions={['view_any_tenant']}
+              onChange={setPlatformUserPermissions}
+              maxHeightClass="max-h-[45vh]"
+            />
+
+            <TenantAccessScopeEditor
+              tenants={scopeTenantsList}
+              permissionGroups={permissionGroupsList}
+              allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : platformPermissionList}
+              accesses={editingPlatformUserAccesses}
+              onChange={setEditingPlatformUserAccesses}
+              defaultRole="hr-manager"
+              basePermissions={platformUserPermissions}
+            />
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditingPlatformUser(null)}>{t('common.cancel')}</Button>
               <Button onClick={handlePlatformUserPermissionsSubmit} disabled={updatePlatformUser.isPending}>
@@ -1843,30 +1940,34 @@ export function SuperAdminPage() {
       </Dialog>
 
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Novo utilizador — {selectedTenant?.name}</DialogTitle>
-            <DialogDescription>Criar um novo utilizador e definir o papel e permissões para esta empresa.</DialogDescription>
+            <DialogTitle>
+              {t('superAdminPage.newTenantUserTitle', { tenant: selectedTenant?.name ?? '', defaultValue: `Novo utilizador — ${selectedTenant?.name ?? ''}` })}
+            </DialogTitle>
+            <DialogDescription>
+              {t('superAdminPage.newTenantUserDescription', { defaultValue: 'Criar um novo utilizador e definir o papel, permissões e empresas/departamentos associados.' })}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Nome *</Label>
+                <Label>{t('superAdminPage.name')} *</Label>
                 <Input value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
                 {userErrors.name && <p className="text-xs text-destructive">{userErrors.name}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Email *</Label>
+                <Label>{t('superAdminPage.email')} *</Label>
                 <Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
                 {userErrors.email && <p className="text-xs text-destructive">{userErrors.email}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Palavra-passe *</Label>
+                <Label>{t('superAdminPage.initialPassword')} *</Label>
                 <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
                 {userErrors.password && <p className="text-xs text-destructive">{userErrors.password}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Papel *</Label>
+                <Label>{t('superAdminPage.roleLabel', { defaultValue: 'Papel' })} *</Label>
                 <select
                   className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                   value={userForm.role}
@@ -1882,9 +1983,9 @@ export function SuperAdminPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold">Permissões</h3>
+                  <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
                   <p className="text-xs text-muted-foreground">
-                    Pré-selecionadas pelo papel; pode personalizar livremente ({userForm.permissions.length} selecionadas).
+                    {t('superAdminPage.selectedCount', { count: userForm.permissions.length, defaultValue: `${userForm.permissions.length} selecionadas` })}
                   </p>
                 </div>
                 <Button
@@ -1893,75 +1994,51 @@ export function SuperAdminPage() {
                   variant="outline"
                   onClick={() => handleNewUserRoleChange(userForm.role)}
                 >
-                  Restaurar do papel
+                  {t('superAdminPage.restoreRolePermissions', { defaultValue: 'Restaurar do papel' })}
                 </Button>
               </div>
               <CopyPermissionsControls
                 users={tenantUsers ?? []}
                 copied={copiedTenantPermissions}
-                selectPlaceholder="Copiar permissões de utilizador..."
-                pasteLabel={`Colar de ${copiedTenantPermissions?.sourceUserName ?? ''}`}
+                selectPlaceholder={t('superAdminPage.copyFromUser')}
+                pasteLabel={t('superAdminPage.pastePermissionsFrom', { name: copiedTenantPermissions?.sourceUserName ?? '' })}
                 onSelectUser={(userId) => {
                   const source = (tenantUsers ?? []).find((u) => u.id === userId)
                   if (!source) return
                   const next = normalizeTenantPermissions(source.permissions ?? [])
                   setUserForm((current) => ({ ...current, permissions: next }))
-                  toast.success(`Permissões copiadas de ${source.name}.`)
+                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: source.name }))
                 }}
                 onPasteCopied={() => {
                   if (!copiedTenantPermissions) return
                   const next = normalizeTenantPermissions(copiedTenantPermissions.permissions)
                   setUserForm((current) => ({ ...current, permissions: next }))
-                  toast.success(`Permissões de ${copiedTenantPermissions.sourceUserName} aplicadas.`)
+                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedTenantPermissions.sourceUserName }))
                 }}
               />
-              <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border p-3">
-                {Object.entries(tenantPermissionGroups).map(([group, permissions]) => (
-                  <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
-                    <details className="min-w-0 flex-1">
-                      <summary className="cursor-pointer text-sm font-medium">
-                        {t(`superAdminPage.permissionGroups.${group}`, { defaultValue: group })}{' '}
-                        <span className="text-xs font-normal text-muted-foreground">({permissions.length})</span>
-                      </summary>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        {permissions.map((permission) => (
-                          <label key={permission.name} className="flex items-start gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5"
-                              checked={userForm.permissions.includes(permission.name)}
-                              onChange={(event) => setUserForm((current) => ({
-                                ...current,
-                                permissions: event.target.checked
-                                  ? [...current.permissions, permission.name]
-                                  : current.permissions.filter((name) => name !== permission.name),
-                              }))}
-                            />
-                            <span>{getPermissionLabel(permission.name)}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </details>
-                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={permissions.every(({ name }) => userForm.permissions.includes(name))}
-                        onChange={(event) => setUserForm((current) => ({
-                          ...current,
-                          permissions: toggleTenantPermissionGroup(current.permissions, permissions, event.target.checked),
-                        }))}
-                      />
-                      {t('superAdminPage.selectAllGroup')}
-                    </label>
-                  </div>
-                ))}
-              </div>
+              <PermissionSelector
+                permissions={tenantPermissionList}
+                selectedPermissions={userForm.permissions}
+                onChange={(permissions) => setUserForm((current) => ({ ...current, permissions }))}
+                maxHeightClass="max-h-64"
+              />
             </div>
+
+            <TenantAccessScopeEditor
+              tenants={scopeTenantsList}
+              permissionGroups={permissionGroupsList}
+              allPermissions={tenantPermissionList}
+              accesses={userTenantAccesses}
+              onChange={setUserTenantAccesses}
+              defaultRole={userForm.role}
+              basePermissions={userForm.permissions}
+            />
+
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setUserDialogOpen(false)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => setUserDialogOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleUserSubmit} disabled={createUser.isPending}>
                 {createUser.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                Criar utilizador
+                {t('superAdminPage.createUser')}
               </Button>
             </div>
           </div>
@@ -1975,20 +2052,24 @@ export function SuperAdminPage() {
           if (!open) setEditingTenantUser(null)
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
-              Permissões — {editingTenantUser?.name}
+              {t('superAdminPage.permissions')} — {editingTenantUser?.name}
             </DialogTitle>
             <DialogDescription>
-              Gerir papel, estado e permissões de {editingTenantUser?.email} em {selectedTenant?.name}.
+              {t('superAdminPage.editTenantUserDescription', {
+                email: editingTenantUser?.email ?? '',
+                tenant: selectedTenant?.name ?? '',
+                defaultValue: `Gerir papel, estado e permissões de ${editingTenantUser?.email ?? ''} em ${selectedTenant?.name ?? ''}.`,
+              })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Papel</Label>
+                <Label>{t('superAdminPage.roleLabel', { defaultValue: 'Papel' })}</Label>
                 <select
                   className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                   value={tenantUserRole}
@@ -2008,16 +2089,16 @@ export function SuperAdminPage() {
                     onChange={(e) => setTenantUserActive(e.target.checked)}
                     className="h-4 w-4"
                   />
-                  Utilizador ativo
+                  <span>{t('superAdminPage.activeUser', { defaultValue: 'Utilizador ativo' })}</span>
                 </label>
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold">Permissões</h3>
+                  <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {tenantUserPermissions.length} permissões selecionadas
+                    {t('superAdminPage.selectedCount', { count: tenantUserPermissions.length, defaultValue: `${tenantUserPermissions.length} selecionadas` })}
                   </p>
                 </div>
                 <Button
@@ -2026,70 +2107,48 @@ export function SuperAdminPage() {
                   variant="outline"
                   onClick={() => handleTenantUserRoleChange(tenantUserRole)}
                 >
-                  Aplicar permissões do papel
+                  {t('superAdminPage.applyRolePermissions', { defaultValue: 'Aplicar permissões do papel' })}
                 </Button>
               </div>
               <CopyPermissionsControls
                 users={(tenantUsers ?? []).filter((u) => u.id !== editingTenantUser?.id)}
                 copied={copiedTenantPermissions && copiedTenantPermissions.sourceUserId !== editingTenantUser?.id ? copiedTenantPermissions : null}
-                selectPlaceholder="Copiar permissões de utilizador..."
-                pasteLabel={`Colar de ${copiedTenantPermissions?.sourceUserName ?? ''}`}
+                selectPlaceholder={t('superAdminPage.copyFromUser')}
+                pasteLabel={t('superAdminPage.pastePermissionsFrom', { name: copiedTenantPermissions?.sourceUserName ?? '' })}
                 onSelectUser={(userId) => {
                   const source = (tenantUsers ?? []).find((u) => u.id === userId)
                   if (!source) return
                   const next = normalizeTenantPermissions(source.permissions ?? [])
                   setTenantUserPermissions(next)
-                  toast.success(`Permissões copiadas de ${source.name}.`)
+                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: source.name }))
                 }}
                 onPasteCopied={() => {
                   if (!copiedTenantPermissions) return
                   const next = normalizeTenantPermissions(copiedTenantPermissions.permissions)
                   setTenantUserPermissions(next)
-                  toast.success(`Permissões de ${copiedTenantPermissions.sourceUserName} aplicadas.`)
+                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedTenantPermissions.sourceUserName }))
                 }}
               />
-              <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-md border p-3">
-                {Object.entries(tenantPermissionGroups).map(([group, permissions]) => (
-                  <div key={group} className="flex items-start gap-3 rounded border border-border/70 px-3 py-2">
-                    <details className="min-w-0 flex-1">
-                      <summary className="cursor-pointer text-sm font-medium">
-                        {t(`superAdminPage.permissionGroups.${group}`, { defaultValue: group })}{' '}
-                        <span className="text-xs font-normal text-muted-foreground">({permissions.length})</span>
-                      </summary>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        {permissions.map((permission) => (
-                          <label key={permission.name} className="flex items-start gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5"
-                              checked={tenantUserPermissions.includes(permission.name)}
-                              onChange={(event) => setTenantUserPermissions((current) => (
-                                event.target.checked
-                                  ? [...current, permission.name]
-                                  : current.filter((name) => name !== permission.name)
-                              ))}
-                            />
-                            <span>{getPermissionLabel(permission.name)}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </details>
-                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={permissions.every(({ name }) => tenantUserPermissions.includes(name))}
-                        onChange={(event) => setTenantUserPermissions((current) => (
-                          toggleTenantPermissionGroup(current, permissions, event.target.checked)
-                        ))}
-                      />
-                      {t('superAdminPage.selectAllGroup')}
-                    </label>
-                  </div>
-                ))}
-              </div>
+              <PermissionSelector
+                permissions={tenantPermissionList}
+                selectedPermissions={tenantUserPermissions}
+                onChange={setTenantUserPermissions}
+                maxHeightClass="max-h-[45vh]"
+              />
             </div>
+
+            <TenantAccessScopeEditor
+              tenants={scopeTenantsList}
+              permissionGroups={permissionGroupsList}
+              allPermissions={tenantPermissionList}
+              accesses={editingTenantUserAccesses}
+              onChange={setEditingTenantUserAccesses}
+              defaultRole={tenantUserRole}
+              basePermissions={tenantUserPermissions}
+            />
+
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditingTenantUser(null)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => setEditingTenantUser(null)}>{t('common.cancel')}</Button>
               <Button
                 onClick={() => {
                   if (!editingTenantUser) return
@@ -2098,12 +2157,73 @@ export function SuperAdminPage() {
                     role: tenantUserRole,
                     is_active: tenantUserActive,
                     permissions: tenantUserPermissions,
+                    tenant_accesses: editingTenantUserAccesses,
                   })
                 }}
                 disabled={updateTenantUser.isPending}
               >
                 {updateTenantUser.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                Guardar permissões
+                {t('superAdminPage.savePermissions')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Criar / Editar Grupo de Permissões ───────────────── */}
+      <Dialog open={permissionGroupDialogOpen} onOpenChange={setPermissionGroupDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPermissionGroup
+                ? t('superAdminPage.editPermissionGroup', { defaultValue: 'Editar grupo de permissões' })
+                : t('superAdminPage.createPermissionGroup', { defaultValue: 'Novo grupo de permissões' })}
+            </DialogTitle>
+            <DialogDescription>
+              {t('superAdminPage.permissionGroupModalDescription', {
+                defaultValue: 'Defina as ações de módulo e permissões por campo que fazem parte deste grupo.',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>{t('superAdminPage.name')} *</Label>
+                <Input
+                  value={permissionGroupForm.name}
+                  onChange={(e) => setPermissionGroupForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder={t('superAdminPage.permissionGroupNamePlaceholder', { defaultValue: 'Ex: Operador Folha Sem Salários' })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('common.description', { defaultValue: 'Descrição' })}</Label>
+                <Input
+                  value={permissionGroupForm.description}
+                  onChange={(e) => setPermissionGroupForm((prev) => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <PermissionSelector
+              permissions={tenantPermissionList}
+              selectedPermissions={permissionGroupForm.permissions}
+              onChange={(permissions) => setPermissionGroupForm((prev) => ({ ...prev, permissions }))}
+              maxHeightClass="max-h-[50vh]"
+            />
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPermissionGroupDialogOpen(false)}>{t('common.cancel')}</Button>
+              <Button
+                disabled={!permissionGroupForm.name.trim() || permissionGroupForm.permissions.length === 0 || savePermissionGroup.isPending}
+                onClick={() => savePermissionGroup.mutate({
+                  id: editingPermissionGroup?.id,
+                  name: permissionGroupForm.name.trim(),
+                  description: permissionGroupForm.description.trim(),
+                  permissions: permissionGroupForm.permissions,
+                })}
+              >
+                {savePermissionGroup.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                {t('superAdminPage.savePermissions')}
               </Button>
             </div>
           </div>

@@ -9,6 +9,9 @@ class BenefitResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $canAmounts = ! $user || $user->hasFieldPermission('benefit', 'amounts', 'view');
+
         return [
             'id' => $this->id,
             'employee_id' => $this->employee_id,
@@ -17,9 +20,9 @@ class BenefitResource extends JsonResource
             'type_label' => $this->type_label,
             'amount_type' => $this->amount_type,
             'amount_type_label' => $this->amount_type_label,
-            'amount' => (float) $this->amount,
-            'percentage' => $this->percentage ? (float) $this->percentage : null,
-            'amount_label' => $this->amount_label,
+            'amount' => $canAmounts ? (float) $this->amount : null,
+            'percentage' => $canAmounts ? ($this->percentage ? (float) $this->percentage : null) : null,
+            'amount_label' => $canAmounts ? $this->amount_label : null,
             'is_taxable' => (bool) $this->is_taxable,
             'provider' => $this->provider,
             'start_date' => $this->start_date?->toDateString(),

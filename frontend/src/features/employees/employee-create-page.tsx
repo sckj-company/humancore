@@ -49,6 +49,11 @@ import {
 import { PageHeader, ErrorState } from '@/components/shared/page-header'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { useAuthStore, hasPermission } from '@/stores/auth-store'
+import {
+  ANGOLA_DOCUMENT_LABELS,
+  ANGOLA_DOCUMENT_PRESETS,
+  ANGOLA_DOCUMENT_TYPE_KEYS,
+} from '@/lib/document-presets'
 import { toast } from 'sonner'
 import { useQuery } from '@tanstack/react-query'
 import type { DocumentRequirement, Paginated, SettingGroups } from '@/types'
@@ -70,16 +75,6 @@ interface IdentityOcrFields {
   id_document_number?: string
   id_document_expiry?: string
 }
-
-const DOCUMENT_TYPE_OPTIONS: DocumentRequirement[] = [
-  { type: 'contract', label: 'Contrato de Trabalho' },
-  { type: 'id_card', label: 'Documento de Identificação' },
-  { type: 'cv', label: 'Currículo (CV)' },
-  { type: 'certificate', label: 'Certificado / Diploma' },
-  { type: 'bank_proof', label: 'Comprovativo Bancário' },
-  { type: 'medical', label: 'Atestado Médico' },
-  { type: 'other', label: 'Outro Documento' },
-]
 
 export function EmployeeCreatePage() {
   const { t } = useTranslation()
@@ -179,12 +174,31 @@ export function EmployeeCreatePage() {
     queryFn: () => api.get<SettingGroups>('settings', { group: 'documents' }),
     enabled: canCreate,
   })
+  const getDocumentTypeLabel = (type: string, fallback?: string) =>
+    ANGOLA_DOCUMENT_TYPE_KEYS.has(type) || type === 'other'
+      ? t(`settingsPage.documentTypes.${type}`, {
+          defaultValue: fallback || ANGOLA_DOCUMENT_LABELS[type] || type,
+        })
+      : (fallback || type)
+
   const requiredDocuments = normalizeDocumentRequirements(
     documentSettings?.documents?.find((setting) => setting.key === 'required')?.value,
-  )
+  ).map((document) => ({
+    ...document,
+    label: getDocumentTypeLabel(document.type, document.label),
+  }))
+
   const documentTypeOptions = [...new Map(
-    [...DOCUMENT_TYPE_OPTIONS, ...requiredDocuments].map((document) => [document.type, document]),
+    [
+      ...ANGOLA_DOCUMENT_PRESETS.map((document) => ({
+        type: document.type,
+        label: getDocumentTypeLabel(document.type, document.label),
+      })),
+      ...requiredDocuments,
+      { type: 'other', label: getDocumentTypeLabel('other', 'Outro Documento') },
+    ].map((document) => [document.type, document]),
   ).values()]
+
   const missingRequiredDocuments = requiredDocuments.filter(
     (requirement) => !documents.some((document) => document.document_type === requirement.type),
   )
@@ -194,7 +208,7 @@ export function EmployeeCreatePage() {
     || missingRequiredDocuments.length > 0
 
   if (!canCreate) {
-    return <ErrorState message="Não tem permissão para criar funcionários." />
+    return <ErrorState message={t('employeeCreate.noPermission')} />
   }
 
   // Handle Photo selection
@@ -202,7 +216,7 @@ export function EmployeeCreatePage() {
     const file = e.target.files?.[0]
     if (file) {
       if (!file.type.startsWith('image/')) {
-        toast.error('Por favor selecione uma imagem válida (JPG, PNG, WebP).')
+        toast.error(t('employeeCreate.errors.invalidPhoto'))
         return
       }
       setPhotoFile(file)
@@ -237,9 +251,9 @@ export function EmployeeCreatePage() {
         ...(fields.id_document_number ? { id_document_number: fields.id_document_number } : {}),
         ...(fields.id_document_expiry ? { id_document_expiry: fields.id_document_expiry } : {}),
       }))
-      toast.success('Dados lidos. Confirme e corrija os campos antes de continuar.')
+      toast.success(t('employeeCreate.ocr.success'))
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Não foi possível ler o documento.'))
+      toast.error(getApiErrorMessage(err, t('employeeCreate.ocr.error')))
     } finally {
       setIsReadingIdentity(false)
     }
@@ -256,17 +270,28 @@ export function EmployeeCreatePage() {
       const isDoc = file.name.endsWith('.doc') || file.name.endsWith('.docx')
 
       if (!isImg && !isPdf && !isDoc) {
-        toast.error(`O ficheiro ${file.name} não é suportado. Use PDF, imagens ou documentos.`)
+        toast.error(t('employeeCreate.errors.unsupportedFile', { name: file.name }))
         return
       }
 
       let defaultType = 'other'
       const lower = file.name.toLowerCase()
       if (lower.includes('contrat') || lower.includes('contract')) defaultType = 'contract'
-      else if (lower.includes('bi') || lower.includes('passaport') || lower.includes('identidad')) defaultType = 'id_card'
+      else if (lower.includes('passaport')) defaultType = 'passport'
+      else if (lower.includes('visto')) defaultType = 'work_visa'
+      else if (lower.includes('bi') || lower.includes('identidad')) defaultType = 'id_card'
+      else if (lower.includes('nif')) defaultType = 'nif_card'
+      else if (lower.includes('inss')) defaultType = 'inss_card'
       else if (lower.includes('cv') || lower.includes('curriculo')) defaultType = 'cv'
       else if (lower.includes('diploma') || lower.includes('certificad')) defaultType = 'certificate'
+      else if (lower.includes('criminal') || lower.includes('registo')) defaultType = 'criminal_record'
+      else if (lower.includes('medic') || lower.includes('atestado')) defaultType = 'medical'
+      else if (lower.includes('vacin')) defaultType = 'vaccination_card'
+      else if (lower.includes('resid')) defaultType = 'residence_proof'
       else if (lower.includes('iban') || lower.includes('nib') || lower.includes('banc')) defaultType = 'bank_proof'
+      else if (lower.includes('termo')) defaultType = 'term'
+      else if (lower.includes('conduc')) defaultType = 'driver_license'
+      else if (lower.includes('militar')) defaultType = 'military_record'
 
       newDocs.push({
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -279,7 +304,7 @@ export function EmployeeCreatePage() {
 
     if (newDocs.length > 0) {
       setDocuments((prev) => [...prev, ...newDocs])
-      toast.success(`${newDocs.length} documento(s) adicionado(s).`)
+      toast.success(t('employeeCreate.documents.addedCount', { count: newDocs.length }))
     }
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -299,7 +324,7 @@ export function EmployeeCreatePage() {
     const isPdf = file.type === 'application/pdf'
     const isDoc = /\.docx?$/i.test(file.name)
     if (!isImg && !isPdf && !isDoc) {
-      toast.error(`O ficheiro ${file.name} não é suportado. Use PDF, imagens ou documentos.`)
+      toast.error(t('employeeCreate.errors.unsupportedFile', { name: file.name }))
       return
     }
 
@@ -336,12 +361,12 @@ export function EmployeeCreatePage() {
     const errors: Record<string, string> = {}
 
     // Validation - Tab 1
-    if (!basicData.first_name.trim()) errors.first_name = 'O nome próprio é obrigatório.'
-    if (!basicData.last_name.trim()) errors.last_name = 'O apelido é obrigatório.'
+    if (!basicData.first_name.trim()) errors.first_name = t('employeeCreate.validation.firstNameRequired')
+    if (!basicData.last_name.trim()) errors.last_name = t('employeeCreate.validation.lastNameRequired')
     if (!basicData.email.trim()) {
-      errors.email = 'O email é obrigatório.'
+      errors.email = t('employeeCreate.validation.emailRequired')
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(basicData.email)) {
-      errors.email = 'Insira um email válido.'
+      errors.email = t('employeeCreate.validation.emailInvalid')
     }
 
     // Validation - Tab 2 (Dates)
@@ -350,11 +375,13 @@ export function EmployeeCreatePage() {
       contractData.contract_end_date &&
       contractData.contract_end_date < contractData.contract_start_date
     ) {
-      errors.contract_end_date = 'A data de término deve ser posterior ou igual à data de início.'
+      errors.contract_end_date = t('employeeCreate.validation.contractEndBeforeStart')
     }
 
     if (missingRequiredDocuments.length > 0) {
-      errors.documents = `Anexe os documentos obrigatórios: ${missingRequiredDocuments.map((document) => document.label).join(', ')}.`
+      errors.documents = t('employeeCreate.validation.missingRequiredDocuments', {
+        documents: missingRequiredDocuments.map((document) => document.label).join(', '),
+      })
     }
 
     if (Object.keys(errors).length > 0) {
@@ -362,7 +389,7 @@ export function EmployeeCreatePage() {
       // Switch to the tab with errors
       if (errors.first_name || errors.last_name || errors.email) {
         setActiveTab('dados-basicos')
-        toast.error('Preencha os campos obrigatórios na aba Dados Básicos.')
+        toast.error(t('employeeCreate.validation.fillRequiredBasicFields'))
       } else if (errors.contract_end_date) {
         setActiveTab('contrato')
         toast.error(errors.contract_end_date)
@@ -410,10 +437,10 @@ export function EmployeeCreatePage() {
 
       await api.upload('employees', formData)
 
-      toast.success('Funcionário, contrato e documentos registados com sucesso!')
+      toast.success(t('employeeCreate.saveSuccess'))
       navigate('/employees')
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Erro ao criar registo de funcionário.'))
+      toast.error(getApiErrorMessage(err, t('employeeCreate.saveError')))
     } finally {
       setIsSubmitting(false)
     }
@@ -434,14 +461,14 @@ export function EmployeeCreatePage() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <span>{t('employees.title', { defaultValue: 'Funcionários' })}</span>
+        <span>{t('employees.title')}</span>
         <span>/</span>
-        <span className="text-foreground font-medium">Novo Cadastro</span>
+        <span className="text-foreground font-medium">{t('employeeCreate.breadcrumb')}</span>
       </div>
 
       <PageHeader
-        title={t('employees.add', { defaultValue: 'Registar Funcionário' })}
-        description="Formulário completo de admissão: dados pessoais, organizacionais, contrato e documentos anexos."
+        title={t('employees.add')}
+        description={t('employeeCreate.pageDescription')}
       />
 
       {/* Main Two-Tab Form */}
@@ -450,14 +477,14 @@ export function EmployeeCreatePage() {
           <TabsList className="grid w-full grid-cols-2 max-w-md h-11 p-1 bg-muted">
             <TabsTrigger value="dados-basicos" className="gap-2 text-sm font-medium">
               <User className="h-4 w-4" />
-              1. Dados Básicos
+              {t('employeeCreate.tabs.basicData')}
               {Object.keys(formErrors).some((k) => ['first_name', 'last_name', 'email'].includes(k)) && (
                 <span className="h-2 w-2 rounded-full bg-destructive" />
               )}
             </TabsTrigger>
             <TabsTrigger value="contrato" className="gap-2 text-sm font-medium">
               <FileText className="h-4 w-4" />
-              2. Contrato & Documentos
+              {t('employeeCreate.tabs.contractDocuments')}
               {documents.length > 0 && (
                 <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
                   {documents.length}
@@ -473,10 +500,10 @@ export function EmployeeCreatePage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <User className="h-4 w-4 text-primary" />
-                  Identificação Pessoal
+                  {t('employeeCreate.sections.personalId.title')}
                 </CardTitle>
                 <CardDescription>
-                  Dados de identificação civil, nascimento e fotografia de perfil.
+                  {t('employeeCreate.sections.personalId.description')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -489,9 +516,9 @@ export function EmployeeCreatePage() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="space-y-1.5 text-center sm:text-left flex-1">
-                    <div className="text-sm font-medium">Fotografia do Funcionário</div>
+                    <div className="text-sm font-medium">{t('employeeCreate.photo.title')}</div>
                     <p className="text-xs text-muted-foreground">
-                      Formatos suportados: JPG, PNG ou WebP. Máximo de 2MB.
+                      {t('employeeCreate.photo.hint')}
                     </p>
                     <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
                       <input
@@ -508,7 +535,7 @@ export function EmployeeCreatePage() {
                         onClick={() => photoInputRef.current?.click()}
                       >
                         <Upload className="mr-1.5 h-3.5 w-3.5" />
-                        {photoFile ? 'Alterar Foto' : 'Carregar Foto'}
+                        {photoFile ? t('employeeCreate.photo.change') : t('employeeCreate.photo.upload')}
                       </Button>
                       {photoFile && (
                         <Button
@@ -518,7 +545,7 @@ export function EmployeeCreatePage() {
                           onClick={handleRemovePhoto}
                           className="text-destructive hover:text-destructive"
                         >
-                          <X className="mr-1 h-3.5 w-3.5" /> Remover
+                          <X className="mr-1 h-3.5 w-3.5" /> {t('employeeCreate.photo.remove')}
                         </Button>
                       )}
                     </div>
@@ -529,11 +556,10 @@ export function EmployeeCreatePage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <FileSearch className="h-4 w-4 text-primary" />
-                      Preencher a partir do BI
+                      {t('employeeCreate.ocr.title')}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Carregue uma imagem ou um PDF digitalizado (máximo 5 MB). Os dados reconhecidos serão
-                      apenas sugestões e devem ser confirmados antes de guardar.
+                      {t('employeeCreate.ocr.description')}
                     </p>
                   </div>
                   <input
@@ -544,7 +570,7 @@ export function EmployeeCreatePage() {
                     onChange={(event) => {
                       const file = event.target.files?.[0]
                       if (file && file.size > 5 * 1024 * 1024) {
-                        toast.error('O documento não pode exceder 5 MB.')
+                        toast.error(t('employeeCreate.ocr.maxSizeError'))
                         setIdentityImage(null)
                         event.target.value = ''
                         return
@@ -561,7 +587,7 @@ export function EmployeeCreatePage() {
                       onClick={() => identityInputRef.current?.click()}
                     >
                       <Upload className="mr-1.5 h-3.5 w-3.5" />
-                      {identityImage ? 'Alterar documento do BI' : 'Selecionar imagem ou PDF do BI'}
+                      {identityImage ? t('employeeCreate.ocr.changeFile') : t('employeeCreate.ocr.selectFile')}
                     </Button>
                     {identityImage && (
                       <span className="text-xs text-muted-foreground">{identityImage.name}</span>
@@ -575,8 +601,7 @@ export function EmployeeCreatePage() {
                       onCheckedChange={(checked) => setIdentityOcrConsent(checked === true)}
                     />
                     <label htmlFor="identity-ocr-consent" className="text-xs leading-relaxed cursor-pointer">
-                      Confirmo que tenho autorização do titular para processar o BI. A imagem será enviada
-                      ao OCR.space, um serviço externo, para leitura.
+                      {t('employeeCreate.ocr.consent')}
                     </label>
                   </div>
                   <Button
@@ -590,13 +615,13 @@ export function EmployeeCreatePage() {
                     ) : (
                       <FileSearch className="mr-1.5 h-3.5 w-3.5" />
                     )}
-                    {isReadingIdentity ? 'A ler documento…' : 'Ler dados do BI'}
+                    {isReadingIdentity ? t('employeeCreate.ocr.reading') : t('employeeCreate.ocr.readButton')}
                   </Button>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-2">
-                    <Label htmlFor="first_name">Nome Próprio *</Label>
+                    <Label htmlFor="first_name">{t('employeeCreate.fields.firstName')} *</Label>
                     <Input
                       id="first_name"
                       value={basicData.first_name}
@@ -604,7 +629,7 @@ export function EmployeeCreatePage() {
                         setBasicData((p) => ({ ...p, first_name: e.target.value }))
                         if (formErrors.first_name) setFormErrors((p) => ({ ...p, first_name: '' }))
                       }}
-                      placeholder="Ex: João"
+                      placeholder={t('employeeCreate.placeholders.firstName')}
                     />
                     {formErrors.first_name && (
                       <p className="text-xs text-destructive">{formErrors.first_name}</p>
@@ -612,7 +637,7 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="last_name">Apelido (Sobrenome) *</Label>
+                    <Label htmlFor="last_name">{t('employeeCreate.fields.lastName')} *</Label>
                     <Input
                       id="last_name"
                       value={basicData.last_name}
@@ -620,7 +645,7 @@ export function EmployeeCreatePage() {
                         setBasicData((p) => ({ ...p, last_name: e.target.value }))
                         if (formErrors.last_name) setFormErrors((p) => ({ ...p, last_name: '' }))
                       }}
-                      placeholder="Ex: Silva"
+                      placeholder={t('employeeCreate.placeholders.lastName')}
                     />
                     {formErrors.last_name && (
                       <p className="text-xs text-destructive">{formErrors.last_name}</p>
@@ -628,7 +653,7 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="gender">Género</Label>
+                    <Label htmlFor="gender">{t('employeeCreate.fields.gender')}</Label>
                     <Select
                       value={basicData.gender}
                       onValueChange={(val: 'male' | 'female' | 'other') =>
@@ -639,15 +664,15 @@ export function EmployeeCreatePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="male">Masculino</SelectItem>
-                        <SelectItem value="female">Feminino</SelectItem>
-                        <SelectItem value="other">Outro</SelectItem>
+                        <SelectItem value="male">{t('employeeCreate.options.gender.male')}</SelectItem>
+                        <SelectItem value="female">{t('employeeCreate.options.gender.female')}</SelectItem>
+                        <SelectItem value="other">{t('employeeCreate.options.gender.other')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="birth_date">Data de Nascimento</Label>
+                    <Label htmlFor="birth_date">{t('employeeCreate.fields.birthDate')}</Label>
                     <Input
                       id="birth_date"
                       type="date"
@@ -657,7 +682,7 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="marital_status">Estado Civil</Label>
+                    <Label htmlFor="marital_status">{t('employeeCreate.fields.maritalStatus')}</Label>
                     <Select
                       value={basicData.marital_status}
                       onValueChange={(val: 'single' | 'married' | 'divorced' | 'widowed') =>
@@ -668,26 +693,26 @@ export function EmployeeCreatePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="single">Solteiro(a)</SelectItem>
-                        <SelectItem value="married">Casado(a)</SelectItem>
-                        <SelectItem value="divorced">Divorciado(a)</SelectItem>
-                        <SelectItem value="widowed">Viúvo(a)</SelectItem>
+                        <SelectItem value="single">{t('employeeCreate.options.maritalStatus.single')}</SelectItem>
+                        <SelectItem value="married">{t('employeeCreate.options.maritalStatus.married')}</SelectItem>
+                        <SelectItem value="divorced">{t('employeeCreate.options.maritalStatus.divorced')}</SelectItem>
+                        <SelectItem value="widowed">{t('employeeCreate.options.maritalStatus.widowed')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="nationality">Nacionalidade</Label>
+                    <Label htmlFor="nationality">{t('employeeCreate.fields.nationality')}</Label>
                     <Input
                       id="nationality"
                       value={basicData.nationality}
                       onChange={(e) => setBasicData((p) => ({ ...p, nationality: e.target.value }))}
-                      placeholder="Ex: Angolana"
+                      placeholder={t('employeeCreate.placeholders.nationality')}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="id_document_type">Tipo de Documento</Label>
+                    <Label htmlFor="id_document_type">{t('employeeCreate.fields.idDocumentType')}</Label>
                     <Select
                       value={basicData.id_document_type}
                       onValueChange={(val) => setBasicData((p) => ({ ...p, id_document_type: val }))}
@@ -696,28 +721,28 @@ export function EmployeeCreatePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="BI">Bilhete de Identidade (BI)</SelectItem>
-                        <SelectItem value="Passaporte">Passaporte</SelectItem>
-                        <SelectItem value="Cartão de Residente">Cartão de Residente</SelectItem>
-                        <SelectItem value="Outro">Outro</SelectItem>
+                        <SelectItem value="BI">{t('employeeCreate.options.idDocumentType.BI')}</SelectItem>
+                        <SelectItem value="Passaporte">{t('employeeCreate.options.idDocumentType.passport')}</SelectItem>
+                        <SelectItem value="Cartão de Residente">{t('employeeCreate.options.idDocumentType.residentCard')}</SelectItem>
+                        <SelectItem value="Outro">{t('employeeCreate.options.idDocumentType.other')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="id_document_number">Número do Documento</Label>
+                    <Label htmlFor="id_document_number">{t('employeeCreate.fields.idDocumentNumber')}</Label>
                     <Input
                       id="id_document_number"
                       value={basicData.id_document_number}
                       onChange={(e) =>
                         setBasicData((p) => ({ ...p, id_document_number: e.target.value }))
                       }
-                      placeholder="Ex: 004928123LA042"
+                      placeholder={t('employeeCreate.placeholders.idDocumentNumber')}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="id_document_expiry">Validade do Documento</Label>
+                    <Label htmlFor="id_document_expiry">{t('employeeCreate.fields.idDocumentExpiry')}</Label>
                     <Input
                       id="id_document_expiry"
                       type="date"
@@ -729,24 +754,24 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="tax_id">NIF (Número de Identificação Fiscal)</Label>
+                    <Label htmlFor="tax_id">{t('employeeCreate.fields.taxId')}</Label>
                     <Input
                       id="tax_id"
                       value={basicData.tax_id}
                       onChange={(e) => setBasicData((p) => ({ ...p, tax_id: e.target.value }))}
-                      placeholder="Ex: 5418291024"
+                      placeholder={t('employeeCreate.placeholders.taxId')}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="social_security_id">Nº da Segurança Social (INSS)</Label>
+                    <Label htmlFor="social_security_id">{t('employeeCreate.fields.socialSecurityId')}</Label>
                     <Input
                       id="social_security_id"
                       value={basicData.social_security_id}
                       onChange={(e) =>
                         setBasicData((p) => ({ ...p, social_security_id: e.target.value }))
                       }
-                      placeholder="Ex: 92837192"
+                      placeholder={t('employeeCreate.placeholders.socialSecurityId')}
                     />
                   </div>
                 </div>
@@ -758,15 +783,15 @@ export function EmployeeCreatePage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-primary" />
-                  Contacto & Residência
+                  {t('employeeCreate.sections.contactAddress.title')}
                 </CardTitle>
                 <CardDescription>
-                  Meios de comunicação e localização geográfica do colaborador.
+                  {t('employeeCreate.sections.contactAddress.description')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email Profissional / Principal *</Label>
+                  <Label htmlFor="email">{t('employeeCreate.fields.email')} *</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -778,7 +803,7 @@ export function EmployeeCreatePage() {
                         if (formErrors.email) setFormErrors((p) => ({ ...p, email: '' }))
                       }}
                       className="pl-9"
-                      placeholder="funcionario@empresa.co.ao"
+                      placeholder={t('employeeCreate.placeholders.email')}
                     />
                   </div>
                   {formErrors.email && (
@@ -787,7 +812,7 @@ export function EmployeeCreatePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Telefone Principal</Label>
+                  <Label htmlFor="phone">{t('employeeCreate.fields.phone')}</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -795,70 +820,70 @@ export function EmployeeCreatePage() {
                       value={basicData.phone}
                       onChange={(e) => setBasicData((p) => ({ ...p, phone: e.target.value }))}
                       className="pl-9"
-                      placeholder="+244 9..."
+                      placeholder={t('employeeCreate.placeholders.phone')}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="alternative_phone">Telefone Alternativo / Emergência</Label>
+                  <Label htmlFor="alternative_phone">{t('employeeCreate.fields.alternativePhone')}</Label>
                   <Input
                     id="alternative_phone"
                     value={basicData.alternative_phone}
                     onChange={(e) =>
                       setBasicData((p) => ({ ...p, alternative_phone: e.target.value }))
                     }
-                    placeholder="+244 9..."
+                    placeholder={t('employeeCreate.placeholders.phone')}
                   />
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="address">Endereço Residencial</Label>
+                  <Label htmlFor="address">{t('employeeCreate.fields.address')}</Label>
                   <Input
                     id="address"
                     value={basicData.address}
                     onChange={(e) => setBasicData((p) => ({ ...p, address: e.target.value }))}
-                    placeholder="Rua, Número, Edifício, Bairro..."
+                    placeholder={t('employeeCreate.placeholders.address')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="city">Cidade</Label>
+                  <Label htmlFor="city">{t('employeeCreate.fields.city')}</Label>
                   <Input
                     id="city"
                     value={basicData.city}
                     onChange={(e) => setBasicData((p) => ({ ...p, city: e.target.value }))}
-                    placeholder="Ex: Luanda"
+                    placeholder={t('employeeCreate.placeholders.city')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="state">Província / Estado</Label>
+                  <Label htmlFor="state">{t('employeeCreate.fields.state')}</Label>
                   <Input
                     id="state"
                     value={basicData.state}
                     onChange={(e) => setBasicData((p) => ({ ...p, state: e.target.value }))}
-                    placeholder="Ex: Luanda, Benguela..."
+                    placeholder={t('employeeCreate.placeholders.state')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="country">País</Label>
+                  <Label htmlFor="country">{t('employeeCreate.fields.country')}</Label>
                   <Input
                     id="country"
                     value={basicData.country}
                     onChange={(e) => setBasicData((p) => ({ ...p, country: e.target.value }))}
-                    placeholder="Ex: Angola"
+                    placeholder={t('employeeCreate.placeholders.country')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="postal_code">Código Postal</Label>
+                  <Label htmlFor="postal_code">{t('employeeCreate.fields.postalCode')}</Label>
                   <Input
                     id="postal_code"
                     value={basicData.postal_code}
                     onChange={(e) => setBasicData((p) => ({ ...p, postal_code: e.target.value }))}
-                    placeholder="Ex: 1000"
+                    placeholder={t('employeeCreate.placeholders.postalCode')}
                   />
                 </div>
               </CardContent>
@@ -869,15 +894,15 @@ export function EmployeeCreatePage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-primary" />
-                  Enquadramento Organizacional
+                  {t('employeeCreate.sections.organization.title')}
                 </CardTitle>
                 <CardDescription>
-                  Alocação de departamento, cargo, superior hierárquico e estado na empresa.
+                  {t('employeeCreate.sections.organization.description')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-2">
-                  <Label htmlFor="department_id">Departamento</Label>
+                  <Label htmlFor="department_id">{t('employeeCreate.fields.department')}</Label>
                   <Select
                     value={basicData.department_id || 'none'}
                     onValueChange={(val) =>
@@ -889,10 +914,10 @@ export function EmployeeCreatePage() {
                     }
                   >
                     <SelectTrigger id="department_id">
-                      <SelectValue placeholder="Selecionar departamento" />
+                      <SelectValue placeholder={t('employeeCreate.placeholders.selectDepartment')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
+                      <SelectItem value="none">{t('employeeCreate.options.none')}</SelectItem>
                       {departments?.map((d) => (
                         <SelectItem key={d.id} value={String(d.id)}>
                           {d.name}
@@ -903,7 +928,7 @@ export function EmployeeCreatePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="position_id">Cargo</Label>
+                  <Label htmlFor="position_id">{t('employeeCreate.fields.position')}</Label>
                   <Select
                     value={basicData.position_id || 'none'}
                     onValueChange={(val) =>
@@ -911,10 +936,10 @@ export function EmployeeCreatePage() {
                     }
                   >
                     <SelectTrigger id="position_id">
-                      <SelectValue placeholder="Selecionar cargo" />
+                      <SelectValue placeholder={t('employeeCreate.placeholders.selectPosition')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
+                      <SelectItem value="none">{t('employeeCreate.options.none')}</SelectItem>
                       {filteredPositions?.map((pos) => (
                         <SelectItem key={pos.id} value={String(pos.id)}>
                           {pos.title}
@@ -925,7 +950,7 @@ export function EmployeeCreatePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manager_id">Superior Hierárquico / Gestor</Label>
+                  <Label htmlFor="manager_id">{t('employeeCreate.fields.manager')}</Label>
                   <Select
                     value={basicData.manager_id || 'none'}
                     onValueChange={(val) =>
@@ -933,10 +958,10 @@ export function EmployeeCreatePage() {
                     }
                   >
                     <SelectTrigger id="manager_id">
-                      <SelectValue placeholder="Selecionar gestor" />
+                      <SelectValue placeholder={t('employeeCreate.placeholders.selectManager')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
+                      <SelectItem value="none">{t('employeeCreate.options.none')}</SelectItem>
                       {managers.map((m) => (
                         <SelectItem key={m.id} value={String(m.id)}>
                           {m.full_name}
@@ -947,7 +972,7 @@ export function EmployeeCreatePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="hired_at">Data de Admissão</Label>
+                  <Label htmlFor="hired_at">{t('employeeCreate.fields.hiredAt')}</Label>
                   <Input
                     id="hired_at"
                     type="date"
@@ -964,7 +989,7 @@ export function EmployeeCreatePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="probation_end">Fim do Período Probatório</Label>
+                  <Label htmlFor="probation_end">{t('employeeCreate.fields.probationEnd')}</Label>
                   <Input
                     id="probation_end"
                     type="date"
@@ -974,7 +999,7 @@ export function EmployeeCreatePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="status">Estado Inicial *</Label>
+                  <Label htmlFor="status">{t('employeeCreate.fields.status')} *</Label>
                   <Select
                     value={basicData.status}
                     onValueChange={(val: 'active' | 'inactive' | 'suspended' | 'terminated') =>
@@ -985,10 +1010,10 @@ export function EmployeeCreatePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="active">Ativo</SelectItem>
-                      <SelectItem value="inactive">Inativo</SelectItem>
-                      <SelectItem value="suspended">Suspenso</SelectItem>
-                      <SelectItem value="terminated">Desligado</SelectItem>
+                      <SelectItem value="active">{t('employeeCreate.options.status.active')}</SelectItem>
+                      <SelectItem value="inactive">{t('employeeCreate.options.status.inactive')}</SelectItem>
+                      <SelectItem value="suspended">{t('employeeCreate.options.status.suspended')}</SelectItem>
+                      <SelectItem value="terminated">{t('employeeCreate.options.status.terminated')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1003,16 +1028,16 @@ export function EmployeeCreatePage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-primary" />
-                  Informações Contratuais
+                  {t('employeeCreate.sections.contract.title')}
                 </CardTitle>
                 <CardDescription>
-                  Configuração do contrato de trabalho, vencimento base e periodicidade.
+                  {t('employeeCreate.sections.contract.description')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-2">
-                    <Label htmlFor="contract_type">Tipo de Contrato</Label>
+                    <Label htmlFor="contract_type">{t('employeeCreate.fields.contractType')}</Label>
                     <Select
                       value={contractData.contract_type}
                       onValueChange={(val) => setContractData((c) => ({ ...c, contract_type: val }))}
@@ -1021,18 +1046,18 @@ export function EmployeeCreatePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="permanent">Tempo Indeterminado (Efetivo / Sem Termo)</SelectItem>
-                        <SelectItem value="fixed_term">Termo Certo</SelectItem>
-                        <SelectItem value="temporary">Temporário</SelectItem>
-                        <SelectItem value="probation">Período de Experiência</SelectItem>
-                        <SelectItem value="internship">Estágio Profissional</SelectItem>
-                        <SelectItem value="outsourced">Prestação de Serviços / Outsourced</SelectItem>
+                        <SelectItem value="permanent">{t('employeeDetail.contractType.permanent')}</SelectItem>
+                        <SelectItem value="fixed_term">{t('employeeDetail.contractType.fixed_term')}</SelectItem>
+                        <SelectItem value="temporary">{t('employeeDetail.contractType.temporary')}</SelectItem>
+                        <SelectItem value="probation">{t('employeeDetail.contractType.probation')}</SelectItem>
+                        <SelectItem value="internship">{t('employeeDetail.contractType.internship')}</SelectItem>
+                        <SelectItem value="outsourced">{t('employeeDetail.contractType.outsourced')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="base_salary">Salário Base ({currency})</Label>
+                    <Label htmlFor="base_salary">{t('employeeCreate.fields.baseSalary', { currency })}</Label>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-success" />
                       <Input
@@ -1051,7 +1076,7 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="salary_frequency">Periodicidade de Pagamento</Label>
+                    <Label htmlFor="salary_frequency">{t('employeeCreate.fields.salaryFrequency')}</Label>
                     <Select
                       value={contractData.salary_frequency}
                       onValueChange={(val) =>
@@ -1062,16 +1087,16 @@ export function EmployeeCreatePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="monthly">Mensal</SelectItem>
-                        <SelectItem value="biweekly">Quinzenal</SelectItem>
-                        <SelectItem value="weekly">Semanal</SelectItem>
-                        <SelectItem value="hourly">À Hora</SelectItem>
+                        <SelectItem value="monthly">{t('employeeCreate.options.salaryFrequency.monthly')}</SelectItem>
+                        <SelectItem value="biweekly">{t('employeeCreate.options.salaryFrequency.biweekly')}</SelectItem>
+                        <SelectItem value="weekly">{t('employeeCreate.options.salaryFrequency.weekly')}</SelectItem>
+                        <SelectItem value="hourly">{t('employeeCreate.options.salaryFrequency.hourly')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="work_hours">Carga Horária Semanal (Horas)</Label>
+                    <Label htmlFor="work_hours">{t('employeeCreate.fields.workHoursPerWeek')}</Label>
                     <Input
                       id="work_hours"
                       type="number"
@@ -1086,7 +1111,7 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="contract_start_date">Data de Início do Contrato</Label>
+                    <Label htmlFor="contract_start_date">{t('employeeCreate.fields.contractStartDate')}</Label>
                     <Input
                       id="contract_start_date"
                       type="date"
@@ -1098,7 +1123,7 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="contract_end_date">Data de Término (se aplicável)</Label>
+                    <Label htmlFor="contract_end_date">{t('employeeCreate.fields.contractEndDate')}</Label>
                     <Input
                       id="contract_end_date"
                       type="date"
@@ -1116,7 +1141,7 @@ export function EmployeeCreatePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="contract_signed_at">Data de Assinatura</Label>
+                    <Label htmlFor="contract_signed_at">{t('employeeCreate.fields.contractSignedAt')}</Label>
                     <Input
                       id="contract_signed_at"
                       type="date"
@@ -1129,7 +1154,7 @@ export function EmployeeCreatePage() {
                 </div>
 
                 <div className="space-y-2 pt-2">
-                  <Label htmlFor="contract_notes">Observações e Cláusulas Especiais</Label>
+                  <Label htmlFor="contract_notes">{t('employeeCreate.fields.contractNotes')}</Label>
                   <Textarea
                     id="contract_notes"
                     value={contractData.contract_notes}
@@ -1137,7 +1162,7 @@ export function EmployeeCreatePage() {
                       setContractData((c) => ({ ...c, contract_notes: e.target.value }))
                     }
                     rows={2}
-                    placeholder="Detalhes adicionais, subsídios acordados, cláusulas de confidencialidade..."
+                    placeholder={t('employeeCreate.placeholders.contractNotes')}
                   />
                 </div>
               </CardContent>
@@ -1150,14 +1175,14 @@ export function EmployeeCreatePage() {
                   <div>
                     <CardTitle className="text-base flex items-center gap-2">
                       <FileCheck className="h-4 w-4 text-primary" />
-                      Documentos Anexados (Imagens ou PDFs)
+                      {t('employeeCreate.documents.title')}
                     </CardTitle>
                     <CardDescription>
-                      Anexe o contrato assinado, cópia do BI, CV, certificados ou comprovativos. Ficheiros são armazenados com URL direta.
+                      {t('employeeCreate.documents.description')}
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="font-mono">
-                    {documents.length} ficheiro{documents.length !== 1 ? 's' : ''}
+                    {t('employeeCreate.documents.fileCount', { count: documents.length })}
                   </Badge>
                 </div>
               </CardHeader>
@@ -1165,43 +1190,45 @@ export function EmployeeCreatePage() {
               <CardContent className="space-y-4">
                 {isLoadingDocumentSettings && (
                   <p role="status" className="text-sm text-muted-foreground">
-                    A carregar a lista de documentos obrigatórios...
+                    {t('employeeCreate.documents.loadingRequired')}
                   </p>
                 )}
                 {hasDocumentSettingsError && (
                   <div role="alert" className="flex items-center justify-between gap-3 text-sm text-destructive">
-                    <span>Não foi possível carregar os documentos obrigatórios. O registo fica bloqueado até a configuração ser carregada.</span>
+                    <span>{t('employeeCreate.documents.loadError')}</span>
                     <Button type="button" size="sm" variant="outline" onClick={() => void refetchDocumentSettings()}>
-                      Tentar novamente
+                      {t('employeeCreate.documents.retry')}
                     </Button>
                   </div>
                 )}
                 {!isLoadingDocumentSettings && !hasDocumentSettingsError && missingRequiredDocuments.length > 0 && (
                   <p role="status" className="text-sm text-muted-foreground">
-                    Anexe todos os documentos obrigatórios para poder criar o funcionário.
+                    {t('employeeCreate.documents.attachAllRequiredHint')}
                   </p>
                 )}
                 {requiredDocuments.length > 0 && (
                   <section className="space-y-3" aria-labelledby="required-documents-heading">
                     <div>
-                      <h4 id="required-documents-heading" className="text-sm font-semibold">Documentos obrigatórios</h4>
-                      <p className="text-xs text-muted-foreground">Todos os documentos abaixo devem ser anexados para registar o funcionário.</p>
+                      <h4 id="required-documents-heading" className="text-sm font-semibold">{t('employeeCreate.documents.requiredHeading')}</h4>
+                      <p className="text-xs text-muted-foreground">{t('employeeCreate.documents.requiredDescription')}</p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {requiredDocuments.map((requirement) => {
                         const uploaded = documents.find((document) => document.document_type === requirement.type)
                         return (
-                          <label key={requirement.type} className="flex min-w-0 flex-col gap-2 border border-border p-3">
+                          <label key={requirement.type} className="flex min-w-0 flex-col gap-2 border border-border p-3 rounded-lg">
                             <span className="text-sm font-medium">{requirement.label} <span className="text-destructive">*</span></span>
                             <input
                               type="file"
                               accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx"
                               onChange={(event) => handleRequiredDocumentChange(requirement, event.target.files?.[0])}
                               className="w-full text-xs file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium"
-                              aria-label={`Anexar ${requirement.label}`}
+                              aria-label={t('employeeCreate.documents.attachAria', { label: requirement.label })}
                             />
                             <span className={`truncate text-xs ${uploaded ? 'text-success' : 'text-muted-foreground'}`}>
-                              {uploaded ? `Anexado: ${uploaded.file.name}` : 'Ainda não anexado'}
+                              {uploaded
+                                ? t('employeeCreate.documents.attachedFile', { name: uploaded.file.name })
+                                : t('employeeCreate.documents.notAttached')}
                             </span>
                           </label>
                         )
@@ -1219,10 +1246,10 @@ export function EmployeeCreatePage() {
                     <Upload className="h-6 w-6" />
                   </div>
                   <p className="text-sm font-medium text-foreground">
-                    Clique aqui para carregar ou arraste os ficheiros
+                    {t('employeeCreate.documents.dropzoneTitle')}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Suporta ficheiros PDF, JPG, PNG, WebP e DOCX (até 10MB cada)
+                    {t('employeeCreate.documents.dropzoneHint')}
                   </p>
                   <input
                     type="file"
@@ -1233,7 +1260,7 @@ export function EmployeeCreatePage() {
                     className="hidden"
                   />
                   <Button type="button" variant="secondary" size="sm" className="mt-3">
-                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Escolher Ficheiros
+                    <Plus className="mr-1.5 h-3.5 w-3.5" /> {t('employeeCreate.documents.chooseFiles')}
                   </Button>
                 </div>
 
@@ -1241,7 +1268,7 @@ export function EmployeeCreatePage() {
                 {documents.length > 0 && (
                   <div className="space-y-3 pt-2">
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Ficheiros a anexar ({documents.length}) — clique em pré-visualizar ou eliminar para substituir
+                      {t('employeeCreate.documents.listHeading', { count: documents.length })}
                     </h4>
 
                     <div className="space-y-2.5">
@@ -1258,13 +1285,13 @@ export function EmployeeCreatePage() {
                                 alt={doc.name}
                                 className="h-10 w-10 shrink-0 rounded object-cover border border-border cursor-pointer hover:opacity-80"
                                 onClick={() => setPreviewDoc(doc)}
-                                title="Clique para ampliar"
+                                title={t('employeeCreate.documents.zoomTitle')}
                               />
                             ) : (
                               <div
                                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"
                                 onClick={() => setPreviewDoc(doc)}
-                                title="Clique para pré-visualizar"
+                                title={t('employeeCreate.documents.previewTitle')}
                               >
                                 {doc.file.type === 'application/pdf' ? (
                                   <FileText className="h-5 w-5 text-red-500" />
@@ -1280,7 +1307,7 @@ export function EmployeeCreatePage() {
                                 onChange={(e) =>
                                   handleUpdateDocumentMeta(doc.id, 'name', e.target.value)
                                 }
-                                placeholder="Nome do documento"
+                                placeholder={t('employeeCreate.documents.namePlaceholder')}
                                 className="h-8 text-xs font-medium"
                               />
                               <div className="flex items-center gap-2 text-[11px] text-muted-foreground truncate">
@@ -1299,7 +1326,7 @@ export function EmployeeCreatePage() {
                                 handleUpdateDocumentMeta(doc.id, 'document_type', val)
                               }
                             >
-                              <SelectTrigger className="h-8 text-xs w-[160px]">
+                              <SelectTrigger className="h-8 text-xs w-[190px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1317,7 +1344,7 @@ export function EmployeeCreatePage() {
                                 size="icon-sm"
                                 onClick={() => setPreviewDoc(doc)}
                                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                title="Pré-visualizar documento"
+                                title={t('employeeCreate.documents.previewTitle')}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -1330,7 +1357,7 @@ export function EmployeeCreatePage() {
                               size="icon-sm"
                               onClick={() => handleRemoveDocument(doc.id)}
                               className="text-muted-foreground hover:text-destructive h-8 w-8"
-                              title="Eliminar este ficheiro para substituir por outro"
+                              title={t('employeeCreate.documents.deleteTitle')}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -1349,15 +1376,15 @@ export function EmployeeCreatePage() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card shadow-sm mt-8">
           <div className="text-xs text-muted-foreground">
             {activeTab === 'dados-basicos' ? (
-              <span>Passo 1 de 2: Dados Básicos</span>
+              <span>{t('employeeCreate.footer.step1')}</span>
             ) : (
-              <span>Passo 2 de 2: Contrato e Documentos ({documents.length} anexo{documents.length !== 1 ? 's' : ''})</span>
+              <span>{t('employeeCreate.footer.step2', { count: documents.length })}</span>
             )}
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <Button type="button" variant="outline" asChild disabled={isSubmitting}>
-              <Link to="/employees">{t('common.cancel', { defaultValue: 'Cancelar' })}</Link>
+              <Link to="/employees">{t('common.cancel')}</Link>
             </Button>
 
             {activeTab === 'dados-basicos' ? (
@@ -1366,7 +1393,7 @@ export function EmployeeCreatePage() {
                 variant="secondary"
                 onClick={() => setActiveTab('contrato')}
               >
-                Avançar para Contrato →
+                {t('employeeCreate.footer.nextStep')}
               </Button>
             ) : (
               <Button
@@ -1374,7 +1401,7 @@ export function EmployeeCreatePage() {
                 variant="secondary"
                 onClick={() => setActiveTab('dados-basicos')}
               >
-                ← Voltar a Dados Básicos
+                {t('employeeCreate.footer.prevStep')}
               </Button>
             )}
 
@@ -1383,23 +1410,25 @@ export function EmployeeCreatePage() {
               type="submit"
               disabled={isCreateDisabled}
               title={hasDocumentSettingsError
-                ? 'Não foi possível carregar os documentos obrigatórios.'
+                ? t('employeeCreate.documents.loadErrorShort')
                 : isLoadingDocumentSettings
-                  ? 'A carregar os documentos obrigatórios.'
+                  ? t('employeeCreate.documents.loadingRequired')
                   : missingRequiredDocuments.length > 0
-                    ? `Faltam documentos obrigatórios: ${missingRequiredDocuments.map((document) => document.label).join(', ')}.`
+                    ? t('employeeCreate.validation.missingRequiredDocuments', {
+                        documents: missingRequiredDocuments.map((document) => document.label).join(', '),
+                      })
                     : undefined}
               className="min-w-[160px] shadow-sm bg-primary text-primary-foreground font-medium"
             >
               {isSubmitting ? (
                 <>
                   <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  A guardar tudo...
+                  {t('employeeCreate.footer.saving')}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Guardar Funcionário
+                  {t('employeeCreate.footer.submit')}
                 </>
               )}
             </Button>
@@ -1447,7 +1476,9 @@ export function EmployeeCreatePage() {
                 <FileCheck className="h-16 w-16 text-primary mb-3" />
                 <p className="text-sm font-medium">{previewDoc?.file.name}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Documento pronto para envio ({previewDoc && formatFileSize(previewDoc.file.size)})
+                  {t('employeeCreate.preview.readyToUpload', {
+                    size: previewDoc ? formatFileSize(previewDoc.file.size) : '',
+                  })}
                 </p>
               </div>
             )}
@@ -1463,7 +1494,7 @@ export function EmployeeCreatePage() {
               }}
             >
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              Eliminar para substituir
+              {t('employeeCreate.preview.deleteToReplace')}
             </Button>
 
             <div className="flex items-center gap-2">
@@ -1476,7 +1507,7 @@ export function EmployeeCreatePage() {
                 >
                   <a href={previewDoc.previewUrl} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                    Abrir em nova aba
+                    {t('employeeCreate.preview.openInNewTab')}
                   </a>
                 </Button>
               )}
@@ -1486,7 +1517,7 @@ export function EmployeeCreatePage() {
                 size="sm"
                 onClick={() => setPreviewDoc(null)}
               >
-                Fechar
+                {t('employeeCreate.preview.close')}
               </Button>
             </div>
           </DialogFooter>
@@ -1500,7 +1531,7 @@ function normalizeDocumentRequirements(value: unknown): DocumentRequirement[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
     if (typeof item === 'string') {
-      return [{ type: item, label: REQUIRED_DOCUMENT_LABELS[item] ?? item }]
+      return [{ type: item, label: ANGOLA_DOCUMENT_LABELS[item] ?? item }]
     }
     if (item && typeof item === 'object' && 'type' in item && 'label' in item) {
       const requirement = item as { type: unknown; label: unknown }
@@ -1510,14 +1541,4 @@ function normalizeDocumentRequirements(value: unknown): DocumentRequirement[] {
     }
     return []
   })
-}
-
-const REQUIRED_DOCUMENT_LABELS: Record<string, string> = {
-  cv: 'Currículo (CV)',
-  criminal_record: 'Registo criminal',
-  term: 'Termo de responsabilidade',
-  contract: 'Contrato de trabalho',
-  medical: 'Atestado médico',
-  bank_proof: 'Comprovativo bancário',
-  id_card: 'Bilhete de identidade (BI)',
 }

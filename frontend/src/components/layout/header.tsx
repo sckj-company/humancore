@@ -31,16 +31,19 @@ export function Header() {
     enabled: isSuperAdmin && canListTenants,
   })
 
-  const activeTenant = isSuperAdmin
-    ? tenantPage?.data?.find((tenant) => String(tenant.id) === selectedTenantId) ?? user?.tenant
-    : user?.tenant
-  const filteredTenants = (tenantPage?.data ?? []).filter((tenant) =>
+  const availableTenants = (isSuperAdmin && canListTenants ? tenantPage?.data : undefined)
+    ?? user?.accessible_tenants
+    ?? (user?.tenant ? [user.tenant] : [])
+  const canSwitchCompany = isSuperAdmin || availableTenants.length > 1
+
+  const activeTenant = availableTenants.find((tenant) => String(tenant.id) === selectedTenantId) ?? user?.tenant
+  const filteredTenants = availableTenants.filter((tenant) =>
     `${tenant.name} ${tenant.slug}`.toLocaleLowerCase().includes(companySearch.trim().toLocaleLowerCase()),
   )
 
   return (
     <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-card px-3 md:px-6">
-      {isSuperAdmin ? (
+      {canSwitchCompany ? (
         <Button
           variant="ghost"
           className="min-w-0 justify-start gap-2 px-2 text-left"
@@ -49,9 +52,11 @@ export function Header() {
           <Building2 className="h-4 w-4 shrink-0 text-primary" />
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-foreground">
-              {activeTenant?.name ?? 'Selecionar empresa'}
+              {activeTenant?.name ?? t('tenant.select', { defaultValue: 'Selecionar empresa' })}
             </span>
-            <span className="hidden text-[10px] text-muted-foreground sm:block">Empresa ativa</span>
+            <span className="hidden text-[10px] text-muted-foreground sm:block">
+              {t('tenant.current', { defaultValue: 'Empresa ativa' })}
+            </span>
           </span>
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
@@ -59,7 +64,7 @@ export function Header() {
         <div className="flex min-w-0 items-center gap-2 px-2">
           <Building2 className="h-4 w-4 shrink-0 text-primary" />
           <span className="truncate text-sm font-semibold text-foreground">
-            {activeTenant?.name ?? 'Empresa'}
+            {activeTenant?.name ?? t('tenant.label', { defaultValue: 'Empresa' })}
           </span>
         </div>
       )}
@@ -72,21 +77,21 @@ export function Header() {
       <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
         <DialogContent className="flex h-[75vh] max-h-[85vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-lg">
           <DialogHeader className="shrink-0">
-            <DialogTitle>Selecionar empresa</DialogTitle>
-            <DialogDescription>Escolha a empresa activa para gerir.</DialogDescription>
+            <DialogTitle>{t('tenant.select', { defaultValue: 'Selecionar empresa' })}</DialogTitle>
+            <DialogDescription>{t('tenant.selectDescription', { defaultValue: 'Escolha a empresa ativa para gerir.' })}</DialogDescription>
           </DialogHeader>
           <div className="relative shrink-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={companySearch}
               onChange={(event) => setCompanySearch(event.target.value)}
-              placeholder="Pesquisar empresa..."
-              aria-label="Pesquisar empresas"
+              placeholder={t('tenant.search', { defaultValue: 'Pesquisar empresa...' })}
+              aria-label={t('tenant.search', { defaultValue: 'Pesquisar empresas' })}
               className="pl-9"
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {!user?.tenant?.id && (
+            {isSuperAdmin && !user?.tenant?.id && (
               <button
                 type="button"
                 onClick={() => {
@@ -98,8 +103,8 @@ export function Header() {
               >
                 <Building2 className="h-4 w-4 shrink-0 text-primary" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">Visão global da plataforma</span>
-                  <span className="block truncate text-xs text-muted-foreground">Dados genéricos sem empresa selecionada</span>
+                  <span className="block truncate text-sm font-medium">{t('tenant.globalView', { defaultValue: 'Visão global da plataforma' })}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{t('tenant.globalViewDescription', { defaultValue: 'Dados genéricos sem empresa selecionada' })}</span>
                 </span>
                 {!selectedTenantId && <Check className="h-4 w-4 shrink-0 text-primary" />}
               </button>
@@ -126,7 +131,7 @@ export function Header() {
                 </button>
               )
             }) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma empresa encontrada.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">{t('common.no_data')}</p>
             )}
           </div>
         </DialogContent>

@@ -250,6 +250,11 @@ Route::prefix('v1')->group(function () {
         Route::put('superadmin/tenants/{tenant}', [SuperAdminController::class, 'updateTenant']);
         Route::delete('superadmin/tenants/{tenant}', [SuperAdminController::class, 'destroyTenant']);
         Route::get('superadmin/tenant-permissions', [SuperAdminController::class, 'tenantPermissions']);
+        Route::get('superadmin/permission-groups', [SuperAdminController::class, 'permissionGroups']);
+        Route::post('superadmin/permission-groups', [SuperAdminController::class, 'storePermissionGroup']);
+        Route::put('superadmin/permission-groups/{group}', [SuperAdminController::class, 'updatePermissionGroup']);
+        Route::delete('superadmin/permission-groups/{group}', [SuperAdminController::class, 'destroyPermissionGroup']);
+        Route::get('superadmin/tenants/{tenant}/departments', [SuperAdminController::class, 'tenantDepartments']);
         Route::get('superadmin/tenants/{tenant}/users', [SuperAdminController::class, 'listTenantUsers']);
         Route::post('superadmin/tenants/{tenant}/users', [SuperAdminController::class, 'storeUser']);
         Route::put('superadmin/tenants/{tenant}/users/{user}', [SuperAdminController::class, 'updateUser']);

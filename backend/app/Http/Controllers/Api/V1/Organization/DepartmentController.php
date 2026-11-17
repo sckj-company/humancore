@@ -16,8 +16,11 @@ class DepartmentController extends BaseController
     {
         $this->authorize('viewAny', Department::class);
 
+        $allowedDeptIds = $request->user()?->allowedDepartmentIds();
+
         $departments = Department::query()
             ->withCount('employees')
+            ->when($allowedDeptIds !== null, fn ($q) => $q->whereIn('id', $allowedDeptIds))
             ->when($request->boolean('tree'), fn ($q) => $q->whereNull('parent_id'))
             ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.$request->string('search').'%'))
             ->orderBy('name')

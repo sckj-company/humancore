@@ -9,6 +9,9 @@ class DeductionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $canAmounts = ! $user || $user->hasFieldPermission('deduction', 'amounts', 'view');
+
         return [
             'id' => $this->id,
             'employee_id' => $this->employee_id,
@@ -17,13 +20,13 @@ class DeductionResource extends JsonResource
             'type_label' => $this->type_label,
             'amount_type' => $this->amount_type,
             'amount_type_label' => $this->amount_type_label,
-            'amount' => (float) $this->amount,
-            'percentage' => $this->percentage ? (float) $this->percentage : null,
-            'amount_label' => $this->amount_label,
-            'total_amount' => $this->total_amount ? (float) $this->total_amount : null,
-            'paid_amount' => (float) $this->paid_amount,
-            'installment_count' => $this->installment_count ? (int) $this->installment_count : null,
-            'installment_amount' => $this->installment_amount ? (float) $this->installment_amount : null,
+            'amount' => $canAmounts ? (float) $this->amount : null,
+            'percentage' => $canAmounts ? ($this->percentage ? (float) $this->percentage : null) : null,
+            'amount_label' => $canAmounts ? $this->amount_label : null,
+            'total_amount' => $canAmounts ? ($this->total_amount ? (float) $this->total_amount : null) : null,
+            'paid_amount' => $canAmounts ? (float) $this->paid_amount : null,
+            'installment_count' => $canAmounts ? ($this->installment_count ? (int) $this->installment_count : null) : null,
+            'installment_amount' => $canAmounts ? ($this->installment_amount ? (float) $this->installment_amount : null) : null,
             'start_period' => $this->starts_at?->format('Y-m'),
             'is_recurring' => (bool) $this->is_recurring,
             'is_mandatory' => (bool) $this->is_mandatory,
@@ -31,7 +34,7 @@ class DeductionResource extends JsonResource
             'status' => $this->status,
             'status_label' => $this->status_label,
             'status_variant' => $this->status_variant,
-            'progress_label' => $this->progress_label,
+            'progress_label' => $canAmounts ? $this->progress_label : null,
             'approved_by' => $this->approved_by,
             'approved_at' => $this->approved_at?->toIso8601String(),
             'notes' => $this->notes,

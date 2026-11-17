@@ -20,6 +20,10 @@ class EmployeePayrollSettingsController extends BaseController
     public function show(Request $request, Employee $employee): JsonResponse
     {
         $this->authorize('view', $employee);
+        $user = $request->user();
+        if ((int) $user->employee_id !== (int) $employee->id && ! $user->hasFieldPermission('employee', 'salary', 'view')) {
+            return $this->error('Sem permissão para consultar dados salariais deste funcionário.', 403);
+        }
 
         $validated = $request->validate([
             'period' => ['sometimes', 'date_format:Y-m'],
@@ -31,6 +35,9 @@ class EmployeePayrollSettingsController extends BaseController
     public function update(Request $request, Employee $employee): JsonResponse
     {
         $this->authorize('update', $employee);
+        if (! $request->user()->hasFieldPermission('employee', 'salary', 'edit')) {
+            return $this->error('Sem permissão para alterar dados salariais deste funcionário.', 403);
+        }
 
         $validated = $request->validate([
             'allowances' => ['required', 'array'],

@@ -9,19 +9,25 @@ class EmployeeListResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $isSelf = $user && (int) $user->employee_id === (int) $this->id;
+        $canSalary = ! $user || $isSelf || $user->hasFieldPermission('employee', 'salary', 'view') || $user->hasFieldPermission('contract', 'base_salary', 'view');
+        $canContact = ! $user || $isSelf || $user->hasFieldPermission('employee', 'contact_address', 'view');
+        $canOrg = ! $user || $isSelf || $user->hasFieldPermission('employee', 'organization', 'view');
+
         return [
             'id' => $this->id,
             'employee_code' => $this->employee_code,
             'full_name' => $this->full_name,
-            'email' => $this->email,
-            'phone' => $this->phone,
+            'email' => $canContact ? $this->email : null,
+            'phone' => $canContact ? $this->phone : null,
             'photo_path' => $this->photo_path,
             'status' => $this->status,
-            'hired_at' => $this->hired_at?->format('Y-m-d'),
-            'department' => $this->whenLoaded('department', fn () => $this->department?->name),
-            'position' => $this->whenLoaded('position', fn () => $this->position?->title),
+            'hired_at' => $canOrg ? $this->hired_at?->format('Y-m-d') : null,
+            'department' => $canOrg ? $this->whenLoaded('department', fn () => $this->department?->name) : null,
+            'position' => $canOrg ? $this->whenLoaded('position', fn () => $this->position?->title) : null,
             'active_contract' => $this->whenLoaded('activeContract', fn () => $this->activeContract ? [
-                'base_salary' => $this->activeContract->base_salary,
+                'base_salary' => $canSalary ? $this->activeContract->base_salary : null,
                 'contract_type' => $this->activeContract->contract_type,
                 'end_date' => $this->activeContract->end_date?->format('Y-m-d'),
                 'is_active' => $this->activeContract->is_active,

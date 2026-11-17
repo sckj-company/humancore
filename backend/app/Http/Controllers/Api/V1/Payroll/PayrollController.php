@@ -52,13 +52,19 @@ class PayrollController extends BaseController
         return $this->success(new PayrollPeriodResource($period), 'Período criado com sucesso.', 201);
     }
 
-    public function show(PayrollPeriod $period): JsonResponse
+    public function show(Request $request, PayrollPeriod $period): JsonResponse
     {
         $this->authorize('view', $period);
 
+        $allowedDeptIds = $request->user()?->allowedDepartmentIds();
+
         $period->load([
-            'records.employee',
-            'records.items',
+            'records' => function ($query) use ($allowedDeptIds) {
+                if ($allowedDeptIds !== null) {
+                    $query->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDeptIds));
+                }
+                $query->with(['employee', 'items']);
+            },
             'events.actor:id,name',
             'processedBy:id,name',
             'approvedBy:id,name',
@@ -138,6 +144,28 @@ class PayrollController extends BaseController
             'records.*.extra_items.*.amount' => ['required', 'numeric', 'min:0'],
         ]);
 
+        $user = $request->user();
+        foreach ($data['records'] as $entry) {
+            $hasAttendanceEdit = array_key_exists('work_days', $entry)
+                || array_key_exists('absent_days', $entry)
+                || array_key_exists('overtime_hours', $entry)
+                || array_key_exists('late_minutes', $entry);
+            if ($hasAttendanceEdit && ! $user->hasFieldPermission('payroll', 'attendance_metrics', 'edit')) {
+                return $this->error('Sem permissão para alterar dias trabalhados, faltas, horas extras ou atrasos na folha.', 403);
+            }
+
+            $hasAllowancesEdit = ! empty($entry['components'])
+                || collect($entry['extra_items'] ?? [])->contains(fn ($item) => ($item['type'] ?? '') === 'earning');
+            if ($hasAllowancesEdit && ! $user->hasFieldPermission('payroll', 'allowances', 'edit')) {
+                return $this->error('Sem permissão para alterar subsídios e abonos na folha.', 403);
+            }
+
+            $hasDeductionsEdit = collect($entry['extra_items'] ?? [])->contains(fn ($item) => ($item['type'] ?? '') === 'deduction');
+            if ($hasDeductionsEdit && ! $user->hasFieldPermission('payroll', 'deductions', 'edit')) {
+                return $this->error('Sem permissão para alterar descontos na folha.', 403);
+            }
+        }
+
         try {
             $result = $engine->recalculatePeriodRecords($period, $data['records']);
         } catch (\Throwable $e) {
@@ -176,17 +204,24 @@ class PayrollController extends BaseController
         ]);
     }
 
-    public function processableEmployees(PayrollPeriod $period): JsonResponse
+    public function processableEmployees(Request $request, PayrollPeriod $period): JsonResponse
     {
         $this->authorize('process', $period);
+
+        $user = $request->user();
+        $allowedDeptIds = $user?->allowedDepartmentIds();
+        $canViewSalary = ! $user
+            || $user->hasFieldPermission('payroll', 'base_salary', 'view')
+            || $user->hasFieldPermission('employee', 'salary', 'view');
 
         $employees = Employee::query()
             ->where('tenant_id', $period->tenant_id)
             ->where('status', 'active')
+            ->when($allowedDeptIds !== null, fn ($q) => $q->whereIn('department_id', $allowedDeptIds))
             ->with('activeContract')
             ->orderBy('first_name')
             ->get()
-            ->map(function (Employee $employee) {
+            ->map(function (Employee $employee) use ($canViewSalary) {
                 $contract = $employee->activeContract;
                 $isExpired = $contract?->end_date !== null
                     && $contract->end_date->lt(today());
@@ -196,7 +231,7 @@ class PayrollController extends BaseController
                     'employee_code' => $employee->employee_code,
                     'full_name' => $employee->full_name,
                     'position' => $employee->position?->title,
-                    'base_salary' => $contract?->base_salary,
+                    'base_salary' => $canViewSalary ? $contract?->base_salary : null,
                     'contract_end_date' => $contract?->end_date?->format('Y-m-d'),
                     'is_contract_expired' => $isExpired,
                     'eligible' => ! $isExpired,
@@ -411,11 +446,16 @@ class PayrollController extends BaseController
         return $this->success($events);
     }
 
-    public function records(PayrollPeriod $period): JsonResponse
+    public function records(Request $request, PayrollPeriod $period): JsonResponse
     {
         $this->authorize('viewAny', PayrollRecord::class);
 
-        $records = $period->records()->with(['employee', 'contract', 'items'])->get();
+        $allowedDeptIds = $request->user()?->allowedDepartmentIds();
+
+        $records = $period->records()
+            ->when($allowedDeptIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDeptIds)))
+            ->with(['employee', 'contract', 'items'])
+            ->get();
 
         return $this->success(PayrollRecordResource::collection($records));
     }

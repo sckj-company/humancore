@@ -16,7 +16,12 @@
     "current": "Empresa atual",
     "switch": "Trocar empresa",
     "search": "Pesquisar empresa...",
-    "new": "Nova empresa"
+    "new": "Nova empresa",
+    "label": "Empresa",
+    "select": "Selecionar empresa",
+    "selectDescription": "Escolha a empresa em que deseja operar.",
+    "globalView": "Visão Global (Todas)",
+    "globalViewDescription": "Modo administrativo sem filtro de empresa."
   },
   "command": {
     "placeholder": "Pesquisar no HumaCore — funcionários, módulos, ações...",
@@ -72,7 +77,8 @@
     "backToLogin": "Voltar ao início de sessão",
     "changePasswordFor": "Alterar palavra-passe de {{name}}",
     "adminChangeDescription": "Defina uma nova palavra-passe para {{name}}. As sessões ativas deste utilizador serão encerradas.",
-    "savePassword": "Guardar palavra-passe"
+    "savePassword": "Guardar palavra-passe",
+    "updated": "Palavra-passe atualizada com sucesso."
   },
   "common": {
     "save": "Guardar",
@@ -114,7 +120,9 @@
       "Qui",
       "Sex",
       "Sáb"
-    ]
+    ],
+    "description": "Descrição",
+    "error": "Erro"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -1940,6 +1948,113 @@
       "manage_platform": "Gerir a plataforma",
       "manage_super_admins": "Gerir super-administradores",
       "view_system_logs": "Consultar registos do sistema"
+    },
+    "activeUser": "Utilizador ativo",
+    "addCompanyScope": "Adicionar empresa",
+    "allDepartments": "Todos os departamentos",
+    "applyRolePermissions": "Aplicar predefinição do papel",
+    "companyAccessDescription": "Defina as empresas que o utilizador pode aceder, o grupo de permissões e os departamentos permitidos.",
+    "companyAccessTitle": "Acesso por Empresa e Departamento",
+    "companyLabel": "Empresa",
+    "companyPermissionsLabel": "Permissões específicas da empresa",
+    "confirmDeletePermissionGroup": "Tem a certeza que deseja eliminar este grupo de permissões?",
+    "createPermissionGroup": "Novo Grupo de Permissões",
+    "customPermissions": "Personalizado (por papel/permissões)",
+    "departmentScope": "Departamentos permitidos",
+    "editPermissionGroup": "Editar Grupo de Permissões",
+    "editTenantUserDescription": "Edite os dados, permissões e âmbitos de empresa/departamento deste utilizador.",
+    "fieldPermissionsHeading": "Permissões por Campo (Colunas)",
+    "moduleActionsHeading": "Ações do Módulo",
+    "newTenantUserDescription": "Crie um utilizador associado a uma ou mais empresas e defina as suas permissões.",
+    "newTenantUserTitle": "Novo Utilizador",
+    "noCompanyScopes": "Nenhuma empresa configurada. O utilizador usará apenas a empresa principal.",
+    "noDepartmentsForTenant": "Nenhum departamento registado nesta empresa.",
+    "noPermissionGroups": "Nenhum grupo de permissões criado ainda.",
+    "permissionFallback": "Outra permissão",
+    "permissionGroupDeleted": "Grupo de permissões eliminado.",
+    "permissionGroupLabel": "Grupo de Permissões",
+    "permissionGroupModalDescription": "Defina um nome e selecione as ações e campos incluídos neste perfil reutilizável.",
+    "permissionGroupNamePlaceholder": "Ex: Operador de Folha (Sem Salários)",
+    "permissionGroupSaveError": "Não foi possível guardar o grupo de permissões.",
+    "permissionGroupSaved": "Grupo de permissões guardado com sucesso.",
+    "permissionGroupsDescription": "Crie perfis reutilizáveis de permissões (módulos e campos) para vincular aos utilizadores por empresa.",
+    "permissionGroupsTab": "Grupos de Permissões",
+    "permissionGroupsTitle": "Grupos de Permissões",
+    "registeredTenantsTab": "Empresas Registadas",
+    "restoreRolePermissions": "Restaurar permissões do papel",
+    "roleLabel": "Papel base",
+    "searchPermissions": "Pesquisar permissões ou campos...",
+    "selectedCount": "{{count}} selecionada(s)",
+    "tenantUserCreateError": "Não foi possível criar o utilizador.",
+    "tenantUserCreated": "Utilizador criado com sucesso.",
+    "tenantUserDeleted": "Utilizador eliminado.",
+    "tenantUserUpdateError": "Não foi possível atualizar o utilizador.",
+    "tenantUserUpdated": "Utilizador atualizado com sucesso.",
+    "permissionShortActions": {
+      "view_any": "Listar",
+      "view": "Consultar",
+      "create": "Criar",
+      "update": "Editar",
+      "delete": "Eliminar",
+      "restore": "Restaurar",
+      "force_delete": "Eliminar permanentemente",
+      "approve": "Aprovar",
+      "reject": "Rejeitar",
+      "process": "Processar",
+      "close": "Fechar",
+      "export": "Exportar",
+      "print": "Imprimir",
+      "configure": "Configurar"
+    },
+    "fieldModes": {
+      "view": "Ver",
+      "edit": "Alterar"
+    },
+    "fieldPermissions": {
+      "payroll": {
+        "base_salary": "Salário base",
+        "gross_salary": "Salário bruto",
+        "allowances": "Subsídios",
+        "inss": "INSS (Segurança Social)",
+        "irt": "IRT (Imposto)",
+        "deductions": "Deduções",
+        "net_salary": "Salário líquido",
+        "employer_cost": "Encargo patronal",
+        "attendance_metrics": "Métricas de assiduidade"
+      },
+      "employee": {
+        "salary": "Salário / Vencimento",
+        "personal_identity": "Identificação pessoal e BI",
+        "fiscal_ids": "NIF e INSS",
+        "contact_address": "Contactos e morada",
+        "organization": "Enquadramento organizacional"
+      },
+      "contract": {
+        "base_salary": "Salário base do contrato",
+        "compensation_terms": "Periodicidade e carga horária",
+        "dates_notes": "Datas e observações"
+      },
+      "attendance": {
+        "clock_times": "Horas de entrada/saída",
+        "overtime_lateness": "Horas extras e atrasos",
+        "salary_deduction": "Dedução salarial"
+      },
+      "leave": {
+        "balances": "Saldo de dias de férias/licença",
+        "documents": "Comprovativos e notas"
+      },
+      "benefit": {
+        "amounts": "Valores e limites de benefícios"
+      },
+      "deduction": {
+        "amounts": "Valores e taxas de deduções"
+      },
+      "payslip": {
+        "salary_details": "Detalhe salarial no recibo"
+      },
+      "report": {
+        "salary_costs": "Custos salariais em relatórios"
+      }
     }
   },
   "emailTemplates": {
@@ -2373,17 +2488,33 @@
     "documentDescription": "Selecione os documentos que devem ser anexados ao registar um funcionário. O cadastro será bloqueado enquanto faltar algum.",
     "documentTypes": {
       "cv": "Currículo (CV)",
-      "criminal_record": "Registo criminal",
-      "term": "Termo de responsabilidade",
-      "contract": "Contrato de trabalho",
-      "medical": "Atestado médico",
-      "bank_proof": "Comprovativo bancário",
-      "id_card": "Bilhete de identidade (BI)"
+      "criminal_record": "Registo Criminal",
+      "term": "Termo de Responsabilidade",
+      "contract": "Contrato de Trabalho",
+      "medical": "Atestado Médico / Aptidão Física",
+      "bank_proof": "Comprovativo Bancário (IBAN)",
+      "id_card": "Bilhete de Identidade (BI)",
+      "passport": "Passaporte",
+      "work_visa": "Visto de Trabalho / Cartão de Residente",
+      "nif_card": "Cartão de Contribuinte (NIF)",
+      "inss_card": "Cartão / Comprovativo de Inscrição INSS",
+      "certificate": "Certificado de Habilitações / Diploma",
+      "vaccination_card": "Cartão de Vacinas",
+      "residence_proof": "Atestado / Comprovativo de Residência",
+      "driver_license": "Carta de Condução",
+      "work_card": "Carteira / Cédula Profissional",
+      "photo": "Fotografia Tipo Passe",
+      "military_record": "Situação / Recenseamento Militar",
+      "family_proof": "Assento de Nascimento / Agregado Familiar",
+      "previous_employment_letter": "Declaração de Serviço Anterior",
+      "other": "Outro Documento"
     },
     "customDocumentPlaceholder": "Outro documento (ex.: certificado profissional)",
     "customDocumentAriaLabel": "Nome do documento obrigatório personalizado",
     "remove": "Remover",
-    "saveDocuments": "Guardar documentos"
+    "saveDocuments": "Guardar documentos",
+    "selectAllDocuments": "Selecionar todos",
+    "clearDocuments": "Limpar seleção"
   },
   "payrollTaxRulesPage": {
     "inssCreated": "Regra INSS criada como rascunho.",
@@ -2503,5 +2634,190 @@
     "revocationReasonRequired": "Motivo da Revogação (Obrigatório)",
     "revocationReasonPlaceholder": "Ex: Publicação de nova taxa oficial pelo Decreto...",
     "revokeRule": "Revogar Regra"
+  },
+  "employeeCreate": {
+    "noPermission": "Não tem permissão para criar funcionários.",
+    "breadcrumb": "Novo Cadastro",
+    "pageDescription": "Formulário completo de admissão: dados pessoais, organizacionais, contrato e documentos anexos.",
+    "saveSuccess": "Funcionário, contrato e documentos registados com sucesso!",
+    "saveError": "Erro ao criar registo de funcionário.",
+    "tabs": {
+      "basicData": "1. Dados Básicos",
+      "contractDocuments": "2. Contrato & Documentos"
+    },
+    "sections": {
+      "personalId": {
+        "title": "Identificação Pessoal",
+        "description": "Dados de identificação civil, nascimento e fotografia de perfil."
+      },
+      "contactAddress": {
+        "title": "Contacto & Residência",
+        "description": "Meios de comunicação e localização geográfica do colaborador."
+      },
+      "organization": {
+        "title": "Enquadramento Organizacional",
+        "description": "Alocação de departamento, cargo, superior hierárquico e estado na empresa."
+      },
+      "contract": {
+        "title": "Informações Contratuais",
+        "description": "Configuração do contrato de trabalho, vencimento base e periodicidade."
+      }
+    },
+    "photo": {
+      "title": "Fotografia do Funcionário",
+      "hint": "Formatos suportados: JPG, PNG ou WebP. Máximo de 2MB.",
+      "change": "Alterar Foto",
+      "upload": "Carregar Foto",
+      "remove": "Remover"
+    },
+    "ocr": {
+      "title": "Preencher a partir do BI",
+      "description": "Carregue uma imagem ou um PDF digitalizado (máximo 5 MB). Os dados reconhecidos serão apenas sugestões e devem ser confirmados antes de guardar.",
+      "maxSizeError": "O documento não pode exceder 5 MB.",
+      "changeFile": "Alterar documento do BI",
+      "selectFile": "Selecionar imagem ou PDF do BI",
+      "consent": "Confirmo que tenho autorização do titular para processar o BI. A imagem será enviada ao OCR.space, um serviço externo, para leitura.",
+      "reading": "A ler documento…",
+      "readButton": "Ler dados do BI",
+      "success": "Dados lidos. Confirme e corrija os campos antes de continuar.",
+      "error": "Não foi possível ler o documento."
+    },
+    "fields": {
+      "firstName": "Nome Próprio",
+      "lastName": "Apelido (Sobrenome)",
+      "gender": "Género",
+      "birthDate": "Data de Nascimento",
+      "maritalStatus": "Estado Civil",
+      "nationality": "Nacionalidade",
+      "idDocumentType": "Tipo de Documento",
+      "idDocumentNumber": "Número do Documento",
+      "idDocumentExpiry": "Validade do Documento",
+      "taxId": "NIF (Número de Identificação Fiscal)",
+      "socialSecurityId": "Nº da Segurança Social (INSS)",
+      "email": "Email Profissional / Principal",
+      "phone": "Telefone Principal",
+      "alternativePhone": "Telefone Alternativo / Emergência",
+      "address": "Endereço Residencial",
+      "city": "Cidade",
+      "state": "Província / Estado",
+      "country": "País",
+      "postalCode": "Código Postal",
+      "department": "Departamento",
+      "position": "Cargo",
+      "manager": "Superior Hierárquico / Gestor",
+      "hiredAt": "Data de Admissão",
+      "probationEnd": "Fim do Período Probatório",
+      "status": "Estado Inicial",
+      "contractType": "Tipo de Contrato",
+      "baseSalary": "Salário Base ({{currency}})",
+      "salaryFrequency": "Periodicidade de Pagamento",
+      "workHoursPerWeek": "Carga Horária Semanal (Horas)",
+      "contractStartDate": "Data de Início do Contrato",
+      "contractEndDate": "Data de Término (se aplicável)",
+      "contractSignedAt": "Data de Assinatura",
+      "contractNotes": "Observações e Cláusulas Especiais"
+    },
+    "placeholders": {
+      "firstName": "Ex: João",
+      "lastName": "Ex: Silva",
+      "nationality": "Ex: Angolana",
+      "idDocumentNumber": "Ex: 004928123LA042",
+      "taxId": "Ex: 5418291024",
+      "socialSecurityId": "Ex: 92837192",
+      "email": "funcionario@empresa.co.ao",
+      "phone": "+244 9...",
+      "address": "Rua, Número, Edifício, Bairro...",
+      "city": "Ex: Luanda",
+      "state": "Ex: Luanda, Benguela...",
+      "country": "Ex: Angola",
+      "postalCode": "Ex: 1000",
+      "selectDepartment": "Selecionar departamento",
+      "selectPosition": "Selecionar cargo",
+      "selectManager": "Selecionar gestor",
+      "contractNotes": "Detalhes adicionais, subsídios acordados, cláusulas de confidencialidade..."
+    },
+    "options": {
+      "none": "Nenhum",
+      "gender": {
+        "male": "Masculino",
+        "female": "Feminino",
+        "other": "Outro"
+      },
+      "maritalStatus": {
+        "single": "Solteiro(a)",
+        "married": "Casado(a)",
+        "divorced": "Divorciado(a)",
+        "widowed": "Viúvo(a)"
+      },
+      "idDocumentType": {
+        "BI": "Bilhete de Identidade (BI)",
+        "passport": "Passaporte",
+        "residentCard": "Cartão de Residente",
+        "other": "Outro"
+      },
+      "status": {
+        "active": "Ativo",
+        "inactive": "Inativo",
+        "suspended": "Suspenso",
+        "terminated": "Desligado"
+      },
+      "salaryFrequency": {
+        "monthly": "Mensal",
+        "biweekly": "Quinzenal",
+        "weekly": "Semanal",
+        "hourly": "À Hora"
+      }
+    },
+    "documents": {
+      "title": "Documentos Anexados (Imagens ou PDFs)",
+      "description": "Anexe o contrato assinado, cópia do BI, CV, certificados ou comprovativos.",
+      "fileCount": "{{count}} ficheiro(s)",
+      "loadingRequired": "A carregar a lista de documentos obrigatórios...",
+      "loadError": "Não foi possível carregar os documentos obrigatórios. O registo fica bloqueado até a configuração ser carregada.",
+      "loadErrorShort": "Não foi possível carregar os documentos obrigatórios.",
+      "retry": "Tentar novamente",
+      "attachAllRequiredHint": "Anexe todos os documentos obrigatórios para poder criar o funcionário.",
+      "requiredHeading": "Documentos obrigatórios",
+      "requiredDescription": "Todos os documentos abaixo devem ser anexados para registar o funcionário.",
+      "attachAria": "Anexar {{label}}",
+      "attachedFile": "Anexado: {{name}}",
+      "notAttached": "Ainda não anexado",
+      "dropzoneTitle": "Clique aqui para carregar ou arraste os ficheiros",
+      "dropzoneHint": "Suporta ficheiros PDF, JPG, PNG, WebP e DOCX (até 10MB cada)",
+      "chooseFiles": "Escolher Ficheiros",
+      "listHeading": "Ficheiros a anexar ({{count}}) — clique em pré-visualizar ou eliminar para substituir",
+      "zoomTitle": "Clique para ampliar",
+      "previewTitle": "Pré-visualizar documento",
+      "deleteTitle": "Eliminar este ficheiro para substituir por outro",
+      "namePlaceholder": "Nome do documento",
+      "addedCount": "{{count}} documento(s) adicionado(s)."
+    },
+    "footer": {
+      "step1": "Passo 1 de 2: Dados Básicos",
+      "step2": "Passo 2 de 2: Contrato e Documentos ({{count}} anexo(s))",
+      "nextStep": "Avançar para Contrato →",
+      "prevStep": "← Voltar a Dados Básicos",
+      "saving": "A guardar tudo...",
+      "submit": "Guardar Funcionário"
+    },
+    "preview": {
+      "readyToUpload": "Documento pronto para envio ({{size}})",
+      "deleteToReplace": "Eliminar para substituir",
+      "openInNewTab": "Abrir em nova aba",
+      "close": "Fechar"
+    },
+    "validation": {
+      "firstNameRequired": "O nome próprio é obrigatório.",
+      "lastNameRequired": "O apelido é obrigatório.",
+      "emailRequired": "O email é obrigatório.",
+      "emailInvalid": "Insira um email válido.",
+      "contractEndBeforeStart": "A data de término deve ser posterior ou igual à data de início.",
+      "missingRequiredDocuments": "Anexe os documentos obrigatórios: {{documents}}.",
+      "fillRequiredBasicFields": "Preencha os campos obrigatórios na aba Dados Básicos."
+    },
+    "errors": {
+      "invalidPhoto": "Por favor selecione uma imagem válida (JPG, PNG, WebP).",
+      "unsupportedFile": "O ficheiro {{name}} não é suportado. Use PDF, imagens ou documentos."
+    }
   }
 }

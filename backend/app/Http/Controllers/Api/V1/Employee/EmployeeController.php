@@ -24,8 +24,11 @@ class EmployeeController extends BaseController
     {
         $this->authorize('viewAny', Employee::class);
 
+        $allowedDeptIds = $request->user()?->allowedDepartmentIds();
+
         $employees = Employee::query()
             ->with(['department', 'position', 'activeContract', 'latestContract'])
+            ->when($allowedDeptIds !== null, fn ($q) => $q->whereIn('department_id', $allowedDeptIds))
             ->when($request->filled('search'), fn ($q) => $q->search($request->string('search')))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
             ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
@@ -41,6 +44,13 @@ class EmployeeController extends BaseController
         $this->authorize('create', Employee::class);
 
         $validated = $request->validated();
+        $allowedDeptIds = $request->user()?->allowedDepartmentIds();
+        if ($allowedDeptIds !== null) {
+            $deptId = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
+            if (! $deptId || ! in_array($deptId, $allowedDeptIds, true)) {
+                return $this->error('Sem permissão para criar funcionário fora dos departamentos atribuídos.', 403);
+            }
+        }
 
         $employee = DB::transaction(function () use ($request, $validated) {
             $employeeData = collect($validated)->except([
@@ -177,6 +187,33 @@ class EmployeeController extends BaseController
         $this->authorize('update', $employee);
 
         $data = $request->validated();
+        $user = $request->user();
+        $fieldGroups = [
+            'personal_identity' => ['first_name', 'last_name', 'birth_date', 'gender', 'marital_status', 'nationality', 'id_document_type', 'id_document_number', 'id_document_expiry'],
+            'fiscal_ids' => ['tax_id', 'social_security_id'],
+            'contact_address' => ['email', 'phone', 'alternative_phone', 'address', 'city', 'state', 'country', 'postal_code'],
+            'organization' => ['department_id', 'position_id', 'manager_id', 'hired_at', 'probation_end', 'status', 'termination_at', 'termination_reason'],
+            'salary' => ['overtime_hourly_rate'],
+        ];
+
+        foreach ($fieldGroups as $fieldGroup => $columns) {
+            if ($user->hasFieldPermission('employee', $fieldGroup, 'edit')) {
+                continue;
+            }
+            foreach ($columns as $column) {
+                if (! array_key_exists($column, $data)) {
+                    continue;
+                }
+                $currentValue = $employee->{$column};
+                if ($currentValue instanceof \DateTimeInterface) {
+                    $currentValue = $currentValue->format('Y-m-d');
+                }
+                if ((string) ($data[$column] ?? '') !== (string) ($currentValue ?? '')) {
+                    return $this->error("Sem permissão para alterar o campo {$column}.", 403);
+                }
+                unset($data[$column]);
+            }
+        }
 
         if ($request->hasFile('photo')) {
             $tenantId = tenant_id() ?? $employee->tenant_id;

@@ -13,18 +13,24 @@ class BenefitController extends BaseController
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Benefit::class);
+        $allowedDepartmentIds = $request->user()?->allowedDepartmentIds();
 
         $benefits = Benefit::query()
             ->with(['employee:id,first_name,last_name,employee_code'])
+            ->when($allowedDepartmentIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDepartmentIds)))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = $request->string('search');
-                $q->where('name', 'like', "%{$term}%")
-                    ->orWhere('provider', 'like', "%{$term}%")
-                    ->orWhereHas('employee', function ($eq) use ($term) {
-                        $eq->where('first_name', 'like', "%{$term}%")
-                            ->orWhere('last_name', 'like', "%{$term}%")
-                            ->orWhere('employee_code', 'like', "%{$term}%");
-                    });
+                $q->where(function ($sq) use ($term) {
+                    $sq->where('name', 'like', "%{$term}%")
+                        ->orWhere('provider', 'like', "%{$term}%")
+                        ->orWhereHas('employee', function ($eq) use ($term) {
+                            $eq->where(function ($inner) use ($term) {
+                                $inner->where('first_name', 'like', "%{$term}%")
+                                    ->orWhere('last_name', 'like', "%{$term}%")
+                                    ->orWhere('employee_code', 'like', "%{$term}%");
+                            });
+                        });
+                });
             })
             ->when($request->filled('benefit_type'), fn ($q) => $q->where('benefit_type', $request->string('benefit_type')))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))

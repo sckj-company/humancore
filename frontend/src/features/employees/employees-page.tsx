@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Eye, Filter, X } from 'lucide-react'
 import { api } from '@/lib/api'
-import { useAuthStore } from '@/stores/auth-store'
+import { hasFieldPermission, useAuthStore } from '@/stores/auth-store'
 import { useEmployeesFilterStore } from '@/stores/employees-filter-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -77,6 +77,9 @@ export function EmployeesPage() {
   }
 
   const hasActiveFilters = search.trim() !== '' || status !== 'all'
+  const canViewSalary =
+    hasFieldPermission(user, 'employee', 'salary', 'view')
+    || hasFieldPermission(user, 'contract', 'base_salary', 'view')
 
   const params: Record<string, string | number> = { page, per_page: 12 }
   if (search) params.search = search
@@ -171,7 +174,9 @@ export function EmployeesPage() {
                     <th className="px-6 py-3 font-medium">{t('employeesPage.department')}</th>
                     <th className="px-6 py-3 font-medium">{t('common.status')}</th>
                     <th className="px-6 py-3 font-medium">{t('employeesPage.hireDate')}</th>
-                    <th className="px-6 py-3 font-medium text-right">{t('employeesPage.salary')}</th>
+                    {canViewSalary && (
+                      <th className="px-6 py-3 font-medium text-right">{t('employeesPage.salary')}</th>
+                    )}
                     <th className="px-6 py-3 font-medium text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
@@ -215,11 +220,13 @@ export function EmployeesPage() {
                       <td className="px-6 py-3 text-muted-foreground">
                         {e.hired_at ? new Intl.DateTimeFormat(i18n.language).format(new Date(e.hired_at)) : '—'}
                       </td>
-                      <td className="px-6 py-3 text-right font-mono text-sm">
-                        {e.active_contract
-                          ? new Intl.NumberFormat(i18n.language).format(e.active_contract.base_salary)
-                          : '—'}
-                      </td>
+                      {canViewSalary && (
+                        <td className="px-6 py-3 text-right font-mono text-sm">
+                          {e.active_contract && e.active_contract.base_salary != null
+                            ? new Intl.NumberFormat(i18n.language).format(e.active_contract.base_salary)
+                            : '—'}
+                        </td>
+                      )}
                       <td className="px-6 py-3 text-right" onClick={(ev) => ev.stopPropagation()}>
                         <Button variant="ghost" size="icon-sm" asChild>
                           <Link to={`/employees/${e.id}`} aria-label={t('employeesPage.viewEmployee', { name: e.full_name })}>

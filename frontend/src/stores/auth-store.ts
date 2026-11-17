@@ -38,6 +38,17 @@ export function hasPermission(user: User | null, permission: string): boolean {
   return user.permissions?.includes(permission) ?? false
 }
 
+export function hasFieldPermission(
+  user: User | null,
+  resource: string,
+  field: string,
+  mode: 'view' | 'edit' = 'view',
+): boolean {
+  if (!user) return false
+  if (user.roles?.includes('super-admin')) return true
+  return user.permissions?.includes(`field.${resource}.${field}.${mode}`) ?? false
+}
+
 export function isPlatformAdmin(user: User | null): boolean {
   return user?.roles?.some((role) => role === 'super-admin' || role === 'super-admin-limited') ?? false
 }

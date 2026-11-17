@@ -14,17 +14,23 @@ class DeductionController extends BaseController
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Deduction::class);
+        $allowedDepartmentIds = $request->user()?->allowedDepartmentIds();
 
         $deductions = Deduction::query()
             ->with(['employee:id,first_name,last_name,employee_code', 'approver:id,name'])
+            ->when($allowedDepartmentIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDepartmentIds)))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = $request->string('search');
-                $q->where('name', 'like', "%{$term}%")
-                    ->orWhereHas('employee', function ($eq) use ($term) {
-                        $eq->where('first_name', 'like', "%{$term}%")
-                            ->orWhere('last_name', 'like', "%{$term}%")
-                            ->orWhere('employee_code', 'like', "%{$term}%");
-                    });
+                $q->where(function ($sq) use ($term) {
+                    $sq->where('name', 'like', "%{$term}%")
+                        ->orWhereHas('employee', function ($eq) use ($term) {
+                            $eq->where(function ($inner) use ($term) {
+                                $inner->where('first_name', 'like', "%{$term}%")
+                                    ->orWhere('last_name', 'like', "%{$term}%")
+                                    ->orWhere('employee_code', 'like', "%{$term}%");
+                            });
+                        });
+                });
             })
             ->when($request->filled('deduction_type'), fn ($q) => $q->where('deduction_type', $request->string('deduction_type')))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))

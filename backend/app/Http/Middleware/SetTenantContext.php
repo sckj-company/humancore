@@ -17,11 +17,23 @@ class SetTenantContext
         $user = $request->user();
 
         if ($user) {
-            $isSuperAdmin = $user->hasRole('super-admin') || (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin());
+            $isPlatformRole = $user->hasRole('super-admin') || (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin());
             $requestedTenantId = $request->header('X-Tenant-ID') ?: ($request->query('tenant_id') ?: $request->input('tenant_id'));
-            $tenantId = $isSuperAdmin
-                ? ($requestedTenantId ?: ($user->tenant_id ?: (Tenant::query()->where('status', 'active')->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id'))))
-                : $user->tenant_id;
+
+            if ($requestedTenantId) {
+                if (! $user->canAccessTenant($requestedTenantId)) {
+                    abort(403, 'Sem permissão para aceder à empresa solicitada.');
+                }
+                $tenantId = (int) $requestedTenantId;
+            } elseif ($isPlatformRole) {
+                $firstAccessTenantId = $user->hasRole('super-admin-limited')
+                    ? $user->tenantAccesses()->orderBy('id')->value('tenant_id')
+                    : null;
+                $tenantId = $user->tenant_id
+                    ?: ($firstAccessTenantId ?: (Tenant::query()->where('status', 'active')->orderBy('id')->value('id') ?: Tenant::query()->orderBy('id')->value('id')));
+            } else {
+                $tenantId = $user->tenant_id ?: $user->tenantAccesses()->orderBy('id')->value('tenant_id');
+            }
 
             if ($tenantId) {
                 $tenant = ($tenantId === $user->tenant_id && $user->tenant)

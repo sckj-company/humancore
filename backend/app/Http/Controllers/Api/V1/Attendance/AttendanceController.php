@@ -168,17 +168,21 @@ class AttendanceController extends BaseController
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', AttendanceRecord::class);
+        $allowedDepartmentIds = $request->user()?->allowedDepartmentIds();
 
         $records = AttendanceRecord::query()
             ->with(['employee', 'shift'])
+            ->when($allowedDepartmentIds !== null, fn ($q) => $q->whereHas('employee', fn ($e) => $e->whereIn('department_id', $allowedDepartmentIds)))
             ->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))
             ->when($request->string('date')->toString(), fn ($q, $d) => $q->where('date', $d))
             ->when($request->string('status')->toString(), fn ($q, $s) => $q->where('status', $s))
             ->when($request->string('search')->toString(), function ($q, $s) {
                 $q->whereHas('employee', function ($e) use ($s) {
-                    $e->where('first_name', 'like', "%{$s}%")
-                        ->orWhere('last_name', 'like', "%{$s}%")
-                        ->orWhere('employee_code', 'like', "%{$s}%");
+                    $e->where(function ($inner) use ($s) {
+                        $inner->where('first_name', 'like', "%{$s}%")
+                            ->orWhere('last_name', 'like', "%{$s}%")
+                            ->orWhere('employee_code', 'like', "%{$s}%");
+                    });
                 });
             })
             ->orderByDesc('date')

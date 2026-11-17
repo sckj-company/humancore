@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { formatMinutesToHours } from '@/lib/format'
-import { useAuthStore, hasPermission } from '@/stores/auth-store'
+import { useAuthStore, hasFieldPermission, hasPermission } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -465,27 +465,33 @@ export function PayrollPeriodDetailPage() {
           label={t('payroll.detail.employees')}
           value={String(employeeCount)}
         />
-        <KpiCard
-          icon={<TrendingUp className="h-5 w-5" />}
-          iconBg="bg-emerald-500/10 text-emerald-600"
-          label={t('payroll.detail.grossTotal')}
-          value={fmtCurrency(totalGross)}
-          sub="AOA"
-        />
-        <KpiCard
-          icon={<Wallet className="h-5 w-5" />}
-          iconBg="bg-primary/10 text-primary"
-          label={t('payroll.detail.netTotal')}
-          value={fmtCurrency(totalNet)}
-          sub="AOA"
-        />
-        <KpiCard
-          icon={<Building2 className="h-5 w-5" />}
-          iconBg="bg-amber-500/10 text-amber-600"
-          label={t('payroll.detail.employerCost')}
-          value={fmtCurrency(totalEmployerCost)}
-          sub="AOA"
-        />
+        {hasFieldPermission(user, 'payroll', 'gross_salary', 'view') && (
+          <KpiCard
+            icon={<TrendingUp className="h-5 w-5" />}
+            iconBg="bg-emerald-500/10 text-emerald-600"
+            label={t('payroll.detail.grossTotal')}
+            value={fmtCurrency(totalGross)}
+            sub="AOA"
+          />
+        )}
+        {hasFieldPermission(user, 'payroll', 'net_salary', 'view') && (
+          <KpiCard
+            icon={<Wallet className="h-5 w-5" />}
+            iconBg="bg-primary/10 text-primary"
+            label={t('payroll.detail.netTotal')}
+            value={fmtCurrency(totalNet)}
+            sub="AOA"
+          />
+        )}
+        {hasFieldPermission(user, 'payroll', 'employer_cost', 'view') && (
+          <KpiCard
+            icon={<Building2 className="h-5 w-5" />}
+            iconBg="bg-amber-500/10 text-amber-600"
+            label={t('payroll.detail.employerCost')}
+            value={fmtCurrency(totalEmployerCost)}
+            sub="AOA"
+          />
+        )}
       </div>
 
       {/* Tabs */}
@@ -829,8 +835,29 @@ function SummaryTab({
   onDownloadPayslip: (id: number, filename: string) => void
 }) {
   const { t } = useTranslation()
+  const user = useAuthStore((s) => s.user)
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [drafts, setDrafts] = useState<Record<number, RecordDraft>>({})
+
+  const canViewBase = hasFieldPermission(user, 'payroll', 'base_salary', 'view')
+  const canViewGross = hasFieldPermission(user, 'payroll', 'gross_salary', 'view')
+  const canViewInss = hasFieldPermission(user, 'payroll', 'inss', 'view')
+  const canViewIrt = hasFieldPermission(user, 'payroll', 'irt', 'view')
+  const canViewDeductions = hasFieldPermission(user, 'payroll', 'deductions', 'view')
+  const canViewNet = hasFieldPermission(user, 'payroll', 'net_salary', 'view')
+  const canViewEmployerCost = hasFieldPermission(user, 'payroll', 'employer_cost', 'view')
+  const canViewAttendance = hasFieldPermission(user, 'payroll', 'attendance_metrics', 'view')
+  const canEditAttendance = canEditRecords && hasFieldPermission(user, 'payroll', 'attendance_metrics', 'edit')
+  const canEditAllowances = canEditRecords && hasFieldPermission(user, 'payroll', 'allowances', 'edit')
+  const canEditDeductions = canEditRecords && hasFieldPermission(user, 'payroll', 'deductions', 'edit')
+  const visibleColumnCount = 3
+    + (canViewBase ? 1 : 0)
+    + (canViewGross ? 1 : 0)
+    + (canViewInss ? 1 : 0)
+    + (canViewIrt ? 1 : 0)
+    + (canViewDeductions ? 1 : 0)
+    + (canViewNet ? 1 : 0)
+    + (canViewEmployerCost ? 1 : 0)
 
   if (records.length === 0) {
     return (
@@ -997,13 +1024,13 @@ function SummaryTab({
             <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-5 py-3 font-medium">{t('payroll.detail.employee')}</th>
-                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.base')}</th>
-                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.gross')}</th>
-                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.inss')}</th>
-                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.irt')}</th>
-                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.otherDeductions')}</th>
-                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.net')}</th>
-                <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.employerCost')}</th>
+                {canViewBase && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.base')}</th>}
+                {canViewGross && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.gross')}</th>}
+                {canViewInss && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.inss')}</th>}
+                {canViewIrt && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.irt')}</th>}
+                {canViewDeductions && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.otherDeductions')}</th>}
+                {canViewNet && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.net')}</th>}
+                {canViewEmployerCost && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.employerCost')}</th>}
                 <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.status')}</th>
                 <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.payslip')}</th>
               </tr>
@@ -1050,21 +1077,29 @@ function SummaryTab({
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-right font-mono text-muted-foreground">{fmtCurrency(r.base_salary)}</td>
-                      <td className="px-5 py-3 text-right font-mono font-medium">{fmtCurrency(r.gross_salary)}</td>
-                      <td className="px-5 py-3 text-right font-mono text-orange-600">
-                        {inssAmount != null ? formatSignedAmount(-inssAmount) : '—'}
-                      </td>
-                      <td className="px-5 py-3 text-right font-mono text-orange-600">
-                        {formatSignedAmount(-irtAmount)}
-                      </td>
-                      <td className="px-5 py-3 text-right font-mono text-destructive">
-                        {otherDeductions > 0 ? formatSignedAmount(-otherDeductions) : '—'}
-                      </td>
-                      <td className="px-5 py-3 text-right font-mono font-semibold text-emerald-700">{fmtCurrency(r.net_salary)}</td>
-                      <td className="px-5 py-3 text-right font-mono text-blue-700">
-                        {r.employer_cost != null ? fmtCurrency(r.employer_cost) : '—'}
-                      </td>
+                      {canViewBase && <td className="px-5 py-3 text-right font-mono text-muted-foreground">{fmtCurrency(r.base_salary)}</td>}
+                      {canViewGross && <td className="px-5 py-3 text-right font-mono font-medium">{fmtCurrency(r.gross_salary)}</td>}
+                      {canViewInss && (
+                        <td className="px-5 py-3 text-right font-mono text-orange-600">
+                          {inssAmount != null ? formatSignedAmount(-inssAmount) : '—'}
+                        </td>
+                      )}
+                      {canViewIrt && (
+                        <td className="px-5 py-3 text-right font-mono text-orange-600">
+                          {formatSignedAmount(-irtAmount)}
+                        </td>
+                      )}
+                      {canViewDeductions && (
+                        <td className="px-5 py-3 text-right font-mono text-destructive">
+                          {otherDeductions > 0 ? formatSignedAmount(-otherDeductions) : '—'}
+                        </td>
+                      )}
+                      {canViewNet && <td className="px-5 py-3 text-right font-mono font-semibold text-emerald-700">{fmtCurrency(r.net_salary)}</td>}
+                      {canViewEmployerCost && (
+                        <td className="px-5 py-3 text-right font-mono text-blue-700">
+                          {r.employer_cost != null ? fmtCurrency(r.employer_cost) : '—'}
+                        </td>
+                      )}
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           {hasErrors && <AlertCircle className="h-3.5 w-3.5 text-destructive" />}
@@ -1088,28 +1123,30 @@ function SummaryTab({
                     </tr>
                     {isExpanded && (
                       <tr className="bg-muted/15">
-                        <td colSpan={10} className="p-4 sm:p-5">
+                        <td colSpan={visibleColumnCount} className="p-4 sm:p-5">
                           <div className="space-y-4">
                             {/* Accordion Header & Quick Actions */}
                             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-                              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                                <span>
-                                  <strong className="text-foreground">{t('payroll.detail.workDays')}:</strong>{' '}
-                                  <span className="font-mono">{r.work_days ?? 0}</span>
-                                </span>
-                                <span>
-                                  <strong className="text-foreground">{t('payroll.detail.absentDays')}:</strong>{' '}
-                                  <span className="font-mono">{r.absent_days ?? 0}</span>
-                                </span>
-                                <span>
-                                  <strong className="text-foreground">{t('payroll.detail.overtimeHours')}:</strong>{' '}
-                                  <span className="font-mono">{formatMinutesToHours(Math.round((r.overtime_hours ?? 0) * 60))}</span>
-                                </span>
-                                <span>
-                                  <strong className="text-foreground">{t('payroll.detail.lateMinutes')}:</strong>{' '}
-                                  <span className="font-mono">{formatMinutesToHours(lateMinutes)}</span>
-                                </span>
-                              </div>
+                              {canViewAttendance ? (
+                                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                                  <span>
+                                    <strong className="text-foreground">{t('payroll.detail.workDays')}:</strong>{' '}
+                                    <span className="font-mono">{r.work_days ?? 0}</span>
+                                  </span>
+                                  <span>
+                                    <strong className="text-foreground">{t('payroll.detail.absentDays')}:</strong>{' '}
+                                    <span className="font-mono">{r.absent_days ?? 0}</span>
+                                  </span>
+                                  <span>
+                                    <strong className="text-foreground">{t('payroll.detail.overtimeHours')}:</strong>{' '}
+                                    <span className="font-mono">{formatMinutesToHours(Math.round((r.overtime_hours ?? 0) * 60))}</span>
+                                  </span>
+                                  <span>
+                                    <strong className="text-foreground">{t('payroll.detail.lateMinutes')}:</strong>{' '}
+                                    <span className="font-mono">{formatMinutesToHours(lateMinutes)}</span>
+                                  </span>
+                                </div>
+                              ) : <span />}
                               <div className="flex flex-wrap items-center gap-2">
                                 <Button variant="outline" size="sm" asChild>
                                   <Link to={`/employees/${r.employee_id}`}>
@@ -1203,7 +1240,7 @@ function SummaryTab({
                               </div>
                             )}
 
-                            {canEditRecords && (
+                            {canEditAttendance && (
                               <Card className="border-primary/20 bg-primary/[0.02]">
                                 <CardHeader className="pb-2 pt-4 px-4">
                                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1322,7 +1359,8 @@ function SummaryTab({
 
                             <EmployeeRecordDetail
                               record={r}
-                              canEdit={canEditRecords}
+                              canEditAllowances={canEditAllowances}
+                              canEditDeductions={canEditDeductions}
                               draft={activeDraft}
                               onUpdateDraft={(updater) => updateDraft(r, updater)}
                             />
@@ -1338,13 +1376,13 @@ function SummaryTab({
             <tfoot className="border-t-2 border-border bg-muted/40 text-sm font-semibold">
               <tr>
                 <td className="px-5 py-3 text-muted-foreground uppercase text-xs">{t('payroll.detail.totals')}</td>
-                <td className="px-5 py-3 text-right font-mono">—</td>
-                <td className="px-5 py-3 text-right font-mono">{fmtCurrency(totalsGross)}</td>
-                <td className="px-5 py-3 text-right font-mono text-orange-600">{fmtCurrency(totalsInss)}</td>
-                <td className="px-5 py-3 text-right font-mono text-orange-600">{fmtCurrency(totalsIrt)}</td>
-                <td className="px-5 py-3 text-right font-mono text-destructive">{fmtCurrency(totalsOtherDeductions)}</td>
-                <td className="px-5 py-3 text-right font-mono text-emerald-700">{fmtCurrency(totalsNet)}</td>
-                <td className="px-5 py-3 text-right font-mono text-blue-700">{fmtCurrency(totalsCost)}</td>
+                {canViewBase && <td className="px-5 py-3 text-right font-mono">—</td>}
+                {canViewGross && <td className="px-5 py-3 text-right font-mono">{fmtCurrency(totalsGross)}</td>}
+                {canViewInss && <td className="px-5 py-3 text-right font-mono text-orange-600">{fmtCurrency(totalsInss)}</td>}
+                {canViewIrt && <td className="px-5 py-3 text-right font-mono text-orange-600">{fmtCurrency(totalsIrt)}</td>}
+                {canViewDeductions && <td className="px-5 py-3 text-right font-mono text-destructive">{fmtCurrency(totalsOtherDeductions)}</td>}
+                {canViewNet && <td className="px-5 py-3 text-right font-mono text-emerald-700">{fmtCurrency(totalsNet)}</td>}
+                {canViewEmployerCost && <td className="px-5 py-3 text-right font-mono text-blue-700">{fmtCurrency(totalsCost)}</td>}
                 <td colSpan={2} />
               </tr>
             </tfoot>
@@ -1352,11 +1390,13 @@ function SummaryTab({
         </div>
         </CardContent>
       </Card>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <InssTotalCard label={t('payroll.detail.inssEmployeeTotal')} value={totalsInss} />
-        <InssTotalCard label={t('payroll.detail.inssEmployerTotal')} value={totalsEmployerInss} />
-        <InssTotalCard label={t('payroll.detail.inssCombinedTotal')} value={totalsInss + totalsEmployerInss} />
-      </div>
+      {canViewInss && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <InssTotalCard label={t('payroll.detail.inssEmployeeTotal')} value={totalsInss} />
+          <InssTotalCard label={t('payroll.detail.inssEmployerTotal')} value={totalsEmployerInss} />
+          <InssTotalCard label={t('payroll.detail.inssCombinedTotal')} value={totalsInss + totalsEmployerInss} />
+        </div>
+      )}
     </div>
   )
 }
@@ -1376,20 +1416,31 @@ function InssTotalCard({ label, value }: { label: string; value: number }) {
 
 function EmployeeRecordDetail({
   record,
-  canEdit,
+  canEditAllowances,
+  canEditDeductions,
   draft,
   onUpdateDraft,
 }: {
   record: PayrollRecord
-  canEdit: boolean
+  canEditAllowances: boolean
+  canEditDeductions: boolean
   draft: RecordDraft
   onUpdateDraft: (updater: (prev: RecordDraft) => RecordDraft) => void
 }) {
   const { t, i18n } = useTranslation()
+  const user = useAuthStore((s) => s.user)
+  const canViewBase = hasFieldPermission(user, 'payroll', 'base_salary', 'view')
+  const canViewGross = hasFieldPermission(user, 'payroll', 'gross_salary', 'view')
+  const canViewInss = hasFieldPermission(user, 'payroll', 'inss', 'view')
+  const canViewIrt = hasFieldPermission(user, 'payroll', 'irt', 'view')
+  const canViewNet = hasFieldPermission(user, 'payroll', 'net_salary', 'view')
+  const canViewEmployerCost = hasFieldPermission(user, 'payroll', 'employer_cost', 'view')
+  const canEdit = canEditAllowances || canEditDeductions
+
   const [selectedStdCode, setSelectedStdCode] = useState('')
   const [selectedStdAmount, setSelectedStdAmount] = useState('')
   const [extraName, setExtraName] = useState('')
-  const [extraType, setExtraType] = useState<'earning' | 'deduction'>('earning')
+  const [extraType, setExtraType] = useState<'earning' | 'deduction'>(canEditAllowances ? 'earning' : 'deduction')
   const [extraAmount, setExtraAmount] = useState('')
 
   const inssComponent = getPayrollComponent(record, 'inss')
@@ -1410,12 +1461,12 @@ function EmployeeRecordDetail({
     <div className="space-y-4">
       {/* KPI mini-cards */}
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <MiniKpi label={t('payroll.detail.salaryBase')} value={fmtCurrency(record.base_salary)} />
-        <MiniKpi label={t('payroll.detail.salaryGross')} value={fmtCurrency(record.gross_salary)} highlight />
-        <MiniKpi label={inssLabel} value={inssEmployee == null ? '—' : formatSignedAmount(-inssEmployee)} danger />
-        <MiniKpi label={t('payroll.detail.irt')} value={formatSignedAmount(-irtAmount)} danger />
-        <MiniKpi label={t('payroll.detail.net')} value={fmtCurrency(record.net_salary)} success />
-        <MiniKpi label={t('payroll.detail.employerCost')} value={fmtCurrency(record.employer_cost)} />
+        {canViewBase && <MiniKpi label={t('payroll.detail.salaryBase')} value={fmtCurrency(record.base_salary)} />}
+        {canViewGross && <MiniKpi label={t('payroll.detail.salaryGross')} value={fmtCurrency(record.gross_salary)} highlight />}
+        {canViewInss && <MiniKpi label={inssLabel} value={inssEmployee == null ? '—' : formatSignedAmount(-inssEmployee)} danger />}
+        {canViewIrt && <MiniKpi label={t('payroll.detail.irt')} value={formatSignedAmount(-irtAmount)} danger />}
+        {canViewNet && <MiniKpi label={t('payroll.detail.net')} value={fmtCurrency(record.net_salary)} success />}
+        {canViewEmployerCost && <MiniKpi label={t('payroll.detail.employerCost')} value={fmtCurrency(record.employer_cost)} />}
       </div>
 
       {/* Items breakdown table */}
@@ -1475,7 +1526,10 @@ function EmployeeRecordDetail({
                   {record.items!.map((item) => {
                     const catCfg = categoryConfig[item.category] ?? { label: item.category, color: '' }
                     const isNeg = item.category === 'deduction' || item.category === 'tax'
-                    const isEditableItem = canEdit && !NON_EDITABLE_CODES.has(item.code) && !item.code.startsWith('manual_')
+                    const isEditableItem =
+                      !NON_EDITABLE_CODES.has(item.code)
+                      && !item.code.startsWith('manual_')
+                      && (item.category === 'deduction' ? canEditDeductions : canEditAllowances)
                     const overriddenValue = draft.components[item.code]
                     const liveMetrics = resolveLiveItemMetrics(item, record, draft)
                     return (
@@ -1603,59 +1657,61 @@ function EmployeeRecordDetail({
           {canEdit && (
             <div className="border-t border-border bg-muted/20 p-4 space-y-4">
               {/* Bloco 1: Componente padrão */}
-              <div className="rounded-lg border border-border bg-card p-3.5 space-y-2.5">
-                <div>
-                  <p className="text-xs font-semibold text-foreground">{t('payroll.detail.addStandardComponentTitle')}</p>
-                  <p className="text-[11px] text-muted-foreground">{t('payroll.detail.addStandardComponentHint')}</p>
-                </div>
-                <div className="flex flex-wrap sm:flex-nowrap items-end gap-2">
-                  <div className="flex-1 min-w-[180px] space-y-1">
-                    <Label className="text-xs">{t('payroll.detail.selectAllowanceToAdd')}</Label>
-                    <Select value={selectedStdCode} onValueChange={setSelectedStdCode}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('payroll.detail.selectAllowanceToAdd')} /></SelectTrigger>
-                      <SelectContent>
-                        {STANDARD_COMPONENTS.filter((c) => !record.items?.some((item) => item.code === c.code)).map((c) => (
-                          <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              {canEditAllowances && (
+                <div className="rounded-lg border border-border bg-card p-3.5 space-y-2.5">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{t('payroll.detail.addStandardComponentTitle')}</p>
+                    <p className="text-[11px] text-muted-foreground">{t('payroll.detail.addStandardComponentHint')}</p>
                   </div>
-                  <div className="w-36 space-y-1">
-                    <Label className="text-xs">{t('payroll.detail.extraItemAmount')}</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      className="h-8 font-mono text-xs"
-                      value={selectedStdAmount}
-                      onChange={(e) => setSelectedStdAmount(e.target.value)}
-                    />
+                  <div className="flex flex-wrap sm:flex-nowrap items-end gap-2">
+                    <div className="flex-1 min-w-[180px] space-y-1">
+                      <Label className="text-xs">{t('payroll.detail.selectAllowanceToAdd')}</Label>
+                      <Select value={selectedStdCode} onValueChange={setSelectedStdCode}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('payroll.detail.selectAllowanceToAdd')} /></SelectTrigger>
+                        <SelectContent>
+                          {STANDARD_COMPONENTS.filter((c) => !record.items?.some((item) => item.code === c.code)).map((c) => (
+                            <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="w-36 space-y-1">
+                      <Label className="text-xs">{t('payroll.detail.extraItemAmount')}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        className="h-8 font-mono text-xs"
+                        value={selectedStdAmount}
+                        onChange={(e) => setSelectedStdAmount(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 shrink-0"
+                      onClick={() => {
+                        const val = Number(selectedStdAmount)
+                        if (!selectedStdCode || selectedStdAmount.trim() === '' || !Number.isFinite(val) || val < 0) {
+                          toast.error(t('payroll.detail.standardComponentValidation'))
+                          return
+                        }
+                        onUpdateDraft((d) => ({
+                          ...d,
+                          components: { ...d.components, [selectedStdCode]: selectedStdAmount },
+                        }))
+                        setSelectedStdCode('')
+                        setSelectedStdAmount('')
+                      }}
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      {t('settingsPage.add')}
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 shrink-0"
-                    onClick={() => {
-                      const val = Number(selectedStdAmount)
-                      if (!selectedStdCode || selectedStdAmount.trim() === '' || !Number.isFinite(val) || val < 0) {
-                        toast.error(t('payroll.detail.standardComponentValidation'))
-                        return
-                      }
-                      onUpdateDraft((d) => ({
-                        ...d,
-                        components: { ...d.components, [selectedStdCode]: selectedStdAmount },
-                      }))
-                      setSelectedStdCode('')
-                      setSelectedStdAmount('')
-                    }}
-                  >
-                    <Plus className="mr-1 h-3.5 w-3.5" />
-                    {t('settingsPage.add')}
-                  </Button>
                 </div>
-              </div>
+              )}
 
               {/* Bloco 2: Item avulso personalizado */}
               <div className="rounded-lg border border-border bg-card p-3.5 space-y-2.5">
@@ -1678,8 +1734,8 @@ function EmployeeRecordDetail({
                     <Select value={extraType} onValueChange={(v) => setExtraType(v as 'earning' | 'deduction')}>
                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="earning">{t('payroll.detail.earning')}</SelectItem>
-                        <SelectItem value="deduction">{t('payroll.detail.deduction')}</SelectItem>
+                        {canEditAllowances && <SelectItem value="earning">{t('payroll.detail.earning')}</SelectItem>}
+                        {canEditDeductions && <SelectItem value="deduction">{t('payroll.detail.deduction')}</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1725,7 +1781,7 @@ function EmployeeRecordDetail({
       </Card>
 
       {/* Employer cost breakdown */}
-      {(record.employer_inss != null || record.employer_cost != null) && (
+      {canViewEmployerCost && (record.employer_inss != null || record.employer_cost != null) && (
         <Card>
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-sm font-semibold">{t('payroll.detail.employerCharges')}</CardTitle>

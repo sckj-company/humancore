@@ -9,7 +9,7 @@ class PayrollPeriodPolicy
 {
     public function before(User $user): ?bool
     {
-        if ($user->hasRole('super-admin') || $user->hasRole('admin') || $user->hasRole('hr-manager')) {
+        if ($user->hasRole('super-admin') || (! $user->hasTenantScopedAccess() && ($user->hasRole('admin') || $user->hasRole('hr-manager')))) {
             return true;
         }
 

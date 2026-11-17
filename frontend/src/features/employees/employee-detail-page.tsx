@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
-import { useAuthStore, hasAnyRole, hasPermission } from '@/stores/auth-store'
+import { useAuthStore, hasAnyRole, hasFieldPermission, hasPermission } from '@/stores/auth-store'
 import { toast } from 'sonner'
 import type { Department, Employee, EmployeeContract, EmployeeDocument, AttendanceRecord, LeaveRequest, Paginated, Position } from '@/types'
 import { LeaveDocumentActions } from '@/features/leave/leave-document-actions'
@@ -87,18 +87,22 @@ export function EmployeeDetailPage() {
   const activeTab = searchParams.get('tab') || 'personal'
   const user = useAuthStore((s) => s.user)
   const currency = user?.tenant?.currency ?? 'AOA'
+  const canViewEmployeeSalary = hasFieldPermission(user, 'employee', 'salary', 'view')
+    || hasFieldPermission(user, 'contract', 'base_salary', 'view')
+  const canEditEmployeeSalary = hasFieldPermission(user, 'employee', 'salary', 'edit')
   const canManageLeaveTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'manage_leave_types')
-  const canViewPayroll = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
-    || hasPermission(user, 'view_any_payroll')
+  const canViewPayroll = canViewEmployeeSalary && (
+    hasPermission(user, 'view_any_payroll')
     || hasPermission(user, 'view_any_deduction')
     || hasPermission(user, 'create_deduction')
     || hasPermission(user, 'update_employee')
-  const canViewDeductions = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'view_any_deduction')
-  const canManageAllowances = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_employee')
-  const canManageDeductions = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'create_deduction')
-  const canCreateContracts = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'create_contract')
-  const canUpdateContracts = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_contract')
-  const canUpdateLeaves = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_leave')
+  )
+  const canViewDeductions = hasPermission(user, 'view_any_deduction')
+  const canManageAllowances = canEditEmployeeSalary && hasPermission(user, 'update_employee')
+  const canManageDeductions = hasPermission(user, 'create_deduction')
+  const canCreateContracts = hasPermission(user, 'create_contract')
+  const canUpdateContracts = hasPermission(user, 'update_contract')
+  const canUpdateLeaves = hasPermission(user, 'update_leave')
   const locale = i18n.language || 'pt-PT'
   const qc = useQueryClient()
 
@@ -615,13 +619,17 @@ export function EmployeeDetailPage() {
             <p className="text-sm font-semibold truncate text-foreground">{data.active_contract ? (contractTypeLabels[data.active_contract.contract_type] ?? data.active_contract.contract_type) : t('employeeDetail.text.noContract')}</p>
           </div>
         </Card>
-        <Card className="p-4 flex items-center gap-3">
-          <div className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-600"><DollarSign className="h-5 w-5" /></div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground font-medium">{t('employeeDetail.text.basePay')}</p>
-            <p className="text-sm font-semibold truncate text-foreground">{data.active_contract ? formatCurrency(data.active_contract.base_salary) : '—'}</p>
-          </div>
-        </Card>
+        {canViewEmployeeSalary && (
+          <Card className="p-4 flex items-center gap-3">
+            <div className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-600"><DollarSign className="h-5 w-5" /></div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground font-medium">{t('employeeDetail.text.basePay')}</p>
+              <p className="text-sm font-semibold truncate text-foreground">
+                {data.active_contract && data.active_contract.base_salary != null ? formatCurrency(data.active_contract.base_salary) : '—'}
+              </p>
+            </div>
+          </Card>
+        )}
         <Card className="p-4 flex items-center gap-3">
           <div className="rounded-lg bg-blue-500/10 p-2.5 text-blue-600"><Building2 className="h-5 w-5" /></div>
           <div className="min-w-0">
@@ -738,7 +746,9 @@ export function EmployeeDetailPage() {
                   <div className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                       <DF label={t('employeeDetail.text.contractType')} value={contractTypeLabels[data.active_contract.contract_type] ?? data.active_contract.contract_type} highlight />
-                      <DF label={t('employeeDetail.text.baseSalary')} value={formatCurrency(data.active_contract.base_salary)} highlight />
+                      {canViewEmployeeSalary && (
+                        <DF label={t('employeeDetail.text.baseSalary')} value={data.active_contract.base_salary != null ? formatCurrency(data.active_contract.base_salary) : '—'} highlight />
+                      )}
                       <DF label={t('employeeDetail.text.salaryFrequency')} value={salaryFrequencyLabels[data.active_contract.salary_frequency] ?? data.active_contract.salary_frequency} />
                       <DF label={t('employeeDetail.text.weeklyHours')} value={data.active_contract.work_hours_per_week ? t('employeeDetail.text.hoursPerWeek', { count: data.active_contract.work_hours_per_week }) : null} />
                       <DF label={t('employeeDetail.text.startDate')} value={formatDate(data.active_contract.start_date)} />
@@ -810,7 +820,10 @@ export function EmployeeDetailPage() {
                   {contracts.map((contract) => (
                     <div key={contract.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
                       <div>
-                        <p className="font-medium">{contractTypeLabels[contract.contract_type] ?? contract.contract_type} · {formatCurrency(contract.base_salary)}</p>
+                        <p className="font-medium">
+                          {contractTypeLabels[contract.contract_type] ?? contract.contract_type}
+                          {canViewEmployeeSalary && contract.base_salary != null ? ` · ${formatCurrency(contract.base_salary)}` : ''}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(contract.start_date)} – {contract.end_date ? formatDate(contract.end_date) : t('employeeDetail.text.indefinite')}
                           {' · '}{contract.is_active ? t('common.active') : t('common.inactive')}

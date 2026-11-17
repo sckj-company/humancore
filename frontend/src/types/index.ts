@@ -7,6 +7,10 @@ export interface User {
   is_active: boolean
   roles: string[]
   permissions: string[]
+  tenant_id?: number | null
+  accessible_tenants?: Array<{ id: number; name: string; slug: string; status?: string; logo_path?: string | null }>
+  active_department_ids?: number[] | null
+  active_permission_group_id?: number | null
   employee?: EmployeeSummary | null
   tenant?: Tenant | null
 }
@@ -54,7 +58,7 @@ export interface EmployeeSummary {
   hired_at?: string
   active_contract?: {
     id?: number
-    base_salary: number
+    base_salary: number | null
     contract_type: ContractType
     end_date?: string | null
     is_active?: boolean

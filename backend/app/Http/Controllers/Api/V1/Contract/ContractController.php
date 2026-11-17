@@ -17,8 +17,11 @@ class ContractController extends BaseController
     {
         $this->authorize('viewAny', EmployeeContract::class);
 
+        $allowedDeptIds = $request->user()?->allowedDepartmentIds();
+
         $contracts = EmployeeContract::query()
-            ->with(['employee:id,first_name,last_name,employee_code', 'position:id,title', 'department:id,name'])
+            ->with(['employee:id,first_name,last_name,employee_code,department_id', 'position:id,title', 'department:id,name'])
+            ->when($allowedDeptIds !== null, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->whereIn('department_id', $allowedDeptIds)))
             ->when($request->filled('status'), fn ($q) => $q->where('is_active', $request->boolean('status')))
             ->when($request->filled('type'), fn ($q) => $q->where('contract_type', $request->string('type')))
             ->when($request->filled('expiring_soon'), fn ($q) => $q->whereNotNull('end_date')
@@ -41,6 +44,15 @@ class ContractController extends BaseController
         $this->authorize('update', $contract);
 
         $data = $request->validated();
+        $user = $request->user();
+        if (
+            array_key_exists('base_salary', $data)
+            && (float) $data['base_salary'] !== (float) $contract->base_salary
+            && ! $user->hasFieldPermission('contract', 'base_salary', 'edit')
+            && ! $user->hasFieldPermission('employee', 'salary', 'edit')
+        ) {
+            return $this->error('Sem permissão para alterar o salário base do contrato.', 403);
+        }
         unset($data['document']);
         $uploaded = null;
         $file = null;

@@ -9,6 +9,10 @@ class PayrollPeriodResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $canGross = ! $user || $user->hasFieldPermission('payroll', 'gross_salary', 'view');
+        $canNet = ! $user || $user->hasFieldPermission('payroll', 'net_salary', 'view');
+
         return [
             'id' => $this->id,
             'tenant_id' => $this->tenant_id,
@@ -32,17 +36,17 @@ class PayrollPeriodResource extends JsonResource
             ] : null),
             'closed_at' => $this->closed_at,
             'rejection_reason' => $this->rejection_reason,
-            'totals_snapshot' => $this->totals_snapshot,
+            'totals_snapshot' => ($canGross || $canNet) ? $this->totals_snapshot : null,
             'progress_total' => $this->progress_total,
             'progress_done' => $this->progress_done,
             'progress_message' => $this->progress_message,
             'employee_count' => $this->whenCounted('records'),
-            'total_gross' => $this->records_sum_gross_salary !== null
+            'total_gross' => $canGross ? ($this->records_sum_gross_salary !== null
                 ? (float) $this->records_sum_gross_salary
-                : ($this->relationLoaded('records') ? (float) $this->records->sum('gross_salary') : null),
-            'total_net' => $this->records_sum_net_salary !== null
+                : ($this->relationLoaded('records') ? (float) $this->records->sum('gross_salary') : null)) : null,
+            'total_net' => $canNet ? ($this->records_sum_net_salary !== null
                 ? (float) $this->records_sum_net_salary
-                : ($this->relationLoaded('records') ? (float) $this->records->sum('net_salary') : null),
+                : ($this->relationLoaded('records') ? (float) $this->records->sum('net_salary') : null)) : null,
             'records' => PayrollRecordResource::collection($this->whenLoaded('records')),
             'events' => $this->whenLoaded('events'),
             'created_at' => $this->created_at,

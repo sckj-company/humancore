@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageHeader, LoadingState, ErrorState } from '@/components/shared/page-header'
-import { useAuthStore } from '@/stores/auth-store'
+import { hasFieldPermission, useAuthStore } from '@/stores/auth-store'
 
 interface ProbationInternshipEmployee {
   id: number
@@ -49,7 +49,7 @@ interface HrDashboardData {
     hired_this_month: number
     terminated_this_month: number
     turnover_rate: number
-    monthly_payroll_cost: number
+    monthly_payroll_cost: number | null
   }
   headcount_trend: { month: string; label: string; count: number }[]
   by_department: { id?: number; name: string; count: number }[]
@@ -323,6 +323,13 @@ export function HrDashboardPage() {
   const formattedToday = new Intl.DateTimeFormat(locale, { dateStyle: 'full' }).format(new Date())
   const deptChartHeight = Math.max(240, sortedDepartments.length * 32)
   const probationAndInternship = data.probation_internship ?? data.recent_hires ?? []
+  const canViewSalaryCost =
+    data.kpis.monthly_payroll_cost !== null
+    && (
+      hasFieldPermission(user, 'payroll', 'base_salary', 'view')
+      || hasFieldPermission(user, 'employee', 'salary', 'view')
+      || hasFieldPermission(user, 'report', 'salary_costs', 'view')
+    )
 
   return (
     <div className="space-y-6">
@@ -357,14 +364,16 @@ export function HrDashboardPage() {
           accent="success"
           to="/employees?status=active"
         />
-        <KpiCard
-          label={t('dashboard.hr.monthly_payroll_cost')}
-          value={data.kpis.monthly_payroll_cost}
-          currency={currency}
-          icon={Wallet}
-          accent="primary"
-          to="/payroll"
-        />
+        {canViewSalaryCost && (
+          <KpiCard
+            label={t('dashboard.hr.monthly_payroll_cost')}
+            value={data.kpis.monthly_payroll_cost ?? 0}
+            currency={currency}
+            icon={Wallet}
+            accent="primary"
+            to="/payroll"
+          />
+        )}
         <KpiCard
           label={t('dashboard.hr.hired_this_month')}
           value={data.kpis.hired_this_month}

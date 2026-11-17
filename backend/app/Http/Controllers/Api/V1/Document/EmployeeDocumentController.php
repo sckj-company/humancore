@@ -24,10 +24,12 @@ class EmployeeDocumentController extends BaseController
         $user = $request->user();
         $isPrivileged = $user->hasRole('super-admin') || $user->hasRole('admin') || $user->hasRole('hr-manager') || $user->can('view_any_document');
         $scopedToOwn = ! $isPrivileged;
+        $allowedDepartmentIds = $user->allowedDepartmentIds();
 
         $documents = EmployeeDocument::query()
             ->with('employee')
             ->when($scopedToOwn, fn ($q) => $q->where('employee_id', $user->employee_id))
+            ->when($allowedDepartmentIds !== null && ! $scopedToOwn, fn ($q) => $q->whereHas('employee', fn ($e) => $e->whereIn('department_id', $allowedDepartmentIds)))
             ->when(
                 $isPrivileged && $request->filled('employee_id'),
                 fn ($q) => $q->where('employee_id', $request->integer('employee_id'))

@@ -9,7 +9,7 @@ class AuditPolicy
 {
     public function before(User $user): ?bool
     {
-        if ($user->hasRole('super-admin') || $user->hasRole('admin')) {
+        if ($user->hasRole('super-admin') || (! $user->hasTenantScopedAccess() && $user->hasRole('admin'))) {
             return true;
         }
 

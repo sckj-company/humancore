@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Support\FieldPermissions;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -48,6 +49,15 @@ class PermissionSeeder extends Seeder
             ];
         }
 
+        // Permissões por campo / coluna
+        foreach (FieldPermissions::definitions() as $fieldPermission) {
+            $permissions[] = [
+                'name' => $fieldPermission['name'],
+                'guard_name' => 'web',
+                'group_name' => $fieldPermission['group_name'],
+            ];
+        }
+
         foreach ($permissions as $permission) {
             Permission::updateOrCreate(
                 ['name' => $permission['name'], 'guard_name' => 'web'],
@@ -89,7 +99,7 @@ class PermissionSeeder extends Seeder
         $admin->syncPermissions(Permission::where('group_name', '!=', 'system')->get());
 
         // HR Manager
-        $hrManager->syncPermissions([
+        $hrManager->syncPermissions(array_merge([
             'view_any_employee', 'view_employee', 'create_employee', 'update_employee', 'delete_employee', 'export_employee',
             'view_any_department', 'view_department', 'create_department', 'update_department', 'delete_department',
             'view_any_position', 'view_position', 'create_position', 'update_position', 'delete_position',
@@ -109,20 +119,20 @@ class PermissionSeeder extends Seeder
             'view_any_report', 'view_report', 'export_report', 'print_report',
             'view_any_setting', 'view_setting', 'configure_setting', 'update_setting',
             'view_any_audit', 'view_audit', 'export_audit',
-        ]);
+        ], FieldPermissions::allNames()));
 
         // Manager
-        $manager->syncPermissions([
+        $manager->syncPermissions(array_merge([
             'view_employee', 'view_contract', 'view_attendance', 'approve_attendance',
             'view_leave', 'approve_leave', 'reject_leave', 'create_leave',
             'view_report', 'print_report', 'view_document',
             'view_any_leave', 'view_any_attendance',
-        ]);
+        ], FieldPermissions::managerDefaults()));
 
         // Employee
-        $employee->syncPermissions([
+        $employee->syncPermissions(array_merge([
             'view_employee', 'view_contract', 'view_attendance', 'create_attendance',
             'view_leave', 'create_leave', 'view_payslip', 'view_document', 'view_report',
-        ]);
+        ], FieldPermissions::employeeDefaults()));
     }
 }

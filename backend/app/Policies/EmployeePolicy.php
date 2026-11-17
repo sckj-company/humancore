@@ -9,7 +9,7 @@ class EmployeePolicy
 {
     public function before(User $user): ?bool
     {
-        if ($user->hasRole('super-admin') || $user->hasRole('admin') || $user->hasRole('hr-manager')) {
+        if ($user->hasRole('super-admin') || (! $user->hasTenantScopedAccess() && ($user->hasRole('admin') || $user->hasRole('hr-manager')))) {
             return true;
         }
 
@@ -23,6 +23,10 @@ class EmployeePolicy
 
     public function view(User $user, Employee $employee): bool
     {
+        if (! $this->canAccessDepartment($user, $employee)) {
+            return false;
+        }
+
         if ($user->can('view_employee')) {
             if ($user->employee_id === $employee->id) {
                 return true;
@@ -47,21 +51,36 @@ class EmployeePolicy
 
     public function update(User $user, Employee $employee): bool
     {
-        return $user->can('update_employee');
+        return $this->canAccessDepartment($user, $employee) && $user->can('update_employee');
     }
 
     public function delete(User $user, Employee $employee): bool
     {
-        return $user->can('delete_employee');
+        return $this->canAccessDepartment($user, $employee) && $user->can('delete_employee');
     }
 
     public function restore(User $user, Employee $employee): bool
     {
-        return $user->can('restore_employee');
+        return $this->canAccessDepartment($user, $employee) && $user->can('restore_employee');
     }
 
     public function forceDelete(User $user, Employee $employee): bool
     {
-        return $user->can('force_delete_employee');
+        return $this->canAccessDepartment($user, $employee) && $user->can('force_delete_employee');
+    }
+
+    private function canAccessDepartment(User $user, Employee $employee): bool
+    {
+        if ($user->employee_id === $employee->id) {
+            return true;
+        }
+
+        $allowedDepartments = $user->allowedDepartmentIds();
+        if ($allowedDepartments === null) {
+            return true;
+        }
+
+        return $employee->department_id !== null
+            && in_array((int) $employee->department_id, $allowedDepartments, true);
     }
 }

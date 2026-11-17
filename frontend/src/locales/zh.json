@@ -53,7 +53,8 @@
     "backToLogin": "返回登录",
     "changePasswordFor": "更改 {{name}} 的密码",
     "adminChangeDescription": "为 {{name}} 设置新密码。该用户的所有活动会话都将退出。",
-    "savePassword": "保存密码"
+    "savePassword": "保存密码",
+    "updated": "密码更新成功。"
   },
   "common": {
     "save": "保存",
@@ -95,7 +96,9 @@
       "周四",
       "周五",
       "周六"
-    ]
+    ],
+    "description": "描述",
+    "error": "错误"
   },
   "nav": {
     "dashboard": "仪表板",
@@ -1713,13 +1716,125 @@
       "manage_platform": "管理平台",
       "manage_super_admins": "管理超级管理员",
       "view_system_logs": "查看系统日志"
+    },
+    "activeUser": "启用用户",
+    "addCompanyScope": "添加公司",
+    "allDepartments": "所有部门",
+    "applyRolePermissions": "应用角色默认权限",
+    "companyAccessDescription": "配置用户可访问的公司、权限组以及允许管理的部门。",
+    "companyAccessTitle": "公司与部门权限范围",
+    "companyLabel": "公司",
+    "companyPermissionsLabel": "该公司专属权限",
+    "confirmDeletePermissionGroup": "确定要删除此权限组吗？",
+    "createPermissionGroup": "新建权限组",
+    "customPermissions": "自定义（按角色/权限）",
+    "departmentScope": "允许的部门",
+    "editPermissionGroup": "编辑权限组",
+    "editTenantUserDescription": "编辑此用户的资料、权限及公司/部门范围。",
+    "fieldPermissionsHeading": "字段权限（列控制）",
+    "moduleActionsHeading": "模块操作",
+    "newTenantUserDescription": "创建可关联一家或多家公司的用户并设置其权限。",
+    "newTenantUserTitle": "新建用户",
+    "noCompanyScopes": "未配置额外公司，用户仅可访问主公司。",
+    "noDepartmentsForTenant": "该公司暂无部门。",
+    "noPermissionGroups": "尚未创建权限组。",
+    "permissionFallback": "其他权限",
+    "permissionGroupDeleted": "权限组已删除。",
+    "permissionGroupLabel": "权限组",
+    "permissionGroupModalDescription": "设置名称并选择此可复用配置中包含的模块操作与字段权限。",
+    "permissionGroupNamePlaceholder": "例如：薪资专员（不含薪资列）",
+    "permissionGroupSaveError": "无法保存权限组。",
+    "permissionGroupSaved": "权限组保存成功。",
+    "permissionGroupsDescription": "创建可复用的模块及字段权限组，按公司分配给用户。",
+    "permissionGroupsTab": "权限组",
+    "permissionGroupsTitle": "权限组管理",
+    "registeredTenantsTab": "已注册公司",
+    "restoreRolePermissions": "恢复角色权限",
+    "roleLabel": "基础角色",
+    "searchPermissions": "搜索权限或字段...",
+    "selectedCount": "已选 {{count}} 项",
+    "tenantUserCreateError": "创建用户失败。",
+    "tenantUserCreated": "用户创建成功。",
+    "tenantUserDeleted": "用户已删除。",
+    "tenantUserUpdateError": "更新用户失败。",
+    "tenantUserUpdated": "用户更新成功。",
+    "permissionShortActions": {
+      "view_any": "列表",
+      "view": "查看",
+      "create": "创建",
+      "update": "编辑",
+      "delete": "删除",
+      "restore": "恢复",
+      "force_delete": "永久删除",
+      "approve": "审批通过",
+      "reject": "拒绝",
+      "process": "处理",
+      "close": "关闭",
+      "export": "导出",
+      "print": "打印",
+      "configure": "配置"
+    },
+    "fieldModes": {
+      "view": "查看",
+      "edit": "修改"
+    },
+    "fieldPermissions": {
+      "payroll": {
+        "base_salary": "基本工资",
+        "gross_salary": "应发工资",
+        "allowances": "津贴与补贴",
+        "inss": "社保（INSS）",
+        "irt": "个人所得税（IRT）",
+        "deductions": "扣款项目",
+        "net_salary": "实发工资",
+        "employer_cost": "雇主成本",
+        "attendance_metrics": "考勤统计"
+      },
+      "employee": {
+        "salary": "薪资待遇",
+        "personal_identity": "个人身份及证件",
+        "fiscal_ids": "税号（NIF）与社保号（INSS）",
+        "contact_address": "联系方式与地址",
+        "organization": "组织架构信息"
+      },
+      "contract": {
+        "base_salary": "合同基本工资",
+        "compensation_terms": "发薪周期与每周工时",
+        "dates_notes": "日期与备注条款"
+      },
+      "attendance": {
+        "clock_times": "打卡时间",
+        "overtime_lateness": "加班与迟到",
+        "salary_deduction": "考勤扣薪"
+      },
+      "leave": {
+        "balances": "假期余额天数",
+        "documents": "请假证明与备注"
+      },
+      "benefit": {
+        "amounts": "福利金额与上限"
+      },
+      "deduction": {
+        "amounts": "扣款金额与比例"
+      },
+      "payslip": {
+        "salary_details": "工资条薪资明细"
+      },
+      "report": {
+        "salary_costs": "报表中的薪资成本"
+      }
     }
   },
   "tenant": {
     "current": "当前公司",
     "switch": "切换公司",
     "search": "搜索公司…",
-    "new": "新公司"
+    "new": "新公司",
+    "label": "公司",
+    "select": "选择公司",
+    "selectDescription": "选择您要操作的公司。",
+    "globalView": "全局视图（全部）",
+    "globalViewDescription": "不按公司过滤的全局管理模式。"
   },
   "command": {
     "placeholder": "输入命令或搜索…",
@@ -2246,18 +2361,34 @@
     "documentTitle": "入职必需文件",
     "documentDescription": "选择登记员工时必须附上的文件。缺少任何文件时将无法完成登记。",
     "documentTypes": {
-      "cv": "简历（CV）",
+      "cv": "个人简历（CV）",
       "criminal_record": "无犯罪记录证明",
-      "term": "责任声明书",
+      "term": "责任承诺书",
       "contract": "劳动合同",
-      "medical": "医疗证明",
-      "bank_proof": "银行证明",
-      "id_card": "身份证"
+      "medical": "体检证明 / 健康证明",
+      "bank_proof": "银行账户证明（IBAN）",
+      "id_card": "身份证（BI）",
+      "passport": "护照",
+      "work_visa": "工作签证 / 居留卡",
+      "nif_card": "税号卡（NIF）",
+      "inss_card": "社保登记卡 / 证明（INSS）",
+      "certificate": "学历证书 / 毕业文凭",
+      "vaccination_card": "疫苗接种卡",
+      "residence_proof": "居住证明",
+      "driver_license": "驾驶证",
+      "work_card": "职业资格证 / 执业证",
+      "photo": "证件照",
+      "military_record": "兵役登记证明",
+      "family_proof": "出生证明 / 家庭成员证明",
+      "previous_employment_letter": "前雇主工作证明",
+      "other": "其他文件"
     },
     "customDocumentPlaceholder": "其他文件（例如：职业资格证书）",
     "customDocumentAriaLabel": "自定义必需文件名称",
     "remove": "移除",
-    "saveDocuments": "保存文件"
+    "saveDocuments": "保存文件",
+    "selectAllDocuments": "全选",
+    "clearDocuments": "清空选择"
   },
   "payrollTaxRulesPage": {
     "inssCreated": "INSS 规则已创建为草稿。",
@@ -2377,5 +2508,190 @@
     "revocationReasonRequired": "撤销原因（必填）",
     "revocationReasonPlaceholder": "例如：颁布法令发布了新的官方费率……",
     "revokeRule": "撤销规则"
+  },
+  "employeeCreate": {
+    "noPermission": "您没有创建员工的权限。",
+    "breadcrumb": "新增员工",
+    "pageDescription": "完整入职表单：个人资料、组织架构、劳动合同及附件文档。",
+    "saveSuccess": "员工、合同及文档已成功保存！",
+    "saveError": "创建员工记录失败。",
+    "tabs": {
+      "basicData": "1. 基本信息",
+      "contractDocuments": "2. 合同与文档"
+    },
+    "sections": {
+      "personalId": {
+        "title": "个人身份信息",
+        "description": "民事证件、出生信息及员工头像。"
+      },
+      "contactAddress": {
+        "title": "联系方式与住址",
+        "description": "员工通讯方式与居住地信息。"
+      },
+      "organization": {
+        "title": "组织架构分配",
+        "description": "所属部门、职位、直属上级及在职状态。"
+      },
+      "contract": {
+        "title": "合同信息",
+        "description": "劳动合同配置、基本工资与发薪周期。"
+      }
+    },
+    "photo": {
+      "title": "员工照片",
+      "hint": "支持 JPG、PNG 或 WebP 格式，最大 2MB。",
+      "change": "更换照片",
+      "upload": "上传照片",
+      "remove": "移除"
+    },
+    "ocr": {
+      "title": "从身份证（BI）自动识别",
+      "description": "上传证件照片或扫描版 PDF（最大 5 MB）。识别结果仅供参考，保存前请核对。",
+      "maxSizeError": "文件大小不能超过 5 MB。",
+      "changeFile": "更换身份证文件",
+      "selectFile": "选择身份证图片或 PDF",
+      "consent": "我确认已获证件持有人授权处理其身份证信息，文件将发送至外部服务 OCR.space 进行识别。",
+      "reading": "正在识别文档…",
+      "readButton": "读取身份证信息",
+      "success": "已提取信息，请在继续前核对并修正字段。",
+      "error": "无法识别该文档。"
+    },
+    "fields": {
+      "firstName": "名",
+      "lastName": "姓",
+      "gender": "性别",
+      "birthDate": "出生日期",
+      "maritalStatus": "婚姻状况",
+      "nationality": "国籍",
+      "idDocumentType": "证件类型",
+      "idDocumentNumber": "证件号码",
+      "idDocumentExpiry": "证件有效期",
+      "taxId": "税号（NIF）",
+      "socialSecurityId": "社保号（INSS）",
+      "email": "工作 / 主邮箱",
+      "phone": "主联系电话",
+      "alternativePhone": "备用 / 紧急联系电话",
+      "address": "居住地址",
+      "city": "城市",
+      "state": "省 / 州",
+      "country": "国家",
+      "postalCode": "邮政编码",
+      "department": "部门",
+      "position": "职位",
+      "manager": "直属上级 / 经理",
+      "hiredAt": "入职日期",
+      "probationEnd": "试用期结束日期",
+      "status": "初始状态",
+      "contractType": "合同类型",
+      "baseSalary": "基本工资 ({{currency}})",
+      "salaryFrequency": "发薪周期",
+      "workHoursPerWeek": "每周工时（小时）",
+      "contractStartDate": "合同开始日期",
+      "contractEndDate": "合同结束日期（如适用）",
+      "contractSignedAt": "签署日期",
+      "contractNotes": "备注与特别条款"
+    },
+    "placeholders": {
+      "firstName": "例如：João",
+      "lastName": "例如：Silva",
+      "nationality": "例如：Angolana",
+      "idDocumentNumber": "例如：004928123LA042",
+      "taxId": "例如：5418291024",
+      "socialSecurityId": "例如：92837192",
+      "email": "employee@company.co.ao",
+      "phone": "+244 9...",
+      "address": "街道、门牌号、楼宇、街区...",
+      "city": "例如：Luanda",
+      "state": "例如：Luanda, Benguela...",
+      "country": "例如：Angola",
+      "postalCode": "例如：1000",
+      "selectDepartment": "选择部门",
+      "selectPosition": "选择职位",
+      "selectManager": "选择上级",
+      "contractNotes": "补充说明、津贴约定、保密条款等..."
+    },
+    "options": {
+      "none": "无",
+      "gender": {
+        "male": "男",
+        "female": "女",
+        "other": "其他"
+      },
+      "maritalStatus": {
+        "single": "未婚",
+        "married": "已婚",
+        "divorced": "离异",
+        "widowed": "丧偶"
+      },
+      "idDocumentType": {
+        "BI": "身份证（BI）",
+        "passport": "护照",
+        "residentCard": "居留卡",
+        "other": "其他"
+      },
+      "status": {
+        "active": "在职",
+        "inactive": "未激活",
+        "suspended": "停职",
+        "terminated": "离职"
+      },
+      "salaryFrequency": {
+        "monthly": "按月",
+        "biweekly": "每两周",
+        "weekly": "按周",
+        "hourly": "按小时"
+      }
+    },
+    "documents": {
+      "title": "附件文档（图片或 PDF）",
+      "description": "上传已签署合同、身份证复印件、简历、证书或相关证明。",
+      "fileCount": "{{count}} 个文件",
+      "loadingRequired": "正在加载必填文档清单...",
+      "loadError": "无法加载必填文档配置，在配置加载成功前无法提交。",
+      "loadErrorShort": "无法加载必填文档清单。",
+      "retry": "重试",
+      "attachAllRequiredHint": "请上传所有必填文档后才能创建员工。",
+      "requiredHeading": "必填文档",
+      "requiredDescription": "必须上传以下所有文档才能完成员工登记。",
+      "attachAria": "上传 {{label}}",
+      "attachedFile": "已上传：{{name}}",
+      "notAttached": "尚未上传",
+      "dropzoneTitle": "点击此处上传或拖拽文件至此",
+      "dropzoneHint": "支持 PDF、JPG、PNG、WebP 和 DOCX 文件（单个最大 10MB）",
+      "chooseFiles": "选择文件",
+      "listHeading": "待上传文件 ({{count}}) — 点击预览或删除以更换",
+      "zoomTitle": "点击放大",
+      "previewTitle": "预览文档",
+      "deleteTitle": "删除此文件并更换",
+      "namePlaceholder": "文档名称",
+      "addedCount": "已添加 {{count}} 份文档。"
+    },
+    "footer": {
+      "step1": "第 1 步 / 共 2 步：基本信息",
+      "step2": "第 2 步 / 共 2 步：合同与文档（{{count}} 个附件）",
+      "nextStep": "下一步：合同 →",
+      "prevStep": "← 返回基本信息",
+      "saving": "正在保存...",
+      "submit": "保存员工"
+    },
+    "preview": {
+      "readyToUpload": "文档已准备上传 ({{size}})",
+      "deleteToReplace": "删除并更换",
+      "openInNewTab": "在新标签页打开",
+      "close": "关闭"
+    },
+    "validation": {
+      "firstNameRequired": "名字为必填项。",
+      "lastNameRequired": "姓氏为必填项。",
+      "emailRequired": "邮箱为必填项。",
+      "emailInvalid": "请输入有效的邮箱地址。",
+      "contractEndBeforeStart": "合同结束日期必须晚于或等于开始日期。",
+      "missingRequiredDocuments": "请上传必填文档：{{documents}}。",
+      "fillRequiredBasicFields": "请先在“基本信息”标签页填写必填字段。"
+    },
+    "errors": {
+      "invalidPhoto": "请选择有效的图片文件（JPG、PNG、WebP）。",
+      "unsupportedFile": "不支持文件 {{name}}。请使用 PDF、图片或文档。"
+    }
   }
 }
