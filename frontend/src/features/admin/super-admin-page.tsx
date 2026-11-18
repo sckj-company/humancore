@@ -958,29 +958,29 @@ export function SuperAdminPage() {
 
       {/* ── Abas de Gestão ───────────────────────────────────────────── */}
       <Tabs defaultValue="tenants" className="space-y-4">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-fit">
-          <TabsTrigger value="tenants" className="gap-2">
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1.5 rounded-lg border border-border/60 bg-muted/60 p-1.5">
+          <TabsTrigger value="tenants" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
             <Building2 className="h-4 w-4" />
             {t('superAdminPage.registeredTenantsTab', { defaultValue: 'Empresas registadas' })}
           </TabsTrigger>
-          <TabsTrigger value="plans" className="gap-2">
+          <TabsTrigger value="plans" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
             <Layers className="h-4 w-4" />
             {t('superAdminPage.plansTab')}
           </TabsTrigger>
-          <TabsTrigger value="relationships" className="gap-2">
+          <TabsTrigger value="relationships" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
             <Globe2 className="h-4 w-4" />
             {t('superAdminPage.hierarchyTab')}
           </TabsTrigger>
-          <TabsTrigger value="billing" className="gap-2">
+          <TabsTrigger value="billing" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
             <Activity className="h-4 w-4" />
             {t('superAdminPage.billingTab')}
           </TabsTrigger>
-          <TabsTrigger value="permission-groups" className="gap-2">
+          <TabsTrigger value="permission-groups" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
             <Layers className="h-4 w-4" />
             {t('superAdminPage.permissionGroupsTab', { defaultValue: 'Grupos de permissões' })}
           </TabsTrigger>
           {canManagePlatformUsers && (
-            <TabsTrigger value="platform-users" className="gap-2">
+            <TabsTrigger value="platform-users" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
               <ShieldCheck className="h-4 w-4" />
               {t('superAdminPage.title')}
             </TabsTrigger>

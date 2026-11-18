@@ -63,6 +63,7 @@ interface NavItem {
   permission?: string
   planFeature?: string
   requiresAgency?: boolean
+  exact?: boolean
 }
 
 interface NavSection {
@@ -140,13 +141,29 @@ const sections: NavSection[] = [
 const footerItems: NavItem[] = [
   { titleKey: 'nav.team', defaultTitle: 'Equipa & Acessos', href: '/settings/team', icon: UserCog, roles: ['admin'] },
   { titleKey: 'nav.billing', defaultTitle: 'Plano & Faturação', href: '/settings/billing', icon: CreditCard, roles: ['admin'] },
-  { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin'], permission: 'view_any_setting' },
+  { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin'], permission: 'view_any_setting', exact: true },
 ]
+
+const allNavHrefs: string[] = [
+  ...platformDashboardSection.items,
+  ...platformSection.items,
+  ...platformGlobalSection.items,
+  ...sections.flatMap((section) => section.items),
+  ...footerItems,
+].map((item) => item.href)
 
 function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const { t } = useTranslation()
   const location = useLocation()
-  const active = location.pathname === item.href || location.pathname.startsWith(item.href + '/')
+  const hasMoreSpecificMatch = allNavHrefs.some(
+    (otherHref) =>
+      otherHref !== item.href &&
+      otherHref.startsWith(item.href + '/') &&
+      (location.pathname === otherHref || location.pathname.startsWith(otherHref + '/')),
+  )
+  const active =
+    location.pathname === item.href ||
+    (!item.exact && !hasMoreSpecificMatch && location.pathname.startsWith(item.href + '/'))
   const Icon = item.icon
 
   const link = (

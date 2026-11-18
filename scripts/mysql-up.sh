@@ -10,6 +10,7 @@
 # Uso:  scripts/mysql-up.sh            # sobe e garante utilizador/base
 #       scripts/mysql-up.sh --seed     # alem disso, migrate:fresh --seed
 set -euo pipefail
+USER="${USER:-$(id -un)}"
 
 BASE=/tmp/hrms-mysql
 DATADIR="$BASE/data"
@@ -43,6 +44,7 @@ character-set-server=utf8mb4
 collation-server=utf8mb4_unicode_ci
 skip-log-bin
 EOF
+chmod 644 "$MYCNF"
 
 if [ -S "$SOCKET" ] && mysqladmin --socket="$SOCKET" -uroot ping >/dev/null 2>&1; then
   echo ">> MySQL 3307 ja esta a correr."

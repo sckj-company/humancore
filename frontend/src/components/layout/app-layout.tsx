@@ -13,7 +13,7 @@ export function AppLayout() {
       <div
         className={cn(
           'fixed inset-y-0 left-0 z-40 transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'w-64' : 'w-16',
+          sidebarOpen ? 'w-60' : 'w-16',
         )}
       >
         <Sidebar />
@@ -23,7 +23,7 @@ export function AppLayout() {
       <div
         className={cn(
           'flex min-h-screen min-w-0 flex-col transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'pl-64' : 'pl-16',
+          sidebarOpen ? 'pl-60' : 'pl-16',
         )}
       >
         <Header />
