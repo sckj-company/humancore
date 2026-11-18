@@ -27,6 +27,7 @@ class BiometricIntegrationController extends BaseController
         $tenantId = (int) tenant_id();
         $validated = $request->validate([
             'updated_since' => ['nullable', 'date'],
+            'date' => ['nullable', 'date'],
             'status' => ['nullable', 'in:active,inactive,terminated,on_leave,all'],
             'only_approved' => ['nullable', 'boolean'],
             'search' => ['nullable', 'string', 'max:120'],
@@ -34,6 +35,9 @@ class BiometricIntegrationController extends BaseController
             'all' => ['nullable', 'boolean'],
         ]);
 
+        $targetDate = ! empty($validated['date'])
+            ? Carbon::parse($validated['date'])->toDateString()
+            : Carbon::now(tenant()?->timezone ?? config('app.timezone', 'Africa/Luanda'))->toDateString();
         $status = $validated['status'] ?? 'active';
         $onlyApproved = array_key_exists('only_approved', $validated)
             ? (bool) $validated['only_approved']
@@ -55,14 +59,15 @@ class BiometricIntegrationController extends BaseController
                 'position:id,title',
                 'schedules' => fn ($q) => $q
                     ->where('is_active', true)
-                    ->whereDate('effective_from', '<=', now()->toDateString())
-                    ->where(fn ($sq) => $sq->whereNull('effective_to')->orWhereDate('effective_to', '>=', now()->toDateString()))
-                    ->with('shift:id,name,code,start_time,end_time,late_tolerance_minutes,working_days,is_night_shift'),
+                    ->whereDate('effective_from', '<=', $targetDate)
+                    ->where(fn ($sq) => $sq->whereNull('effective_to')->orWhereDate('effective_to', '>=', $targetDate))
+                    ->with('shift:id,name,code,start_time,end_time,break_minutes,work_hours,late_tolerance_minutes,working_days,is_night_shift'),
             ])
             ->orderBy('id');
 
-        $mapEmployee = static function (Employee $emp): array {
-            $activeShift = $emp->schedules->first()?->shift;
+        $biometricService = $this->biometricService;
+        $mapEmployee = static function (Employee $emp) use ($biometricService, $targetDate): array {
+            $shiftsPayload = $biometricService->formatEmployeeShiftsPayload($emp, $targetDate);
 
             return [
                 'id' => $emp->id,
@@ -82,16 +87,11 @@ class BiometricIntegrationController extends BaseController
                 'status' => $emp->status,
                 'approval_status' => $emp->approval_status,
                 'is_active' => $emp->status === 'active' && $emp->deleted_at === null,
-                'shift' => $activeShift ? [
-                    'id' => $activeShift->id,
-                    'name' => $activeShift->name,
-                    'code' => $activeShift->code,
-                    'start_time' => $activeShift->start_time,
-                    'end_time' => $activeShift->end_time,
-                    'late_tolerance_minutes' => (int) ($activeShift->late_tolerance_minutes ?? 10),
-                    'working_days' => $activeShift->working_days ?? [1, 2, 3, 4, 5],
-                    'is_night_shift' => (bool) $activeShift->is_night_shift,
-                ] : null,
+                'has_assigned_shift' => $shiftsPayload['has_assigned_shift'],
+                'shifts_count' => $shiftsPayload['shifts_count'],
+                'shift' => $shiftsPayload['shift'],
+                'shifts' => $shiftsPayload['shifts'],
+                'missing_shift_warning' => $shiftsPayload['missing_shift_warning'],
                 'updated_at' => $emp->updated_at?->toIso8601String(),
                 'deleted_at' => $emp->deleted_at?->toIso8601String(),
             ];

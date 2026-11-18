@@ -447,7 +447,7 @@ function AttendanceTab({
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard icon={Clock} label={t('reports.attendance.records')} value={data.summary.records} />
-        <SummaryCard icon={Clock} label={t('reports.attendance.totalHours')} value={data.summary.total_hours} accent="primary" />
+        <SummaryCard icon={Clock} label={t('reports.attendance.totalHours')} value={formatMinutesToHours(data.summary.total_minutes ?? Math.round((data.summary.total_hours ?? 0) * 60))} accent="primary" />
         <SummaryCard icon={AlertTriangle} label={t('reports.attendance.lateMinutes')} value={formatMinutesToHours(data.summary.late_minutes)} accent="warning" />
         <SummaryCard icon={Clock} label={t('reports.attendance.overtimeMinutes')} value={formatMinutesToHours(data.summary.overtime_minutes)} accent="info" />
         <SummaryCard icon={Calendar} label={t('reports.attendance.leavesApproved')} value={data.summary.leaves_approved} accent="success" />
@@ -466,7 +466,7 @@ function AttendanceTab({
               columns={[
                 { key: 'department', label: t('reports.attendance.byDepartment') },
                 { key: 'records', label: t('reports.attendance.records'), align: 'right' },
-                { key: 'total_hours', label: t('reports.attendance.totalHours'), align: 'right' },
+                { key: 'total_hours', label: t('reports.attendance.totalHours'), align: 'right', render: (row) => formatMinutesToHours(Number(row.total_minutes ?? Math.round(Number(row.total_hours ?? 0) * 60))) },
                 { key: 'late_minutes', label: t('reports.attendance.lateMinutes'), align: 'right', render: (row) => formatMinutesToHours(Number(row.late_minutes ?? 0)) },
                 { key: 'overtime_minutes', label: t('reports.attendance.overtimeMinutes'), align: 'right', render: (row) => formatMinutesToHours(Number(row.overtime_minutes ?? 0)) },
               ]}

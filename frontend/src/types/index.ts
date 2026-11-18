@@ -682,6 +682,7 @@ export interface AttendanceReport {
   range: ReportRange
   summary: {
     records: number
+    total_minutes?: number
     total_hours: number
     late_minutes: number
     overtime_minutes: number
@@ -689,7 +690,7 @@ export interface AttendanceReport {
     leaves_pending: number
   }
   by_status: Record<string, number>
-  by_department: { department: string; records: number; total_hours: number; late_minutes: number; overtime_minutes: number }[]
+  by_department: { department: string; records: number; total_minutes?: number; total_hours: number; late_minutes: number; overtime_minutes: number }[]
 }
 
 export type ReportType = 'headcount' | 'turnover' | 'payroll' | 'attendance' | 'absenteeism' | 'cost'

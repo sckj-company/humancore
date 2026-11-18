@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { CalendarDays, Check, FileDown, Loader2, Search, Users, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
+import { formatMinutesToHours } from '@/lib/format'
 import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -44,8 +45,10 @@ interface AttendanceReportPayload {
     absent_count: number
     on_leave_count: number
     half_day_count: number
+    total_worked_minutes?: number
     total_worked_hours: number
     total_late_minutes: number
+    total_overtime_minutes?: number
     total_overtime_hours: number
     attendance_rate: number
   }
@@ -61,8 +64,10 @@ interface AttendanceReportPayload {
     absent_days: number
     half_days: number
     leave_days: number
+    worked_minutes?: number
     worked_hours: number
     late_minutes: number
+    overtime_minutes?: number
     overtime_hours: number
     attendance_rate: number
   }>
@@ -74,8 +79,10 @@ interface AttendanceReportPayload {
     shift_name: string
     clock_in: string
     clock_out: string
+    worked_minutes?: number
     worked_hours: number
     late_minutes: number
+    overtime_minutes?: number
     overtime_hours: number
     status: string
     status_label: string
@@ -514,7 +521,7 @@ export function AttendanceReportDialog({
                   </div>
                   <div className="rounded-md border border-border bg-card p-2.5">
                     <p className="text-[11px] text-muted-foreground">{t('attendanceReport.workedHours', { defaultValue: 'Horas Trab.' })}</p>
-                    <p className="text-lg font-semibold font-mono">{report.data.totals.total_worked_hours.toFixed(1)}h</p>
+                    <p className="text-lg font-semibold font-mono">{formatMinutesToHours(report.data.totals.total_worked_minutes ?? Math.round(report.data.totals.total_worked_hours * 60))}</p>
                   </div>
                   <div className="rounded-md border border-border bg-card p-2.5">
                     <p className="text-[11px] text-muted-foreground">{t('attendanceReport.attendanceRate', { defaultValue: 'Assiduidade' })}</p>
@@ -556,8 +563,8 @@ export function AttendanceReportDialog({
                             <td className="px-3 py-2 text-center font-medium text-amber-700">{row.late_days}</td>
                             <td className="px-3 py-2 text-center font-medium text-destructive">{row.absent_days}</td>
                             <td className="px-3 py-2 text-center text-blue-700">{row.leave_days}</td>
-                            <td className="px-3 py-2 text-right font-mono">{row.worked_hours.toFixed(2)}h</td>
-                            <td className="px-3 py-2 text-right font-mono">{row.overtime_hours.toFixed(2)}h</td>
+                            <td className="px-3 py-2 text-right font-mono">{formatMinutesToHours(row.worked_minutes ?? Math.round(row.worked_hours * 60))}</td>
+                            <td className="px-3 py-2 text-right font-mono">{formatMinutesToHours(row.overtime_minutes ?? Math.round(row.overtime_hours * 60))}</td>
                             <td className="px-3 py-2 text-right">
                               <Badge variant="outline" className="font-mono text-[11px]">{row.attendance_rate.toFixed(1)}%</Badge>
                             </td>
@@ -594,7 +601,7 @@ export function AttendanceReportDialog({
                               <td className="px-3 py-1.5 text-muted-foreground">{entry.shift_name}</td>
                               <td className="px-3 py-1.5 text-center font-mono">{entry.clock_in}</td>
                               <td className="px-3 py-1.5 text-center font-mono">{entry.clock_out}</td>
-                              <td className="px-3 py-1.5 text-right font-mono">{entry.worked_hours.toFixed(2)}h</td>
+                              <td className="px-3 py-1.5 text-right font-mono">{formatMinutesToHours(entry.worked_minutes ?? Math.round(entry.worked_hours * 60))}</td>
                               <td className="px-3 py-1.5 text-center">
                                 <Badge variant="outline" className="text-[11px]">{entry.status_label}</Badge>
                               </td>

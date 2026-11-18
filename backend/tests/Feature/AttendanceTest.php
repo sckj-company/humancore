@@ -56,6 +56,19 @@ class AttendanceTest extends TestCase
     public function test_employee_can_clock_in_and_out(): void
     {
         [$tenant, $employee, $user] = $this->setupEmployeeUser('employee');
+        $shift = Shift::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno Padrão',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+        ]);
+        EmployeeSchedule::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'effective_from' => now()->toDateString(),
+            'is_active' => true,
+        ]);
 
         $this->actingAs($user, 'sanctum');
 
@@ -68,6 +81,7 @@ class AttendanceTest extends TestCase
         $record = AttendanceRecord::where('employee_id', $employee->id)->first();
         $this->assertNotNull($record->clock_in);
         $this->assertNotNull($record->clock_out);
+        $this->assertSame($shift->id, $record->shift_id);
     }
 
     public function test_employee_overtime_amount_is_calculated_when_clocking_out(): void
@@ -425,14 +439,45 @@ class AttendanceTest extends TestCase
             ->assertJsonCount(1, 'data.data');
     }
 
-    public function test_manual_and_edit_attendance_without_shift_uses_work_end_time_setting_for_overtime(): void
+    public function test_attendance_requires_assigned_shift_before_recording_and_calculates_overtime(): void
     {
         [$tenant, $employee, $admin] = $this->setupEmployeeUser('admin');
-        $this->seed(SettingSeeder::class);
         $employee->update(['overtime_hourly_rate' => 1000]);
         $date = now()->toDateString();
 
         $this->actingAs($admin, 'sanctum');
+
+        $this->postJson('/api/v1/attendance/toggle', [
+            'employee_id' => $employee->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors('shift_id');
+
+        $this->postJson('/api/v1/attendance/manual', [
+            'employee_id' => $employee->id,
+            'date' => $date,
+            'clock_in' => '08:00',
+            'clock_out' => '18:30',
+            'status' => 'present',
+        ])->assertUnprocessable()->assertJsonValidationErrors('shift_id');
+
+        $this->postJson('/api/v1/attendance/qr/issue', [
+            'action' => 'clock_in',
+        ])->assertUnprocessable();
+
+        $shift = Shift::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno Comercial',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'break_minutes' => 60,
+            'late_tolerance_minutes' => 10,
+        ]);
+        EmployeeSchedule::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+            'effective_from' => $date,
+            'is_active' => true,
+        ]);
 
         $recordId = $this->postJson('/api/v1/attendance/manual', [
             'employee_id' => $employee->id,
@@ -442,6 +487,7 @@ class AttendanceTest extends TestCase
             'status' => 'present',
         ])
             ->assertCreated()
+            ->assertJsonPath('data.shift_id', $shift->id)
             ->assertJsonPath('data.overtime_minutes', 90)
             ->assertJsonPath('data.overtime_amount', 1500)
             ->json('data.id');

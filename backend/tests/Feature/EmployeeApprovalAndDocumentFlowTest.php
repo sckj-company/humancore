@@ -6,8 +6,10 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeSchedule;
 use App\Models\PayrollPeriod;
 use App\Models\Setting;
+use App\Models\Shift;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\CloudinaryService;
@@ -181,6 +183,20 @@ class EmployeeApprovalAndDocumentFlowTest extends TestCase
         // Passa a estar elegível para folha e operações
         $processableAfter = $this->getJson("/api/v1/payroll/periods/{$period->id}/processable-employees")->assertOk();
         $this->assertCount(1, $processableAfter->json('data'));
+
+        $shift = Shift::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno Padrão',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+        ]);
+        EmployeeSchedule::create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $empId,
+            'shift_id' => $shift->id,
+            'effective_from' => now()->toDateString(),
+            'is_active' => true,
+        ]);
 
         $this->postJson('/api/v1/attendance/toggle', ['employee_id' => $empId])->assertOk();
 

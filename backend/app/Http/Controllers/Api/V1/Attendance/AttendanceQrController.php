@@ -6,8 +6,9 @@ use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\V1\AttendanceResource;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
-use App\Models\Shift;
+use App\Models\EmployeeSchedule;
 use App\Models\Setting;
+use App\Models\Shift;
 use App\Services\Attendance\OvertimePayCalculator;
 use App\Services\Attendance\QrCodeService;
 use App\Services\Attendance\WorkedHoursCalculator;
@@ -21,13 +22,23 @@ class AttendanceQrController extends BaseController
 
     public function issue(Request $request): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'action' => ['required', 'in:clock_in,clock_out'],
+            'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
         ]);
 
         $employee = auth()->user()->employee;
         if (! $employee) {
             return $this->error('Utilizador sem funcionário associado.', 422);
+        }
+
+        $schedule = $this->resolveScheduleForDate(
+            now()->toDateString(),
+            $employee,
+            isset($validated['shift_id']) ? (int) $validated['shift_id'] : null,
+        );
+        if (! $schedule?->shift) {
+            return $this->error('O funcionário não possui nenhum turno vinculado para hoje. Vincule um turno antes de registar presença.', 422);
         }
 
         $code = $this->qrService->issue(
@@ -70,6 +81,11 @@ class AttendanceQrController extends BaseController
             ->whereDate('date', $today)
             ->first();
 
+        $schedule = $this->resolveScheduleForDate($today, $employee, $record?->shift_id);
+        if (! $schedule?->shift) {
+            return $this->error('O funcionário não possui nenhum turno vinculado para hoje. Vincule um turno antes de registar presença.', 422);
+        }
+
         if ($code->action === QrCodeService::ACTION_CLOCK_IN) {
             if ($record && $record->clock_in) {
                 $this->qrService->consume($code);
@@ -80,12 +96,14 @@ class AttendanceQrController extends BaseController
             if (! $record) {
                 $record = AttendanceRecord::create([
                     'employee_id' => $employee->id,
+                    'shift_id' => $schedule->shift_id,
                     'tenant_id' => tenant_id(),
                     'date' => $today,
                     'status' => 'present',
                 ]);
             }
 
+            $record->shift_id ??= $schedule->shift_id;
             $record->clock_in = now();
             $record->ip_address = $request->ip();
             $record->device_info = 'QR Code';
@@ -103,7 +121,8 @@ class AttendanceQrController extends BaseController
 
             $record->clock_out = now();
             $record->loadMissing('shift');
-            $shift = $record->shift ?? $this->resolveShiftForDate($today, $employee);
+            $shift = $record->shift ?? $schedule->shift;
+            $record->shift_id ??= $shift->id;
             $record->total_worked = app(WorkedHoursCalculator::class)->workedMinutes(
                 Carbon::parse($record->clock_in),
                 $record->clock_out,
@@ -124,22 +143,34 @@ class AttendanceQrController extends BaseController
         );
     }
 
-    protected function resolveShiftForDate(string $date, Employee $employee): ?Shift
+    protected function resolveScheduleForDate(string $date, Employee $employee, ?int $shiftId = null): ?EmployeeSchedule
     {
-        $schedule = $employee->schedules()
+        $schedules = $employee->schedules()
             ->with('shift')
             ->where('is_active', true)
             ->whereDate('effective_from', '<=', $date)
             ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date))
             ->orderByDesc('effective_from')
-            ->first();
+            ->get()
+            ->filter(function (EmployeeSchedule $schedule) use ($date) {
+                if (! $schedule->shift) {
+                    return false;
+                }
+                $days = $schedule->custom_days ?? $schedule->shift->working_days;
 
-        return $schedule?->shift;
+                return $days === null || in_array(Carbon::parse($date)->dayOfWeek, array_map('intval', $days), true);
+            });
+
+        if ($shiftId !== null) {
+            return $schedules->firstWhere('shift_id', $shiftId);
+        }
+
+        return $schedules->first();
     }
 
     protected function overtimeMinutes(string $date, \DateTimeInterface $clockOut, Employee $employee, ?Shift $shift = null): int
     {
-        $shift ??= $this->resolveShiftForDate($date, $employee);
+        $shift ??= $this->resolveScheduleForDate($date, $employee)?->shift;
         $endTime = $shift?->end_time ?: (string) (Setting::where('tenant_id', tenant_id())
             ->where('group', 'hr')
             ->where('key', 'work_end_time')

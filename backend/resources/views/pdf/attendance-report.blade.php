@@ -31,6 +31,19 @@
             'half_day' => '半天',
             default => $status,
         };
+        $formatDuration = static function (int|float|null $minutes): string {
+            $total = max(0, (int) round((float) ($minutes ?? 0)));
+            $hours = intdiv($total, 60);
+            $rem = $total % 60;
+            if ($hours === 0) {
+                return "{$total} min";
+            }
+            if ($rem === 0) {
+                return "{$hours}h";
+            }
+
+            return "{$hours}h {$rem} min";
+        };
     @endphp
     <style>
         @page { size: A4 {{ $isSingleEmployee ? 'portrait' : 'landscape' }}; margin: 10mm 11mm; }
@@ -193,8 +206,8 @@
             <td><span class="kpi-label">{!! $biBlock('Atrasos', '迟到次数') !!}</span><span class="kpi-val" style="color:#b45309;">{{ $totals['late_count'] }} ({{ $totals['total_late_minutes'] }} min)</span></td>
             <td><span class="kpi-label">{!! $biBlock('Faltas', '缺勤次数') !!}</span><span class="kpi-val" style="color:#b91c1c;">{{ $totals['absent_count'] }}</span></td>
             <td><span class="kpi-label">{!! $biBlock('Ausências / Férias', '请假 / 休假') !!}</span><span class="kpi-val" style="color:#1d4ed8;">{{ $totals['on_leave_count'] }}</span></td>
-            <td><span class="kpi-label">{!! $biBlock('Horas Trabalhadas', '工作总工时') !!}</span><span class="kpi-val">{{ number_format($totals['total_worked_hours'], 2, ',', '.') }} h</span></td>
-            <td><span class="kpi-label">{!! $biBlock('Horas Extras', '加班工时') !!}</span><span class="kpi-val">{{ number_format($totals['total_overtime_hours'], 2, ',', '.') }} h</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Horas Trabalhadas', '工作总工时') !!}</span><span class="kpi-val">{{ $formatDuration($totals['total_worked_minutes'] ?? (($totals['total_worked_hours'] ?? 0) * 60)) }}</span></td>
+            <td><span class="kpi-label">{!! $biBlock('Horas Extras', '加班工时') !!}</span><span class="kpi-val">{{ $formatDuration($totals['total_overtime_minutes'] ?? (($totals['total_overtime_hours'] ?? 0) * 60)) }}</span></td>
             <td><span class="kpi-label">{!! $biBlock('Assiduidade', '出勤率') !!}</span><span class="kpi-val">{{ number_format($totals['attendance_rate'], 1, ',', '.') }}%</span></td>
         </tr>
     </table>
@@ -229,8 +242,8 @@
                     <td class="center">{{ $row['absent_days'] }}</td>
                     <td class="center">{{ $row['leave_days'] }}</td>
                     <td class="num">{{ $row['late_minutes'] }}</td>
-                    <td class="num">{{ number_format($row['worked_hours'], 2, ',', '.') }}h</td>
-                    <td class="num">{{ number_format($row['overtime_hours'], 2, ',', '.') }}h</td>
+                    <td class="num">{{ $formatDuration($row['worked_minutes'] ?? (($row['worked_hours'] ?? 0) * 60)) }}</td>
+                    <td class="num">{{ $formatDuration($row['overtime_minutes'] ?? (($row['overtime_hours'] ?? 0) * 60)) }}</td>
                     <td class="num"><strong>{{ number_format($row['attendance_rate'], 1, ',', '.') }}%</strong></td>
                 </tr>
             @empty
@@ -273,9 +286,9 @@
                     <td>{{ $entry['shift_name'] }}</td>
                     <td class="center">{{ $entry['clock_in'] }}</td>
                     <td class="center">{{ $entry['clock_out'] }}</td>
-                    <td class="num">{{ number_format($entry['worked_hours'], 2, ',', '.') }}h</td>
+                    <td class="num">{{ $formatDuration($entry['worked_minutes'] ?? (($entry['worked_hours'] ?? 0) * 60)) }}</td>
                     <td class="num">{{ $entry['late_minutes'] }}</td>
-                    <td class="num">{{ number_format($entry['overtime_hours'], 2, ',', '.') }}h</td>
+                    <td class="num">{{ $formatDuration($entry['overtime_minutes'] ?? (($entry['overtime_hours'] ?? 0) * 60)) }}</td>
                     <td class="center">
                         <span class="badge st-{{ $entry['status'] }}">
                             {{ $entry['status_label'] }}@if($isBilingual) / {{ $statusZh($entry['status']) }}@endif

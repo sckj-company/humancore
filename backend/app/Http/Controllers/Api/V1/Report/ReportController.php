@@ -260,6 +260,7 @@ class ReportController extends BaseController
             ->map(fn ($r) => [
                 'department' => $r->department,
                 'records' => (int) $r->records,
+                'total_minutes' => (int) $r->total_minutes,
                 'total_hours' => round(((int) $r->total_minutes) / 60, 2),
                 'late_minutes' => (int) $r->late_minutes,
                 'overtime_minutes' => (int) $r->overtime_minutes,
@@ -280,6 +281,7 @@ class ReportController extends BaseController
             'range' => ['start' => $start->toDateString(), 'end' => $end->toDateString()],
             'summary' => [
                 'records' => (int) ($totals->records ?? 0),
+                'total_minutes' => (int) ($totals->total_minutes ?? 0),
                 'total_hours' => round(((int) ($totals->total_minutes ?? 0)) / 60, 2),
                 'late_minutes' => (int) ($totals->total_late_minutes ?? 0),
                 'overtime_minutes' => (int) ($totals->total_overtime_minutes ?? 0),

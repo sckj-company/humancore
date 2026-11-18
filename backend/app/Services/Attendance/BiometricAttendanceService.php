@@ -29,6 +29,7 @@ class BiometricAttendanceService
             'created' => 0,
             'not_found' => 0,
             'errors' => 0,
+            'without_shift_count' => 0,
             'items' => [],
         ];
 
@@ -82,15 +83,20 @@ class BiometricAttendanceService
                     'approval_status' => 'pending',
                 ]);
 
+                $shiftPayload = $this->formatEmployeeShiftsPayload($employee);
+                if (! $shiftPayload['has_assigned_shift']) {
+                    $summary['without_shift_count']++;
+                }
+
                 $summary['created']++;
-                $summary['items'][] = [
+                $summary['items'][] = array_merge([
                     'index' => $index,
                     'status' => 'created',
                     'employee_id' => $employee->id,
                     'employee_code' => $employee->employee_code,
                     'biometric_code' => $employee->biometric_code,
                     'full_name' => $employee->full_name,
-                ];
+                ], $shiftPayload);
 
                 continue;
             }
@@ -111,18 +117,79 @@ class BiometricAttendanceService
                 $employee->update($updates);
             }
 
+            $shiftPayload = $this->formatEmployeeShiftsPayload($employee);
+            if (! $shiftPayload['has_assigned_shift']) {
+                $summary['without_shift_count']++;
+            }
+
             $summary['updated']++;
-            $summary['items'][] = [
+            $summary['items'][] = array_merge([
                 'index' => $index,
                 'status' => 'updated',
                 'employee_id' => $employee->id,
                 'employee_code' => $employee->employee_code,
                 'biometric_code' => $employee->biometric_code,
                 'full_name' => $employee->full_name,
-            ];
+            ], $shiftPayload);
         }
 
         return $summary;
+    }
+
+    /**
+     * Formata os turnos ativos vinculados ao funcionário para os endpoints de integração biométrica.
+     *
+     * @return array{has_assigned_shift: bool, shifts_count: int, shift: ?array<string, mixed>, shifts: array<int, array<string, mixed>>, missing_shift_warning: ?string}
+     */
+    public function formatEmployeeShiftsPayload(Employee $employee, ?string $date = null): array
+    {
+        $targetDate = $date ?: Carbon::now($this->tenantTimezone((int) $employee->tenant_id))->toDateString();
+
+        if ($employee->relationLoaded('schedules')) {
+            $schedules = $employee->schedules
+                ->filter(fn (EmployeeSchedule $schedule) => $schedule->is_active
+                    && (! $schedule->effective_from || $schedule->effective_from->toDateString() <= $targetDate)
+                    && (! $schedule->effective_to || $schedule->effective_to->toDateString() >= $targetDate));
+
+            if ($schedules instanceof \Illuminate\Database\Eloquent\Collection && $schedules->isNotEmpty()) {
+                $schedules->loadMissing('shift');
+            }
+        } else {
+            $schedules = $this->activeSchedulesForDate($employee, $targetDate);
+        }
+
+        $shifts = $schedules
+            ->filter(fn (EmployeeSchedule $schedule) => $schedule->shift !== null)
+            ->map(function (EmployeeSchedule $schedule): array {
+                $shift = $schedule->shift;
+
+                return [
+                    'id' => $shift->id,
+                    'schedule_id' => $schedule->id,
+                    'name' => $shift->name,
+                    'code' => $shift->code,
+                    'start_time' => $shift->start_time,
+                    'end_time' => $shift->end_time,
+                    'break_minutes' => (int) ($shift->break_minutes ?? 0),
+                    'work_hours' => $shift->work_hours !== null ? (float) $shift->work_hours : 8.0,
+                    'late_tolerance_minutes' => (int) ($shift->late_tolerance_minutes ?? 10),
+                    'working_days' => array_map('intval', $schedule->custom_days ?? $shift->working_days ?? [1, 2, 3, 4, 5]),
+                    'is_night_shift' => (bool) $shift->is_night_shift,
+                    'effective_from' => $schedule->effective_from?->toDateString(),
+                    'effective_to' => $schedule->effective_to?->toDateString(),
+                ];
+            })
+            ->values();
+
+        return [
+            'has_assigned_shift' => $shifts->isNotEmpty(),
+            'shifts_count' => $shifts->count(),
+            'shift' => $shifts->first(),
+            'shifts' => $shifts->all(),
+            'missing_shift_warning' => $shifts->isEmpty()
+                ? 'Funcionário sem turno vinculado. Não poderá registar presença até que um turno seja atribuído.'
+                : null,
+        ];
     }
 
     public function ingestBatch(
@@ -165,7 +232,7 @@ class BiometricAttendanceService
                 $summary['results'][] = array_merge(['index' => $index], $result);
             } catch (\Throwable $e) {
                 $summary['failed']++;
-                $summary['results'][] = [
+                $errorItem = [
                     'index' => $index,
                     'action' => 'error',
                     'employee_id' => $item['employee_id'] ?? null,
@@ -173,6 +240,10 @@ class BiometricAttendanceService
                     'biometric_code' => $this->extractBiometricCode($item),
                     'message' => $e->getMessage(),
                 ];
+                if ($e->getCode() === 42201) {
+                    $errorItem['code'] = 'SHIFT_REQUIRED';
+                }
+                $summary['results'][] = $errorItem;
             }
         }
 
@@ -333,8 +404,14 @@ class BiometricAttendanceService
 
             $dateStr = $punchedAt->toDateString();
             $schedule = $this->resolveScheduleForPunch($employee, $dateStr, $item['shift_id'] ?? null, $punchedAt, $timezone);
-            $shift = $schedule?->shift;
-            $shiftId = $schedule?->shift_id;
+            if (! $schedule || ! $schedule->shift) {
+                throw new \RuntimeException(
+                    "Funcionário {$employee->full_name} não possui turno vinculado para a data {$dateStr}. Vincule um turno antes de registar presença.",
+                    42201,
+                );
+            }
+            $shift = $schedule->shift;
+            $shiftId = $schedule->shift_id;
 
             return DB::transaction(function () use (
                 $tenantId,
@@ -360,6 +437,8 @@ class BiometricAttendanceService
                             'employee_id' => $employee->id,
                             'employee_code' => $employee->employee_code,
                             'biometric_code' => $employee->biometric_code,
+                            'shift_id' => $shiftId,
+                            'shift_name' => $shift->name,
                             'date' => $dateStr,
                             'attendance_record_id' => $record->id,
                             'status' => $record->status,
@@ -442,8 +521,14 @@ class BiometricAttendanceService
         }
 
         $schedule = $this->resolveScheduleForPunch($employee, $dateStr, $item['shift_id'] ?? null, null, $timezone);
-        $shift = $schedule?->shift;
-        $shiftId = $schedule?->shift_id;
+        if (! $schedule || ! $schedule->shift) {
+            throw new \RuntimeException(
+                "Funcionário {$employee->full_name} não possui turno vinculado para a data {$dateStr}. Vincule um turno antes de registar presença.",
+                42201,
+            );
+        }
+        $shift = $schedule->shift;
+        $shiftId = $schedule->shift_id;
 
         $inDateTime = ! empty($item['clock_in'])
             ? $this->parseTimeOnDate($dateStr, (string) $item['clock_in'], $timezone)
@@ -507,12 +592,16 @@ class BiometricAttendanceService
 
     private function formatIngestResult(string $action, Employee $employee, AttendanceRecord $record): array
     {
+        $record->loadMissing('shift:id,name');
+
         return [
             'action' => $action,
             'attendance_record_id' => $record->id,
             'employee_id' => $employee->id,
             'employee_code' => $employee->employee_code,
             'biometric_code' => $employee->biometric_code,
+            'shift_id' => $record->shift_id,
+            'shift_name' => $record->shift?->name,
             'date' => $record->date?->format('Y-m-d'),
             'clock_in' => $record->clock_in?->format('H:i:s'),
             'clock_out' => $record->clock_out?->format('H:i:s'),
@@ -651,7 +740,7 @@ class BiometricAttendanceService
     private function isScheduledWorkday(Collection $schedules, Carbon $targetDate): bool
     {
         if ($schedules->isEmpty()) {
-            return in_array((int) $targetDate->dayOfWeek, [1, 2, 3, 4, 5], true);
+            return false;
         }
 
         foreach ($schedules as $schedule) {

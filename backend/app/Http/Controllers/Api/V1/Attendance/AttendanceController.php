@@ -40,7 +40,7 @@ class AttendanceController extends BaseController
         }
 
         $schedule = $this->scheduleForDate($employee, $today, $validated['shift_id'] ?? null);
-        $shiftId = $schedule?->shift_id;
+        $shiftId = $schedule->shift_id;
         $record = $this->recordForShift($employee->id, $today, $shiftId)->first();
 
         if ($record && $record->clock_in && $record->clock_out) {
@@ -62,20 +62,20 @@ class AttendanceController extends BaseController
             $record->total_worked = $this->workedMinutes(
                 Carbon::parse($record->clock_in),
                 $record->clock_out,
-                $schedule?->shift,
+                $schedule->shift,
                 $record->break_start ? Carbon::parse($record->break_start) : null,
                 $record->break_end ? Carbon::parse($record->break_end) : null,
             );
-            $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee, $schedule?->shift);
+            $record->overtime_minutes = $this->overtimeMinutes($today, $record->clock_out, $employee, $schedule->shift);
             $record->overtime_amount = app(OvertimePayCalculator::class)->amount($employee, $record->overtime_minutes);
-            $record->status = $this->resolveStatus($record, $schedule?->shift);
+            $record->status = $this->resolveStatus($record, $schedule->shift);
             $record->save();
 
             return $this->success(new AttendanceResource($record->load('shift')), 'Saída registada.');
         }
 
         $record->clock_in = now();
-        $record->late_minutes = $this->lateMinutes($today, $record->clock_in, $employee, $schedule?->shift);
+        $record->late_minutes = $this->lateMinutes($today, $record->clock_in, $employee, $schedule->shift);
         $record->status = $record->late_minutes > 0 ? 'late' : 'present';
         $record->ip_address = $request->ip();
         $record->device_info = substr((string) $request->userAgent(), 0, 250);
@@ -128,7 +128,7 @@ class AttendanceController extends BaseController
             return $this->error('Funcionário aguarda aprovação e verificação dos documentos.', 422);
         }
         $schedule = $this->scheduleForDate($employee, $validated['date'], $validated['shift_id'] ?? null);
-        $shiftId = $schedule?->shift_id;
+        $shiftId = $schedule->shift_id;
         $existing = $this->recordForShift($employee->id, $validated['date'], $shiftId)->first();
 
         if ($existing && $existing->clock_in && $existing->clock_out) {
@@ -144,14 +144,14 @@ class AttendanceController extends BaseController
         $outDateTime = null;
         if (! empty($validated['clock_in'])) {
             $inDateTime = Carbon::parse($validated['date'].' '.$validated['clock_in'], $timezone);
-            $lateMinutes = $this->lateMinutes($validated['date'], $inDateTime, $employee, $schedule?->shift);
+            $lateMinutes = $this->lateMinutes($validated['date'], $inDateTime, $employee, $schedule->shift);
         }
         if (! empty($validated['clock_out'])) {
-            $outDateTime = $this->parseClockOut($validated['date'], $validated['clock_out'], $inDateTime, $schedule?->shift, $timezone);
-            $overtimeMinutes = $this->overtimeMinutes($validated['date'], $outDateTime, $employee, $schedule?->shift);
+            $outDateTime = $this->parseClockOut($validated['date'], $validated['clock_out'], $inDateTime, $schedule->shift, $timezone);
+            $overtimeMinutes = $this->overtimeMinutes($validated['date'], $outDateTime, $employee, $schedule->shift);
         }
         if ($inDateTime && $outDateTime) {
-            $totalMinutes = $this->workedMinutes($inDateTime, $outDateTime, $schedule?->shift);
+            $totalMinutes = $this->workedMinutes($inDateTime, $outDateTime, $schedule->shift);
         }
 
         $record = AttendanceRecord::updateOrCreate(
@@ -242,7 +242,7 @@ class AttendanceController extends BaseController
         if ($attendanceChanged) {
             $employee = $record->employee;
             $schedule = $this->scheduleForDate($employee, $date, $shiftId, true);
-            $shiftId = $schedule?->shift_id;
+            $shiftId = $schedule->shift_id;
 
             $collision = $this->recordForShift($employee->id, $date, $shiftId)
                 ->whereKeyNot($record->id)
@@ -261,20 +261,20 @@ class AttendanceController extends BaseController
                 ? $validated['clock_out']
                 : $record->clock_out?->format('H:i');
             $inDateTime = $clockIn ? Carbon::parse($date.' '.$clockIn, $timezone) : null;
-            $outDateTime = $clockOut ? $this->parseClockOut($date, $clockOut, $inDateTime, $schedule?->shift, $timezone) : null;
+            $outDateTime = $clockOut ? $this->parseClockOut($date, $clockOut, $inDateTime, $schedule->shift, $timezone) : null;
 
             $validated['date'] = $date;
             $validated['shift_id'] = $shiftId;
             $validated['clock_in'] = $inDateTime;
             $validated['clock_out'] = $outDateTime;
             $validated['total_worked'] = $inDateTime && $outDateTime
-                ? $this->workedMinutes($inDateTime, $outDateTime, $schedule?->shift)
+                ? $this->workedMinutes($inDateTime, $outDateTime, $schedule->shift)
                 : 0;
             $validated['late_minutes'] = $inDateTime
-                ? $this->lateMinutes($date, $inDateTime, $employee, $schedule?->shift)
+                ? $this->lateMinutes($date, $inDateTime, $employee, $schedule->shift)
                 : 0;
             $validated['overtime_minutes'] = $outDateTime
-                ? $this->overtimeMinutes($date, $outDateTime, $employee, $schedule?->shift)
+                ? $this->overtimeMinutes($date, $outDateTime, $employee, $schedule->shift)
                 : 0;
             $validated['overtime_amount'] = app(OvertimePayCalculator::class)->amount($employee, $validated['overtime_minutes']);
         }
@@ -404,7 +404,7 @@ class AttendanceController extends BaseController
             : $query->where('shift_id', $shiftId);
     }
 
-    private function scheduleForDate(Employee $employee, string $date, ?int $shiftId, bool $includeInactive = false): ?EmployeeSchedule
+    private function scheduleForDate(Employee $employee, string $date, ?int $shiftId, bool $includeInactive = false): EmployeeSchedule
     {
         $schedules = $employee->schedules()
             ->with('shift')
@@ -413,10 +413,19 @@ class AttendanceController extends BaseController
             ->when(! $includeInactive, fn ($query) => $query->where('is_active', true))
             ->get()
             ->filter(function (EmployeeSchedule $schedule) use ($date) {
-                $days = $schedule->custom_days ?? $schedule->shift?->working_days;
+                if (! $schedule->shift) {
+                    return false;
+                }
+                $days = $schedule->custom_days ?? $schedule->shift->working_days;
 
                 return $days === null || in_array(Carbon::parse($date)->dayOfWeek, array_map('intval', $days), true);
             });
+
+        if ($schedules->isEmpty()) {
+            throw ValidationException::withMessages([
+                'shift_id' => 'O funcionário não possui nenhum turno vinculado para esta data. Vincule um turno antes de registar presença.',
+            ]);
+        }
 
         if ($shiftId !== null) {
             $schedule = $schedules->firstWhere('shift_id', $shiftId);
@@ -435,6 +444,9 @@ class AttendanceController extends BaseController
             ]);
         }
 
-        return $schedules->first();
+        /** @var EmployeeSchedule $schedule */
+        $schedule = $schedules->first();
+
+        return $schedule;
     }
 }

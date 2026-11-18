@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Clock, LogIn, LogOut, Filter, Loader2, Pencil } from 'lucide-react'
+import { AlertCircle, Clock, LogIn, LogOut, Filter, Loader2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { formatMinutesToHours } from '@/lib/format'
@@ -80,7 +80,7 @@ function EmployeeAttendanceView() {
   const queryClient = useQueryClient()
   const [selectedShiftId, setSelectedShiftId] = useState('')
 
-  const { data: schedules = [] } = useQuery({
+  const { data: schedules = [], isLoading: isLoadingSchedules } = useQuery({
     queryKey: ['my-schedules'],
     queryFn: () => api.get<MySchedule[]>('my-schedule'),
   })
@@ -161,9 +161,19 @@ function EmployeeAttendanceView() {
                   {today.status}
                 </Badge>
               )}
+              {!isLoadingSchedules && assignedShifts.length === 0 && (
+                <div className="flex w-full max-w-md items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-left text-xs text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {t('attendance.noShiftAssignedWarning', {
+                      defaultValue: 'Não possui nenhum turno vinculado para hoje. Contacte os Recursos Humanos para atribuir um turno antes de registar presença.',
+                    })}
+                  </span>
+                </div>
+              )}
               <Button
                 size="lg"
-                disabled={toggleMutation.isPending || (assignedShifts.length > 1 && !selectedShiftId)}
+                disabled={toggleMutation.isPending || isLoadingSchedules || assignedShifts.length === 0 || (assignedShifts.length > 1 && !selectedShiftId)}
                 onClick={() => toggleMutation.mutate()}
                 variant={isClockedIn ? 'outline' : 'default'}
               >
@@ -214,7 +224,7 @@ function EmployeeAttendanceView() {
                         {formatMinutesToHours(Math.round((r.normal_hours ?? r.shift?.work_hours ?? 8) * 60))}
                       </td>
                       <td className="px-6 py-3 text-right font-mono">
-                        {r.total_worked != null ? (r.total_worked / 60).toFixed(1) : '—'}
+                        {r.total_worked != null ? formatMinutesToHours(r.total_worked) : '—'}
                       </td>
                       <td className="px-6 py-3 text-right font-mono text-muted-foreground">
                         {formatMinutesToHours(r.overtime_minutes)}
@@ -254,7 +264,7 @@ function AdminAttendanceView() {
     queryKey: ['attendance', params],
     queryFn: () => api.get<Paginated<AttendanceDTO>>('attendance', params),
   })
-  const { data: scheduleData } = useQuery({
+  const { data: scheduleData, isLoading: isLoadingEditSchedules } = useQuery({
     queryKey: ['attendance-editor-schedules', editing?.employee_id],
     queryFn: () => api.get<Paginated<EmployeeSchedule>>('employee-schedules', { employee_id: editing?.employee_id, per_page: 100 }),
     enabled: !!editing,
@@ -357,7 +367,7 @@ function AdminAttendanceView() {
                         {formatMinutesToHours(Math.round((r.normal_hours ?? r.shift?.work_hours ?? 8) * 60))}
                       </td>
                       <td className="px-6 py-3 text-right font-mono">
-                        {r.total_worked != null ? (r.total_worked / 60).toFixed(1) : '—'}
+                        {r.total_worked != null ? formatMinutesToHours(r.total_worked) : '—'}
                       </td>
                       <td className="px-6 py-3 text-right font-mono text-muted-foreground">
                         {formatMinutesToHours(r.overtime_minutes)}
@@ -417,7 +427,7 @@ function AdminAttendanceView() {
                 </SelectContent>
               </Select>
             </div>
-            {editShifts.length > 0 && (
+            {editShifts.length > 0 ? (
               <div className="space-y-1.5">
                 <Label>{t('attendance.shift')}</Label>
                 <Select value={editForm.shift_id} onValueChange={(value) => setEditForm((form) => ({ ...form, shift_id: value }))}>
@@ -430,6 +440,15 @@ function AdminAttendanceView() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            ) : !isLoadingEditSchedules && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  {t('attendance.noActiveShiftForDateWarning', {
+                    defaultValue: 'Este funcionário não possui turno ativo atribuído para esta data. Vincule um turno antes de alterar a marcação.',
+                  })}
+                </span>
               </div>
             )}
             <div className="space-y-1.5">
@@ -448,7 +467,7 @@ function AdminAttendanceView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
-            <Button onClick={() => editMutation.mutate()} disabled={editMutation.isPending || (editShifts.length > 1 && !editForm.shift_id)}>
+            <Button onClick={() => editMutation.mutate()} disabled={editMutation.isPending || isLoadingEditSchedules || editShifts.length === 0 || (editShifts.length > 1 && !editForm.shift_id)}>
               {editMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t('common.save')}
             </Button>

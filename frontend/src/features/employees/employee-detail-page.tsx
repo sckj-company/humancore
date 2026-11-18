@@ -209,7 +209,7 @@ export function EmployeeDetailPage() {
   const { data: leavesData, refetch: refetchLeaves } = useQuery<Paginated<LeaveRequest>>({ queryKey: ['leaves', id], queryFn: () => api.get<Paginated<LeaveRequest>>('leaves', { employee_id: id, per_page: 50 }), enabled: !!id && activeTab === 'leaves' })
   const { data: leaveTypes } = useQuery<LeaveType[]>({ queryKey: ['leave-types'], queryFn: () => api.get<LeaveType[]>('leaves/types'), enabled: isLeaveOpen })
   const { data: shiftsData } = useQuery<Paginated<Shift>>({ queryKey: ['shifts-all'], queryFn: () => api.get<Paginated<Shift>>('shifts', { per_page: 100 }), enabled: isShiftOpen })
-  const { data: scheduleHistory, refetch: refetchSchedule } = useQuery<Paginated<EmployeeScheduleRecord>>({ queryKey: ['employee-schedules-history', id], queryFn: () => api.get<Paginated<EmployeeScheduleRecord>>('employee-schedules', { employee_id: id, per_page: 100 }), enabled: !!id && (activeTab === 'shift' || activeTab === 'attendance' || isManualAttOpen) })
+  const { data: scheduleHistory, refetch: refetchSchedule, isLoading: isLoadingSchedules } = useQuery<Paginated<EmployeeScheduleRecord>>({ queryKey: ['employee-schedules-history', id], queryFn: () => api.get<Paginated<EmployeeScheduleRecord>>('employee-schedules', { employee_id: id, per_page: 100 }), enabled: !!id && (activeTab === 'shift' || activeTab === 'attendance' || isManualAttOpen) })
   const attendanceSchedules = (scheduleHistory?.data ?? []).filter((schedule) =>
     schedule.is_active
     && (!schedule.effective_from || schedule.effective_from <= todayStr)
@@ -555,7 +555,7 @@ export function EmployeeDetailPage() {
       return raw
     }
   }
-  const formatMinutes = (m?: number | null) => { const total = m ?? 0; const h = Math.floor(total / 60); const mn = total % 60; return t('employeeDetail.text.durationHoursMinutes', { hours: h, minutes: String(mn).padStart(2, '0') }) }
+  const formatMinutes = (m?: number | null) => formatMinutesToHours(m)
   const formatCurrency = (a?: number | null) => { if (a == null) return '—'; return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(a) }
   const calculateAge = (b?: string | null) => { if (!b) return null; try { const diff = Date.now() - new Date(b).getTime(); const a = Math.abs(new Date(diff).getUTCFullYear() - 1970); return isNaN(a) ? null : t('employeeDetail.text.ageYears', { count: a }) } catch { return null } }
   const openContractDialog = (contract?: EmployeeContract | null, renew = false) => {
@@ -1193,7 +1193,8 @@ export function EmployeeDetailPage() {
                     variant={isClockedIn ? 'secondary' : isClockedOut ? 'outline' : 'default'}
                     className="h-auto min-h-8 whitespace-normal text-center gap-1.5"
                     onClick={() => toggleAttendance.mutate()}
-                    disabled={toggleAttendance.isPending || isClockedOut || (attendanceSchedules.length > 1 && !attendanceShiftId)}
+                    disabled={toggleAttendance.isPending || isClockedOut || attendanceSchedules.length === 0 || (attendanceSchedules.length > 1 && !attendanceShiftId)}
+                    title={attendanceSchedules.length === 0 ? t('employeeDetail.text.noShiftForDateDescription', { defaultValue: 'Não é possível registar presença porque o funcionário não possui um turno ativo atribuído para esta data.' }) : undefined}
                   >
                     {toggleAttendance.isPending ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1231,7 +1232,7 @@ export function EmployeeDetailPage() {
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_in)}</td>
                               <td className="px-4 py-3 font-mono text-xs">{formatTime(rec.clock_out)}</td>
                               <td className="px-4 py-3 text-right font-mono text-xs text-muted-foreground">{formatMinutesToHours(Math.round((rec.normal_hours ?? rec.shift?.work_hours ?? 8) * 60))}</td>
-                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatMinutes(rec.total_worked)}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{rec.total_worked != null ? formatMinutesToHours(rec.total_worked) : '—'}</td>
                               <td className="px-4 py-3 text-right font-mono text-xs">{formatMinutesToHours(rec.late_minutes)}</td>
                               <td className="px-4 py-3 text-right font-mono text-xs">{formatMinutesToHours(rec.overtime_minutes)}</td>
                               <td className="px-4 py-3"><Badge variant="outline" className={`text-[10px] font-medium ${attendanceStatusColors[rec.status] ?? ''}`}>{attendanceStatusLabels[rec.status] ?? rec.status}</Badge></td>
@@ -1756,6 +1757,34 @@ export function EmployeeDetailPage() {
               </div>
             )}
 
+            {!isLoadingSchedules && manualSchedules.length === 0 && !isManualDateFuture && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">
+                      {t('employeeDetail.text.noShiftForDateTitle', { defaultValue: 'Funcionário sem turno vinculado' })}
+                    </p>
+                    <p className="mt-0.5">
+                      {t('employeeDetail.text.noShiftForDateDescription', { defaultValue: 'Não é possível registar presença porque o funcionário não possui um turno ativo atribuído para esta data.' })}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 h-7 text-xs"
+                  onClick={() => {
+                    setIsManualAttOpen(false)
+                    setIsShiftOpen(true)
+                  }}
+                >
+                  {t('employeeDetail.text.assignShift')}
+                </Button>
+              </div>
+            )}
+
             {isManualDateFuture && (
               <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400 flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -1849,7 +1878,7 @@ export function EmployeeDetailPage() {
             <Button
               size="sm"
               onClick={() => manualAttMutation.mutate()}
-              disabled={manualAttMutation.isPending || (isManualDateClosed && !manualAttRecordId) || isManualDateFuture || (manualSchedules.length > 1 && !manualAttForm.shift_id)}
+              disabled={manualAttMutation.isPending || isLoadingSchedules || (isManualDateClosed && !manualAttRecordId) || isManualDateFuture || manualSchedules.length === 0 || (manualSchedules.length > 1 && !manualAttForm.shift_id)}
             >
               {manualAttMutation.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
               {t('employeeDetail.text.save')}

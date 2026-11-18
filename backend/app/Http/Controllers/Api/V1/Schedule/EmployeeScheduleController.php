@@ -14,7 +14,7 @@ class EmployeeScheduleController extends BaseController
         $this->authorize('viewAny', EmployeeSchedule::class);
 
         $schedules = EmployeeSchedule::query()
-            ->with(['employee:id,first_name,last_name,employee_code', 'shift:id,name,code,start_time,end_time,color'])
+            ->with(['employee:id,first_name,last_name,employee_code', 'shift:id,name,code,start_time,end_time,color,working_days,work_hours'])
             ->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))
             ->when($request->filled('shift_id'), fn ($q) => $q->where('shift_id', $request->integer('shift_id')))
             ->when($request->filled('is_active'), fn ($q) => $q->where('is_active', $request->boolean('is_active')))
@@ -42,6 +42,8 @@ class EmployeeScheduleController extends BaseController
                 'start_time' => $s->shift->start_time,
                 'end_time' => $s->shift->end_time,
                 'color' => $s->shift->color,
+                'working_days' => $s->shift->working_days,
+                'work_hours' => $s->shift->work_hours !== null ? (float) $s->shift->work_hours : null,
             ] : null,
             'created_at' => $s->created_at?->toIso8601String(),
         ]));
@@ -185,7 +187,8 @@ class EmployeeScheduleController extends BaseController
                 'effective_from' => $s->effective_from?->toDateString(),
                 'effective_to' => $s->effective_to?->toDateString(),
                 'custom_days' => $s->custom_days,
-            ]);
+            ])
+            ->values();
 
         return $this->success($schedules);
     }

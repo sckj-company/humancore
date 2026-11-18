@@ -95,15 +95,54 @@ class BiometricIntegrationTest extends TestCase
 
     public function test_biometric_can_sync_employees_both_ways(): void
     {
-        [, , , $employeeA, $employeeB] = $this->setupTenantWithEmployees();
+        [$tenant, , $shift, $employeeA, $employeeB] = $this->setupTenantWithEmployees();
+
+        $secondShift = Shift::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Turno Tarde',
+            'code' => 'TT-02',
+            'start_time' => '18:00:00',
+            'end_time' => '22:00:00',
+            'late_tolerance_minutes' => 5,
+            'working_days' => [1, 2, 3, 4, 5],
+            'is_active' => true,
+        ]);
+        EmployeeSchedule::query()->create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employeeA->id,
+            'shift_id' => $secondShift->id,
+            'effective_from' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $employeeWithoutShift = Employee::factory()->create([
+            'tenant_id' => $tenant->id,
+            'employee_code' => 'EMP-0104',
+            'biometric_code' => 'BIO-104',
+            'first_name' => 'Lucia',
+            'last_name' => 'Ferreira',
+            'status' => 'active',
+            'approval_status' => 'approved',
+        ]);
 
         // 1. Pull list for entrance biometric PC
         $pull = $this->getJson('/api/v1/integrations/biometric/employees?all=1')
             ->assertOk()
-            ->assertJsonPath('data.total', 3)
+            ->assertJsonPath('data.total', 4)
             ->assertJsonPath('data.employees.0.biometric_code', 'BIO-101')
-            ->assertJsonPath('data.employees.0.shift.start_time', '08:00:00');
+            ->assertJsonPath('data.employees.0.has_assigned_shift', true)
+            ->assertJsonPath('data.employees.0.shifts_count', 2)
+            ->assertJsonPath('data.employees.0.shift.start_time', '08:00:00')
+            ->assertJsonPath('data.employees.0.shifts.0.id', $shift->id)
+            ->assertJsonPath('data.employees.0.shifts.1.id', $secondShift->id)
+            ->assertJsonPath('data.employees.0.missing_shift_warning', null)
+            ->assertJsonPath('data.employees.3.id', $employeeWithoutShift->id)
+            ->assertJsonPath('data.employees.3.has_assigned_shift', false)
+            ->assertJsonPath('data.employees.3.shifts_count', 0)
+            ->assertJsonPath('data.employees.3.shift', null)
+            ->assertJsonPath('data.employees.3.shifts', []);
 
+        $this->assertNotNull($pull->json('data.employees.3.missing_shift_warning'));
         $this->assertTrue($pull->json('data.employees.0.has_explicit_biometric_code'));
         // Employee B without explicit biometric_code falls back to employee_code
         $this->assertSame('EMP-0102', $pull->json('data.employees.1.biometric_code'));
@@ -118,7 +157,15 @@ class BiometricIntegrationTest extends TestCase
         ])->assertOk();
 
         $sync->assertJsonPath('data.updated', 1)
-            ->assertJsonPath('data.created', 1);
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.without_shift_count', 1)
+            ->assertJsonPath('data.items.0.has_assigned_shift', true)
+            ->assertJsonPath('data.items.0.shifts_count', 1)
+            ->assertJsonPath('data.items.0.shifts.0.id', $shift->id)
+            ->assertJsonPath('data.items.1.has_assigned_shift', false)
+            ->assertJsonPath('data.items.1.shifts_count', 0)
+            ->assertJsonPath('data.items.1.shifts', []);
+        $this->assertNotNull($sync->json('data.items.1.missing_shift_warning'));
 
         $this->assertDatabaseHas('employees', [
             'id' => $employeeB->id,
@@ -130,6 +177,15 @@ class BiometricIntegrationTest extends TestCase
             'last_name' => 'João',
             'approval_status' => 'pending',
         ]);
+
+        // 3. Employee without assigned shift cannot record biometric attendance
+        $this->postJson('/api/v1/integrations/biometric/attendance', [
+            'biometric_code' => 'BIO-104',
+            'punched_at' => '2026-11-16T08:00:00+01:00',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.results.0.action', 'error')
+            ->assertJsonPath('errors.results.0.code', 'SHIFT_REQUIRED');
     }
 
     public function test_biometric_attendance_automates_clock_in_debounce_lateness_clock_out_and_overtime(): void

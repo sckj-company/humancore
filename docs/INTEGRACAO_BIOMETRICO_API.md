@@ -67,6 +67,7 @@ php artisan biometric:token <TENANT_ID> --name="BiometricEntrancePC"
 | Parâmetro | Tipo | Padrão | Descrição |
 | :--- | :--- | :--- | :--- |
 | `updated_since` | ISO 8601 / DateTime | `null` | Retorna apenas registos alterados ou eliminados desde esta data/hora (`withTrashed`). |
+| `date` | Date (`YYYY-MM-DD`) | `hoje` | Data de referência para listar os turnos ativos vinculados ao funcionário (`shifts`). |
 | `status` | `active` \| `inactive` \| `terminated` \| `on_leave` \| `all` | `active` | Filtra estado laboral. |
 | `only_approved` | boolean (`0`/`1`) | `1` | Se `1`, retorna apenas funcionários aprovados pelo RH. |
 | `search` | string | `null` | Pesquisa por nome, código ou documento. |
@@ -88,7 +89,7 @@ curl -X GET "https://<dominio>/api/v1/integrations/biometric/employees?all=1" \
   "message": "OK",
   "data": {
     "synced_at": "2026-11-17T14:30:00+01:00",
-    "total": 1,
+    "total": 2,
     "employees": [
       {
         "id": 42,
@@ -108,16 +109,67 @@ curl -X GET "https://<dominio>/api/v1/integrations/biometric/employees?all=1" \
         "status": "active",
         "approval_status": "approved",
         "is_active": true,
+        "has_assigned_shift": true,
+        "shifts_count": 1,
         "shift": {
           "id": 1,
+          "schedule_id": 12,
           "name": "Turno Geral",
           "code": "TG-01",
           "start_time": "08:00:00",
           "end_time": "17:00:00",
+          "break_minutes": 60,
+          "work_hours": 8,
           "late_tolerance_minutes": 10,
           "working_days": [1, 2, 3, 4, 5],
-          "is_night_shift": false
+          "is_night_shift": false,
+          "effective_from": "2026-01-01",
+          "effective_to": null
         },
+        "shifts": [
+          {
+            "id": 1,
+            "schedule_id": 12,
+            "name": "Turno Geral",
+            "code": "TG-01",
+            "start_time": "08:00:00",
+            "end_time": "17:00:00",
+            "break_minutes": 60,
+            "work_hours": 8,
+            "late_tolerance_minutes": 10,
+            "working_days": [1, 2, 3, 4, 5],
+            "is_night_shift": false,
+            "effective_from": "2026-01-01",
+            "effective_to": null
+          }
+        ],
+        "missing_shift_warning": null,
+        "updated_at": "2026-11-17T10:15:22+01:00",
+        "deleted_at": null
+      },
+      {
+        "id": 43,
+        "employee_code": "EMP-0043",
+        "biometric_code": "EMP-0043",
+        "has_explicit_biometric_code": false,
+        "first_name": "Maria",
+        "last_name": "Silva",
+        "full_name": "Maria Silva",
+        "id_document_number": null,
+        "email": null,
+        "phone": null,
+        "department_id": 3,
+        "department": "Operações",
+        "position_id": 8,
+        "position": "Assistente",
+        "status": "active",
+        "approval_status": "approved",
+        "is_active": true,
+        "has_assigned_shift": false,
+        "shifts_count": 0,
+        "shift": null,
+        "shifts": [],
+        "missing_shift_warning": "Funcionário sem turno vinculado. Não poderá registar presença até que um turno seja atribuído.",
         "updated_at": "2026-11-17T10:15:22+01:00",
         "deleted_at": null
       }
@@ -125,6 +177,8 @@ curl -X GET "https://<dominio>/api/v1/integrations/biometric/employees?all=1" \
   }
 }
 ```
+
+> **Atenção:** Quando `has_assigned_shift` for `false` (`shifts: []`), o funcionário **não possui turno vinculado** e o Humancore bloqueará qualquer tentativa de registo de presença (`code: "SHIFT_REQUIRED"`). O sistema biométrico deve alertar o operador/utilizador usando `missing_shift_warning`. Quando o funcionário tiver múltiplos turnos ativos em `shifts`, o sistema pode enviar `shift_id` em `POST /api/v1/integrations/biometric/attendance` para especificar o turno.
 
 ---
 
@@ -162,6 +216,7 @@ Associa o `biometric_code` do leitor da entrada aos funcionários existentes no 
     "created": 0,
     "not_found": 0,
     "errors": 0,
+    "without_shift_count": 1,
     "items": [
       {
         "index": 0,
@@ -169,7 +224,42 @@ Associa o `biometric_code` do leitor da entrada aos funcionários existentes no 
         "employee_id": 42,
         "employee_code": "EMP-0042",
         "biometric_code": "1042",
-        "full_name": "Carlos Mendes"
+        "full_name": "Carlos Mendes",
+        "has_assigned_shift": true,
+        "shifts_count": 1,
+        "shift": {
+          "id": 1,
+          "schedule_id": 12,
+          "name": "Turno Geral",
+          "code": "TG-01",
+          "start_time": "08:00:00",
+          "end_time": "17:00:00",
+          "break_minutes": 60,
+          "work_hours": 8,
+          "late_tolerance_minutes": 10,
+          "working_days": [1, 2, 3, 4, 5],
+          "is_night_shift": false,
+          "effective_from": "2026-01-01",
+          "effective_to": null
+        },
+        "shifts": [
+          {
+            "id": 1,
+            "schedule_id": 12,
+            "name": "Turno Geral",
+            "code": "TG-01",
+            "start_time": "08:00:00",
+            "end_time": "17:00:00",
+            "break_minutes": 60,
+            "work_hours": 8,
+            "late_tolerance_minutes": 10,
+            "working_days": [1, 2, 3, 4, 5],
+            "is_night_shift": false,
+            "effective_from": "2026-01-01",
+            "effective_to": null
+          }
+        ],
+        "missing_shift_warning": null
       }
     ]
   }
@@ -269,6 +359,8 @@ Ideal se o software do PC já consolida entrada e saída por dia antes de enviar
         "employee_id": 42,
         "employee_code": "EMP-0042",
         "biometric_code": "1042",
+        "shift_id": 1,
+        "shift_name": "Turno Geral",
         "date": "2026-11-17",
         "clock_in": "08:25:00",
         "clock_out": null,
@@ -285,10 +377,12 @@ Ideal se o software do PC já consolida entrada e saída por dia antes de enviar
         "employee_id": 42,
         "employee_code": "EMP-0042",
         "biometric_code": "1042",
+        "shift_id": 1,
+        "shift_name": "Turno Geral",
         "date": "2026-11-17",
         "clock_in": "08:25:00",
         "clock_out": "18:30:00",
-        "total_worked": 605,
+        "total_worked": 545,
         "late_minutes": 15,
         "overtime_minutes": 90,
         "overtime_amount": 3750,
@@ -299,7 +393,7 @@ Ideal se o software do PC já consolida entrada e saída por dia antes de enviar
 }
 ```
 
-> Em lote, se um item falhar (ex.: código biométrico desconhecido ou funcionário não aprovado), apenas aquele item aparece com `"action": "error"` em `results` e os restantes itens válidos do lote continuam a ser gravados normalmente.
+> Em lote, se um item falhar (ex.: código biométrico desconhecido, funcionário não aprovado ou funcionário **sem turno vinculado**, que retorna `"code": "SHIFT_REQUIRED"`), apenas aquele item aparece com `"action": "error"` em `results` e os restantes itens válidos do lote continuam a ser gravados normalmente. Em envio unitário, a API devolve `HTTP 422`.
 
 ---
 
@@ -310,7 +404,7 @@ Ideal se o software do PC já consolida entrada e saída por dia antes de enviar
 Percorre todos os funcionários ativos e aprovados do tenant na data indicada e cria automaticamente `status = "absent"` para quem **não registou ponto** nesse dia, **respeitando**:
 * **Feriados** da empresa (`holidays`);
 * **Férias e licenças aprovadas** (`leave_requests`);
-* **Dias de folga da escala/turno** (`employee_schedules` / `shifts`, ou Sáb/Dom por padrão).
+* **Dias de folga e obrigatoriedade de turno** (`employee_schedules` / `shifts` — funcionários sem turno vinculado na data são ignorados em `skipped_offday_count`).
 
 **Payload JSON (todos os campos opcionais):**
 ```json
