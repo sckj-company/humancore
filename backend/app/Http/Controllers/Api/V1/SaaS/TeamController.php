@@ -40,7 +40,7 @@ class TeamController extends BaseController
 
     public function index(Request $request): JsonResponse
     {
-        $this->authorizeTeamManagement($request);
+        $this->authorizeTeamManagement($request, false);
         $tenant = $this->tenantManager->requireTenant();
 
         $users = User::query()
@@ -385,7 +385,7 @@ class TeamController extends BaseController
         $this->authorizeTeamManagement($request);
         $tenant = $this->tenantManager->requireTenant();
 
-        if (! $this->entitlementService->hasFeature($tenant, 'custom_permission_groups')) {
+        if (! $request->user()->isSuperAdmin() && ! $this->entitlementService->hasFeature($tenant, 'custom_permission_groups')) {
             return $this->error('O plano atual não permite criar grupos de permissões personalizados.', 403);
         }
 
@@ -430,14 +430,20 @@ class TeamController extends BaseController
         return $this->success(null, 'Grupo de permissões eliminado com sucesso.');
     }
 
-    private function authorizeTeamManagement(Request $request): void
+    private function authorizeTeamManagement(Request $request, bool $write = true): void
     {
         $user = $request->user();
         if (! $user) {
             abort(401);
         }
 
-        if ($user->hasRole('super-admin') || $user->hasRole('admin') || $user->can('create_user') || $user->can('update_user')) {
+        if (
+            $user->hasRole('super-admin')
+            || $user->hasRole('admin')
+            || $user->can('create_user')
+            || $user->can('update_user')
+            || (! $write && $user->can('view_any_user'))
+        ) {
             return;
         }
 

@@ -21,6 +21,7 @@ import type { Paginated, Tenant } from '@/types'
 export function Header() {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
+  const isFullSuperAdmin = user?.roles?.includes('super-admin') ?? false
   const isSuperAdmin = isPlatformAdmin(user)
   const canListTenants = hasPermission(user, 'view_any_tenant')
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false)
@@ -32,7 +33,9 @@ export function Header() {
     enabled: isSuperAdmin && canListTenants,
   })
 
-  const availableTenants = (isSuperAdmin && canListTenants ? tenantPage?.data : undefined)
+  const availableTenants = (isFullSuperAdmin
+    ? (canListTenants ? tenantPage?.data : undefined)
+    : (user?.accessible_tenants?.length ? user.accessible_tenants : (canListTenants ? tenantPage?.data : undefined)))
     ?? user?.accessible_tenants
     ?? (user?.tenant ? [user.tenant] : [])
   const canSwitchCompany = isSuperAdmin || availableTenants.length > 1
@@ -116,7 +119,7 @@ export function Header() {
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {isSuperAdmin && !user?.tenant?.id && (
+            {isSuperAdmin && !user?.home_tenant_id && (
               <button
                 type="button"
                 onClick={() => {

@@ -49,6 +49,12 @@ class UserTenantAccess extends Model
         return $this->belongsTo(PermissionGroup::class);
     }
 
+    public function hasExplicitPermissions(): bool
+    {
+        return $this->permission_group_id !== null
+            || (is_array($this->permissions) && $this->permissions !== []);
+    }
+
     /**
      * @return array<int, string>
      */

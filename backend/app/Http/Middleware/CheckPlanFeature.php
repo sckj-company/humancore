@@ -19,7 +19,7 @@ class CheckPlanFeature
     public function handle(Request $request, Closure $next, string $feature): Response
     {
         $user = $request->user();
-        if (! $user || $user->hasRole('super-admin')) {
+        if (! $user || $user->isSuperAdmin()) {
             return $next($request);
         }
 

@@ -54,7 +54,7 @@ class AttendanceReportService
         $employeeStatus = trim((string) $request->input('employee_status', ''));
         $attendanceStatus = trim((string) $request->input('attendance_status', ''));
         $search = trim((string) $request->input('search', ''));
-        $canViewOvertime = ! $user || $user->hasFieldPermission('attendance', 'overtime', 'view');
+        $canViewOvertime = ! $user || $user->hasFieldPermission('attendance', 'overtime_lateness', 'view');
 
         $employeesQuery = Employee::query()
             ->with(['department:id,name', 'position:id,title', 'tenant'])

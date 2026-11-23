@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Employee;
+use App\Models\EmployeeContract;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\UserTenantAccess;
 use App\Services\Tenant\TenantManager;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\SettingSeeder;
@@ -480,5 +482,149 @@ class SuperAdminTest extends TestCase
 
         $this->assertNull($accessB->department_ids);
         $this->assertSame($updatedPermissions, $accessB->permissions);
+    }
+
+    public function test_super_admin_limited_with_all_permissions_and_linked_tenants_works_without_subscription_and_preserves_role(): void
+    {
+        config(['saas.require_subscription' => true]);
+
+        $creator = User::factory()->create(['is_active' => true]);
+        $creator->assignRole('super-admin');
+
+        $tenantA = Tenant::factory()->create(['name' => 'Empresa Ligada A']);
+        $tenantB = Tenant::factory()->create(['name' => 'Empresa Não Ligada B']);
+
+        app(TenantManager::class)->set($tenantA);
+        $employeeA = Employee::factory()->create([
+            'tenant_id' => $tenantA->id,
+            'status' => 'active',
+        ]);
+        $contractA = EmployeeContract::factory()->create([
+            'tenant_id' => $tenantA->id,
+            'employee_id' => $employeeA->id,
+            'base_salary' => 350000,
+            'is_active' => true,
+            'start_date' => now()->subMonths(3)->toDateString(),
+        ]);
+
+        app(TenantManager::class)->set($tenantB);
+        Employee::factory()->create([
+            'tenant_id' => $tenantB->id,
+            'status' => 'active',
+        ]);
+
+        $platformPermsResponse = $this->actingAs($creator, 'sanctum')
+            ->getJson('/api/v1/superadmin/platform-users')
+            ->assertOk();
+
+        $allAssignablePerms = collect($platformPermsResponse->json('data.permissions'))
+            ->pluck('name')
+            ->all();
+
+        $this->assertContains('field.employee.salary.view', $allAssignablePerms);
+        $this->assertContains('field.payroll.base_salary.edit', $allAssignablePerms);
+        $this->assertNotContains('manage_platform', $allAssignablePerms);
+
+        $created = $this->actingAs($creator, 'sanctum')
+            ->postJson('/api/v1/superadmin/platform-users', [
+                'name' => 'Super Admin Limitado Completo',
+                'email' => 'limited-full@platform.test',
+                'password' => 'secure-password',
+                'permissions' => $allAssignablePerms,
+                'tenant_accesses' => [
+                    [
+                        'tenant_id' => $tenantA->id,
+                        'permission_group_id' => null,
+                        'role_name' => 'hr-manager',
+                        'permissions' => null,
+                        'department_ids' => [],
+                    ],
+                ],
+            ])
+            ->assertCreated();
+
+        $limitedUserId = $created->json('data.id');
+        $limitedAdmin = User::query()->findOrFail($limitedUserId);
+
+        $accessA = UserTenantAccess::query()
+            ->where('user_id', $limitedUserId)
+            ->where('tenant_id', $tenantA->id)
+            ->firstOrFail();
+        $this->assertNull($accessA->permissions);
+
+        // auth/me deve preservar super-admin-limited em roles mesmo com role_name na empresa vinculada
+        $meResponse = $this->actingAs($limitedAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->getJson('/api/v1/auth/me')
+            ->assertOk();
+
+        $this->assertContains('super-admin-limited', $meResponse->json('data.roles'));
+        $this->assertContains('hr-manager', $meResponse->json('data.roles'));
+        $this->assertContains('field.employee.salary.view', $meResponse->json('data.permissions'));
+        $this->assertContains('field.payroll.base_salary.edit', $meResponse->json('data.permissions'));
+
+        // Listagem de empresas para super-admin-limited vinculado só mostra a empresa ligada
+        $this->actingAs($limitedAdmin, 'sanctum')
+            ->getJson('/api/v1/superadmin/tenants')
+            ->assertOk()
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.data.0.id', $tenantA->id);
+
+        // Operações na empresa vinculada funcionam mesmo sem subscrição ativa e sem permissões ausentes
+        $employeesRes = $this->actingAs($limitedAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+        $this->assertEquals(350000, (float) $employeesRes->json('data.data.0.active_contract.base_salary'));
+
+        $this->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->getJson('/api/v1/shifts')
+            ->assertOk();
+
+        $this->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->getJson('/api/v1/employee-schedules')
+            ->assertOk();
+
+        $this->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->postJson('/api/v1/holidays', [
+                'name' => 'Dia da Independência',
+                'date' => '2026-11-11',
+                'is_recurring' => true,
+            ])
+            ->assertCreated();
+
+        $this->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->postJson('/api/v1/leave/types', [
+                'name' => 'Férias Especiais',
+                'code' => 'FER-ESP',
+                'category' => 'vacation',
+                'is_paid' => true,
+            ])
+            ->assertCreated();
+
+        $this->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->putJson("/api/v1/contracts/{$contractA->id}", [
+                'contract_type' => $contractA->contract_type,
+                'base_salary' => 450000,
+                'salary_frequency' => 'monthly',
+                'start_date' => $contractA->start_date->toDateString(),
+                'notes' => 'Atualizado por super-admin limitado',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.base_salary', 450000);
+
+        // Empresa não vinculada devolve 403
+        $this->withHeader('X-Tenant-ID', (string) $tenantB->id)
+            ->getJson('/api/v1/employees')
+            ->assertForbidden();
+
+        // Compatibilidade com registos antigos onde permissions = [] sem permission_group_id
+        $accessA->update(['permissions' => []]);
+        $freshLimited = $limitedAdmin->fresh();
+        $employeesLegacyRes = $this->actingAs($freshLimited, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+        $this->assertEquals(450000, (float) $employeesLegacyRes->json('data.data.0.active_contract.base_salary'));
     }
 }

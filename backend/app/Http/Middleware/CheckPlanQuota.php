@@ -22,7 +22,7 @@ class CheckPlanQuota
         }
 
         $user = $request->user();
-        if (! $user || $user->hasRole('super-admin')) {
+        if (! $user || $user->isSuperAdmin()) {
             return $next($request);
         }
 

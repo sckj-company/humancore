@@ -127,6 +127,13 @@ class User extends Authenticatable
         return $this->activeTenantAccess($tenantId) !== null;
     }
 
+    public function hasExplicitTenantPermissions(?int $tenantId = null): bool
+    {
+        $access = $this->activeTenantAccess($tenantId);
+
+        return $access !== null && $access->hasExplicitPermissions();
+    }
+
     /**
      * @return Collection<int, string>
      */
@@ -138,7 +145,7 @@ class User extends Authenticatable
 
         $resolvedTenantId = $tenantId ?? $this->activeTenantId();
         $access = $this->activeTenantAccess($resolvedTenantId);
-        if ($access) {
+        if ($access && $access->hasExplicitPermissions()) {
             $platformPerms = $this->hasRole('super-admin-limited')
                 ? $this->getAllPermissions()
                     ->pluck('name')
@@ -152,7 +159,7 @@ class User extends Authenticatable
         // Caso esteja a aceder a uma empresa gerida através da sua empresa gestora (sem UserTenantAccess direto)
         if ($resolvedTenantId && $this->tenant_id && (int) $this->tenant_id !== (int) $resolvedTenantId) {
             $managerAccess = $this->activeTenantAccess((int) $this->tenant_id);
-            if ($managerAccess) {
+            if ($managerAccess && $managerAccess->hasExplicitPermissions()) {
                 return collect($managerAccess->resolvedPermissions())->values();
             }
         }
@@ -170,9 +177,17 @@ class User extends Authenticatable
             return $this->getAllPermissions()->contains('name', $permission);
         }
 
-        $access = $this->activeTenantAccess($tenantId);
-        if ($access) {
+        $resolvedTenantId = $tenantId ?? $this->activeTenantId();
+        $access = $this->activeTenantAccess($resolvedTenantId);
+        if ($access && $access->hasExplicitPermissions()) {
             return in_array($permission, $access->resolvedPermissions(), true);
+        }
+
+        if ($resolvedTenantId && $this->tenant_id && (int) $this->tenant_id !== (int) $resolvedTenantId) {
+            $managerAccess = $this->activeTenantAccess((int) $this->tenant_id);
+            if ($managerAccess && $managerAccess->hasExplicitPermissions()) {
+                return in_array($permission, $managerAccess->resolvedPermissions(), true);
+            }
         }
 
         return $this->getAllPermissions()->contains('name', $permission);
@@ -180,7 +195,7 @@ class User extends Authenticatable
 
     public function hasPermissionTo($permission, ?string $guardName = null): bool
     {
-        if (! $this->hasRole('super-admin') && $this->hasTenantScopedAccess()) {
+        if (! $this->hasRole('super-admin') && $this->hasExplicitTenantPermissions()) {
             $name = match (true) {
                 is_string($permission) => $permission,
                 $permission instanceof \BackedEnum => (string) $permission->value,
@@ -204,7 +219,7 @@ class User extends Authenticatable
 
         $permission = "field.{$resource}.{$field}.{$mode}";
 
-        if ($this->hasTenantScopedAccess($tenantId)) {
+        if ($this->hasExplicitTenantPermissions($tenantId)) {
             return $this->hasEffectivePermission($permission, $tenantId);
         }
 

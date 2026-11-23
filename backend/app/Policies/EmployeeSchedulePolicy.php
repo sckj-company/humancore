@@ -18,27 +18,32 @@ class EmployeeSchedulePolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('view_employee_schedule') || $user->hasRole('manager');
+        return $user->can('view_employee_schedule')
+            || $user->can('view_any_attendance')
+            || $user->can('view_attendance')
+            || $user->hasRole('manager');
     }
 
     public function view(User $user, EmployeeSchedule $schedule): bool
     {
         return $user->can('view_employee_schedule')
+            || $user->can('view_any_attendance')
+            || $user->can('view_attendance')
             || $user->employee?->id === $schedule->employee_id;
     }
 
     public function create(User $user): bool
     {
-        return $user->can('create_employee_schedule');
+        return $user->can('create_employee_schedule') || $user->can('create_attendance') || $user->can('configure_attendance');
     }
 
     public function update(User $user, EmployeeSchedule $schedule): bool
     {
-        return $user->can('update_employee_schedule');
+        return $user->can('update_employee_schedule') || $user->can('update_attendance') || $user->can('configure_attendance');
     }
 
     public function delete(User $user, EmployeeSchedule $schedule): bool
     {
-        return $user->can('delete_employee_schedule');
+        return $user->can('delete_employee_schedule') || $user->can('delete_attendance') || $user->can('configure_attendance');
     }
 }

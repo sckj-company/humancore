@@ -13,7 +13,7 @@ class FieldPermissions
     {
         $map = [
             'payroll' => [
-                'base_salary' => ['view'],
+                'base_salary' => ['view', 'edit'],
                 'gross_salary' => ['view'],
                 'allowances' => ['view', 'edit'],
                 'inss' => ['view'],

@@ -8,17 +8,27 @@ import i18n from '@/lib/i18n'
 import { useEffect, type ReactNode } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
+import type { User } from '@/types'
 
 function AuthInitializer({ children }: { children: ReactNode }) {
-  const { user, token, setUser, clear } = useAuthStore()
+  const { token, setUser, clear } = useAuthStore()
 
   useEffect(() => {
-    if (token && !user) {
-      api.get<{ id: number; name: string; email: string; roles: string[]; permissions: string[] }>('auth/me')
-        .then((u) => setUser(u as any))
-        .catch(() => clear())
-    }
-  }, [token, user, setUser, clear])
+    if (!token) return
+    let cancelled = false
+    api.get<User>('auth/me')
+      .then((u) => {
+        if (!cancelled) setUser(u)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 401 || !useAuthStore.getState().user) {
+          clear()
+        }
+      })
+    return () => { cancelled = true }
+  }, [token, setUser, clear])
 
   return <>{children}</>
 }

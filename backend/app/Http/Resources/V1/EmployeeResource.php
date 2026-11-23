@@ -84,6 +84,8 @@ class EmployeeResource extends JsonResource
                 'start_date' => $canContractDates ? $contract->start_date?->format('Y-m-d') : null,
                 'end_date' => $canContractDates ? $contract->end_date?->format('Y-m-d') : null,
                 'is_active' => (bool) $contract->is_active,
+                'termination_type' => $contract->termination_type,
+                'terminated_at' => $contract->terminated_at?->format('Y-m-d'),
                 'signed_at' => $canContractDates ? $contract->signed_at?->format('Y-m-d') : null,
                 'document_path' => $canContractDates ? $contract->document_path : null,
                 'document_url' => $canContractDates && $contract->document_path ? (str_starts_with($contract->document_path, 'http') ? $contract->document_path : url($contract->document_path)) : null,

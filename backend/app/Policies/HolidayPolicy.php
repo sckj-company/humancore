@@ -28,16 +28,25 @@ class HolidayPolicy
 
     public function create(User $user): bool
     {
-        return $user->can('create_holiday');
+        return $user->can('create_holiday')
+            || $user->can('create_attendance')
+            || $user->can('configure_attendance')
+            || $user->can('configure_setting');
     }
 
     public function update(User $user, Holiday $holiday): bool
     {
-        return $user->can('update_holiday');
+        return $user->can('update_holiday')
+            || $user->can('update_attendance')
+            || $user->can('configure_attendance')
+            || $user->can('configure_setting');
     }
 
     public function delete(User $user, Holiday $holiday): bool
     {
-        return $user->can('delete_holiday');
+        return $user->can('delete_holiday')
+            || $user->can('delete_attendance')
+            || $user->can('configure_attendance')
+            || $user->can('configure_setting');
     }
 }

@@ -22,9 +22,15 @@ class AuthResource extends JsonResource
 
         $activeAccess = $this->activeTenantAccess($activeTenantId);
         $accessibleTenants = $this->accessibleTenants();
-        $roles = $activeAccess?->role_name
-            ? collect([$activeAccess->role_name])
-            : $this->getRoleNames();
+        $baseRoles = $this->getRoleNames();
+        if ($activeAccess?->role_name) {
+            $platformRoles = $baseRoles->filter(
+                fn (string $role) => in_array($role, ['super-admin', 'super-admin-limited'], true)
+            );
+            $roles = $platformRoles->push($activeAccess->role_name)->unique()->values();
+        } else {
+            $roles = $baseRoles;
+        }
         $entitlements = $tenant
             ? app(PlanEntitlementService::class)->resolve($tenant)
             : null;

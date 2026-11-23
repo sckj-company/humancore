@@ -139,8 +139,8 @@ const sections: NavSection[] = [
 ]
 
 const footerItems: NavItem[] = [
-  { titleKey: 'nav.team', defaultTitle: 'Equipa & Acessos', href: '/settings/team', icon: UserCog, roles: ['admin'] },
-  { titleKey: 'nav.billing', defaultTitle: 'Plano & Faturação', href: '/settings/billing', icon: CreditCard, roles: ['admin'] },
+  { titleKey: 'nav.team', defaultTitle: 'Equipa & Acessos', href: '/settings/team', icon: UserCog, roles: ['admin'], permission: 'view_any_user' },
+  { titleKey: 'nav.billing', defaultTitle: 'Plano & Faturação', href: '/settings/billing', icon: CreditCard, roles: ['admin'], permission: 'configure_setting' },
   { titleKey: 'nav.settings', href: '/settings', icon: Settings, roles: ['admin'], permission: 'view_any_setting', exact: true },
 ]
 
@@ -206,7 +206,30 @@ export function Sidebar() {
   const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
   const hasPlatformRole = isPlatformAdmin(user)
   const enforceAssignedPermissions = hasPlatformRole && !isSuperAdmin
+  const hasPermissionScope = enforceAssignedPermissions || Boolean(user?.active_permission_group_id)
   const hasSelectedTenant = Boolean(localStorage.getItem('hrms_selected_tenant') || user?.tenant?.id)
+
+  const isItemVisible = (item: NavItem) => {
+    if (item.requiresAgency && !canManageOtherTenants(user)) return false
+    if (!hasPlanFeature(user, item.planFeature)) return false
+    if (isSuperAdmin) return true
+
+    if (hasPermissionScope) {
+      if (item.href === '/settings/team') {
+        return hasPermission(user, 'view_any_user')
+          || hasPermission(user, 'create_user')
+          || hasPermission(user, 'update_user')
+      }
+      if (item.permission) return hasPermission(user, item.permission)
+      return !item.roles || hasAnyRole(user, item.roles)
+    }
+
+    if (!item.roles || hasAnyRole(user, item.roles)) return true
+    if (item.href === '/settings/team') {
+      return hasPermission(user, 'create_user') || hasPermission(user, 'update_user')
+    }
+    return Boolean(item.permission && hasPermission(user, item.permission))
+  }
 
   const logout = async () => {
     try {
@@ -250,12 +273,7 @@ export function Sidebar() {
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-4 scrollbar-thin">
           <nav className="space-y-4">
             {activeSections.map((section, idx) => {
-              const visibleItems = section.items.filter(
-                (item) => (isSuperAdmin || enforceAssignedPermissions || !item.roles || hasAnyRole(user, item.roles))
-                  && (!enforceAssignedPermissions || !item.permission || hasPermission(user, item.permission))
-                  && hasPlanFeature(user, item.planFeature)
-                  && (!item.requiresAgency || canManageOtherTenants(user)),
-              )
+              const visibleItems = section.items.filter(isItemVisible)
               if (visibleItems.length === 0) return null
 
               return (
@@ -275,9 +293,7 @@ export function Sidebar() {
 
           <div className="mt-4 border-t border-sidebar-border/60 pt-3 space-y-0.5">
             {footerItems
-              .filter((item) => isSuperAdmin || enforceAssignedPermissions || !item.roles || hasAnyRole(user, item.roles))
-              .filter((item) => !enforceAssignedPermissions || !item.permission || hasPermission(user, item.permission))
-              .filter((item) => hasPlanFeature(user, item.planFeature))
+              .filter(isItemVisible)
               .map((item) => (
                 <NavLink key={item.href} item={item} collapsed={!sidebarOpen} />
               ))}

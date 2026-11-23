@@ -27,7 +27,7 @@ export interface TenantAccessDraft {
   tenant_id: number
   permission_group_id: number | null
   role_name: string
-  permissions: string[]
+  permissions: string[] | null
   department_ids: number[]
 }
 
@@ -134,6 +134,45 @@ export function PermissionSelector({
   const lockedSet = useMemo(() => new Set(lockedPermissions), [lockedPermissions])
   const selectedSet = useMemo(() => new Set(selectedPermissions), [selectedPermissions])
 
+  const { actionPerms, fieldPerms, selectedActionCount, selectedFieldCount } = useMemo(() => {
+    const actions: PermissionItem[] = []
+    const fields: PermissionItem[] = []
+    let selActions = 0
+    let selFields = 0
+    for (const perm of permissions) {
+      if (perm.name.startsWith('field.')) {
+        fields.push(perm)
+        if (selectedSet.has(perm.name)) selFields++
+      } else {
+        actions.push(perm)
+        if (selectedSet.has(perm.name)) selActions++
+      }
+    }
+    return {
+      actionPerms: actions,
+      fieldPerms: fields,
+      selectedActionCount: selActions,
+      selectedFieldCount: selFields,
+    }
+  }, [permissions, selectedSet])
+
+  const selectAllPermissions = () => {
+    const next = new Set(permissions.map((p) => p.name))
+    for (const locked of lockedSet) next.add(locked)
+    onChange([...next])
+  }
+
+  const clearAllPermissions = () => {
+    onChange([...lockedSet])
+  }
+
+  const enableAllFieldPermissions = () => {
+    const next = new Set(selectedSet)
+    for (const fieldPerm of fieldPerms) next.add(fieldPerm.name)
+    for (const locked of lockedSet) next.add(locked)
+    onChange([...next])
+  }
+
   const grouped = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
     const map: Record<string, { actions: PermissionItem[]; fields: PermissionItem[] }> = {}
@@ -179,15 +218,68 @@ export function PermissionSelector({
 
   return (
     <div className="space-y-2">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('superAdminPage.searchPermissions', { defaultValue: 'Filtrar permissões ou campos...' })}
-          className="h-8 pl-8 text-xs"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[180px] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('superAdminPage.searchPermissions', { defaultValue: 'Filtrar permissões ou campos...' })}
+            className="h-8 pl-8 text-xs"
+          />
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 text-xs"
+          disabled={permissions.length === 0 || (selectedActionCount + selectedFieldCount === permissions.length)}
+          onClick={selectAllPermissions}
+        >
+          {t('superAdminPage.selectAllPermissions', { defaultValue: 'Selecionar todas' })}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 text-xs"
+          disabled={selectedPermissions.length <= lockedSet.size}
+          onClick={clearAllPermissions}
+        >
+          {t('superAdminPage.clearPermissions', { defaultValue: 'Limpar' })}
+        </Button>
       </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>
+          {t('superAdminPage.permissionsSummaryCount', {
+            actions: selectedActionCount,
+            totalActions: actionPerms.length,
+            fields: selectedFieldCount,
+            totalFields: fieldPerms.length,
+            defaultValue: `${selectedActionCount}/${actionPerms.length} ações de módulo · ${selectedFieldCount}/${fieldPerms.length} campos/colunas`,
+          })}
+        </span>
+      </div>
+
+      {selectedActionCount > 0 && selectedFieldCount === 0 && fieldPerms.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          <span>
+            {t('superAdminPage.noFieldPermissionsWarning', {
+              defaultValue: 'Nenhuma permissão por campo/coluna selecionada: salários, NIF/INSS, contactos e colunas da folha ficarão ocultos.',
+            })}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 border-amber-500/40 bg-background text-xs"
+            onClick={enableAllFieldPermissions}
+          >
+            {t('superAdminPage.enableAllFieldPermissions', { defaultValue: 'Ativar todas as colunas/campos' })}
+          </Button>
+        </div>
+      )}
 
       <div className={`${maxHeightClass} space-y-2 overflow-y-auto rounded-md border p-2.5`}>
         {Object.keys(grouped).length === 0 ? (
@@ -378,13 +470,20 @@ const PLATFORM_ONLY_PERMISSIONS = new Set([
 
 function haveSameSharedAccessConfig(accesses: TenantAccessDraft[]): boolean {
   if (accesses.length <= 1) return true
+  const serialize = (perms: string[] | null) => (perms === null ? '__INHERIT__' : [...perms].sort().join('\0'))
   const first = accesses[0]
-  const firstPerms = [...first.permissions].sort().join('\0')
+  const firstPerms = serialize(first.permissions)
   return accesses.every(
     (item) =>
       (item.permission_group_id ?? null) === (first.permission_group_id ?? null)
       && item.role_name === first.role_name
-      && [...item.permissions].sort().join('\0') === firstPerms,
+      && serialize(item.permissions) === firstPerms,
+  )
+}
+
+function areAccessesInheritingGlobal(accesses: TenantAccessDraft[]): boolean {
+  return accesses.length === 0 || accesses.every(
+    (item) => (item.permission_group_id ?? null) === null && (item.permissions === null || item.permissions.length === 0),
   )
 }
 
@@ -407,6 +506,7 @@ export function TenantAccessScopeEditor({
 }) {
   const { t } = useTranslation()
   const [companySearch, setCompanySearch] = useState('')
+  const [inheritGlobal, setInheritGlobal] = useState<boolean>(() => areAccessesInheritingGlobal(accesses))
   const [shareConfig, setShareConfig] = useState<boolean>(() => haveSameSharedAccessConfig(accesses))
   const [sharedEdited, setSharedEdited] = useState(false)
 
@@ -434,33 +534,46 @@ export function TenantAccessScopeEditor({
   const [draftSharedConfig, setDraftSharedConfig] = useState<{
     permission_group_id: number | null
     role_name: string
-    permissions: string[]
+    permissions: string[] | null
   }>(() => ({
     permission_group_id: accesses[0]?.permission_group_id ?? null,
     role_name: accesses[0]?.role_name || defaultRole,
-    permissions: accesses[0]?.permissions
+    permissions: accesses[0]?.permissions != null
       ? filterAssignablePermissions(accesses[0].permissions)
-      : sanitizedBasePermissions,
+      : null,
   }))
 
   useEffect(() => {
     if (!haveSameSharedAccessConfig(accesses)) {
       setShareConfig(false)
     }
+    if (accesses.some((item) => (item.permission_group_id ?? null) !== null || (item.permissions !== null && item.permissions.length > 0))) {
+      setInheritGlobal(false)
+    }
   }, [accesses])
 
   const currentShared = useMemo(() => {
+    if (inheritGlobal) {
+      return {
+        permission_group_id: null,
+        role_name: accesses[0]?.role_name || draftSharedConfig.role_name || defaultRole,
+        permissions: null as string[] | null,
+      }
+    }
     if (accesses.length > 0) {
+      const firstPerms = accesses[0].permissions
       return {
         permission_group_id: accesses[0].permission_group_id ?? null,
         role_name: accesses[0].role_name || defaultRole,
-        permissions: filterAssignablePermissions(accesses[0].permissions ?? []),
+        permissions: firstPerms === null ? sanitizedBasePermissions : filterAssignablePermissions(firstPerms),
       }
     }
     if (sharedEdited) {
       return {
         ...draftSharedConfig,
-        permissions: filterAssignablePermissions(draftSharedConfig.permissions),
+        permissions: draftSharedConfig.permissions === null
+          ? sanitizedBasePermissions
+          : filterAssignablePermissions(draftSharedConfig.permissions),
       }
     }
     return {
@@ -468,7 +581,7 @@ export function TenantAccessScopeEditor({
       role_name: defaultRole,
       permissions: sanitizedBasePermissions,
     }
-  }, [accesses, defaultRole, draftSharedConfig, filterAssignablePermissions, sanitizedBasePermissions, sharedEdited])
+  }, [accesses, defaultRole, draftSharedConfig, filterAssignablePermissions, inheritGlobal, sanitizedBasePermissions, sharedEdited])
 
   const assignedTenantIds = useMemo(
     () => new Set(accesses.map((a) => a.tenant_id)),
@@ -494,9 +607,9 @@ export function TenantAccessScopeEditor({
         ...accesses,
         {
           tenant_id: tenantId,
-          permission_group_id: currentShared.permission_group_id,
+          permission_group_id: inheritGlobal ? null : currentShared.permission_group_id,
           role_name: currentShared.role_name,
-          permissions: [...currentShared.permissions],
+          permissions: inheritGlobal ? null : [...(currentShared.permissions ?? sanitizedBasePermissions)],
           department_ids: [],
         },
       ])
@@ -511,9 +624,9 @@ export function TenantAccessScopeEditor({
       if (!assignedTenantIds.has(tnt.id)) {
         additions.push({
           tenant_id: tnt.id,
-          permission_group_id: currentShared.permission_group_id,
+          permission_group_id: inheritGlobal ? null : currentShared.permission_group_id,
           role_name: currentShared.role_name,
-          permissions: [...currentShared.permissions],
+          permissions: inheritGlobal ? null : [...(currentShared.permissions ?? sanitizedBasePermissions)],
           department_ids: [],
         })
       }
@@ -529,11 +642,57 @@ export function TenantAccessScopeEditor({
     }
   }
 
-  const updateSharedConfig = (patch: Partial<{ permission_group_id: number | null; role_name: string; permissions: string[] }>) => {
+  const handleToggleInheritGlobal = (enabled: boolean) => {
+    setInheritGlobal(enabled)
+    const nextRole = accesses[0]?.role_name || draftSharedConfig.role_name || defaultRole
+    if (enabled) {
+      setShareConfig(true)
+      setDraftSharedConfig({
+        permission_group_id: null,
+        role_name: nextRole,
+        permissions: null,
+      })
+      if (accesses.length > 0) {
+        onChange(
+          accesses.map((item) => ({
+            ...item,
+            permission_group_id: null,
+            role_name: nextRole,
+            permissions: null,
+          })),
+        )
+      }
+    } else {
+      const nextPerms = [...sanitizedBasePermissions]
+      setSharedEdited(true)
+      setDraftSharedConfig({
+        permission_group_id: null,
+        role_name: nextRole,
+        permissions: nextPerms,
+      })
+      if (accesses.length > 0) {
+        onChange(
+          accesses.map((item) => ({
+            ...item,
+            permission_group_id: null,
+            role_name: item.role_name || nextRole,
+            permissions: item.permissions === null || item.permissions.length === 0
+              ? [...nextPerms]
+              : filterAssignablePermissions(item.permissions),
+          })),
+        )
+      }
+    }
+  }
+
+  const updateSharedConfig = (patch: Partial<{ permission_group_id: number | null; role_name: string; permissions: string[] | null }>) => {
+    const resolvedPermissions = patch.permissions !== undefined
+      ? (patch.permissions === null ? null : filterAssignablePermissions(patch.permissions))
+      : currentShared.permissions
     const nextConfig = {
       permission_group_id: patch.permission_group_id !== undefined ? patch.permission_group_id : currentShared.permission_group_id,
       role_name: patch.role_name !== undefined ? patch.role_name : currentShared.role_name,
-      permissions: patch.permissions !== undefined ? filterAssignablePermissions(patch.permissions) : currentShared.permissions,
+      permissions: resolvedPermissions,
     }
     setSharedEdited(true)
     setDraftSharedConfig(nextConfig)
@@ -543,7 +702,7 @@ export function TenantAccessScopeEditor({
           ...item,
           permission_group_id: nextConfig.permission_group_id,
           role_name: nextConfig.role_name,
-          permissions: [...nextConfig.permissions],
+          permissions: nextConfig.permissions === null ? null : [...nextConfig.permissions],
         })),
       )
     }
@@ -552,10 +711,11 @@ export function TenantAccessScopeEditor({
   const handleToggleShareConfig = (enabled: boolean) => {
     setShareConfig(enabled)
     if (enabled && accesses.length > 0) {
+      const firstPerms = accesses[0].permissions
       const template = {
         permission_group_id: accesses[0].permission_group_id ?? null,
         role_name: accesses[0].role_name || defaultRole,
-        permissions: filterAssignablePermissions(accesses[0].permissions ?? []),
+        permissions: firstPerms === null ? [...sanitizedBasePermissions] : filterAssignablePermissions(firstPerms),
       }
       setSharedEdited(true)
       setDraftSharedConfig(template)
@@ -564,7 +724,7 @@ export function TenantAccessScopeEditor({
           ...item,
           permission_group_id: template.permission_group_id,
           role_name: template.role_name,
-          permissions: [...template.permissions],
+          permissions: template.permissions === null ? null : [...template.permissions],
         })),
       )
     }
@@ -670,22 +830,116 @@ export function TenantAccessScopeEditor({
       </div>
 
       {tenants.length > 0 && (
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/70 bg-card px-3 py-2 text-xs font-medium">
-          <input
-            type="checkbox"
-            className="h-3.5 w-3.5 shrink-0"
-            checked={shareConfig}
-            onChange={(e) => handleToggleShareConfig(e.target.checked)}
-          />
-          <span>
-            {t('superAdminPage.shareCompanyConfig', {
-              defaultValue: 'Partilhar grupo, papel e permissões entre as empresas selecionadas',
-            })}
-          </span>
-        </label>
+        <div className="space-y-2">
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/70 bg-card px-3 py-2 text-xs font-medium">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 shrink-0"
+              checked={inheritGlobal}
+              onChange={(e) => handleToggleInheritGlobal(e.target.checked)}
+            />
+            <span>
+              {t('superAdminPage.inheritGlobalPermissions', {
+                defaultValue: 'Usar automaticamente as mesmas permissões globais definidas acima (sincronizado)',
+              })}
+            </span>
+          </label>
+
+          {!inheritGlobal && (
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/70 bg-card px-3 py-2 text-xs font-medium">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 shrink-0"
+                checked={shareConfig}
+                onChange={(e) => handleToggleShareConfig(e.target.checked)}
+              />
+              <span>
+                {t('superAdminPage.shareCompanyConfig', {
+                  defaultValue: 'Partilhar grupo, papel e permissões entre as empresas selecionadas',
+                })}
+              </span>
+            </label>
+          )}
+        </div>
       )}
 
-      {accesses.length === 0 && !shareConfig ? (
+      {inheritGlobal ? (
+        <div className="space-y-3">
+          {accesses.length > 0 && (
+            <div className="space-y-3 rounded-md border bg-card p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {t('superAdminPage.inheritGlobalHint', {
+                    count: sanitizedBasePermissions.length,
+                    defaultValue: `Todas as empresas selecionadas herdarão as ${sanitizedBasePermissions.length} permissões de empresa configuradas acima.`,
+                  })}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">{t('superAdminPage.roleLabel', { defaultValue: 'Papel' })}</Label>
+                  <select
+                    className="h-8 rounded-md border border-input bg-transparent px-2.5 text-xs"
+                    value={currentShared.role_name}
+                    onChange={(e) => {
+                      const nextRole = e.target.value
+                      onChange(accesses.map((item) => ({ ...item, role_name: nextRole })))
+                    }}
+                  >
+                    <option value="admin">{t('superAdminPage.roles.admin')}</option>
+                    <option value="hr-manager">{t('superAdminPage.roles.hr-manager')}</option>
+                    <option value="manager">{t('superAdminPage.roles.manager')}</option>
+                    <option value="employee">{t('superAdminPage.roles.employee')}</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {accesses.map((access) => {
+                  const tnt = tenantMap.get(access.tenant_id)
+                  const deptLabel = access.department_ids.length === 0
+                    ? t('superAdminPage.allDepartments', { defaultValue: 'Todos os departamentos' })
+                    : t('superAdminPage.selectedDepartmentsCount', {
+                        count: access.department_ids.length,
+                        defaultValue: `${access.department_ids.length} selecionado(s)`,
+                      })
+
+                  return (
+                    <details key={access.tenant_id} className="rounded border border-border/70 px-2.5 py-2">
+                      <summary className="flex cursor-pointer items-center justify-between gap-2 text-xs font-medium">
+                        <span className="truncate">{tnt?.name ?? `#${access.tenant_id}`}</span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <Badge variant="outline" className="text-[11px] font-normal">
+                            {deptLabel}
+                          </Badge>
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            className="h-6 w-6 text-destructive hover:text-destructive"
+                            title={t('common.delete')}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              removeAccessByTenantId(access.tenant_id)
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </summary>
+                      <div className="mt-2 border-t border-border/50 pt-2">
+                        <TenantDepartmentSelector
+                          tenantId={access.tenant_id}
+                          selectedDepartmentIds={access.department_ids}
+                          onChange={(department_ids) => updateAccessByTenantId(access.tenant_id, { department_ids })}
+                        />
+                      </div>
+                    </details>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : accesses.length === 0 && !shareConfig ? (
         <p className="rounded border border-dashed px-3 py-3 text-center text-xs text-muted-foreground">
           {t('superAdminPage.noCompanyScopes', {
             defaultValue: 'Sem vínculos específicos por empresa. O utilizador usará apenas o escopo padrão.',
@@ -723,7 +977,7 @@ export function TenantAccessScopeEditor({
                     const group = permissionGroups.find((g) => g.id === groupId)
                     updateSharedConfig({
                       permission_group_id: groupId,
-                      permissions: group ? filterAssignablePermissions(group.permissions) : currentShared.permissions,
+                      permissions: group ? filterAssignablePermissions(group.permissions) : (currentShared.permissions ?? sanitizedBasePermissions),
                     })
                   }}
                 >
@@ -758,13 +1012,13 @@ export function TenantAccessScopeEditor({
                   })}
                 </span>
                 <Badge variant="outline" className="text-[11px] font-normal">
-                  {currentShared.permissions.length}
+                  {(currentShared.permissions ?? sanitizedBasePermissions).length}
                 </Badge>
               </summary>
               <div className="mt-2">
                 <PermissionSelector
                   permissions={allPermissions}
-                  selectedPermissions={currentShared.permissions}
+                  selectedPermissions={currentShared.permissions ?? sanitizedBasePermissions}
                   onChange={(permissions) => updateSharedConfig({
                     permission_group_id: null,
                     permissions,
@@ -834,7 +1088,9 @@ export function TenantAccessScopeEditor({
         <div className="space-y-3">
           {accesses.map((access) => {
             const tnt = tenantMap.get(access.tenant_id)
-            const accessPermissions = filterAssignablePermissions(access.permissions ?? [])
+            const accessPermissions = access.permissions === null
+              ? sanitizedBasePermissions
+              : filterAssignablePermissions(access.permissions)
 
             return (
               <div key={access.tenant_id} className="space-y-3 rounded-md border bg-card p-3">

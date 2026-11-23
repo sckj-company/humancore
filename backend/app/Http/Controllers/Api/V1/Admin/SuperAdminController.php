@@ -40,26 +40,63 @@ class SuperAdminController extends BaseController
         'force_delete_tenant',
     ];
 
+    /**
+     * @return array<int, int>|null Null significa acesso global a todas as empresas.
+     */
+    private function scopedTenantIds(User $user): ?array
+    {
+        if ($user->hasRole('super-admin')) {
+            return null;
+        }
+
+        if ($user->hasRole('super-admin-limited') && ! $user->tenantAccesses()->exists()) {
+            return null;
+        }
+
+        return $user->accessibleTenants()
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     public function dashboard(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Tenant::class);
 
-        $totalTenants = Tenant::query()->count();
-        $activeTenants = Tenant::query()->where('status', 'active')->count();
-        $inactiveTenants = Tenant::query()->where('status', 'inactive')->count();
-        $suspendedTenants = Tenant::query()->where('status', 'suspended')->count();
-        $totalEmployees = Employee::withoutGlobalScopes()->count();
-        $activeEmployees = Employee::withoutGlobalScopes()->where('status', 'active')->count();
-        $totalUsers = User::query()->count();
+        $scopedIds = $this->scopedTenantIds($request->user());
+        $scopedFilter = $scopedIds === [] ? [0] : $scopedIds;
+
+        $tenantScope = fn ($query) => $query->when(
+            $scopedFilter !== null,
+            fn ($q) => $q->whereIn('id', $scopedFilter)
+        );
+
+        $totalTenants = $tenantScope(Tenant::query())->count();
+        $activeTenants = $tenantScope(Tenant::query())->where('status', 'active')->count();
+        $inactiveTenants = $tenantScope(Tenant::query())->where('status', 'inactive')->count();
+        $suspendedTenants = $tenantScope(Tenant::query())->where('status', 'suspended')->count();
+        $totalEmployees = Employee::withoutGlobalScopes()
+            ->when($scopedFilter !== null, fn ($q) => $q->whereIn('tenant_id', $scopedFilter))
+            ->count();
+        $activeEmployees = Employee::withoutGlobalScopes()
+            ->when($scopedFilter !== null, fn ($q) => $q->whereIn('tenant_id', $scopedFilter))
+            ->where('status', 'active')
+            ->count();
+        $totalUsers = User::query()
+            ->when($scopedFilter !== null, fn ($q) => $q->where(function ($uq) use ($scopedFilter): void {
+                $uq->whereIn('tenant_id', $scopedFilter)
+                    ->orWhereHas('tenantAccesses', fn ($aq) => $aq->whereIn('tenant_id', $scopedFilter)->where('is_active', true));
+            }))
+            ->count();
         $superAdmins = User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['super-admin', 'super-admin-limited']))->count();
 
-        $tenantTrend = collect(range(11, 0))->map(function ($monthsAgo) {
+        $tenantTrend = collect(range(11, 0))->map(function ($monthsAgo) use ($tenantScope) {
             $month = now()->startOfMonth()->subMonths($monthsAgo);
 
             return [
                 'month' => $month->format('Y-m'),
                 'label' => $month->locale(app()->getLocale())->translatedFormat('M/y'),
-                'count' => Tenant::query()
+                'count' => $tenantScope(Tenant::query())
                     ->whereYear('created_at', $month->year)
                     ->whereMonth('created_at', $month->month)
                     ->count(),
@@ -72,7 +109,7 @@ class SuperAdminController extends BaseController
             'large' => 0,
         ];
 
-        $byTenant = Tenant::query()
+        $byTenant = $tenantScope(Tenant::query())
             ->withCount('employees')
             ->orderByDesc('created_at')
             ->get()
@@ -136,10 +173,15 @@ class SuperAdminController extends BaseController
                 'tenant_accesses' => $this->formatTenantAccesses($user),
             ]);
 
-        $permissions = Permission::query()
+        $permissionsQuery = Permission::query()
             ->where('guard_name', 'web')
-            ->where('name', '!=', 'manage_platform')
-            ->whereIn('name', $request->user()->getAllPermissions()->pluck('name'))
+            ->where('name', '!=', 'manage_platform');
+
+        if (! $request->user()->hasRole('super-admin')) {
+            $permissionsQuery->whereIn('name', $request->user()->getAllPermissions()->pluck('name'));
+        }
+
+        $permissions = $permissionsQuery
             ->orderBy('group_name')
             ->orderBy('name')
             ->get(['name', 'group_name']);
@@ -283,10 +325,16 @@ class SuperAdminController extends BaseController
      */
     private function validateAssignablePlatformUserPermissions(Request $request, array $requestedPermissions): void
     {
-        $assignablePermissions = $request->user()->getAllPermissions()
-            ->reject(fn (Permission $permission) => $permission->name === 'manage_platform')
-            ->pluck('name')
-            ->all();
+        $assignablePermissions = $request->user()->hasRole('super-admin')
+            ? Permission::query()
+                ->where('guard_name', 'web')
+                ->where('name', '!=', 'manage_platform')
+                ->pluck('name')
+                ->all()
+            : $request->user()->getAllPermissions()
+                ->reject(fn (Permission $permission) => $permission->name === 'manage_platform')
+                ->pluck('name')
+                ->all();
 
         if (array_diff($requestedPermissions, $assignablePermissions)) {
             abort(403, 'Não pode atribuir permissões que não possui.');
@@ -307,7 +355,11 @@ class SuperAdminController extends BaseController
     {
         $this->authorize('viewAny', Tenant::class);
 
+        $scopedIds = $this->scopedTenantIds($request->user());
+        $scopedFilter = $scopedIds === [] ? [0] : $scopedIds;
+
         $tenants = Tenant::query()
+            ->when($scopedFilter !== null, fn ($q) => $q->whereIn('id', $scopedFilter))
             ->with([
                 'latestSubscription.plan:id,name,slug,currency,base_price',
                 'activeManagerRelationship.managerTenant:id,name,slug',
@@ -460,9 +512,12 @@ class SuperAdminController extends BaseController
         ]);
     }
 
-    public function listTenantUsers(Tenant $tenant): JsonResponse
+    public function listTenantUsers(Request $request, Tenant $tenant): JsonResponse
     {
         $this->authorize('view', $tenant);
+        if (! $request->user()->canAccessTenant($tenant->id)) {
+            return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
+        }
 
         $users = User::query()
             ->where(function ($query) use ($tenant) {
@@ -490,6 +545,9 @@ class SuperAdminController extends BaseController
     public function storeUser(Request $request, Tenant $tenant): JsonResponse
     {
         $this->authorize('update', $tenant);
+        if (! $request->user()->canAccessTenant($tenant->id)) {
+            return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
+        }
 
         $data = $request->validate([
             'name'          => ['required', 'string', 'max:255'],
@@ -554,6 +612,9 @@ class SuperAdminController extends BaseController
     public function updateUser(Request $request, Tenant $tenant, User $user): JsonResponse
     {
         $this->authorize('update', $tenant);
+        if (! $request->user()->canAccessTenant($tenant->id)) {
+            return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
+        }
 
         $belongsToTenant = $user->tenant_id === $tenant->id
             || $user->tenantAccesses()->where('tenant_id', $tenant->id)->exists();
@@ -617,9 +678,12 @@ class SuperAdminController extends BaseController
         ], 'Utilizador atualizado com sucesso.');
     }
 
-    public function tenantDepartments(Tenant $tenant): JsonResponse
+    public function tenantDepartments(Request $request, Tenant $tenant): JsonResponse
     {
         $this->authorize('view', $tenant);
+        if (! $request->user()->canAccessTenant($tenant->id)) {
+            return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
+        }
 
         $departments = Department::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
@@ -717,6 +781,10 @@ class SuperAdminController extends BaseController
                 ? array_values(array_unique(array_map('strval', $entry['permissions'])))
                 : null;
 
+            if ($groupId === null && $perms === []) {
+                $perms = null;
+            }
+
             if ($perms !== null) {
                 $this->validateTenantAssignablePermissions($perms);
                 if ($isPlatformUser && $actorPermissions !== null && array_diff($perms, $actorPermissions)) {
@@ -787,9 +855,12 @@ class SuperAdminController extends BaseController
         }
     }
 
-    public function destroyUser(Tenant $tenant, User $user): JsonResponse
+    public function destroyUser(Request $request, Tenant $tenant, User $user): JsonResponse
     {
         $this->authorize('update', $tenant);
+        if (! $request->user()->canAccessTenant($tenant->id)) {
+            return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
+        }
 
         if ($user->tenant_id !== $tenant->id) {
             return $this->error('Utilizador não pertence a esta empresa.', 403);
@@ -823,9 +894,12 @@ class SuperAdminController extends BaseController
         return $this->success(null, 'Palavra-passe do utilizador atualizada com sucesso.');
     }
 
-    public function showTenant(Tenant $tenant): JsonResponse
+    public function showTenant(Request $request, Tenant $tenant): JsonResponse
     {
         $this->authorize('view', $tenant);
+        if (! $request->user()->canAccessTenant($tenant->id)) {
+            return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
+        }
 
         return $this->success(new TenantResource(
             $tenant->loadCount(['employees', 'users', 'departments'])
@@ -835,6 +909,9 @@ class SuperAdminController extends BaseController
     public function updateTenant(Request $request, Tenant $tenant): JsonResponse
     {
         $this->authorize('update', $tenant);
+        if (! $request->user()->canAccessTenant($tenant->id)) {
+            return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
+        }
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -856,9 +933,12 @@ class SuperAdminController extends BaseController
         );
     }
 
-    public function destroyTenant(Tenant $tenant): JsonResponse
+    public function destroyTenant(Request $request, Tenant $tenant): JsonResponse
     {
         $this->authorize('delete', $tenant);
+        if (! $request->user()->canAccessTenant($tenant->id)) {
+            return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
+        }
 
         if ($tenant->employees()->exists()) {
             return $this->error('Não é possível eliminar uma empresa com funcionários associados.', 422);

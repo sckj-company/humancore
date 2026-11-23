@@ -277,7 +277,9 @@ function toTenantAccessDrafts(accesses?: TenantAccessSummary[]): TenantAccessDra
     tenant_id: a.tenant_id,
     permission_group_id: a.permission_group_id ?? null,
     role_name: a.role_name || 'employee',
-    permissions: a.permissions ?? a.resolved_permissions ?? [],
+    permissions: a.permission_group_id == null && (a.permissions == null || a.permissions.length === 0)
+      ? null
+      : (a.permissions ?? a.resolved_permissions ?? []),
     department_ids: a.department_ids ?? [],
   }))
 }
@@ -336,6 +338,7 @@ export function SuperAdminPage() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const currentUser = useAuthStore((state) => state.user)
+  const canManagePlatform = currentUser?.roles.includes('super-admin') || hasPermission(currentUser, 'manage_platform')
   const canManagePlatformUsers = currentUser?.roles.includes('super-admin') || hasPermission(currentUser, 'manage_super_admins')
   const canCreateTenant = hasPermission(currentUser, 'create_tenant')
   const canUpdateTenant = hasPermission(currentUser, 'update_tenant')
@@ -670,7 +673,19 @@ export function SuperAdminPage() {
       return
     }
     setUserErrors({})
-    createUser.mutate({ ...parsed.data, tenant_accesses: userTenantAccesses })
+    createUser.mutate({
+      ...parsed.data,
+      tenant_accesses: userTenantAccesses.map((a) => ({
+        ...a,
+        permissions: a.permissions === null ? null : normalizeTenantPermissions(a.permissions),
+      })),
+    })
+  }
+
+  const openCreatePlatformUser = () => {
+    setPlatformUserForm(emptyPlatformUser)
+    setPlatformUserAccesses([])
+    setPlatformUserDialogOpen(true)
   }
 
   const handlePlatformUserSubmit = () => {
@@ -686,7 +701,7 @@ export function SuperAdminPage() {
       ...platformUserForm,
       tenant_accesses: platformUserAccesses.map((a) => ({
         ...a,
-        permissions: normalizeTenantPermissions(a.permissions),
+        permissions: a.permissions === null ? null : normalizeTenantPermissions(a.permissions),
       })),
     })
   }
@@ -708,7 +723,7 @@ export function SuperAdminPage() {
       permissions: platformUserPermissions,
       tenant_accesses: editingPlatformUserAccesses.map((a) => ({
         ...a,
-        permissions: normalizeTenantPermissions(a.permissions),
+        permissions: a.permissions === null ? null : normalizeTenantPermissions(a.permissions),
       })),
     })
   }
@@ -894,7 +909,7 @@ export function SuperAdminPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canManagePlatformUsers && (
-              <Button size="sm" variant="outline" onClick={() => setPlatformUserDialogOpen(true)}>
+              <Button size="sm" variant="outline" onClick={openCreatePlatformUser}>
                 <UserPlus className="mr-1.5 h-4 w-4" />
                 {t('superAdminPage.createButton')}
               </Button>
@@ -988,18 +1003,22 @@ export function SuperAdminPage() {
             <Building2 className="h-4 w-4" />
             {t('superAdminPage.registeredTenantsTab', { defaultValue: 'Empresas registadas' })}
           </TabsTrigger>
-          <TabsTrigger value="plans" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
-            <Layers className="h-4 w-4" />
-            {t('superAdminPage.plansTab')}
-          </TabsTrigger>
+          {canManagePlatform && (
+            <TabsTrigger value="plans" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
+              <Layers className="h-4 w-4" />
+              {t('superAdminPage.plansTab')}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="relationships" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
             <Globe2 className="h-4 w-4" />
             {t('superAdminPage.hierarchyTab')}
           </TabsTrigger>
-          <TabsTrigger value="billing" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
-            <Activity className="h-4 w-4" />
-            {t('superAdminPage.billingTab')}
-          </TabsTrigger>
+          {canManagePlatform && (
+            <TabsTrigger value="billing" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
+              <Activity className="h-4 w-4" />
+              {t('superAdminPage.billingTab')}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="payroll-reports" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
             <FileSpreadsheet className="h-4 w-4" />
             {t('companyReports.tabTitleShort', { defaultValue: 'Relatórios & Resumos' })}
@@ -1302,17 +1321,21 @@ export function SuperAdminPage() {
             </Card>
           </TabsContent>
 
-        <TabsContent value="plans">
-          <PlansManagementTab />
-        </TabsContent>
+        {canManagePlatform && (
+          <TabsContent value="plans">
+            <PlansManagementTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="relationships">
           <RelationshipsAndSubscriptionsTab />
         </TabsContent>
 
-        <TabsContent value="billing">
-          <PlatformBillingTab />
-        </TabsContent>
+        {canManagePlatform && (
+          <TabsContent value="billing">
+            <PlatformBillingTab />
+          </TabsContent>
+        )}
 
         {canManagePlatformUsers && (
           <TabsContent value="platform-users">
@@ -1322,7 +1345,7 @@ export function SuperAdminPage() {
                   <CardTitle className="text-base">{t('superAdminPage.title')}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">{t('superAdminPage.description')}</p>
                 </div>
-                <Button size="sm" className="shrink-0" onClick={() => setPlatformUserDialogOpen(true)}>
+                <Button size="sm" className="shrink-0" onClick={openCreatePlatformUser}>
                   <UserPlus className="mr-1.5 h-4 w-4" />
                   {t('superAdminPage.createButton')}
                 </Button>
@@ -2278,7 +2301,10 @@ export function SuperAdminPage() {
                     role: tenantUserRole,
                     is_active: tenantUserActive,
                     permissions: tenantUserPermissions,
-                    tenant_accesses: editingTenantUserAccesses,
+                    tenant_accesses: editingTenantUserAccesses.map((a) => ({
+                      ...a,
+                      permissions: a.permissions === null ? null : normalizeTenantPermissions(a.permissions),
+                    })),
                   })
                 }}
                 disabled={updateTenantUser.isPending}

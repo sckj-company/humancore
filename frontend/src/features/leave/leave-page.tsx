@@ -211,7 +211,10 @@ function LeaveRequestDialog({ leave }: { leave?: LeaveRequest }) {
   const canRequest = hasPermission(user, 'create_leave') || hasAnyRole(user, ['employee'])
   const canUpdate = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'update_leave')
   const canOpen = leave ? canUpdate : canRequest
-  const canManageTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'manage_leave_types')
+  const canManageTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
+    || hasPermission(user, 'manage_leave_types')
+    || hasPermission(user, 'configure_leave')
+    || hasPermission(user, 'create_leave')
   const queryClient = useQueryClient()
 
   const {

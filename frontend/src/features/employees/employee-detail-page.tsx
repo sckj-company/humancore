@@ -73,7 +73,7 @@ export function EmployeeDetailPage() {
     ['national_id', 'bi', 'passport', 'driver_license', 'residence_permit', 'other'].map((key) => [key, t(`employeeDetail.idDocumentType.${key}`)]),
   )
   const contractTypeLabels: Record<string, string> = Object.fromEntries(
-    ['permanent', 'fixed_term', 'part_time', 'internship', 'temporary', 'contractor'].map((key) => [key, t(`employeeDetail.contractType.${key}`)]),
+    ['permanent', 'fixed_term', 'part_time', 'internship', 'temporary', 'probation', 'outsourced', 'contractor'].map((key) => [key, t(`employeeDetail.contractType.${key}`)]),
   )
   const salaryFrequencyLabels: Record<string, string> = Object.fromEntries(
     ['monthly', 'biweekly', 'weekly', 'hourly', 'yearly'].map((key) => [key, t(`employeeDetail.salaryFrequency.${key}`)]),
@@ -95,7 +95,11 @@ export function EmployeeDetailPage() {
   const canViewEmployeeSalary = hasFieldPermission(user, 'employee', 'salary', 'view')
     || hasFieldPermission(user, 'contract', 'base_salary', 'view')
   const canEditEmployeeSalary = hasFieldPermission(user, 'employee', 'salary', 'edit')
-  const canManageLeaveTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'manage_leave_types')
+  const canEditContractSalary = hasFieldPermission(user, 'contract', 'base_salary', 'edit') || canEditEmployeeSalary
+  const canManageLeaveTypes = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager'])
+    || hasPermission(user, 'manage_leave_types')
+    || hasPermission(user, 'configure_leave')
+    || hasPermission(user, 'create_leave')
   const canViewPayroll = canViewEmployeeSalary && (
     hasPermission(user, 'view_any_payroll')
     || hasPermission(user, 'view_any_deduction')
@@ -222,8 +226,16 @@ export function EmployeeDetailPage() {
     enabled: !!id,
   })
   const { data: contracts = [] } = useQuery<EmployeeContract[]>({ queryKey: ['employee-contracts', id], queryFn: () => api.get<EmployeeContract[]>(`employees/${id}/contracts`), enabled: !!id && activeTab === 'contract' })
-  const { data: contractPositions } = useQuery<Paginated<Position>>({ queryKey: ['contract-positions'], queryFn: () => api.get<Paginated<Position>>('positions', { per_page: 100 }), enabled: isContractDialogOpen })
-  const { data: contractDepartments } = useQuery<Paginated<Department>>({ queryKey: ['contract-departments'], queryFn: () => api.get<Paginated<Department>>('departments', { per_page: 100 }), enabled: isContractDialogOpen })
+  const { data: contractPositions = [] } = useQuery<Position[]>({
+    queryKey: ['contract-positions'],
+    queryFn: () => api.get<Position[] | Paginated<Position>>('positions', { per_page: 100 }).then((res) => (Array.isArray(res) ? res : res?.data ?? [])),
+    enabled: isContractDialogOpen,
+  })
+  const { data: contractDepartments = [] } = useQuery<Department[]>({
+    queryKey: ['contract-departments'],
+    queryFn: () => api.get<Department[] | Paginated<Department>>('departments', { per_page: 100 }).then((res) => (Array.isArray(res) ? res : res?.data ?? [])),
+    enabled: isContractDialogOpen,
+  })
   const { data: contractManagers } = useQuery<Paginated<{ id: number; full_name: string; employee_code: string }>>({ queryKey: ['contract-managers'], queryFn: () => api.get<Paginated<{ id: number; full_name: string; employee_code: string }>>('employees', { per_page: 200 }), enabled: isContractDialogOpen })
   const { data: documents } = useQuery<EmployeeDocument[]>({ queryKey: ['employee-documents', id], queryFn: () => api.get<{ data: EmployeeDocument[] }>('documents', { employee_id: id, per_page: 100 }).then((res) => (Array.isArray(res) ? res : (res as any).data ?? [])), enabled: !!id })
   const { data: assetsOverview } = useQuery<EmployeeAssetsResponse>({ queryKey: ['employee-assets', Number(id)], queryFn: () => api.get<EmployeeAssetsResponse>(`employees/${id}/assets`), enabled: !!id })
@@ -380,19 +392,38 @@ export function EmployeeDetailPage() {
   const contractMutation = useMutation({
     mutationFn: () => {
       if (!id) throw new Error(t('employeeDetail.messages.contractSaveError'))
-      const payload = {
-        ...contractForm,
+      const parsedHours = Number(contractForm.work_hours_per_week)
+      const workHours = contractForm.work_hours_per_week !== '' && Number.isFinite(parsedHours) && parsedHours >= 1
+        ? parsedHours
+        : null
+
+      const payload: Record<string, string | number | null | undefined> = {
+        contract_type: contractForm.contract_type,
         position_id: contractForm.position_id ? Number(contractForm.position_id) : null,
         department_id: contractForm.department_id ? Number(contractForm.department_id) : null,
         manager_id: contractForm.manager_id ? Number(contractForm.manager_id) : null,
-        base_salary: Number(contractForm.base_salary),
-        work_hours_per_week: contractForm.work_hours_per_week ? Number(contractForm.work_hours_per_week) : null,
+        salary_frequency: contractForm.salary_frequency,
+        work_hours_per_week: workHours,
         end_date: contractForm.end_date || null,
         signed_at: contractForm.signed_at || null,
+        notes: contractForm.notes,
       }
+
+      if (!editingContract || contractForm.start_date) {
+        payload.start_date = contractForm.start_date
+      }
+
+      if (!editingContract || (canEditContractSalary && contractForm.base_salary !== '')) {
+        payload.base_salary = Number(contractForm.base_salary)
+      }
+
       if (contractDocument) {
         const formData = new FormData()
-        Object.entries(payload).forEach(([key, value]) => formData.append(key, value == null ? '' : String(value)))
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== undefined) {
+            formData.append(key, value == null ? '' : String(value))
+          }
+        })
         formData.append('document', contractDocument)
         if (editingContract) {
           formData.append('_method', 'PUT')
@@ -409,12 +440,15 @@ export function EmployeeDetailPage() {
       setIsContractDialogOpen(false)
       setEditingContract(null)
       setContractDocument(null)
+      qc.invalidateQueries({ queryKey: ['employees'] })
       qc.invalidateQueries({ queryKey: ['employees', id] })
       qc.invalidateQueries({ queryKey: ['employee-contracts', id] })
       qc.invalidateQueries({ queryKey: ['employee-documents', id] })
+      qc.invalidateQueries({ queryKey: ['employee-payroll-settings', Number(id)] })
       qc.invalidateQueries({ queryKey: ['employees', id, 'timeline'] })
       qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
       qc.invalidateQueries({ queryKey: ['payroll-period'] })
+      qc.invalidateQueries({ queryKey: ['hr-dashboard'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('employeeDetail.messages.contractSaveError'))),
   })
@@ -623,9 +657,9 @@ export function EmployeeDetailPage() {
       base_salary: contract?.base_salary != null ? String(contract.base_salary) : '',
       salary_frequency: contract?.salary_frequency ?? 'monthly',
       work_hours_per_week: contract?.work_hours_per_week != null ? String(contract.work_hours_per_week) : '40',
-      start_date: renew || !contract ? todayStr : contract.start_date,
-      end_date: renew ? '' : contract?.end_date ?? '',
-      signed_at: renew ? '' : contract?.signed_at ?? '',
+      start_date: renew || !contract ? todayStr : (contract.start_date ? String(contract.start_date).slice(0, 10) : todayStr),
+      end_date: renew ? '' : (contract?.end_date ? String(contract.end_date).slice(0, 10) : ''),
+      signed_at: renew ? '' : (contract?.signed_at ? String(contract.signed_at).slice(0, 10) : ''),
       notes: renew ? '' : contract?.notes ?? '',
     })
     setIsContractDialogOpen(true)
@@ -2293,7 +2327,7 @@ export function EmployeeDetailPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">{t('employeeDetail.text.noPosition')}</SelectItem>
-                  {(contractPositions?.data ?? []).map((position) => (
+                  {contractPositions.map((position) => (
                     <SelectItem key={position.id} value={String(position.id)}>{position.title}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2305,7 +2339,7 @@ export function EmployeeDetailPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">{t('employeeDetail.text.noDepartment')}</SelectItem>
-                  {(contractDepartments?.data ?? []).map((department) => (
+                  {contractDepartments.map((department) => (
                     <SelectItem key={department.id} value={String(department.id)}>{department.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2325,8 +2359,20 @@ export function EmployeeDetailPage() {
             </div>
             <div className="border-b pb-2 pt-2 sm:col-span-2"><p className="text-sm font-semibold">{t('employeeDetail.text.compensationAndDates')}</p></div>
             <div className="space-y-1.5">
-              <Label>{t('employeeDetail.text.baseSalary')} *</Label>
-              <Input type="number" min="0" step="0.01" value={contractForm.base_salary} onChange={(event) => setContractForm((form) => ({ ...form, base_salary: event.target.value }))} />
+              <Label>{t('employeeDetail.text.baseSalary')} {!editingContract || canEditContractSalary ? '*' : ''}</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                disabled={Boolean(editingContract && !canEditContractSalary)}
+                value={contractForm.base_salary}
+                onChange={(event) => setContractForm((form) => ({ ...form, base_salary: event.target.value }))}
+              />
+              {editingContract && !canEditContractSalary && (
+                <p className="text-[11px] text-muted-foreground">
+                  {t('employeeDetail.text.salaryEditRestrictedHint', { defaultValue: 'Sem permissão para alterar o salário base do contrato.' })}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>{t('employeeDetail.text.salaryFrequency')} *</Label>
@@ -2356,11 +2402,11 @@ export function EmployeeDetailPage() {
               <Input type="date" value={contractForm.signed_at} onChange={(event) => setContractForm((form) => ({ ...form, signed_at: event.target.value }))} />
             </div>
             <div className="border-b pb-2 pt-2 sm:col-span-2"><p className="text-sm font-semibold">{t('employeeDetail.text.contractDocumentsAndNotes')}</p></div>
-            {!editingContract && <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>{t('employeeDetail.text.signedContractDocument')}</Label>
-              <Input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => setContractDocument(event.target.files?.[0] ?? null)} />
+              <Input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" onChange={(event) => setContractDocument(event.target.files?.[0] ?? null)} />
               <p className="text-xs text-muted-foreground">{t('employeeDetail.text.signedContractDocumentHint')}</p>
-            </div>}
+            </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label>{t('common.notes')}</Label>
               <Textarea value={contractForm.notes} onChange={(event) => setContractForm((form) => ({ ...form, notes: event.target.value }))} rows={3} />
@@ -2368,7 +2414,14 @@ export function EmployeeDetailPage() {
           </div>
           <DialogFooter className="shrink-0 flex-wrap gap-2">
             <Button variant="outline" onClick={() => setIsContractDialogOpen(false)} disabled={contractMutation.isPending}>{t('common.cancel')}</Button>
-            <Button onClick={() => contractMutation.mutate()} disabled={contractMutation.isPending || !contractForm.base_salary || !contractForm.start_date}>
+            <Button
+              onClick={() => contractMutation.mutate()}
+              disabled={
+                contractMutation.isPending
+                || (!editingContract && (!contractForm.base_salary || !contractForm.start_date))
+                || (Boolean(editingContract) && canEditContractSalary && contractForm.base_salary === '')
+              }
+            >
               {contractMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {t('common.save')}
             </Button>

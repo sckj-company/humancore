@@ -10,8 +10,10 @@ use App\Models\EmployeeDocument;
 use App\Services\CloudinaryService;
 use App\Services\Contract\ContractTerminationService;
 use App\Support\PdfDocument;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -71,28 +73,51 @@ class ContractController extends BaseController
             $data['document_path'] = $uploaded['url'];
         }
 
-        $contract->update($data);
-        if ($file && $uploaded) {
-            EmployeeDocument::query()->create([
-                'employee_id' => $contract->employee_id,
-                'tenant_id' => $contract->tenant_id,
-                'uploader_id' => $request->user()->id,
-                'name' => 'Contrato de Trabalho - '.$contract->start_date->format('Y-m-d'),
-                'document_type' => 'contract',
-                'file_path' => $uploaded['url'],
-                'original_name' => $file->getClientOriginalName(),
-                'mime_type' => $file->getMimeType(),
-                'file_size' => $uploaded['bytes'] ?? $file->getSize(),
-                'is_confidential' => false,
-            ]);
+        if ($contract->terminated_at === null && $contract->termination_type === null && ! array_key_exists('is_active', $data)) {
+            $effectiveEndDate = array_key_exists('end_date', $data)
+                ? $data['end_date']
+                : $contract->end_date?->toDateString();
+
+            if ($effectiveEndDate !== null && Carbon::parse($effectiveEndDate)->lt(today())) {
+                $data['is_active'] = false;
+            } elseif (! $contract->is_active) {
+                $hasOtherActive = EmployeeContract::query()
+                    ->where('employee_id', $contract->employee_id)
+                    ->where('id', '!=', $contract->id)
+                    ->where('is_active', true)
+                    ->exists();
+                if (! $hasOtherActive) {
+                    $data['is_active'] = true;
+                }
+            }
         }
-        if ($contract->is_active && $contract->employee) {
-            $contract->employee->update([
-                'position_id' => $contract->position_id,
-                'department_id' => $contract->department_id,
-                'manager_id' => $contract->manager_id,
-            ]);
-        }
+
+        DB::transaction(function () use ($contract, $data, $file, $uploaded, $request): void {
+            $contract->update($data);
+
+            if ($file && $uploaded) {
+                EmployeeDocument::query()->create([
+                    'employee_id' => $contract->employee_id,
+                    'tenant_id' => $contract->tenant_id,
+                    'uploader_id' => $request->user()->id,
+                    'name' => 'Contrato de Trabalho - '.($contract->start_date?->format('Y-m-d') ?? now()->toDateString()),
+                    'document_type' => 'contract',
+                    'file_path' => $uploaded['url'],
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'file_size' => $uploaded['bytes'] ?? $file->getSize(),
+                    'is_confidential' => false,
+                ]);
+            }
+
+            if ($contract->is_active && $contract->employee) {
+                $contract->employee->update([
+                    'position_id' => $contract->position_id,
+                    'department_id' => $contract->department_id,
+                    'manager_id' => $contract->manager_id,
+                ]);
+            }
+        });
 
         return $this->success(
             new ContractResource($contract->fresh(['employee', 'position', 'department', 'manager'])),

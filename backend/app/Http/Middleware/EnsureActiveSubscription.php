@@ -18,7 +18,7 @@ class EnsureActiveSubscription
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        if (! $user || $user->hasRole('super-admin')) {
+        if (! $user || $user->isSuperAdmin()) {
             return $next($request);
         }
 

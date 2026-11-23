@@ -18,16 +18,16 @@ class LeaveTypePolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('view_leave');
+        return $user->can('view_leave') || $user->can('view_any_leave');
     }
 
     public function view(User $user, LeaveType $type): bool
     {
-        return $user->can('view_leave');
+        return $user->can('view_leave') || $user->can('view_any_leave');
     }
 
     public function create(User $user): bool
     {
-        return $user->can('manage_leave_types');
+        return $user->can('manage_leave_types') || $user->can('configure_leave') || $user->can('create_leave');
     }
 }
