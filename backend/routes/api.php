@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\CompanyPayrollReportController;
 use App\Http\Controllers\Api\V1\Admin\PlanController;
 use App\Http\Controllers\Api\V1\Admin\PlatformBillingController;
 use App\Http\Controllers\Api\V1\Admin\SuperAdminController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\Api\V1\Payroll\MyPayslipsController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollInssRuleController;
 use App\Http\Controllers\Api\V1\Payroll\PayrollIrtTableController;
+use App\Http\Controllers\Api\V1\Payroll\PayrollPeriodReportController;
 use App\Http\Controllers\Api\V1\Payroll\PayslipController;
 use App\Http\Controllers\Api\V1\Payroll\SalaryComponentRegulationController;
 use App\Http\Controllers\Api\V1\Performance\PerformanceEvaluationController;
@@ -131,6 +133,15 @@ Route::prefix('v1')->group(function () {
             Route::post('platform-users', [SuperAdminController::class, 'storePlatformUser']);
             Route::put('platform-users/{user}', [SuperAdminController::class, 'updatePlatformUser']);
             Route::delete('platform-users/{user}', [SuperAdminController::class, 'destroyPlatformUser']);
+
+            // Relatórios, Dossiês Completos & Resumos Salariais Multi-empresa
+            Route::get('payroll-reports/overview', [CompanyPayrollReportController::class, 'overview']);
+            Route::get('payroll-reports/tenants/{tenant}/inspect', [CompanyPayrollReportController::class, 'inspectTenant']);
+            Route::post('payroll-reports/tenants/{tenant}/dossier.pdf', [CompanyPayrollReportController::class, 'downloadCompanyDossier']);
+            Route::get('payroll-reports/tenants/{tenant}/inss-map.pdf', [CompanyPayrollReportController::class, 'downloadCompanyInssMap']);
+            Route::get('payroll-reports/tenants/{tenant}/irt-map.pdf', [CompanyPayrollReportController::class, 'downloadCompanyIrtMap']);
+            Route::post('payroll-reports/bulk-singular.zip', [CompanyPayrollReportController::class, 'downloadBulkSingular']);
+            Route::post('payroll-reports/general-summary.pdf', [CompanyPayrollReportController::class, 'downloadGeneralSummaryPdf']);
         });
 
         // Rotas operacionais protegidas pela subscrição ativa do tenant
@@ -235,6 +246,13 @@ Route::prefix('v1')->group(function () {
                 Route::post('payroll/periods/{period}/pay', [PayrollController::class, 'pay']);
                 Route::get('payroll/periods/{period}/records', [PayrollController::class, 'records']);
                 Route::get('payroll/periods/{period}/events', [PayrollController::class, 'events']);
+                Route::get('payroll/periods/{period}/report', [PayrollPeriodReportController::class, 'show']);
+                Route::put('payroll/periods/{period}/report', [PayrollPeriodReportController::class, 'upsert']);
+                Route::post('payroll/periods/{period}/report/documents', [PayrollPeriodReportController::class, 'storeDocument']);
+                Route::post('payroll/periods/{period}/report/documents/attach-system', [PayrollPeriodReportController::class, 'attachSystemDocument']);
+                Route::patch('payroll/periods/{period}/report/documents/{document}', [PayrollPeriodReportController::class, 'updateDocument']);
+                Route::get('payroll/periods/{period}/report/documents/{document}/download', [PayrollPeriodReportController::class, 'downloadDocument']);
+                Route::delete('payroll/periods/{period}/report/documents/{document}', [PayrollPeriodReportController::class, 'destroyDocument']);
                 Route::get('employees/{employee}/payroll-settings', [EmployeePayrollSettingsController::class, 'show']);
                 Route::put('employees/{employee}/payroll-settings', [EmployeePayrollSettingsController::class, 'update']);
 
@@ -278,6 +296,8 @@ Route::prefix('v1')->group(function () {
                     Route::get('payroll/records/{record}/payslip', [PayslipController::class, 'show']);
                     Route::get('payroll/records/{record}/payslip.pdf', [PayslipController::class, 'download']);
                     Route::get('payroll/periods/{period}/payslip.pdf', [PayslipController::class, 'downloadPeriod']);
+                    Route::get('payroll/periods/{period}/inss-map.pdf', [PayslipController::class, 'downloadInssMap']);
+                    Route::get('payroll/periods/{period}/irt-map.pdf', [PayslipController::class, 'downloadIrtMap']);
                     Route::post('payroll/periods/{period}/payslips/bulk.pdf', [PayslipController::class, 'downloadBulk']);
                     Route::get('payroll/my-payslips', [MyPayslipsController::class, 'index']);
                 });
@@ -373,6 +393,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('reports/headcount', [ReportController::class, 'headcount']);
                 Route::get('reports/turnover', [ReportController::class, 'turnover']);
                 Route::get('reports/payroll-summary', [ReportController::class, 'payrollSummary']);
+                Route::get('reports/payroll-period-summary', [ReportController::class, 'payrollPeriodSummary']);
+                Route::post('reports/payroll-period-summary.pdf', [ReportController::class, 'payrollPeriodSummaryPdf']);
                 Route::get('reports/attendance-summary', [ReportController::class, 'attendanceSummary']);
                 Route::get('reports/absenteeism', [ReportController::class, 'absenteeism']);
                 Route::get('reports/cost', [ReportController::class, 'cost']);

@@ -75,20 +75,16 @@
     @endphp
     <style>
         @page { size: A4 landscape; margin: 6mm; }
+        @if($isBilingual)
         @font-face {
             font-family: 'Droid Sans Fallback';
             src: url('{{ resource_path('fonts/DroidSansFallbackFull.ttf') }}') format('truetype');
             font-weight: normal;
             font-style: normal;
         }
-        @font-face {
-            font-family: 'Droid Sans Fallback';
-            src: url('{{ resource_path('fonts/DroidSansFallbackFull.ttf') }}') format('truetype');
-            font-weight: bold;
-            font-style: normal;
-        }
+        @endif
         * { box-sizing: border-box; }
-        body { font-family: 'Droid Sans Fallback', 'DejaVu Sans', sans-serif; font-size: 6.5px; color: #1e293b; }
+        body { font-family: {{ $isBilingual ? "'Droid Sans Fallback', " : '' }}'DejaVu Sans', sans-serif; font-size: 6.5px; color: #1e293b; }
         table { width: 100%; border-collapse: collapse; }
         .header { margin-bottom: 6px; border-bottom: 2px solid #2563eb; }
         .header td { padding: 2px 0 5px; vertical-align: top; }

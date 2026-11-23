@@ -19,6 +19,7 @@ import {
   CalendarRange,
   Clock,
   Save,
+  FileCheck2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -44,6 +45,7 @@ import { PageHeader, LoadingState, EmptyState, ErrorState } from '@/components/s
 import { CalendarDateField } from '@/components/ui/calendar-date-field'
 import { formatDayMonthLong } from '@/lib/format'
 import { ProcessPeriodDialog } from '@/features/payroll/process-period-dialog'
+import { PayrollPeriodReportDialog } from '@/features/payroll/payroll-period-report-dialog'
 import type { PayrollPeriod, Paginated } from '@/types'
 
 const statusStyle: Record<string, string> = {
@@ -116,6 +118,7 @@ export function PayrollPeriodsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [reopenId, setReopenId] = useState<number | null>(null)
   const [processId, setProcessId] = useState<number | null>(null)
+  const [reportPeriod, setReportPeriod] = useState<PayrollPeriod | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [periodTypeFilter, setPeriodTypeFilter] = useState('all')
@@ -324,6 +327,7 @@ export function PayrollPeriodsPage() {
                     <th className="px-6 py-3 font-medium">{t('payroll.periodsPage.type')}</th>
                     <th className="px-6 py-3 font-medium">{t('payroll.periodsPage.range')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('common.status')}</th>
+                    <th className="px-4 py-3 font-medium">{t('payrollReport.columnHeader', { defaultValue: 'Relatório' })}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('payroll.periodsPage.employees')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('payroll.periodsPage.grossTotal')}</th>
                     <th className="px-6 py-3 font-medium text-right">{t('payroll.periodsPage.netTotal')}</th>
@@ -331,7 +335,10 @@ export function PayrollPeriodsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border text-sm">
-                  {data.data.map((p) => (
+                  {data.data.map((p) => {
+                    const isReportable = p.is_reportable ?? ['approved', 'closed', 'paid'].includes(p.status)
+                    const docsCount = p.report?.documents_count ?? 0
+                    return (
                     <tr key={p.id} className="transition-colors hover:bg-muted/30">
                       <td className="px-6 py-3 font-medium">{p.name}</td>
                       <td className="px-6 py-3 text-muted-foreground">{t(`payroll.periodTypes.${p.period_type}`)}</td>
@@ -342,6 +349,31 @@ export function PayrollPeriodsPage() {
                         <Badge className={statusStyle[p.status]} variant="outline">
                           {t(`payroll.periodStatuses.${p.status}`, { defaultValue: statusLabel[p.status] ?? p.status })}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        {isReportable ? (
+                          <button
+                            type="button"
+                            onClick={() => setReportPeriod(p)}
+                            className="flex flex-wrap items-center gap-1 text-left hover:opacity-80"
+                          >
+                            <Badge variant={p.report?.is_summary_complete ? 'success' : 'warning'} className="text-[10px]">
+                              {p.report?.is_summary_complete
+                                ? t('payrollReport.summaryShortComplete', { defaultValue: 'Concluído' })
+                                : t('payrollReport.summaryShortPending', { defaultValue: 'Pendente' })}
+                            </Badge>
+                            <Badge variant={p.report?.inss_paid ? 'success' : 'destructive'} className="text-[10px]">
+                              {p.report?.inss_paid
+                                ? t('payrollReport.inssPaidShort', { defaultValue: 'INSS Pago' })
+                                : t('payrollReport.inssUnpaidShort', { defaultValue: 'INSS N/Pago' })}
+                            </Badge>
+                            <span className="text-[11px] text-muted-foreground">
+                              ({docsCount} doc{docsCount === 1 ? '' : 's'})
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-3 text-right text-muted-foreground">{p.employee_count ?? 0}</td>
                       <td className="px-6 py-3 text-right font-mono">
@@ -423,6 +455,16 @@ export function PayrollPeriodsPage() {
                               <RotateCcw className="h-4 w-4" />
                             </Button>
                           )}
+                          {isReportable && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title={t('payrollReport.manageButton', { defaultValue: 'Relatório & Documentos' })}
+                              onClick={() => setReportPeriod(p)}
+                            >
+                              <FileCheck2 className="h-4 w-4 text-primary" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon-sm" asChild title={t('payroll.periodsPage.viewDetails')}>
                             <Link to={`/payroll/${p.id}`}>
                               <Eye className="h-4 w-4" />
@@ -431,7 +473,8 @@ export function PayrollPeriodsPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -453,6 +496,14 @@ export function PayrollPeriodsPage() {
           if (reopenId != null) reopenMutation.mutate({ id: reopenId, reason })
         }}
         isPending={reopenMutation.isPending}
+      />
+
+      <PayrollPeriodReportDialog
+        periodId={reportPeriod?.id ?? null}
+        periodName={reportPeriod?.name}
+        open={reportPeriod != null}
+        onOpenChange={(open) => { if (!open) setReportPeriod(null) }}
+        onSaved={() => invalidate()}
       />
     </div>
   )

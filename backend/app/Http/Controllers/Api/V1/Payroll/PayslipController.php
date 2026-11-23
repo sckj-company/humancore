@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Payroll;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
+use App\Services\Payroll\CompanyPayrollDossierService;
 use App\Services\Payroll\PayslipPdfService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
@@ -27,6 +28,44 @@ class PayslipController extends BaseController
         $filename = 'folha-salarial-'.$period->id.'.pdf';
 
         return $payslips->renderPeriod($period, $request->query('lang'))->download($filename);
+    }
+
+    public function downloadInssMap(Request $request, PayrollPeriod $period, CompanyPayrollDossierService $dossierService): SymfonyResponse
+    {
+        $this->authorize('view', $period);
+
+        $lang = $request->query('lang');
+        $result = $dossierService->renderInssMapPdf(
+            period: $period,
+            lang: is_string($lang) ? $lang : null,
+            actor: $request->user(),
+            allowedDeptIds: $request->user()?->allowedDepartmentIds(),
+        );
+
+        if ($request->query('disposition') === 'inline') {
+            return $result['pdf']->stream($result['filename']);
+        }
+
+        return $result['pdf']->download($result['filename']);
+    }
+
+    public function downloadIrtMap(Request $request, PayrollPeriod $period, CompanyPayrollDossierService $dossierService): SymfonyResponse
+    {
+        $this->authorize('view', $period);
+
+        $lang = $request->query('lang');
+        $result = $dossierService->renderIrtMapPdf(
+            period: $period,
+            lang: is_string($lang) ? $lang : null,
+            actor: $request->user(),
+            allowedDeptIds: $request->user()?->allowedDepartmentIds(),
+        );
+
+        if ($request->query('disposition') === 'inline') {
+            return $result['pdf']->stream($result['filename']);
+        }
+
+        return $result['pdf']->download($result['filename']);
     }
 
     public function downloadBulk(Request $request, PayrollPeriod $period, PayslipPdfService $payslips): SymfonyResponse
@@ -66,17 +105,17 @@ class PayslipController extends BaseController
         }
 
         $lang = $validated['lang'] ?? $request->query('lang');
-        $pdf = $payslips->renderBulk($records, is_string($lang) ? $lang : null);
+        $pdfBinary = $payslips->renderBulkBinary($records, is_string($lang) ? $lang : null);
 
         $filename = 'recibos-lote-'.($period->displayName() ?: $period->id).'.pdf';
         $filename = str_replace(['/', '\\', ' '], '-', $filename);
 
         $disposition = $validated['disposition'] ?? $request->query('disposition', 'attachment');
-        if ($disposition === 'inline') {
-            return $pdf->stream($filename);
-        }
 
-        return $pdf->download($filename);
+        return response($pdfBinary, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "{$disposition}; filename=\"{$filename}\"",
+        ]);
     }
 
     public function show(PayrollRecord $record, Request $request, PayslipPdfService $payslips): SymfonyResponse

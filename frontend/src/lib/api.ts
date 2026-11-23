@@ -36,7 +36,21 @@ class ApiClient {
 
     this.client.interceptors.response.use(
       (response) => response,
-      (error) => {
+      async (error) => {
+        if (error.response?.data instanceof Blob) {
+          const blob = error.response.data
+          if (blob.type.includes('json') || blob.type === '' || blob.size < 4096) {
+            try {
+              const text = await blob.text()
+              const parsed = JSON.parse(text)
+              if (parsed && typeof parsed === 'object') {
+                error.response.data = parsed
+              }
+            } catch {
+              // Keep binary blob if not valid JSON
+            }
+          }
+        }
         if (error.response?.status === 401) {
           localStorage.removeItem('hrms_token')
           const base = import.meta.env.BASE_URL.replace(/\/$/, '')
@@ -94,6 +108,11 @@ class ApiClient {
   async downloadFilePost(url: string, data?: unknown, filename?: string, params?: Record<string, unknown>): Promise<void> {
     const response = await this.client.post(url, data, { params, responseType: 'blob' })
     this.triggerBlobDownload(response, filename)
+  }
+
+  async fetchBlob(url: string, params?: Record<string, unknown>): Promise<Blob> {
+    const response = await this.client.get(url, { params, responseType: 'blob' })
+    return response.data as Blob
   }
 
   async fetchBlobPost(url: string, data?: unknown, params?: Record<string, unknown>): Promise<Blob> {

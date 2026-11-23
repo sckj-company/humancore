@@ -18,7 +18,7 @@ class DocumentStorageService
     /**
      * Store an uploaded file (multipart or base64 JSON fallback) to Cloudinary or local disk.
      *
-     * @return array{path: string, name: string, mime: string}|null
+     * @return array{path: string, name: string, mime: string, size?: int|null}|null
      */
     public function storeFromRequest(
         Request $request,
@@ -26,6 +26,8 @@ class DocumentStorageService
         string $localDir,
         string $cloudinaryFolder,
         string $prefix = 'doc_',
+        string $mimes = 'pdf,jpg,jpeg,png,webp',
+        int $maxKb = 10240,
     ): ?array {
         $rawFile = $request->file($fileField);
         if ($rawFile !== null && ! $rawFile->isValid()) {
@@ -48,7 +50,7 @@ class DocumentStorageService
         }
 
         $request->validate([
-            $fileField => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            $fileField => ['required', 'file', "mimes:{$mimes}", "max:{$maxKb}"],
         ]);
 
         $path = null;
@@ -68,7 +70,105 @@ class DocumentStorageService
             'path' => $path,
             'name' => $rawFile->getClientOriginalName(),
             'mime' => $rawFile->getClientMimeType() ?: ($rawFile->getMimeType() ?: 'application/octet-stream'),
+            'size' => $rawFile->getSize() ?: null,
         ];
+    }
+
+    /**
+     * Store raw generated file bytes (e.g., system PDF) to Cloudinary or local disk.
+     *
+     * @return array{path: string, name: string, mime: string, size: int}
+     */
+    public function storeBinary(
+        string $binary,
+        string $filename,
+        string $mime,
+        string $localDir,
+        string $cloudinaryFolder,
+        string $prefix = 'doc_',
+    ): array {
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION) ?: 'pdf');
+        $relativePath = rtrim($localDir, '/').'/'.uniqid($prefix, true).'.'.$ext;
+        Storage::disk('local')->put($relativePath, $binary);
+
+        $storedPath = $relativePath;
+        if ($this->hasCloudinary()) {
+            $tempFilePath = Storage::disk('local')->path($relativePath);
+            try {
+                $storedPath = $this->cloudinary->upload($tempFilePath, $cloudinaryFolder, 'auto')['url'];
+                Storage::disk('local')->delete($relativePath);
+            } catch (\Throwable) {
+                $storedPath = $relativePath;
+            }
+        }
+
+        return [
+            'path' => $storedPath,
+            'name' => $filename,
+            'mime' => $mime,
+            'size' => strlen($binary),
+        ];
+    }
+
+    /**
+     * Read stored document contents from local disk or remote Cloudinary URL.
+     *
+     * @return array{contents: string, mime: string, extension: string}|null
+     */
+    public function readBinary(string $path): ?array
+    {
+        if ($path === '') {
+            return null;
+        }
+
+        if ($this->cloudinary->isCloudinaryUrl($path)) {
+            try {
+                $remote = Http::timeout(20)->get($path);
+                if ($remote->successful()) {
+                    $ext = strtolower((string) pathinfo((string) parse_url($path, PHP_URL_PATH), PATHINFO_EXTENSION));
+                    $mime = strtolower((string) ($remote->header('Content-Type') ?: 'application/octet-stream'));
+
+                    return [
+                        'contents' => $remote->body(),
+                        'mime' => $mime,
+                        'extension' => $ext ?: $this->extensionFromMime($mime),
+                    ];
+                }
+            } catch (\Throwable) {
+                return null;
+            }
+
+            return null;
+        }
+
+        if (! Storage::disk('local')->exists($path)) {
+            return null;
+        }
+
+        $contents = Storage::disk('local')->get($path);
+        if ($contents === null) {
+            return null;
+        }
+
+        $ext = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+        $mime = strtolower((string) (Storage::disk('local')->mimeType($path) ?: 'application/octet-stream'));
+
+        return [
+            'contents' => $contents,
+            'mime' => $mime,
+            'extension' => $ext ?: $this->extensionFromMime($mime),
+        ];
+    }
+
+    private function extensionFromMime(string $mime): string
+    {
+        return match (true) {
+            str_contains($mime, 'pdf') => 'pdf',
+            str_contains($mime, 'png') => 'png',
+            str_contains($mime, 'webp') => 'webp',
+            str_contains($mime, 'jpeg'), str_contains($mime, 'jpg') => 'jpg',
+            default => 'bin',
+        };
     }
 
     public function delete(?string $path): void
@@ -84,8 +184,10 @@ class DocumentStorageService
         }
     }
 
-    public function download(string $path, string $fallbackFilename): Response|StreamedResponse|JsonResponse
+    public function download(string $path, string $fallbackFilename, bool $inline = false): Response|StreamedResponse|JsonResponse
     {
+        $disposition = $inline ? 'inline' : 'attachment';
+
         if ($this->cloudinary->isCloudinaryUrl($path)) {
             try {
                 $remote = Http::timeout(20)->get($path);
@@ -96,7 +198,7 @@ class DocumentStorageService
 
                     return response($remote->body(), 200, [
                         'Content-Type' => $contentType,
-                        'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                        'Content-Disposition' => "{$disposition}; filename=\"{$filename}\"",
                     ]);
                 }
             } catch (\Throwable) {
@@ -114,6 +216,16 @@ class DocumentStorageService
                 'success' => false,
                 'message' => 'Documento não encontrado.',
             ], 404);
+        }
+
+        if ($inline) {
+            $mime = Storage::disk('local')->mimeType($path) ?: 'application/octet-stream';
+            $contents = Storage::disk('local')->get($path);
+
+            return response($contents ?? '', 200, [
+                'Content-Type' => $mime,
+                'Content-Disposition' => "inline; filename=\"{$fallbackFilename}\"",
+            ]);
         }
 
         return Storage::disk('local')->download($path, $fallbackFilename);

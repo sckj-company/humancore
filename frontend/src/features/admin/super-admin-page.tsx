@@ -33,6 +33,7 @@ import {
   ArrowUpRight,
   Copy,
   ClipboardPaste,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -56,6 +57,7 @@ import {
 import { PlansManagementTab } from '@/features/admin/plans-management-tab'
 import { PlatformBillingTab } from '@/features/admin/platform-billing-tab'
 import { RelationshipsAndSubscriptionsTab } from '@/features/admin/relationships-tab'
+import { CompanyDossierModal, CompanyPayrollReportsTab } from '@/features/admin/company-payroll-reports-tab'
 import type { Paginated, Tenant } from '@/types'
 
 // ── Constantes Angola ─────────────────────────────────────────────────────────
@@ -359,6 +361,7 @@ export function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<'info' | 'address' | 'config' | 'admin'>('info')
 
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null)
+  const [dossierTenantId, setDossierTenantId] = useState<number | null>(null)
   const [usersDialogOpen, setUsersDialogOpen] = useState(false)
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [userForm, setUserForm] = useState<UserForm>(emptyUserForm)
@@ -997,6 +1000,10 @@ export function SuperAdminPage() {
             <Activity className="h-4 w-4" />
             {t('superAdminPage.billingTab')}
           </TabsTrigger>
+          <TabsTrigger value="payroll-reports" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
+            <FileSpreadsheet className="h-4 w-4" />
+            {t('companyReports.tabTitleShort', { defaultValue: 'Relatórios & Resumos' })}
+          </TabsTrigger>
           <TabsTrigger value="permission-groups" className="flex-none gap-2 px-3 py-1.5 text-xs sm:text-sm">
             <Layers className="h-4 w-4" />
             {t('superAdminPage.permissionGroupsTab', { defaultValue: 'Grupos de permissões' })}
@@ -1122,6 +1129,15 @@ export function SuperAdminPage() {
                                 }}
                               >
                                 <ArrowUpRight className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title={t('companyReports.dossierRowAction', { defaultValue: 'Gerar Dossiê Completo PDF' })}
+                                aria-label={t('companyReports.dossierRowAction', { defaultValue: 'Gerar Dossiê Completo PDF' })}
+                                onClick={() => setDossierTenantId(tenantItem.id)}
+                              >
+                                <FileSpreadsheet className="h-3.5 w-3.5 text-primary" />
                               </Button>
                               {canViewTenantUsers && (
                                 <Button
@@ -1424,6 +1440,10 @@ export function SuperAdminPage() {
             </Card>
           </TabsContent>
         )}
+
+        <TabsContent value="payroll-reports">
+          <CompanyPayrollReportsTab tenants={scopeTenantsList} />
+        </TabsContent>
       </Tabs>
 
       {/* ── Dialog: Criar / Editar Empresa ──────────────────────────── */}
@@ -2401,6 +2421,15 @@ export function SuperAdminPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <CompanyDossierModal
+        tenants={scopeTenantsList}
+        initialTenantId={dossierTenantId}
+        open={dossierTenantId != null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setDossierTenantId(null)
+        }}
+      />
     </div>
   )
 }

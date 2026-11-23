@@ -23,6 +23,18 @@ class User extends Authenticatable
         hasPermissionTo as spatieHasPermissionTo;
     }
 
+    public const PLATFORM_ONLY_PERMISSIONS = [
+        'manage_platform',
+        'manage_super_admins',
+        'view_any_tenant',
+        'view_tenant',
+        'create_tenant',
+        'update_tenant',
+        'delete_tenant',
+        'restore_tenant',
+        'force_delete_tenant',
+    ];
+
     protected $fillable = [
         'tenant_id',
         'employee_id',
@@ -127,7 +139,14 @@ class User extends Authenticatable
         $resolvedTenantId = $tenantId ?? $this->activeTenantId();
         $access = $this->activeTenantAccess($resolvedTenantId);
         if ($access) {
-            return collect($access->resolvedPermissions())->values();
+            $platformPerms = $this->hasRole('super-admin-limited')
+                ? $this->getAllPermissions()
+                    ->pluck('name')
+                    ->filter(fn (string $name) => in_array($name, self::PLATFORM_ONLY_PERMISSIONS, true))
+                    ->all()
+                : [];
+
+            return collect(array_merge($access->resolvedPermissions(), $platformPerms))->unique()->values();
         }
 
         // Caso esteja a aceder a uma empresa gerida através da sua empresa gestora (sem UserTenantAccess direto)
@@ -145,6 +164,10 @@ class User extends Authenticatable
     {
         if ($this->hasRole('super-admin')) {
             return true;
+        }
+
+        if (in_array($permission, self::PLATFORM_ONLY_PERMISSIONS, true)) {
+            return $this->getAllPermissions()->contains('name', $permission);
         }
 
         $access = $this->activeTenantAccess($tenantId);

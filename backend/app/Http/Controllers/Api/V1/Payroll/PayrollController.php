@@ -27,6 +27,7 @@ class PayrollController extends BaseController
         $this->authorize('viewAny', PayrollPeriod::class);
 
         $periods = PayrollPeriod::query()
+            ->with(['report.documents'])
             ->withCount('records')
             ->withSum('records', 'gross_salary')
             ->withSum('records', 'net_salary')
@@ -121,6 +122,8 @@ class PayrollController extends BaseController
             'events.actor:id,name',
             'processedBy:id,name',
             'approvedBy:id,name',
+            'report.documents.uploadedBy:id,name',
+            'report.updatedBy:id,name',
         ])
             ->loadCount('records');
 
@@ -237,6 +240,8 @@ class PayrollController extends BaseController
             'events.actor:id,name',
             'processedBy:id,name',
             'approvedBy:id,name',
+            'report.documents.uploadedBy:id,name',
+            'report.updatedBy:id,name',
         ])->loadCount('records');
 
         return $this->success(new PayrollPeriodResource($period), 'Folha recalculada com sucesso.');

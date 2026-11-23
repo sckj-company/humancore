@@ -9,10 +9,13 @@ use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
+use App\Services\Payroll\CompanyPayrollDossierService;
 use App\Services\Tenant\TenantManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends BaseController
@@ -474,6 +477,71 @@ class ReportController extends BaseController
                 'absent_days' => (int) $r->absent_days,
             ])
             ->all();
+    }
+
+    public function payrollPeriodSummary(Request $request, CompanyPayrollDossierService $service): JsonResponse
+    {
+        $this->authorize('view_report');
+
+        $validated = $request->validate([
+            'periodicity' => ['nullable', Rule::in(CompanyPayrollDossierService::PERIODICITIES)],
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'month' => ['nullable', 'integer', 'min:1', 'max:12'],
+            'quarter' => ['nullable', 'integer', 'min:1', 'max:4'],
+            'semester' => ['nullable', 'integer', 'min:1', 'max:2'],
+        ]);
+
+        $tenant = $this->tenantManager->requireTenant();
+        $range = $service->resolvePeriodRange(
+            periodicity: (string) ($validated['periodicity'] ?? 'monthly'),
+            year: (int) ($validated['year'] ?? now()->year),
+            month: isset($validated['month']) ? (int) $validated['month'] : (int) now()->month,
+            quarter: isset($validated['quarter']) ? (int) $validated['quarter'] : null,
+            semester: isset($validated['semester']) ? (int) $validated['semester'] : null,
+        );
+
+        $overview = $service->buildOverview(collect([$tenant]), $range);
+
+        return $this->success($overview, 'Resumo salarial por periodicidade gerado com sucesso.');
+    }
+
+    public function payrollPeriodSummaryPdf(Request $request, CompanyPayrollDossierService $service): SymfonyResponse
+    {
+        $this->authorize('view_report');
+
+        $validated = $request->validate([
+            'periodicity' => ['nullable', Rule::in(CompanyPayrollDossierService::PERIODICITIES)],
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'month' => ['nullable', 'integer', 'min:1', 'max:12'],
+            'quarter' => ['nullable', 'integer', 'min:1', 'max:4'],
+            'semester' => ['nullable', 'integer', 'min:1', 'max:2'],
+            'lang' => ['nullable', 'string'],
+            'disposition' => ['nullable', Rule::in(['inline', 'attachment'])],
+        ]);
+
+        $tenant = $this->tenantManager->requireTenant();
+        $range = $service->resolvePeriodRange(
+            periodicity: (string) ($validated['periodicity'] ?? 'monthly'),
+            year: (int) ($validated['year'] ?? now()->year),
+            month: isset($validated['month']) ? (int) $validated['month'] : (int) now()->month,
+            quarter: isset($validated['quarter']) ? (int) $validated['quarter'] : null,
+            semester: isset($validated['semester']) ? (int) $validated['semester'] : null,
+        );
+
+        $overview = $service->buildOverview(collect([$tenant]), $range);
+        $pdf = $service->renderGeneralSummaryPdf(
+            overview: $overview,
+            scopeLabel: $tenant->name,
+            lang: $validated['lang'] ?? null,
+            actor: $request->user(),
+        );
+
+        $filename = "resumo-salarial-{$tenant->slug}-{$range['code']}.pdf";
+        if (($validated['disposition'] ?? 'attachment') === 'inline') {
+            return $pdf->stream($filename);
+        }
+
+        return $pdf->download($filename);
     }
 
     /**

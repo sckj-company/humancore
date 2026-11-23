@@ -67,4 +67,15 @@ class PayrollPeriodPolicy
     {
         return $user->can('close_payroll') && in_array($period->status, ['approved', 'closed'], true);
     }
+
+    public function manageReport(User $user, PayrollPeriod $period): bool
+    {
+        if (! $period->isReportable()) {
+            return false;
+        }
+
+        return $user->can('process_payroll')
+            || $user->can('approve_payroll')
+            || $user->can('close_payroll');
+    }
 }

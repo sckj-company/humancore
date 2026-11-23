@@ -47,21 +47,17 @@
     @endphp
     <style>
         @page { size: A4 {{ $isSingleEmployee ? 'portrait' : 'landscape' }}; margin: 10mm 11mm; }
+        @if($isBilingual)
         @font-face {
             font-family: 'Droid Sans Fallback';
             src: url('{{ resource_path('fonts/DroidSansFallbackFull.ttf') }}') format('truetype');
             font-weight: normal;
             font-style: normal;
         }
-        @font-face {
-            font-family: 'Droid Sans Fallback';
-            src: url('{{ resource_path('fonts/DroidSansFallbackFull.ttf') }}') format('truetype');
-            font-weight: bold;
-            font-style: normal;
-        }
+        @endif
         * { box-sizing: border-box; }
         body {
-            font-family: 'Droid Sans Fallback', 'DejaVu Sans', sans-serif;
+            font-family: {{ $isBilingual ? "'Droid Sans Fallback', " : '' }}'DejaVu Sans', sans-serif;
             font-size: 8.5px;
             line-height: 1.35;
             color: #1e293b;

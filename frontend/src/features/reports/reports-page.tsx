@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
-import { Download, Calendar, Users, UserMinus, TrendingUp, Wallet, Clock, AlertTriangle } from 'lucide-react'
+import { Download, Calendar, Users, UserMinus, TrendingUp, Wallet, Clock, AlertTriangle, Printer, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EChartsOption } from 'echarts'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -12,10 +12,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader, LoadingState, ErrorState } from '@/components/shared/page-header'
+import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import { Chart } from '@/components/charts/chart'
-import type { ReportType, HeadcountReport, TurnoverReport, PayrollReport, AttendanceReport } from '@/types'
+import type {
+  ReportType,
+  HeadcountReport,
+  TurnoverReport,
+  PayrollReport,
+  AttendanceReport,
+  CompanyPayrollOverviewResponse,
+  CompanyPayrollReportPeriodicity,
+} from '@/types'
 
 type TabValue = 'headcount' | 'turnover' | 'payroll' | 'attendance'
 
@@ -364,8 +374,31 @@ function PayrollTab({
   locale: string
 }) {
   const { t } = useTranslation()
+  const user = useAuthStore((s) => s.user)
+  const pdfPrompt = usePdfLanguagePrompt()
+  const canViewPayroll = hasPermission(user, 'view_payroll')
+
   if (loading && !data) return <LoadingState />
   if (error || !data) return <ErrorState message={t('reports.error')} onRetry={onRetry} />
+
+  const downloadTaxMap = (periodId: number, mapType: 'inss' | 'irt') => {
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      const loadingKey = mapType === 'inss' ? 'payroll.detail.inssMapGenerating' : 'payroll.detail.irtMapGenerating'
+      const doneKey = mapType === 'inss' ? 'payroll.detail.inssMapDownloaded' : 'payroll.detail.irtMapDownloaded'
+      const errKey = mapType === 'inss' ? 'payroll.detail.inssMapError' : 'payroll.detail.irtMapError'
+      const tid = toast.loading(t(loadingKey, { defaultValue: mapType === 'inss' ? 'A gerar mapa de INSS…' : 'A gerar mapa de IRT…' }))
+      try {
+        await api.downloadFile(
+          `payroll/periods/${periodId}/${mapType}-map.pdf`,
+          `mapa-${mapType}-${periodId}.pdf`,
+          { lang },
+        )
+        toast.success(t(doneKey, { defaultValue: mapType === 'inss' ? 'Mapa de INSS descarregado.' : 'Mapa de IRT descarregado.' }), { id: tid })
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, t(errKey, { defaultValue: 'Erro ao gerar mapa.' })), { id: tid })
+      }
+    })
+  }
 
   return (
     <>
@@ -393,6 +426,35 @@ function PayrollTab({
                 { key: 'total_gross', label: t('reports.payroll.gross'), align: 'right', render: (r) => currencyFormatter.format(Number(r.total_gross)) },
                 { key: 'total_net', label: t('reports.payroll.net'), align: 'right', render: (r) => currencyFormatter.format(Number(r.total_net)) },
                 { key: 'total_absent_days', label: t('reports.payroll.absentDays'), align: 'right' },
+                ...(canViewPayroll
+                  ? [{
+                      key: 'tax_maps',
+                      label: t('companyReports.standaloneMapsShort', { defaultValue: 'Mapas PDF' }),
+                      align: 'right' as const,
+                      render: (r: Record<string, unknown>) => (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => downloadTaxMap(Number(r.period_id), 'inss')}
+                          >
+                            INSS
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => downloadTaxMap(Number(r.period_id), 'irt')}
+                          >
+                            IRT
+                          </Button>
+                        </div>
+                      ),
+                    }]
+                  : []),
               ]}
               rows={data.rows.map((r) => ({ ...r }))}
               locale={locale}
@@ -422,7 +484,193 @@ function PayrollTab({
           )}
         </CardContent>
       </Card>
+
+      <TenantPeriodicitySummaryCard locale={locale} />
+
+      <PdfLanguageDialog
+        open={pdfPrompt.open}
+        onOpenChange={pdfPrompt.onOpenChange}
+        onSelect={pdfPrompt.handleSelect}
+      />
     </>
+  )
+}
+
+function TenantPeriodicitySummaryCard({ locale }: { locale: string }) {
+  const { t } = useTranslation()
+  const now = new Date()
+  const numFmt = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }), [locale])
+
+  const [periodicity, setPeriodicity] = useState<CompanyPayrollReportPeriodicity>('monthly')
+  const [year, setYear] = useState<number>(now.getFullYear())
+  const [month, setMonth] = useState<number>(now.getMonth() + 1)
+  const [quarter, setQuarter] = useState<number>(Math.floor(now.getMonth() / 3) + 1)
+  const [semester, setSemester] = useState<number>(now.getMonth() < 6 ? 1 : 2)
+  const [lang, setLang] = useState<'bilingual' | 'pt'>('bilingual')
+  const [busy, setBusy] = useState(false)
+
+  const params = useMemo(() => ({
+    periodicity,
+    year,
+    ...(periodicity === 'monthly' ? { month } : {}),
+    ...(periodicity === 'quarterly' ? { quarter } : {}),
+    ...(periodicity === 'semiannual' ? { semester } : {}),
+  }), [periodicity, year, month, quarter, semester])
+
+  const summaryQuery = useQuery({
+    queryKey: ['reports', 'payroll-period-summary', params],
+    queryFn: () => api.get<CompanyPayrollOverviewResponse>('reports/payroll-period-summary', params),
+  })
+
+  const exportPdf = async (disposition: 'inline' | 'attachment') => {
+    const previewTab = disposition === 'inline' ? window.open('', '_blank') : null
+    if (previewTab) previewTab.document.write('<p style="font-family:sans-serif;padding:24px;">A gerar resumo salarial em PDF...</p>')
+    setBusy(true)
+    try {
+      const payload = { ...params, lang, disposition }
+      if (disposition === 'inline') {
+        const blob = await api.fetchBlobPost('reports/payroll-period-summary.pdf', payload)
+        const blobUrl = URL.createObjectURL(blob)
+        if (previewTab && !previewTab.closed) previewTab.location.href = blobUrl
+        else window.open(blobUrl, '_blank')
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+      } else {
+        await api.downloadFilePost(
+          'reports/payroll-period-summary.pdf',
+          payload,
+          `resumo-salarial-${summaryQuery.data?.range.code ?? year}.pdf`,
+        )
+      }
+      toast.success(t('common.success'))
+    } catch (error) {
+      if (previewTab && !previewTab.closed) previewTab.close()
+      toast.error(getApiErrorMessage(error, t('reports.error')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const companyRow = summaryQuery.data?.companies?.[0]
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileText className="h-4 w-4 text-primary" />
+          {t('companyReports.periodicitySummaryTitle', {
+            defaultValue: 'Resumo Salarial por Periodicidade (Mensal, Trimestral, Semestral e Anual)',
+          })}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label className="text-xs">{t('companyReports.periodicity', { defaultValue: 'Periodicidade' })}</Label>
+            <select
+              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+              value={periodicity}
+              onChange={(e) => setPeriodicity(e.target.value as CompanyPayrollReportPeriodicity)}
+            >
+              <option value="monthly">{t('companyReports.periodicities.monthly', { defaultValue: 'Mensal' })}</option>
+              <option value="quarterly">{t('companyReports.periodicities.quarterly', { defaultValue: 'Trimestral' })}</option>
+              <option value="semiannual">{t('companyReports.periodicities.semiannual', { defaultValue: 'Semestral' })}</option>
+              <option value="annual">{t('companyReports.periodicities.annual', { defaultValue: 'Anual' })}</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('payroll.periodsPage.year', { defaultValue: 'Ano' })}</Label>
+            <Input
+              type="number"
+              min={2000}
+              max={2100}
+              className="h-9 text-xs"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value) || now.getFullYear())}
+            />
+          </div>
+          {periodicity === 'monthly' && (
+            <div className="space-y-1">
+              <Label className="text-xs">{t('schedules.month', { defaultValue: 'Mês' })}</Label>
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+                value={month}
+                onChange={(e) => setMonth(Number(e.target.value))}
+              >
+                {Array.from({ length: 12 }, (_, idx) => idx + 1).map((m) => (
+                  <option key={m} value={m}>
+                    {new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(2026, m - 1, 1))}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {periodicity === 'quarterly' && (
+            <div className="space-y-1">
+              <Label className="text-xs">{t('companyReports.quarter', { defaultValue: 'Trimestre' })}</Label>
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+                value={quarter}
+                onChange={(e) => setQuarter(Number(e.target.value))}
+              >
+                <option value={1}>1º Trimestre</option>
+                <option value={2}>2º Trimestre</option>
+                <option value={3}>3º Trimestre</option>
+                <option value={4}>4º Trimestre</option>
+              </select>
+            </div>
+          )}
+          {periodicity === 'semiannual' && (
+            <div className="space-y-1">
+              <Label className="text-xs">{t('companyReports.semester', { defaultValue: 'Semestre' })}</Label>
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+                value={semester}
+                onChange={(e) => setSemester(Number(e.target.value))}
+              >
+                <option value={1}>1º Semestre</option>
+                <option value={2}>2º Semestre</option>
+              </select>
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label className="text-xs">{t('companyReports.pdfLanguage', { defaultValue: 'Idioma PDF' })}</Label>
+            <select
+              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+              value={lang}
+              onChange={(e) => setLang(e.target.value as 'bilingual' | 'pt')}
+            >
+              <option value="bilingual">{t('pdfLanguage.bilingual', { defaultValue: 'Bilingue (PT + 中文)' })}</option>
+              <option value="pt">{t('pdfLanguage.portuguese', { defaultValue: 'Português (PT)' })}</option>
+            </select>
+          </div>
+        </div>
+
+        {companyRow && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 p-3 text-xs">
+            <div className="flex flex-wrap items-center gap-3">
+              <span><strong>{summaryQuery.data?.range.label}</strong> ({companyRow.periods_count} folha(s))</span>
+              <span>Bruto: <strong className="font-mono">{numFmt.format(companyRow.total_gross)}</strong></span>
+              <span>INSS: <strong className="font-mono">{numFmt.format(companyRow.total_inss)}</strong></span>
+              <span>IRT: <strong className="font-mono">{numFmt.format(companyRow.total_irt)}</strong></span>
+              <span>Líquido: <strong className="font-mono text-emerald-600">{numFmt.format(companyRow.total_net)}</strong></span>
+              <Badge variant={companyRow.compliance.inss_paid ? 'success' : 'secondary'}>
+                {companyRow.compliance.inss_paid ? 'INSS Pago' : 'INSS Pendente'}
+              </Badge>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void exportPdf('inline')}>
+                <Printer className="mr-1.5 h-3.5 w-3.5" />
+                {t('common.print', { defaultValue: 'Imprimir' })}
+              </Button>
+              <Button type="button" size="sm" disabled={busy} onClick={() => void exportPdf('attachment')}>
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                {t('companyReports.downloadPdf', { defaultValue: 'Baixar PDF' })}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

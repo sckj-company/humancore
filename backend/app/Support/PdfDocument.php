@@ -33,6 +33,8 @@ class PdfDocument
         string $orientation = 'portrait',
         ?string $lang = null,
     ): DomPdfDocument {
+        self::ensureMemoryHeadroom();
+
         $resolvedLang = self::resolveLanguage($lang);
         $fontCache = storage_path('framework/cache/dompdf/fonts');
         File::ensureDirectoryExists($fontCache);
@@ -41,12 +43,37 @@ class PdfDocument
             'font_dir' => $fontCache,
             'font_cache' => $fontCache,
             'chroot' => base_path(),
-            'default_font' => 'Droid Sans Fallback',
+            'default_font' => $resolvedLang === self::LANG_PT ? 'DejaVu Sans' : 'Droid Sans Fallback',
+            'isFontSubsettingEnabled' => true,
         ])
             ->loadView($view, array_merge($data, [
                 'lang' => $resolvedLang,
                 'isBilingual' => $resolvedLang === self::LANG_BILINGUAL,
             ]))
             ->setPaper($paper, $orientation);
+    }
+
+    private static function ensureMemoryHeadroom(string $target = '512M'): void
+    {
+        $current = trim((string) ini_get('memory_limit'));
+        if ($current === '' || $current === '-1') {
+            return;
+        }
+
+        $parseBytes = static function (string $val): int {
+            $unit = strtolower(substr($val, -1));
+            $num = (int) $val;
+
+            return match ($unit) {
+                'g' => $num * 1024 * 1024 * 1024,
+                'm' => $num * 1024 * 1024,
+                'k' => $num * 1024,
+                default => $num,
+            };
+        };
+
+        if ($parseBytes($current) < $parseBytes($target)) {
+            @ini_set('memory_limit', $target);
+        }
     }
 }

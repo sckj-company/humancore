@@ -49,6 +49,8 @@ class PayrollPeriodResource extends JsonResource
                 : ($this->relationLoaded('records') ? (float) $this->records->sum('net_salary') : null)) : null,
             'records' => PayrollRecordResource::collection($this->whenLoaded('records')),
             'events' => $this->whenLoaded('events'),
+            'is_reportable' => $this->isReportable(),
+            'report' => $this->whenLoaded('report', fn () => $this->report ? new PayrollPeriodReportResource($this->report) : null),
             'created_at' => $this->created_at,
         ];
     }

@@ -318,6 +318,237 @@ export interface PayrollPeriodTotalsSnapshot {
   record_count?: number
 }
 
+export type PayrollPeriodReportDocumentType =
+  | 'inss_guide'
+  | 'inss_payment_proof'
+  | 'payslips_summary_pdf'
+  | 'payroll_sheet'
+  | 'irt_guide'
+  | 'irt_payment_proof'
+  | 'bank_transfer_proof'
+  | 'attendance_report'
+  | 'other'
+
+export interface PayrollPeriodReportDocument {
+  id: number
+  document_type: PayrollPeriodReportDocumentType
+  title: string
+  file_name: string
+  mime_type?: string | null
+  file_size?: number | null
+  is_paid: boolean
+  is_sent: boolean
+  paid_at?: string | null
+  sent_at?: string | null
+  notes?: string | null
+  uploaded_by?: number | null
+  uploaded_by_user?: { id: number; name: string } | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface PayrollPeriodReportMandatoryItem {
+  attached: boolean
+  document_id?: number | null
+  file_name?: string | null
+  is_sent: boolean
+  is_paid: boolean
+}
+
+export interface PayrollPeriodReport {
+  id: number | null
+  tenant_id: number
+  payroll_period_id: number
+  is_reportable?: boolean
+  title?: string | null
+  notes?: string | null
+  inss_guide_sent: boolean
+  inss_payment_proof_sent: boolean
+  inss_paid: boolean
+  payslips_summary_sent: boolean
+  payroll_sheet_sent: boolean
+  is_summary_complete: boolean
+  submitted_at?: string | null
+  updated_by?: number | null
+  updated_by_user?: { id: number; name: string } | null
+  has_inss_payment_proof: boolean
+  mandatory_status: {
+    inss_guide: PayrollPeriodReportMandatoryItem
+    inss_payment_proof: PayrollPeriodReportMandatoryItem
+    payslips_summary_pdf: PayrollPeriodReportMandatoryItem
+    payroll_sheet: PayrollPeriodReportMandatoryItem
+    all_mandatory_attached: boolean
+    all_mandatory_sent: boolean
+    has_inss_payment_proof: boolean
+    inss_paid: boolean
+    is_summary_complete: boolean
+  }
+  documents_count: number
+  documents: PayrollPeriodReportDocument[]
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export type CompanyPayrollReportPeriodicity = 'monthly' | 'quarterly' | 'semiannual' | 'annual'
+
+export type CompanyDossierSection =
+  | 'payroll_sheet'
+  | 'payslips'
+  | 'inss_map'
+  | 'irt_map'
+  | 'inss_payment_proof'
+  | 'attendance'
+
+export interface CompanyPayrollPeriodOverviewRow {
+  period_id: number
+  tenant_id: number
+  tenant_name: string
+  tenant_tax_id?: string | null
+  period_name: string
+  period_type: string
+  period_start?: string | null
+  period_end?: string | null
+  month_key: string
+  status: PayrollPeriodStatus
+  employees_count: number
+  total_gross: number
+  total_inss_employee: number
+  total_inss_employer: number
+  total_inss: number
+  total_irt: number
+  total_deductions: number
+  total_net: number
+  total_employer_cost: number
+  inss_guide_sent: boolean
+  inss_payment_proof_attached: boolean
+  inss_payment_proof_sent: boolean
+  inss_paid: boolean
+  payslips_summary_sent: boolean
+  payroll_sheet_sent: boolean
+  is_summary_complete: boolean
+  documents_count: number
+}
+
+export interface CompanyPayrollOverviewItem {
+  tenant_id: number
+  name: string
+  slug: string
+  tax_id?: string | null
+  inss_number?: string | null
+  currency: string
+  periods_count: number
+  has_approved_payroll: boolean
+  ready_for_dossier: boolean
+  latest_period_id?: number | null
+  latest_period_name?: string | null
+  latest_report_id?: number | null
+  employees_count: number
+  total_gross: number
+  total_inss_employee: number
+  total_inss_employer: number
+  total_inss: number
+  total_irt: number
+  total_deductions: number
+  total_net: number
+  total_employer_cost: number
+  documents_count: number
+  compliance: {
+    inss_guide_sent: boolean
+    inss_payment_proof_attached: boolean
+    inss_payment_proof_sent: boolean
+    inss_paid: boolean
+    payslips_summary_sent: boolean
+    payroll_sheet_sent: boolean
+    is_summary_complete: boolean
+  }
+  periods: CompanyPayrollPeriodOverviewRow[]
+}
+
+export interface CompanyPayrollOverviewResponse {
+  range: {
+    periodicity: CompanyPayrollReportPeriodicity
+    year: number
+    month?: number | null
+    quarter?: number | null
+    semester?: number | null
+    start_date: string
+    end_date: string
+    label: string
+    label_zh: string
+    code: string
+  }
+  totals: {
+    companies_total: number
+    companies_with_approved_payroll: number
+    companies_ready_for_dossier: number
+    periods_count: number
+    reports_complete_count: number
+    inss_paid_periods_count: number
+    inss_proof_attached_count: number
+    employees_count: number
+    total_gross: number
+    total_inss_employee: number
+    total_inss_employer: number
+    total_inss: number
+    total_irt: number
+    total_deductions: number
+    total_net: number
+    total_employer_cost: number
+  }
+  companies: CompanyPayrollOverviewItem[]
+  period_rows: CompanyPayrollPeriodOverviewRow[]
+  monthly_timeline: Array<{
+    month: string
+    periods_count: number
+    employees_count: number
+    total_gross: number
+    total_inss: number
+    total_irt: number
+    total_net: number
+    inss_paid_count: number
+    complete_count: number
+  }>
+}
+
+export interface CompanyDossierInspectResponse {
+  tenant: {
+    id: number
+    name: string
+    slug: string
+    tax_id?: string | null
+    inss_number?: string | null
+    currency: string
+  }
+  period: {
+    id: number
+    name: string
+    period_type: string
+    period_start?: string | null
+    period_end?: string | null
+    status: PayrollPeriodStatus
+    is_reportable: boolean
+    employees_count: number
+    total_gross: number
+    total_net: number
+    total_inss: number
+    total_irt: number
+  } | null
+  has_inss_payment_proof: boolean
+  inss_paid: boolean
+  inss_payment_proof_sent: boolean
+  can_print: boolean
+  blocking_reason?: string | null
+  available_periods: Array<{
+    id: number
+    name: string
+    status: PayrollPeriodStatus
+    period_start?: string | null
+    period_end?: string | null
+    has_inss_payment_proof: boolean
+    inss_paid: boolean
+  }>
+}
+
 export interface PayrollPeriod {
   id: number
   tenant_id: number
@@ -339,6 +570,8 @@ export interface PayrollPeriod {
   employee_count?: number
   total_gross?: number
   total_net?: number
+  is_reportable?: boolean
+  report?: PayrollPeriodReport | null
   records?: PayrollRecord[]
   events?: PayrollPeriodEvent[]
 }

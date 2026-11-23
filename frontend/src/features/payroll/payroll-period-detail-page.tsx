@@ -7,7 +7,7 @@ import {
   TrendingUp, Wallet, Building2, AlertTriangle, AlertCircle, Info,
   Loader2, Clock, Calendar, FileText, BarChart3, XCircle, Send,
   Banknote, RotateCcw, History, X, ExternalLink, Settings2, Calculator, Plus, Trash2, Search,
-  Printer, RefreshCw,
+  Printer, RefreshCw, FileCheck2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -33,6 +33,7 @@ import {
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
 import { PdfLanguageDialog, usePdfLanguagePrompt, type PdfLanguage } from '@/components/shared/pdf-language-dialog'
 import { ProcessPeriodDialog } from '@/features/payroll/process-period-dialog'
+import { PayrollPeriodReportDialog } from '@/features/payroll/payroll-period-report-dialog'
 import type {
   PayrollPeriod,
   PayrollPeriodEvent,
@@ -193,6 +194,7 @@ export function PayrollPeriodDetailPage() {
   const [reopenReason, setReopenReason] = useState('')
   const [warningsAck, setWarningsAck] = useState(false)
   const [processOpen, setProcessOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const pdfPrompt = usePdfLanguagePrompt()
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -320,6 +322,30 @@ export function PayrollPeriodDetailPage() {
         toast.success(t('payroll.detail.periodPdfDownloaded'), { id: tid })
       } catch (error) {
         toast.error(getApiErrorMessage(error, t('payroll.detail.periodPdfError')), { id: tid })
+      }
+    })
+  }
+
+  const downloadPeriodInssMap = (filename: string) => {
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      const tid = toast.loading(t('payroll.detail.inssMapGenerating', { defaultValue: 'A gerar mapa de INSS…' }))
+      try {
+        await api.downloadFile(`payroll/periods/${id}/inss-map.pdf`, filename, { lang })
+        toast.success(t('payroll.detail.inssMapDownloaded', { defaultValue: 'Mapa de INSS descarregado.' }), { id: tid })
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, t('payroll.detail.inssMapError', { defaultValue: 'Não foi possível gerar o mapa de INSS.' })), { id: tid })
+      }
+    })
+  }
+
+  const downloadPeriodIrtMap = (filename: string) => {
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      const tid = toast.loading(t('payroll.detail.irtMapGenerating', { defaultValue: 'A gerar mapa de IRT…' }))
+      try {
+        await api.downloadFile(`payroll/periods/${id}/irt-map.pdf`, filename, { lang })
+        toast.success(t('payroll.detail.irtMapDownloaded', { defaultValue: 'Mapa de IRT descarregado.' }), { id: tid })
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, t('payroll.detail.irtMapError', { defaultValue: 'Não foi possível gerar o mapa de IRT.' })), { id: tid })
       }
     })
   }
@@ -564,6 +590,21 @@ export function PayrollPeriodDetailPage() {
                   {t('payroll.detail.registerPayment')}
                 </Button>
               )}
+              {(data.status === 'approved' || data.status === 'closed' || data.status === 'paid') && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setReportOpen(true)}
+                >
+                  <FileCheck2 className="mr-1.5 h-3.5 w-3.5 text-primary" />
+                  {t('payrollReport.manageButton', { defaultValue: 'Relatório & Documentos' })}
+                  {(data.report?.documents_count ?? 0) > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+                      {data.report?.documents_count}
+                    </Badge>
+                  )}
+                </Button>
+              )}
               {data.status === 'closed' && hasPermission(user, 'close_payroll') && (
                 <Button
                   size="sm"
@@ -653,6 +694,8 @@ export function PayrollPeriodDetailPage() {
               await recalculateMutation.mutateAsync(payload)
             }}
             onDownloadPeriod={downloadPeriodPayroll}
+            onDownloadInssMap={downloadPeriodInssMap}
+            onDownloadIrtMap={downloadPeriodIrtMap}
             onDownloadPayslip={downloadPayslip}
             onPrintBulkPayslips={printBulkPayslips}
             onDownloadBulkPayslips={downloadBulkPayslips}
@@ -696,6 +739,14 @@ export function PayrollPeriodDetailPage() {
         open={processOpen}
         onOpenChange={setProcessOpen}
         onFinished={() => invalidate()}
+      />
+
+      <PayrollPeriodReportDialog
+        periodId={Number(id)}
+        periodName={data.name}
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        onSaved={() => invalidate()}
       />
 
       {/* ── Dialog: Aprovação ── */}
@@ -964,6 +1015,8 @@ function SummaryTab({
   isRecalculating,
   onRecalculate,
   onDownloadPeriod,
+  onDownloadInssMap,
+  onDownloadIrtMap,
   onDownloadPayslip,
   onPrintBulkPayslips,
   onDownloadBulkPayslips,
@@ -976,6 +1029,8 @@ function SummaryTab({
   isRecalculating: boolean
   onRecalculate: (payload: Array<Record<string, unknown>>) => Promise<void>
   onDownloadPeriod: (filename: string) => void
+  onDownloadInssMap: (filename: string) => void
+  onDownloadIrtMap: (filename: string) => void
   onDownloadPayslip: (id: number, filename: string) => void
   onPrintBulkPayslips: (recordIds: number[]) => void
   onDownloadBulkPayslips: (recordIds: number[], filename: string) => void
@@ -1273,6 +1328,26 @@ function SummaryTab({
                 <FileDown className="mr-1.5 h-4 w-4" />
                 {t('payroll.detail.downloadPeriodPdf')}
               </Button>
+              {canViewInss && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onDownloadInssMap(`mapa-inss-${periodId}.pdf`)}
+                >
+                  <FileDown className="mr-1.5 h-4 w-4" />
+                  {t('payroll.detail.downloadInssMap', { defaultValue: 'Mapa INSS (PDF)' })}
+                </Button>
+              )}
+              {canViewIrt && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onDownloadIrtMap(`mapa-irt-${periodId}.pdf`)}
+                >
+                  <FileDown className="mr-1.5 h-4 w-4" />
+                  {t('payroll.detail.downloadIrtMap', { defaultValue: 'Mapa IRT (PDF)' })}
+                </Button>
+              )}
             </div>
           </div>
           {validSelectedIds.size > 0 && (

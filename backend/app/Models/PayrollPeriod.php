@@ -90,6 +90,16 @@ class PayrollPeriod extends Model
         return $this->hasMany(PayrollRecord::class);
     }
 
+    public function report()
+    {
+        return $this->hasOne(PayrollPeriodReport::class);
+    }
+
+    public function isReportable(): bool
+    {
+        return in_array($this->status, PayrollPeriodReport::REPORTABLE_PERIOD_STATUSES, true);
+    }
+
     public function displayName(): string
     {
         if ($this->period_type === 'monthly' && $this->period_start !== null) {
