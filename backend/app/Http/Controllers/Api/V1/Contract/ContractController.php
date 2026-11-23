@@ -8,8 +8,12 @@ use App\Http\Resources\V1\ContractResource;
 use App\Models\EmployeeContract;
 use App\Models\EmployeeDocument;
 use App\Services\CloudinaryService;
+use App\Services\Contract\ContractTerminationService;
+use App\Support\PdfDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response;
 
 class ContractController extends BaseController
 {
@@ -124,5 +128,97 @@ class ContractController extends BaseController
         }
 
         return $this->success(new ContractResource($contract->fresh(['employee', 'position', 'department', 'manager'])), 'Contrato desativado com sucesso.');
+    }
+
+    public function terminationPreview(Request $request, EmployeeContract $contract, ContractTerminationService $service): JsonResponse
+    {
+        $this->authorize('view', $contract);
+
+        $validated = $request->validate([
+            'termination_type' => ['nullable', 'string', Rule::in(array_keys(ContractTerminationService::TERMINATION_TYPES))],
+            'termination_date' => ['nullable', 'date'],
+            'termination_reason' => ['nullable', 'string', 'max:2000'],
+            'worked_days_in_month' => ['nullable', 'numeric', 'min:0', 'max:31'],
+            'months_worked_in_year' => ['nullable', 'numeric', 'min:0', 'max:12'],
+            'unused_vacation_days' => ['nullable', 'numeric', 'min:0', 'max:120'],
+            'notice_days_required' => ['nullable', 'integer', 'min:0', 'max:180'],
+            'notice_days_served' => ['nullable', 'integer', 'min:0', 'max:180'],
+            'unjustified_absence_days' => ['nullable', 'numeric', 'min:0', 'max:31'],
+            'custom_severance_amount' => ['nullable', 'numeric', 'min:0'],
+            'include_vacation_subsidy' => ['nullable', 'boolean'],
+            'include_christmas_subsidy' => ['nullable', 'boolean'],
+            'include_severance' => ['nullable', 'boolean'],
+            'apply_taxes' => ['nullable', 'boolean'],
+            'discount_pending_deductions' => ['nullable', 'boolean'],
+            'discount_unreturned_assets' => ['nullable', 'boolean'],
+            'discount_attendance_pendencies' => ['nullable', 'boolean'],
+            'extra_earnings' => ['nullable', 'array'],
+            'extra_earnings.*.name' => ['required_with:extra_earnings', 'string', 'max:190'],
+            'extra_earnings.*.amount' => ['required_with:extra_earnings', 'numeric', 'min:0'],
+            'extra_deductions' => ['nullable', 'array'],
+            'extra_deductions.*.name' => ['required_with:extra_deductions', 'string', 'max:190'],
+            'extra_deductions.*.amount' => ['required_with:extra_deductions', 'numeric', 'min:0'],
+        ]);
+
+        return $this->success($service->calculatePreview($contract, $validated));
+    }
+
+    public function terminate(Request $request, EmployeeContract $contract, ContractTerminationService $service): JsonResponse
+    {
+        $this->authorize('update', $contract);
+
+        $validated = $request->validate([
+            'termination_type' => ['required', 'string', Rule::in(array_keys(ContractTerminationService::TERMINATION_TYPES))],
+            'termination_date' => ['required', 'date'],
+            'termination_reason' => ['required', 'string', 'max:2000'],
+            'worked_days_in_month' => ['nullable', 'numeric', 'min:0', 'max:31'],
+            'months_worked_in_year' => ['nullable', 'numeric', 'min:0', 'max:12'],
+            'unused_vacation_days' => ['nullable', 'numeric', 'min:0', 'max:120'],
+            'notice_days_required' => ['nullable', 'integer', 'min:0', 'max:180'],
+            'notice_days_served' => ['nullable', 'integer', 'min:0', 'max:180'],
+            'unjustified_absence_days' => ['nullable', 'numeric', 'min:0', 'max:31'],
+            'custom_severance_amount' => ['nullable', 'numeric', 'min:0'],
+            'include_vacation_subsidy' => ['nullable', 'boolean'],
+            'include_christmas_subsidy' => ['nullable', 'boolean'],
+            'include_severance' => ['nullable', 'boolean'],
+            'apply_taxes' => ['nullable', 'boolean'],
+            'discount_pending_deductions' => ['nullable', 'boolean'],
+            'discount_unreturned_assets' => ['nullable', 'boolean'],
+            'discount_attendance_pendencies' => ['nullable', 'boolean'],
+            'extra_earnings' => ['nullable', 'array'],
+            'extra_earnings.*.name' => ['required_with:extra_earnings', 'string', 'max:190'],
+            'extra_earnings.*.amount' => ['required_with:extra_earnings', 'numeric', 'min:0'],
+            'extra_deductions' => ['nullable', 'array'],
+            'extra_deductions.*.name' => ['required_with:extra_deductions', 'string', 'max:190'],
+            'extra_deductions.*.amount' => ['required_with:extra_deductions', 'numeric', 'min:0'],
+        ]);
+
+        $settlement = $service->executeTermination($contract, $validated, $request->user());
+
+        return $this->success([
+            'contract' => new ContractResource($contract->fresh(['employee', 'position', 'department', 'manager'])),
+            'settlement' => $settlement,
+        ], 'Contrato rescindido e acerto final calculado com sucesso.');
+    }
+
+    public function terminationPdf(Request $request, EmployeeContract $contract, ContractTerminationService $service): Response
+    {
+        $this->authorize('view', $contract);
+
+        $contract->loadMissing(['employee.department', 'employee.position', 'position', 'department', 'tenant']);
+        $settlement = is_array($contract->settlement_breakdown) && ! empty($contract->settlement_breakdown['totals'])
+            ? $contract->settlement_breakdown
+            : $service->calculatePreview($contract, $request->all());
+
+        $pdf = PdfDocument::make('pdf.contract-termination', [
+            'contract' => $contract,
+            'employee' => $contract->employee,
+            'tenant' => $contract->tenant,
+            'settlement' => $settlement,
+        ], 'a4', 'portrait', $request->input('lang', 'pt'));
+
+        $code = $contract->employee?->employee_code ?? $contract->id;
+
+        return $pdf->download("termo-rescisao-{$code}.pdf");
     }
 }

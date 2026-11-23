@@ -828,4 +828,76 @@ class PayrollPhase3ValidationAndFlowTest extends TestCase
         $this->assertNotContains('MISSING_INSS_RULE', array_column($resolved['errors'], 'code'));
         $this->assertNotContains('MISSING_IRT_TABLE', array_column($resolved['errors'], 'code'));
     }
+
+    public function test_super_admin_can_assign_inss_rule_and_irt_table_to_multiple_tenants(): void
+    {
+        [$tenantA, $superAdmin] = $this->setupTenantWithAdmin();
+        \Spatie\Permission\Models\Role::findOrCreate('super-admin', 'web');
+        Permission::findOrCreate('configure_payroll', 'web');
+        $superAdmin->assignRole('super-admin');
+        $superAdmin->givePermissionTo('configure_payroll');
+
+        $tenantB = Tenant::factory()->create(['name' => 'Empresa B Lda', 'status' => 'active']);
+        $tenantC = Tenant::factory()->create(['name' => 'Empresa C Lda', 'status' => 'active']);
+
+        $this->actingAs($superAdmin, 'sanctum');
+
+        // 1. Create an INSS rule in Tenant A and replicate + activate it across Tenant B and Tenant C
+        $inssId = $this->postJson('/api/v1/payroll/inss-rules', [
+            'country_code' => 'AO',
+            'regime_code' => 'standard',
+            'employee_rate' => 3.0,
+            'employer_rate' => 8.0,
+            'effective_from' => '2026-01-01',
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson("/api/v1/payroll/inss-rules/{$inssId}/assign-tenants", [
+            'tenant_ids' => [$tenantA->id, $tenantB->id, $tenantC->id],
+            'activate' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.total_applied', 3);
+
+        foreach ([$tenantA->id, $tenantB->id, $tenantC->id] as $tid) {
+            $rule = PayrollInssRule::withoutGlobalScopes()
+                ->where('tenant_id', $tid)
+                ->where('status', 'active')
+                ->first();
+            $this->assertNotNull($rule, "Active INSS rule should exist for tenant {$tid}");
+            $this->assertNotNull($rule->validated_at);
+            $this->assertEquals(3.0, (float) $rule->employee_rate);
+            $this->assertEquals(8.0, (float) $rule->employer_rate);
+        }
+
+        // 2. Create an IRT table directly assigned & activated across Tenant A, B, and C
+        $brackets = [
+            ['lower_bound' => 0, 'upper_bound' => 100000, 'rate' => 0, 'fixed_amount' => 0],
+            ['lower_bound' => 100000, 'upper_bound' => 200000, 'rate' => 7, 'fixed_amount' => 0],
+            ['lower_bound' => 200000, 'upper_bound' => null, 'rate' => 15, 'fixed_amount' => 7000],
+        ];
+
+        $irtId = $this->postJson('/api/v1/payroll/irt-tables', [
+            'country_code' => 'AO',
+            'regime_code' => 'standard',
+            'effective_from' => '2026-01-01',
+            'brackets' => $brackets,
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson("/api/v1/payroll/irt-tables/{$irtId}/assign-tenants", [
+            'tenant_ids' => [$tenantA->id, $tenantB->id, $tenantC->id],
+            'activate' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.total_applied', 3);
+
+        foreach ([$tenantA->id, $tenantB->id, $tenantC->id] as $tid) {
+            $table = PayrollIrtTable::withoutGlobalScopes()
+                ->where('tenant_id', $tid)
+                ->where('status', 'active')
+                ->first();
+            $this->assertNotNull($table, "Active IRT table should exist for tenant {$tid}");
+            $this->assertNotNull($table->validated_at);
+            $this->assertCount(3, $table->brackets);
+        }
+    }
 }

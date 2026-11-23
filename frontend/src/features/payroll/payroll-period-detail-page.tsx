@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Play, CheckCircle2, Lock, FileDown, Users,
   TrendingUp, Wallet, Building2, AlertTriangle, AlertCircle, Info,
@@ -179,6 +179,7 @@ const categoryConfig: Record<string, { label: string; color: string }> = {
 
 export function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const rawTab = searchParams.get('tab') || 'summary'
@@ -300,6 +301,39 @@ export function PayrollPeriodDetailPage() {
       invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.recalculateError'))),
+  })
+
+  const deleteRecordMutation = useMutation({
+    mutationFn: (recordId: number) =>
+      api.delete<PayrollPeriod>(`payroll/periods/${id}/records/${recordId}`),
+    onSuccess: (updatedPeriod) => {
+      toast.success(t('payroll.detail.recordDeletedSuccess', { defaultValue: 'Funcionário removido da folha e valores recalculados.' }))
+      qc.setQueryData(['payroll-period', id], updatedPeriod)
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.recordDeleteError', { defaultValue: 'Não foi possível remover o funcionário da folha.' }))),
+  })
+
+  const bulkDeleteRecordsMutation = useMutation({
+    mutationFn: (recordIds: number[]) =>
+      api.post<PayrollPeriod>(`payroll/periods/${id}/records/bulk-delete`, { record_ids: recordIds }),
+    onSuccess: (updatedPeriod) => {
+      toast.success(t('payroll.detail.bulkRecordsDeletedSuccess', { defaultValue: 'Funcionários selecionados removidos da folha e totais recalculados.' }))
+      qc.setQueryData(['payroll-period', id], updatedPeriod)
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.bulkRecordDeleteError', { defaultValue: 'Não foi possível remover os funcionários selecionados.' }))),
+  })
+
+  const deletePeriodMutation = useMutation({
+    mutationFn: () => api.delete(`payroll/periods/${id}`),
+    onSuccess: () => {
+      toast.success(t('payroll.feedback.deleted', { defaultValue: 'Folha salarial eliminada com sucesso.' }))
+      qc.invalidateQueries({ queryKey: ['payroll-periods'] })
+      navigate('/payroll')
+    },
+    onError: (e) =>
+      toast.error(getApiErrorMessage(e, t('payroll.detail.messages.deleteError', { defaultValue: 'Não foi possível eliminar a folha salarial.' }))),
   })
 
   const downloadPayslip = (recordId: number, filename: string) => {
@@ -615,6 +649,33 @@ export function PayrollPeriodDetailPage() {
                   {t('payroll.detail.reopen')}
                 </Button>
               )}
+              {!['approved', 'closed', 'paid'].includes(data.status) &&
+                (hasPermission(user, 'delete_payroll') ||
+                  hasPermission(user, 'process_payroll') ||
+                  hasPermission(user, 'create_payroll')) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                    disabled={deletePeriodMutation.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Confirma a eliminação definitiva da folha "${data.name}"? Esta operação é permitida apenas antes da aprovação.`,
+                        )
+                      ) {
+                        deletePeriodMutation.mutate()
+                      }
+                    }}
+                  >
+                    {deletePeriodMutation.isPending ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {t('payroll.detail.deletePeriod', { defaultValue: 'Eliminar Folha' })}
+                  </Button>
+                )}
             </div>
           </div>
         </CardContent>
@@ -688,10 +749,17 @@ export function PayrollPeriodDetailPage() {
             validationReport={validationReport}
             periodStatus={data.status}
             periodId={data.id}
-            canEditRecords={!['closed', 'paid', 'cancelled'].includes(data.status) && hasPermission(user, 'process_payroll')}
+            canEditRecords={!['approved', 'closed', 'paid', 'cancelled'].includes(data.status) && hasPermission(user, 'process_payroll')}
             isRecalculating={recalculateMutation.isPending}
+            isDeletingRecords={deleteRecordMutation.isPending || bulkDeleteRecordsMutation.isPending}
             onRecalculate={async (payload) => {
               await recalculateMutation.mutateAsync(payload)
+            }}
+            onDeleteRecord={async (recordId) => {
+              await deleteRecordMutation.mutateAsync(recordId)
+            }}
+            onBulkDeleteRecords={async (recordIds) => {
+              await bulkDeleteRecordsMutation.mutateAsync(recordIds)
             }}
             onDownloadPeriod={downloadPeriodPayroll}
             onDownloadInssMap={downloadPeriodInssMap}
@@ -914,6 +982,8 @@ interface RecordDraft {
 }
 
 const STANDARD_COMPONENTS = [
+  { code: 'base_salary', label: 'Salário Base' },
+  { code: 'overtime', label: 'Horas Extras (valor)' },
   { code: 'meal_allowance', label: 'Subsídio de Alimentação' },
   { code: 'transport_allowance', label: 'Subsídio de Transporte' },
   { code: 'vacation_subsidy', label: 'Subsídio de Férias' },
@@ -921,9 +991,11 @@ const STANDARD_COMPONENTS = [
   { code: 'family_allowance', label: 'Abono de Família' },
   { code: 'additional_allowance', label: 'Abono Adicional' },
   { code: 'bonus', label: 'Bónus de Desempenho' },
+  { code: 'absence', label: 'Faltas (desconto direto)' },
+  { code: 'lateness', label: 'Atrasos (desconto direto)' },
 ]
 
-const NON_EDITABLE_CODES = new Set(['base_salary', 'inss', 'irt', 'employer_inss'])
+const NON_EDITABLE_CODES = new Set(['inss', 'irt', 'employer_inss'])
 
 function buildDraftFromRecord(record: PayrollRecord): RecordDraft {
   const existingComponents: Record<string, string> = {}
@@ -1013,7 +1085,10 @@ function SummaryTab({
   periodId,
   canEditRecords,
   isRecalculating,
+  isDeletingRecords,
   onRecalculate,
+  onDeleteRecord,
+  onBulkDeleteRecords,
   onDownloadPeriod,
   onDownloadInssMap,
   onDownloadIrtMap,
@@ -1027,7 +1102,10 @@ function SummaryTab({
   periodId: number
   canEditRecords: boolean
   isRecalculating: boolean
+  isDeletingRecords: boolean
   onRecalculate: (payload: Array<Record<string, unknown>>) => Promise<void>
+  onDeleteRecord: (recordId: number) => Promise<void>
+  onBulkDeleteRecords: (recordIds: number[]) => Promise<void>
   onDownloadPeriod: (filename: string) => void
   onDownloadInssMap: (filename: string) => void
   onDownloadIrtMap: (filename: string) => void
@@ -1044,6 +1122,24 @@ function SummaryTab({
   const [departmentFilter, setDepartmentFilter] = useState('all')
   const [recordStatusFilter, setRecordStatusFilter] = useState('all')
   const [contractTypeFilter, setContractTypeFilter] = useState('all')
+  const [bulkEditOpen, setBulkEditOpen] = useState(false)
+  const [bulkForm, setBulkForm] = useState<{
+    work_days: string
+    absent_days: string
+    overtime_hours: string
+    late_minutes: string
+    components: Record<string, string>
+    extra_items: Array<{ name: string; type: 'earning' | 'deduction'; amount: string }>
+    replace_extra_items: boolean
+  }>({
+    work_days: '',
+    absent_days: '',
+    overtime_hours: '',
+    late_minutes: '',
+    components: {},
+    extra_items: [],
+    replace_extra_items: false,
+  })
 
   const validSelectedIds = useMemo(() => {
     const existing = new Set(records.map((r) => r.id))
@@ -1238,6 +1334,94 @@ function SummaryTab({
     await onRecalculate(payload)
     setDrafts({})
   }
+
+  const handleApplyBulkEdit = async () => {
+    const selectedRecords = records.filter((r) => validSelectedIds.has(r.id))
+    if (selectedRecords.length === 0) return
+
+    const bulkComponents: Record<string, number> = {}
+    for (const [code, val] of Object.entries(bulkForm.components)) {
+      if (val.trim() !== '' && Number.isFinite(Number(val)) && Number(val) >= 0) {
+        bulkComponents[code] = Number(val)
+      }
+    }
+
+    const bulkExtras = bulkForm.extra_items
+      .filter((it) => it.name.trim() !== '' && Number.isFinite(Number(it.amount)) && Number(it.amount) >= 0)
+      .map((it) => ({
+        name: it.name.trim(),
+        type: it.type,
+        amount: Number(it.amount),
+      }))
+
+    const payload = selectedRecords.map((rec) => {
+      const existingAdj = rec.manual_adjustments ?? {}
+      const existingComps: Record<string, number> = {}
+      if (existingAdj.components) {
+        for (const [k, v] of Object.entries(existingAdj.components)) {
+          if (v != null && Number.isFinite(Number(v))) existingComps[k] = Number(v)
+        }
+      }
+      const mergedComponents = { ...existingComps, ...bulkComponents }
+      const existingExtras = (existingAdj.extra_items ?? []).map((item) => ({
+        name: item.name,
+        type: item.type,
+        amount: Number(item.amount),
+      }))
+      const mergedExtras = bulkForm.replace_extra_items
+        ? bulkExtras
+        : [...existingExtras, ...bulkExtras]
+
+      return {
+        employee_id: rec.employee_id,
+        work_days:
+          bulkForm.work_days.trim() !== ''
+            ? Math.max(0, Number(bulkForm.work_days))
+            : (existingAdj.work_days ?? null),
+        absent_days:
+          bulkForm.absent_days.trim() !== ''
+            ? Math.max(0, Number(bulkForm.absent_days))
+            : (existingAdj.absent_days ?? null),
+        overtime_hours:
+          bulkForm.overtime_hours.trim() !== ''
+            ? Math.max(0, Number(bulkForm.overtime_hours))
+            : (existingAdj.overtime_hours ?? null),
+        late_minutes:
+          bulkForm.late_minutes.trim() !== ''
+            ? Math.max(0, Math.round(Number(bulkForm.late_minutes)))
+            : (existingAdj.late_minutes ?? null),
+        components: mergedComponents,
+        extra_items: mergedExtras,
+      }
+    })
+
+    await onRecalculate(payload)
+    setBulkEditOpen(false)
+    setBulkForm({
+      work_days: '',
+      absent_days: '',
+      overtime_hours: '',
+      late_minutes: '',
+      components: {},
+      extra_items: [],
+      replace_extra_items: false,
+    })
+  }
+
+  const handleBulkDeleteSelected = async () => {
+    const ids = Array.from(validSelectedIds)
+    if (ids.length === 0) return
+    if (
+      !window.confirm(
+        `Confirma a remoção de ${ids.length} funcionário(s) selecionado(s) desta folha salarial? A folha será recalculada automaticamente.`,
+      )
+    ) {
+      return
+    }
+    await onBulkDeleteRecords(ids)
+    setSelectedRecordIds(new Set())
+  }
+
   const canDownloadPayslip = periodStatus === 'approved' || periodStatus === 'paid' || periodStatus === 'closed'
 
   const totalsGross = filteredRecords.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
@@ -1359,6 +1543,38 @@ function SummaryTab({
                 })}
               </span>
               <div className="flex flex-wrap items-center gap-2">
+                {canEditRecords && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={isRecalculating || isDeletingRecords}
+                      onClick={() => setBulkEditOpen(true)}
+                    >
+                      <Calculator className="mr-1.5 h-3.5 w-3.5" />
+                      {t('payroll.detail.bulkEditAndRecalculate', {
+                        defaultValue: 'Editar e Recalcular em Massa',
+                      })}{' '}
+                      ({validSelectedIds.size})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={isRecalculating || isDeletingRecords}
+                      onClick={handleBulkDeleteSelected}
+                    >
+                      {isDeletingRecords ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      {t('payroll.detail.bulkDeleteFromPayroll', {
+                        defaultValue: 'Eliminar da Folha',
+                      })}{' '}
+                      ({validSelectedIds.size})
+                    </Button>
+                  </>
+                )}
                 <Button
                   size="sm"
                   onClick={() => onPrintBulkPayslips(Array.from(validSelectedIds))}
@@ -1559,16 +1775,35 @@ function SummaryTab({
                         </div>
                       </td>
                       <td className="px-5 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        {canDownloadPayslip && (
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title={t('payroll.detail.downloadPayslip')}
-                            onClick={() => onDownloadPayslip(r.id, `recibo-${r.employee?.employee_code ?? r.id}.pdf`)}
-                          >
-                            <FileDown className="h-4 w-4" />
-                          </Button>
-                        )}
+                        <div className="flex items-center justify-end gap-1">
+                          {canDownloadPayslip && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title={t('payroll.detail.downloadPayslip')}
+                              onClick={() => onDownloadPayslip(r.id, `recibo-${r.employee?.employee_code ?? r.id}.pdf`)}
+                            >
+                              <FileDown className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canEditRecords && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              title={t('payroll.detail.removeEmployeeFromPayroll', { defaultValue: 'Remover funcionário desta folha salarial' })}
+                              disabled={isDeletingRecords || isRecalculating}
+                              onClick={async () => {
+                                const empName = r.employee?.full_name ?? `#${r.employee_id}`
+                                if (window.confirm(`Remover ${empName} desta folha salarial e recalcular os totais?`)) {
+                                  await onDeleteRecord(r.id)
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     {isExpanded && (
@@ -1617,6 +1852,22 @@ function SummaryTab({
                                   >
                                     <FileDown className="mr-1.5 h-3.5 w-3.5" />
                                     {t('payroll.detail.downloadPayslip')}
+                                  </Button>
+                                )}
+                                {canEditRecords && (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={isDeletingRecords || isRecalculating}
+                                    onClick={async () => {
+                                      const empName = r.employee?.full_name ?? `#${r.employee_id}`
+                                      if (window.confirm(`Remover ${empName} desta folha salarial e recalcular os totais?`)) {
+                                        await onDeleteRecord(r.id)
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                    {t('payroll.detail.removeFromPayroll', { defaultValue: 'Eliminar da folha' })}
                                   </Button>
                                 )}
                               </div>
@@ -1803,6 +2054,9 @@ function SummaryTab({
                                           return { ...d, late_minutes: e.target.value, components: nextComponents }
                                         })}
                                       />
+                                      <p className="text-[10px] text-muted-foreground leading-tight">
+                                        Em minutos (para definir o valor em AOA, edite a linha Atrasos abaixo).
+                                      </p>
                                     </div>
                                   </div>
                                 </CardContent>
@@ -1811,6 +2065,7 @@ function SummaryTab({
 
                             <EmployeeRecordDetail
                               record={r}
+                              canEditRecords={canEditRecords}
                               canEditAllowances={canEditAllowances}
                               canEditDeductions={canEditDeductions}
                               draft={activeDraft}
@@ -1843,6 +2098,246 @@ function SummaryTab({
         </div>
         </CardContent>
       </Card>
+
+      {/* Modal de Edição e Recálculo em Massa */}
+      <Dialog open={bulkEditOpen} onOpenChange={setBulkEditOpen}>
+        <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-[95vw] sm:max-w-4xl flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-primary" />
+              Edição e Recálculo em Massa ({validSelectedIds.size} funcionários selecionados)
+            </DialogTitle>
+            <DialogDescription>
+              Preencha apenas os campos que pretende aplicar aos {validSelectedIds.size} funcionários selecionados. Os campos deixados em branco manterão o valor atual de cada funcionário.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-5 py-2 pr-1">
+            {canEditAttendance && (
+              <div className="space-y-2.5 rounded-xl border border-border bg-muted/20 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  1. Métricas de Assiduidade e Horas
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <Label className="text-xs">{t('payroll.detail.workDays')}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="31"
+                      step="0.5"
+                      placeholder="Manter atual"
+                      value={bulkForm.work_days}
+                      onChange={(e) => setBulkForm((p) => ({ ...p, work_days: e.target.value }))}
+                      className="mt-1 h-8 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">{t('payroll.detail.absentDays')}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="31"
+                      step="0.5"
+                      placeholder="Manter atual"
+                      value={bulkForm.absent_days}
+                      onChange={(e) => setBulkForm((p) => ({ ...p, absent_days: e.target.value }))}
+                      className="mt-1 h-8 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">{t('payroll.detail.overtimeHours')}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="500"
+                      step="0.5"
+                      placeholder="Manter atual"
+                      value={bulkForm.overtime_hours}
+                      onChange={(e) => setBulkForm((p) => ({ ...p, overtime_hours: e.target.value }))}
+                      className="mt-1 h-8 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">{t('payroll.detail.lateMinutes')}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="10000"
+                      step="1"
+                      placeholder="Manter atual"
+                      value={bulkForm.late_minutes}
+                      onChange={(e) => setBulkForm((p) => ({ ...p, late_minutes: e.target.value }))}
+                      className="mt-1 h-8 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(canEditAllowances || canEditDeductions) && (
+              <div className="space-y-2.5 rounded-xl border border-border bg-muted/20 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  2. Salário Base, Horas Extras, Subsídios e Descontos (INSS/IRT são automáticos)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {STANDARD_COMPONENTS.filter((comp) => {
+                    if (comp.code === 'absence' || comp.code === 'lateness') return canEditDeductions
+                    return canEditAllowances || comp.code === 'base_salary'
+                  }).map((comp) => (
+                    <div key={comp.code}>
+                      <Label className="text-xs">{comp.label}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Manter valor individual"
+                        value={bulkForm.components[comp.code] ?? ''}
+                        onChange={(e) =>
+                          setBulkForm((p) => ({
+                            ...p,
+                            components: { ...p.components, [comp.code]: e.target.value },
+                          }))
+                        }
+                        className="mt-1 h-8 font-mono text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(canEditAllowances || canEditDeductions) && (
+              <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    3. Rubricas Extra em Massa (Bónus, Prémios ou Descontos Extra)
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() =>
+                      setBulkForm((p) => ({
+                        ...p,
+                        extra_items: [
+                          ...p.extra_items,
+                          { name: '', type: canEditAllowances ? 'earning' : 'deduction', amount: '' },
+                        ],
+                      }))
+                    }
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Adicionar Rubrica
+                  </Button>
+                </div>
+
+                {bulkForm.extra_items.length > 0 && (
+                  <div className="space-y-2">
+                    {bulkForm.extra_items.map((item, idx) => (
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-5">
+                          <Input
+                            placeholder="Nome da rubrica (ex: Prémio Mensal)"
+                            value={item.name}
+                            onChange={(e) =>
+                              setBulkForm((p) => ({
+                                ...p,
+                                extra_items: p.extra_items.map((it, i) =>
+                                  i === idx ? { ...it, name: e.target.value } : it,
+                                ),
+                              }))
+                            }
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="col-span-3">
+                          <Select
+                            value={item.type}
+                            onValueChange={(v) =>
+                              setBulkForm((p) => ({
+                                ...p,
+                                extra_items: p.extra_items.map((it, i) =>
+                                  i === idx ? { ...it, type: v as 'earning' | 'deduction' } : it,
+                                ),
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {canEditAllowances && <SelectItem value="earning">Rendimento (+)</SelectItem>}
+                              {canEditDeductions && <SelectItem value="deduction">Desconto (-)</SelectItem>}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-3">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Valor"
+                            value={item.amount}
+                            onChange={(e) =>
+                              setBulkForm((p) => ({
+                                ...p,
+                                extra_items: p.extra_items.map((it, i) =>
+                                  i === idx ? { ...it, amount: e.target.value } : it,
+                                ),
+                              }))
+                            }
+                            className="h-8 font-mono text-xs"
+                          />
+                        </div>
+                        <div className="col-span-1 flex justify-end">
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() =>
+                              setBulkForm((p) => ({
+                                ...p,
+                                extra_items: p.extra_items.filter((_, i) => i !== idx),
+                              }))
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                      <input
+                        type="checkbox"
+                        checked={bulkForm.replace_extra_items}
+                        onChange={(e) => setBulkForm((p) => ({ ...p, replace_extra_items: e.target.checked }))}
+                      />
+                      Substituir rubricas extra manuais anteriores dos funcionários selecionados
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="shrink-0 gap-2">
+            <Button variant="outline" size="sm" onClick={() => setBulkEditOpen(false)} disabled={isRecalculating}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleApplyBulkEdit} disabled={isRecalculating || validSelectedIds.size === 0}>
+              {isRecalculating ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Calculator className="mr-1.5 h-4 w-4" />
+              )}
+              Aplicar e Recalcular ({validSelectedIds.size})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {(canViewInss || canViewIrt) && (
         <div className={`grid gap-3 sm:grid-cols-2 ${canViewInss && canViewIrt ? 'lg:grid-cols-4' : canViewInss ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
           {canViewInss && (
@@ -1879,12 +2374,14 @@ function InssTotalCard({ label, value }: { label: string; value: number }) {
 
 function EmployeeRecordDetail({
   record,
+  canEditRecords,
   canEditAllowances,
   canEditDeductions,
   draft,
   onUpdateDraft,
 }: {
   record: PayrollRecord
+  canEditRecords: boolean
   canEditAllowances: boolean
   canEditDeductions: boolean
   draft: RecordDraft
@@ -1896,9 +2393,11 @@ function EmployeeRecordDetail({
   const canViewGross = hasFieldPermission(user, 'payroll', 'gross_salary', 'view')
   const canViewInss = hasFieldPermission(user, 'payroll', 'inss', 'view')
   const canViewIrt = hasFieldPermission(user, 'payroll', 'irt', 'view')
+  const canViewDeductions = hasFieldPermission(user, 'payroll', 'deductions', 'view')
   const canViewNet = hasFieldPermission(user, 'payroll', 'net_salary', 'view')
   const canViewEmployerCost = hasFieldPermission(user, 'payroll', 'employer_cost', 'view')
-  const canEdit = canEditAllowances || canEditDeductions
+  const canEditBaseSalary = canEditRecords && (hasFieldPermission(user, 'payroll', 'base_salary', 'edit') || canEditAllowances)
+  const canEdit = canEditBaseSalary || canEditAllowances || canEditDeductions
 
   const [selectedStdCode, setSelectedStdCode] = useState('')
   const [selectedStdAmount, setSelectedStdAmount] = useState('')
@@ -1911,6 +2410,7 @@ function EmployeeRecordDetail({
   const inssEmployee = inssComponent?.amount ?? null
   const employerInss = employerInssComponent?.amount ?? record.employer_inss ?? 0
   const irtAmount = getPayrollComponent(record, 'irt')?.amount ?? Math.abs(record.total_taxes ?? 0)
+  const otherDeductions = Math.max(0, (record.total_deductions ?? 0) - (inssEmployee ?? 0))
   const snapshotEmployeeRate = record.snapshot?.inss_employee_rate
   const snapshotEmployerRate = record.snapshot?.inss_employer_rate
   const inssRate = inssComponent?.rate ?? (typeof snapshotEmployeeRate === 'number' ? snapshotEmployeeRate : null)
@@ -1923,11 +2423,12 @@ function EmployeeRecordDetail({
   return (
     <div className="space-y-4">
       {/* KPI mini-cards */}
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
         {canViewBase && <MiniKpi label={t('payroll.detail.salaryBase')} value={fmtCurrency(record.base_salary)} />}
         {canViewGross && <MiniKpi label={t('payroll.detail.salaryGross')} value={fmtCurrency(record.gross_salary)} highlight />}
         {canViewInss && <MiniKpi label={inssLabel} value={inssEmployee == null ? '—' : formatSignedAmount(-inssEmployee)} danger />}
         {canViewIrt && <MiniKpi label={t('payroll.detail.irt')} value={formatSignedAmount(-irtAmount)} danger />}
+        {canViewDeductions && <MiniKpi label={t('payroll.detail.otherDeductions')} value={otherDeductions > 0 ? formatSignedAmount(-otherDeductions) : '—'} danger />}
         {canViewNet && <MiniKpi label={t('payroll.detail.net')} value={fmtCurrency(record.net_salary)} success />}
         {canViewEmployerCost && <MiniKpi label={t('payroll.detail.employerCost')} value={fmtCurrency(record.employer_cost)} />}
       </div>
@@ -1989,15 +2490,30 @@ function EmployeeRecordDetail({
                   {record.items!.map((item) => {
                     const catCfg = categoryConfig[item.category] ?? { label: item.category, color: '' }
                     const isNeg = item.category === 'deduction' || item.category === 'tax'
+                    const isLegalLocked = NON_EDITABLE_CODES.has(item.code)
                     const isEditableItem =
-                      !NON_EDITABLE_CODES.has(item.code)
+                      !isLegalLocked
                       && !item.code.startsWith('manual_')
-                      && (item.category === 'deduction' ? canEditDeductions : canEditAllowances)
+                      && (item.code === 'base_salary'
+                        ? canEditBaseSalary
+                        : item.category === 'deduction'
+                          ? canEditDeductions
+                          : canEditAllowances)
                     const overriddenValue = draft.components[item.code]
                     const liveMetrics = resolveLiveItemMetrics(item, record, draft)
                     return (
                       <tr key={item.id} className="hover:bg-muted/30">
-                        <td className="px-5 py-3 font-medium">{item.name}</td>
+                        <td className="px-5 py-3 font-medium">
+                          <div className="flex items-center gap-1.5">
+                            <span>{item.name}</span>
+                            {isLegalLocked && (
+                              <Badge variant="outline" className="text-[10px] h-4 px-1.5 gap-0.5 text-muted-foreground">
+                                <Lock className="h-2.5 w-2.5" />
+                                Legal
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-5 py-3">
                           <span className={`text-xs font-medium ${catCfg.color}`}>{t(`payroll.detail.categories.${item.category}`, { defaultValue: catCfg.label })}</span>
                         </td>
@@ -2120,7 +2636,7 @@ function EmployeeRecordDetail({
           {canEdit && (
             <div className="border-t border-border bg-muted/20 p-4 space-y-4">
               {/* Bloco 1: Componente padrão */}
-              {canEditAllowances && (
+              {(canEditAllowances || canEditDeductions) && (
                 <div className="rounded-lg border border-border bg-card p-3.5 space-y-2.5">
                   <div>
                     <p className="text-xs font-semibold text-foreground">{t('payroll.detail.addStandardComponentTitle')}</p>
@@ -2132,7 +2648,12 @@ function EmployeeRecordDetail({
                       <Select value={selectedStdCode} onValueChange={setSelectedStdCode}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('payroll.detail.selectAllowanceToAdd')} /></SelectTrigger>
                         <SelectContent>
-                          {STANDARD_COMPONENTS.filter((c) => !record.items?.some((item) => item.code === c.code)).map((c) => (
+                          {STANDARD_COMPONENTS.filter((c) => {
+                            if (record.items?.some((item) => item.code === c.code)) return false
+                            if (c.code === 'absence' || c.code === 'lateness') return canEditDeductions
+                            if (c.code === 'base_salary') return canEditBaseSalary
+                            return canEditAllowances
+                          }).map((c) => (
                             <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
                           ))}
                         </SelectContent>

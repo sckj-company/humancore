@@ -63,7 +63,23 @@ class PayrollInssRuleController extends BaseController
             'legal_source' => ['nullable', 'string', 'max:5000'],
             'legal_reference' => ['nullable', 'string', 'max:255'],
             'legal_document' => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg', 'max:10240'],
+            'tenant_ids' => ['sometimes', 'array', 'min:1'],
+            'tenant_ids.*' => ['integer', 'exists:tenants,id'],
+            'activate' => ['sometimes', 'boolean'],
         ]);
+
+        $extraTenantIds = isset($data['tenant_ids']) && is_array($data['tenant_ids'])
+            ? array_values(array_unique(array_map('intval', $data['tenant_ids'])))
+            : [];
+        $shouldActivate = $request->boolean('activate');
+        unset($data['tenant_ids'], $data['activate']);
+
+        $user = $request->user();
+        foreach ($extraTenantIds as $tid) {
+            if (! $user->canAccessTenant($tid)) {
+                return $this->error('Sem permissão para configurar uma ou mais empresas selecionadas.', 403);
+            }
+        }
 
         $legalDocument = $request->file('legal_document');
         unset($data['legal_document']);
@@ -76,19 +92,11 @@ class PayrollInssRuleController extends BaseController
             ->whereDate('effective_from', $data['effective_from'])
             ->exists();
 
-        if ($duplicateExists) {
+        if ($duplicateExists && ! in_array((int) $tenantId, $extraTenantIds, true)) {
             return $this->error('Já existe uma regra INSS para esta data de início e regime.', 422, [
                 'effective_from' => ['Já existe uma regra INSS para esta data de início e regime.'],
             ]);
         }
-
-        $data['tenant_id'] = $tenantId;
-        $data['status'] = 'draft';
-        $data['version'] = ((int) PayrollInssRule::query()
-            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
-            ->where('country_code', $data['country_code'])
-            ->where('regime_code', $data['regime_code'])
-            ->max('version')) + 1;
 
         if ($legalDocument) {
             $data['legal_document_path'] = $cloudinary->upload(
@@ -98,11 +106,38 @@ class PayrollInssRuleController extends BaseController
             )['url'];
         }
 
+        if ($extraTenantIds !== []) {
+            $allTargetIds = $tenantId && ! in_array((int) $tenantId, $extraTenantIds, true)
+                ? array_merge([(int) $tenantId], $extraTenantIds)
+                : $extraTenantIds;
+
+            $result = $this->replicateRulePayloadToTenants($data, $allTargetIds, $shouldActivate, (int) $user->id);
+            $primaryRule = $result['primary'];
+
+            return $this->success(
+                new PayrollInssRuleResource($primaryRule),
+                'Regra INSS aplicada a '.count($allTargetIds).' empresa(s) com sucesso.',
+                201
+            );
+        }
+
+        $data['tenant_id'] = $tenantId;
+        $data['status'] = $shouldActivate ? 'active' : 'draft';
+        if ($shouldActivate) {
+            $data['validated_at'] = now();
+            $data['validated_by'] = $user->id;
+        }
+        $data['version'] = ((int) PayrollInssRule::query()
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
+            ->where('country_code', $data['country_code'])
+            ->where('regime_code', $data['regime_code'])
+            ->max('version')) + 1;
+
         $rule = PayrollInssRule::query()->create($data);
 
         return $this->success(
             new PayrollInssRuleResource($rule),
-            'Regra INSS criada como rascunho.',
+            $shouldActivate ? 'Regra INSS criada e ativada com sucesso.' : 'Regra INSS criada como rascunho.',
             201
         );
     }
@@ -284,6 +319,192 @@ class PayrollInssRuleController extends BaseController
         }
 
         return $this->success(null, 'Regra eliminada com sucesso.');
+    }
+
+    public function assignToTenants(Request $request, PayrollInssRule $rule): JsonResponse
+    {
+        $this->authorize('create', PayrollInssRule::class);
+
+        $validated = $request->validate([
+            'tenant_ids' => ['required', 'array', 'min:1'],
+            'tenant_ids.*' => ['integer', 'exists:tenants,id'],
+            'activate' => ['sometimes', 'boolean'],
+        ]);
+
+        $tenantIds = array_values(array_unique(array_map('intval', $validated['tenant_ids'])));
+        $user = $request->user();
+
+        foreach ($tenantIds as $tid) {
+            if (! $user->canAccessTenant($tid)) {
+                return $this->error('Sem permissão para configurar uma ou mais empresas selecionadas.', 403);
+            }
+        }
+
+        $shouldActivate = array_key_exists('activate', $validated)
+            ? (bool) $validated['activate']
+            : ($rule->status === 'active');
+
+        $effectiveFromStr = $rule->effective_from instanceof \DateTimeInterface
+            ? $rule->effective_from->format('Y-m-d')
+            : (string) $rule->effective_from;
+
+        $effectiveToStr = $rule->effective_to instanceof \DateTimeInterface
+            ? $rule->effective_to->format('Y-m-d')
+            : ($rule->effective_to ? (string) $rule->effective_to : null);
+
+        $payload = [
+            'country_code' => $rule->country_code,
+            'regime_code' => $rule->regime_code,
+            'employee_rate' => $rule->employee_rate,
+            'employer_rate' => $rule->employer_rate,
+            'max_base' => $rule->max_base,
+            'effective_from' => $effectiveFromStr,
+            'effective_to' => $effectiveToStr,
+            'legal_source' => $rule->legal_source,
+            'legal_reference' => $rule->legal_reference,
+            'legal_document_path' => $rule->legal_document_path,
+        ];
+
+        $result = $this->replicateRulePayloadToTenants($payload, $tenantIds, $shouldActivate, (int) $user->id);
+
+        return $this->success([
+            'created_count' => $result['created_count'],
+            'updated_count' => $result['updated_count'],
+            'total_applied' => $result['created_count'] + $result['updated_count'],
+            'tenant_ids' => $tenantIds,
+        ], 'Regra INSS aplicada a '.count($tenantIds).' empresa(s) com sucesso.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<int, int>  $tenantIds
+     * @return array{primary: PayrollInssRule, created_count: int, updated_count: int}
+     */
+    private function replicateRulePayloadToTenants(
+        array $payload,
+        array $tenantIds,
+        bool $shouldActivate,
+        int $actorId,
+    ): array {
+        $tenantManager = app(\App\Services\Tenant\TenantManager::class);
+        $previousTenant = $tenantManager->get();
+        $tenantsById = Tenant::query()->whereIn('id', $tenantIds)->get()->keyBy('id');
+
+        $createdCount = 0;
+        $updatedCount = 0;
+        $primary = null;
+
+        try {
+            DB::transaction(function () use (
+                $payload,
+                $tenantIds,
+                $shouldActivate,
+                $actorId,
+                $tenantManager,
+                $tenantsById,
+                &$createdCount,
+                &$updatedCount,
+                &$primary,
+            ): void {
+                foreach ($tenantIds as $targetTenantId) {
+                    $targetTenant = $tenantsById->get($targetTenantId);
+                    if (! $targetTenant) {
+                        continue;
+                    }
+
+                    $tenantManager->set($targetTenant);
+
+                    $existing = PayrollInssRule::withoutGlobalScopes()
+                        ->where('tenant_id', $targetTenantId)
+                        ->where('country_code', $payload['country_code'])
+                        ->where('regime_code', $payload['regime_code'])
+                        ->where('status', '!=', 'revoked')
+                        ->whereDate('effective_from', $payload['effective_from'])
+                        ->first();
+
+                    if ($shouldActivate) {
+                        PayrollInssRule::withoutGlobalScopes()
+                            ->where('tenant_id', $targetTenantId)
+                            ->where('country_code', $payload['country_code'])
+                            ->where('regime_code', $payload['regime_code'])
+                            ->where('status', 'active')
+                            ->when($existing, fn ($q) => $q->where('id', '!=', $existing->id))
+                            ->whereDate('effective_from', '<=', $payload['effective_to'] ?? '9999-12-31')
+                            ->where(function ($query) use ($payload): void {
+                                $query->whereNull('effective_to')
+                                    ->orWhereDate('effective_to', '>=', $payload['effective_from']);
+                            })
+                            ->update([
+                                'status' => 'revoked',
+                                'revoked_at' => now(),
+                                'revoked_by' => $actorId,
+                                'revocation_reason' => 'Substituída por aplicação multi-empresa.',
+                            ]);
+                    }
+
+                    if ($existing) {
+                        $updateData = [
+                            'employee_rate' => $payload['employee_rate'],
+                            'employer_rate' => $payload['employer_rate'],
+                            'max_base' => $payload['max_base'] ?? null,
+                            'effective_to' => $payload['effective_to'] ?? null,
+                            'legal_source' => $payload['legal_source'] ?? $existing->legal_source,
+                            'legal_reference' => $payload['legal_reference'] ?? $existing->legal_reference,
+                            'legal_document_path' => $payload['legal_document_path'] ?? $existing->legal_document_path,
+                        ];
+
+                        if ($shouldActivate) {
+                            $updateData['status'] = 'active';
+                            $updateData['validated_at'] = $existing->validated_at ?? now();
+                            $updateData['validated_by'] = $existing->validated_by ?? $actorId;
+                        }
+
+                        $existing->update($updateData);
+                        $updatedCount++;
+                        $primary ??= $existing->fresh();
+                    } else {
+                        $nextVersion = ((int) PayrollInssRule::withoutGlobalScopes()
+                            ->where('tenant_id', $targetTenantId)
+                            ->where('country_code', $payload['country_code'])
+                            ->where('regime_code', $payload['regime_code'])
+                            ->max('version')) + 1;
+
+                        $created = PayrollInssRule::withoutGlobalScopes()->create([
+                            'tenant_id' => $targetTenantId,
+                            'country_code' => $payload['country_code'],
+                            'regime_code' => $payload['regime_code'],
+                            'version' => $nextVersion,
+                            'employee_rate' => $payload['employee_rate'],
+                            'employer_rate' => $payload['employer_rate'],
+                            'max_base' => $payload['max_base'] ?? null,
+                            'effective_from' => $payload['effective_from'],
+                            'effective_to' => $payload['effective_to'] ?? null,
+                            'legal_source' => $payload['legal_source'] ?? null,
+                            'legal_reference' => $payload['legal_reference'] ?? null,
+                            'legal_document_path' => $payload['legal_document_path'] ?? null,
+                            'status' => $shouldActivate ? 'active' : 'draft',
+                            'validated_at' => $shouldActivate ? now() : null,
+                            'validated_by' => $shouldActivate ? $actorId : null,
+                        ]);
+
+                        $createdCount++;
+                        $primary ??= $created;
+                    }
+                }
+            });
+        } finally {
+            if ($previousTenant !== null) {
+                $tenantManager->set($previousTenant);
+            } else {
+                $tenantManager->clear();
+            }
+        }
+
+        return [
+            'primary' => $primary,
+            'created_count' => $createdCount,
+            'updated_count' => $updatedCount,
+        ];
     }
 
     public function downloadDocument(PayrollInssRule $rule, CloudinaryService $cloudinary): StreamedResponse|RedirectResponse|JsonResponse

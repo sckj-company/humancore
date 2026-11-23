@@ -21,6 +21,7 @@ class Audit extends Model
         'user_id',
         'tenant_id',
         'acting_tenant_id',
+        'employee_id',
         'event',
         'auditable_type',
         'auditable_id',
@@ -29,6 +30,11 @@ class Audit extends Model
         'ip_address',
         'user_agent',
     ];
+
+    public function employee()
+    {
+        return $this->belongsTo(Employee::class);
+    }
 
     public function actingTenant()
     {

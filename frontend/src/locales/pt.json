@@ -2868,6 +2868,17 @@
     "toggleMandatoryAria": "Alternar obrigatoriedade do documento"
   },
   "payrollTaxRulesPage": {
+    "assignToCompanies": "Aplicar a empresas",
+    "assignModalTitleInss": "Aplicar Regra de INSS a Várias Empresas",
+    "assignModalTitleIrt": "Aplicar Tabela de IRT a Várias Empresas",
+    "assignModalDescription": "Selecione as empresas que devem receber esta configuração fiscal.",
+    "selectCompaniesLabel": "Aplicar às empresas selecionadas",
+    "onlyCurrentCompany": "Apenas empresa atual",
+    "autoActivateInCompanies": "Validar e ativar imediatamente nas empresas selecionadas",
+    "assignConfirmButton": "Aplicar a {{count}} empresa(s)",
+    "assignSuccess": "Configuração aplicada às empresas selecionadas com sucesso.",
+    "assignError": "Não foi possível aplicar a configuração às empresas selecionadas.",
+    "selectAtLeastOneCompany": "Selecione pelo menos uma empresa.",
     "inssCreated": "Regra INSS criada como rascunho.",
     "inssCreateError": "Erro ao criar regra INSS.",
     "inssValidated": "Regra INSS validada com sucesso.",

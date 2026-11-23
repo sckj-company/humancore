@@ -7,8 +7,10 @@ use App\Http\Requests\V1\Payroll\StorePeriodRequest;
 use App\Http\Resources\V1\PayrollPeriodResource;
 use App\Http\Resources\V1\PayrollRecordResource;
 use App\Models\Deduction;
+use App\Models\DeductionInstallment;
 use App\Models\Employee;
 use App\Models\PayrollPeriod;
+use App\Models\PayrollPeriodEvent;
 use App\Models\PayrollRecord;
 use App\Models\PayrollRecordItem;
 use App\Services\Payroll\PayrollEngineService;
@@ -106,6 +108,55 @@ class PayrollController extends BaseController
         );
     }
 
+    public function destroy(PayrollPeriod $period): JsonResponse
+    {
+        if (in_array($period->status, ['approved', 'closed', 'paid'], true)) {
+            return $this->error('Não é possível eliminar uma folha salarial já aprovada, fechada ou paga.', 422);
+        }
+
+        $this->authorize('delete', $period);
+
+        DB::transaction(function () use ($period): void {
+            $linkedInstallments = DeductionInstallment::query()
+                ->where('payroll_period_id', $period->id)
+                ->with('deduction')
+                ->get();
+
+            foreach ($linkedInstallments as $installment) {
+                if ($installment->status === 'paid' && $installment->deduction) {
+                    $deduction = $installment->deduction;
+                    $deduction->update([
+                        'paid_amount' => max(0, round((float) $deduction->paid_amount - (float) $installment->amount, 2)),
+                        'status' => 'active',
+                    ]);
+                }
+
+                $installment->update([
+                    'status' => 'pending',
+                    'payroll_period_id' => null,
+                    'payroll_record_id' => null,
+                    'paid_at' => null,
+                ]);
+            }
+
+            $recordIds = $period->records()->pluck('id');
+            if ($recordIds->isNotEmpty()) {
+                PayrollRecordItem::query()->whereIn('payroll_record_id', $recordIds)->delete();
+                PayrollRecord::query()->whereIn('id', $recordIds)->delete();
+            }
+
+            PayrollPeriodEvent::query()->where('payroll_period_id', $period->id)->delete();
+            if ($period->report) {
+                $period->report->documents()->delete();
+                $period->report->delete();
+            }
+
+            $period->delete();
+        });
+
+        return $this->success(null, 'Período e folha salarial eliminados com sucesso.');
+    }
+
     public function show(Request $request, PayrollPeriod $period): JsonResponse
     {
         $this->authorize('view', $period);
@@ -179,11 +230,11 @@ class PayrollController extends BaseController
 
     public function recalculate(Request $request, PayrollPeriod $period, PayrollEngineService $engine): JsonResponse
     {
-        $this->authorize('process', $period);
-
-        if ($period->isClosed()) {
-            return $this->error('Não é possível recalcular um período fechado.', 422);
+        if (in_array($period->status, ['approved', 'closed', 'paid', 'cancelled'], true) || $period->isClosed()) {
+            return $this->error('Não é possível editar ou recalcular uma folha salarial já aprovada, fechada ou paga.', 422);
         }
+
+        $this->authorize('process', $period);
 
         $data = $request->validate([
             'records' => ['required', 'array', 'min:1'],
@@ -202,6 +253,13 @@ class PayrollController extends BaseController
 
         $user = $request->user();
         foreach ($data['records'] as $entry) {
+            $components = is_array($entry['components'] ?? null) ? $entry['components'] : [];
+            foreach (array_keys($components) as $compCode) {
+                if (in_array((string) $compCode, PayrollEngineService::LEGAL_LOCKED_CODES, true)) {
+                    return $this->error('IRT e INSS são regidos por lei e recalculados automaticamente pelo sistema.', 422);
+                }
+            }
+
             $hasAttendanceEdit = array_key_exists('work_days', $entry)
                 || array_key_exists('absent_days', $entry)
                 || array_key_exists('overtime_hours', $entry)
@@ -210,13 +268,25 @@ class PayrollController extends BaseController
                 return $this->error('Sem permissão para alterar dias trabalhados, faltas, horas extras ou atrasos na folha.', 403);
             }
 
-            $hasAllowancesEdit = ! empty($entry['components'])
+            if (array_key_exists('base_salary', $components)
+                && ! $user->hasFieldPermission('payroll', 'base_salary', 'edit')
+                && ! $user->hasFieldPermission('payroll', 'allowances', 'edit')) {
+                return $this->error('Sem permissão para alterar o salário base na folha.', 403);
+            }
+
+            $deductionComponentCodes = collect(array_keys($components))
+                ->filter(fn ($code) => in_array((string) $code, ['absence', 'lateness'], true) || str_starts_with((string) $code, 'deduction_'));
+            $allowanceComponentCodes = collect(array_keys($components))
+                ->reject(fn ($code) => $code === 'base_salary' || in_array((string) $code, ['absence', 'lateness'], true) || str_starts_with((string) $code, 'deduction_'));
+
+            $hasAllowancesEdit = $allowanceComponentCodes->isNotEmpty()
                 || collect($entry['extra_items'] ?? [])->contains(fn ($item) => ($item['type'] ?? '') === 'earning');
             if ($hasAllowancesEdit && ! $user->hasFieldPermission('payroll', 'allowances', 'edit')) {
                 return $this->error('Sem permissão para alterar subsídios e abonos na folha.', 403);
             }
 
-            $hasDeductionsEdit = collect($entry['extra_items'] ?? [])->contains(fn ($item) => ($item['type'] ?? '') === 'deduction');
+            $hasDeductionsEdit = $deductionComponentCodes->isNotEmpty()
+                || collect($entry['extra_items'] ?? [])->contains(fn ($item) => ($item['type'] ?? '') === 'deduction');
             if ($hasDeductionsEdit && ! $user->hasFieldPermission('payroll', 'deductions', 'edit')) {
                 return $this->error('Sem permissão para alterar descontos na folha.', 403);
             }
@@ -272,33 +342,242 @@ class PayrollController extends BaseController
             || $user->hasFieldPermission('payroll', 'base_salary', 'view')
             || $user->hasFieldPermission('employee', 'salary', 'view');
 
+        $periodMonth = Carbon::parse($period->period_start)->format('Y-m');
+
         $employees = Employee::query()
             ->where('tenant_id', $period->tenant_id)
             ->where('status', 'active')
             ->where('approval_status', 'approved')
             ->when($allowedDeptIds !== null, fn ($q) => $q->whereIn('department_id', $allowedDeptIds))
-            ->with('activeContract')
+            ->with([
+                'activeContract',
+                'position:id,title',
+                'department:id,name',
+                'deductions' => fn ($q) => $q->where('status', 'active')
+                    ->where(fn ($sq) => $sq->whereNull('starts_at')->orWhereDate('starts_at', '<=', $period->period_end))
+                    ->with('installments')
+                    ->orderBy('id'),
+                'assets' => fn ($q) => $q->where('is_settled', false),
+            ])
             ->orderBy('first_name')
+            ->get();
+
+        $employeeIds = $employees->pluck('id')->all();
+        $attendanceByEmployee = \App\Models\AttendanceRecord::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$period->period_start, $period->period_end])
             ->get()
-            ->map(function (Employee $employee) use ($canViewSalary) {
-                $contract = $employee->activeContract;
-                $isExpired = $contract?->end_date !== null
-                    && $contract->end_date->lt(today());
+            ->groupBy('employee_id');
 
-                return [
-                    'id' => $employee->id,
-                    'employee_code' => $employee->employee_code,
-                    'full_name' => $employee->full_name,
-                    'position' => $employee->position?->title,
-                    'base_salary' => $canViewSalary ? $contract?->base_salary : null,
-                    'contract_end_date' => $contract?->end_date?->format('Y-m-d'),
-                    'is_contract_expired' => $isExpired,
-                    'eligible' => ! $isExpired,
+        $mapped = $employees->map(function (Employee $employee) use ($canViewSalary, $periodMonth, $attendanceByEmployee) {
+            $contract = $employee->activeContract;
+            $isExpired = $contract?->end_date !== null
+                && $contract->end_date->lt(today());
+            $baseSalary = (float) ($contract?->base_salary ?? 0);
+
+            $advancesAndDeductions = [];
+            $totalDiscountThisPeriod = 0.0;
+
+            foreach ($employee->deductions as $deduction) {
+                if (! $deduction->is_recurring && $deduction->total_amount === null && (float) $deduction->paid_amount > 0) {
+                    continue;
+                }
+
+                $installments = $deduction->installments->sortBy('installment_number')->values();
+                $totalInstallments = $installments->count() ?: (int) ($deduction->installment_count ?? 0);
+                $paidInstallmentsCount = $installments->where('status', 'paid')->count();
+                $pendingInstallments = $installments->where('status', 'pending')->values();
+                $remainingInstallmentsCount = $pendingInstallments->count();
+
+                $currentInstallmentNumber = null;
+                $currentReferenceMonth = $periodMonth;
+                $discountThisPeriod = 0.0;
+
+                if ($installments->isNotEmpty()) {
+                    $dueInstallments = $pendingInstallments->where('reference_month', $periodMonth)->values();
+                    $dueAmount = round((float) $dueInstallments->sum('amount'), 2);
+                    $remainingBalance = $deduction->total_amount !== null
+                        ? max(0, round((float) $deduction->total_amount - (float) $deduction->paid_amount, 2))
+                        : round((float) $pendingInstallments->sum('amount'), 2);
+
+                    $discountThisPeriod = min($dueAmount, $remainingBalance);
+                    $firstDue = $dueInstallments->first() ?? $pendingInstallments->first();
+                    $currentInstallmentNumber = $firstDue?->installment_number;
+                    $currentReferenceMonth = $firstDue?->reference_month ?? $periodMonth;
+                } else {
+                    $remainingBalance = $deduction->total_amount !== null
+                        ? max(0, round((float) $deduction->total_amount - (float) $deduction->paid_amount, 2))
+                        : round((float) ($deduction->installment_amount ?? $deduction->amount ?? 0), 2);
+
+                    if ($deduction->amount_type === 'percentage') {
+                        $discountThisPeriod = round($baseSalary * ((float) $deduction->percentage / 100), 2);
+                    } else {
+                        $discountThisPeriod = (float) ($deduction->installment_amount ?? $deduction->amount ?? 0);
+                    }
+
+                    if ($deduction->total_amount !== null) {
+                        if ($deduction->amount_type === 'fixed' && $totalInstallments > 0 && (float) $deduction->installment_amount > 0) {
+                            $paidInstallmentsCount = (int) round((float) $deduction->paid_amount / (float) $deduction->installment_amount);
+                            $remainingInstallmentsCount = max(1, $totalInstallments - $paidInstallmentsCount);
+                            $currentInstallmentNumber = min($totalInstallments, $paidInstallmentsCount + 1);
+                            $discountThisPeriod = min($discountThisPeriod, round($remainingBalance / $remainingInstallmentsCount, 2));
+                        } else {
+                            $discountThisPeriod = min($discountThisPeriod, $remainingBalance);
+                        }
+                    } else {
+                        $totalInstallments = $totalInstallments ?: 1;
+                        $currentInstallmentNumber = 1;
+                        $remainingInstallmentsCount = 1;
+                    }
+                }
+
+                $discountThisPeriod = round(max(0, $discountThisPeriod), 2);
+                $totalDiscountThisPeriod = round($totalDiscountThisPeriod + $discountThisPeriod, 2);
+
+                $installmentLabel = $totalInstallments > 0 && $currentInstallmentNumber !== null
+                    ? "{$currentInstallmentNumber}ª de {$totalInstallments} parcelas"
+                    : ($deduction->is_recurring ? 'Recorrente mensal' : 'Parcela única');
+
+                $advancesAndDeductions[] = [
+                    'id' => $deduction->id,
+                    'name' => $deduction->name,
+                    'deduction_type' => $deduction->deduction_type,
+                    'type_label' => Deduction::TYPES[$deduction->deduction_type] ?? $deduction->deduction_type,
+                    'amount_type' => $deduction->amount_type,
+                    'percentage' => $deduction->percentage !== null ? (float) $deduction->percentage : null,
+                    'total_amount' => $deduction->total_amount !== null ? (float) $deduction->total_amount : $discountThisPeriod,
+                    'paid_amount' => (float) $deduction->paid_amount,
+                    'remaining_balance' => $remainingBalance,
+                    'installment_count' => $totalInstallments,
+                    'paid_installments_count' => $paidInstallmentsCount,
+                    'remaining_installments_count' => $remainingInstallmentsCount,
+                    'current_installment_number' => $currentInstallmentNumber,
+                    'current_installment_label' => $installmentLabel,
+                    'current_reference_month' => $currentReferenceMonth,
+                    'discount_amount_this_period' => $discountThisPeriod,
+                    'will_discount_this_period' => $discountThisPeriod > 0,
                 ];
-            })
-            ->values();
+            }
 
-        return $this->success($employees);
+            $empAttendance = $attendanceByEmployee->get($employee->id, collect());
+            $deductibleAbsenceDays = 0.0;
+            $unjustifiedAbsenceDays = 0.0;
+            foreach ($empAttendance as $att) {
+                if ($att->status === 'absent') {
+                    $unjustifiedAbsenceDays += 1.0;
+                    if ($att->deduct_from_salary) {
+                        $deductibleAbsenceDays += 1.0;
+                    }
+                } elseif ($att->status === 'half_day' && $att->deduct_from_salary) {
+                    $deductibleAbsenceDays += 0.5;
+                }
+            }
+            $lateMinutes = (int) $empAttendance->sum('late_minutes');
+            $lateDaysCount = $empAttendance->where('late_minutes', '>', 0)->count();
+            $overtimeHours = round(((int) $empAttendance->sum('overtime_minutes')) / 60, 2);
+
+            $pendingAssets = $employee->assets->filter(fn ($a) => $a->pendingLiabilityAmount() > 0);
+            $unreturnedAssetsCount = $pendingAssets->count();
+            $unreturnedAssetsLiability = round((float) $pendingAssets->sum(fn ($a) => $a->pendingLiabilityAmount()), 2);
+
+            return [
+                'id' => $employee->id,
+                'employee_code' => $employee->employee_code,
+                'full_name' => $employee->full_name,
+                'position' => $employee->position?->title,
+                'department' => $employee->department?->name,
+                'base_salary' => $canViewSalary ? $contract?->base_salary : null,
+                'contract_end_date' => $contract?->end_date?->format('Y-m-d'),
+                'is_contract_expired' => $isExpired,
+                'eligible' => ! $isExpired,
+                'advances_and_deductions' => $advancesAndDeductions,
+                'total_discount_this_period' => $totalDiscountThisPeriod,
+                'pending_impacts' => [
+                    'deductible_absence_days' => $deductibleAbsenceDays,
+                    'unjustified_absence_days' => $unjustifiedAbsenceDays,
+                    'late_minutes' => $lateMinutes,
+                    'late_days_count' => $lateDaysCount,
+                    'overtime_hours' => $overtimeHours,
+                    'unreturned_assets_count' => $unreturnedAssetsCount,
+                    'unreturned_assets_liability' => $unreturnedAssetsLiability,
+                    'has_pending_impacts' => count($advancesAndDeductions) > 0
+                        || $deductibleAbsenceDays > 0
+                        || $lateMinutes > 0
+                        || $unreturnedAssetsCount > 0,
+                ],
+            ];
+        })->values();
+
+        return $this->success($mapped);
+    }
+
+    public function destroyRecord(Request $request, PayrollPeriod $period, PayrollRecord $record, PayrollEngineService $engine): JsonResponse
+    {
+        if (in_array($period->status, ['approved', 'closed', 'paid', 'cancelled'], true) || $period->isClosed()) {
+            return $this->error('Não é possível eliminar funcionários de uma folha já aprovada, fechada ou paga.', 422);
+        }
+
+        $this->authorize('process', $period);
+
+        if ((int) $record->payroll_period_id !== (int) $period->id) {
+            return $this->error('O registo não pertence a este período salarial.', 404);
+        }
+
+        try {
+            $result = $engine->deletePeriodRecords($period, [$record->id]);
+        } catch (\Throwable $e) {
+            return $this->error('Não foi possível remover o funcionário da folha: '.$e->getMessage(), 422);
+        }
+
+        $period->recordEvent('processed', auth()->id(), 'Funcionário removido da folha salarial.', $result);
+
+        $period->refresh()->load([
+            'records.employee.department',
+            'records.employee.position',
+            'records.items',
+            'events.actor:id,name',
+            'processedBy:id,name',
+            'approvedBy:id,name',
+            'report.documents.uploadedBy:id,name',
+            'report.updatedBy:id,name',
+        ])->loadCount('records');
+
+        return $this->success(new PayrollPeriodResource($period), 'Funcionário removido da folha e totais recalculados.');
+    }
+
+    public function bulkDestroyRecords(Request $request, PayrollPeriod $period, PayrollEngineService $engine): JsonResponse
+    {
+        if (in_array($period->status, ['approved', 'closed', 'paid', 'cancelled'], true) || $period->isClosed()) {
+            return $this->error('Não é possível eliminar funcionários de uma folha já aprovada, fechada ou paga.', 422);
+        }
+
+        $this->authorize('process', $period);
+
+        $data = $request->validate([
+            'record_ids' => ['required', 'array', 'min:1'],
+            'record_ids.*' => ['integer', 'exists:payroll_records,id'],
+        ]);
+
+        try {
+            $result = $engine->deletePeriodRecords($period, $data['record_ids']);
+        } catch (\Throwable $e) {
+            return $this->error('Não foi possível remover os funcionários selecionados: '.$e->getMessage(), 422);
+        }
+
+        $period->recordEvent('processed', auth()->id(), "Remoção em massa de {$result['deleted']} funcionário(s) da folha salarial.", $result);
+
+        $period->refresh()->load([
+            'records.employee.department',
+            'records.employee.position',
+            'records.items',
+            'events.actor:id,name',
+            'processedBy:id,name',
+            'approvedBy:id,name',
+            'report.documents.uploadedBy:id,name',
+            'report.updatedBy:id,name',
+        ])->loadCount('records');
+
+        return $this->success(new PayrollPeriodResource($period), 'Funcionários removidos da folha e valores recalculados com sucesso.');
     }
 
     public function validations(PayrollPeriod $period, PayrollValidationService $validator): JsonResponse

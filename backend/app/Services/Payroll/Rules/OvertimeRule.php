@@ -59,7 +59,7 @@ class OvertimeRule extends AbstractPayrollRule
             return round($amount + ($globalHourlyRate * $context->unpricedOvertimeHours), 2);
         }
 
-        $hourlyRate = (float) $context->contract->base_salary / 220;
+        $hourlyRate = $context->effectiveBaseSalary() / 220;
         $rate = (float) $this->setting($context, 'payroll.overtime.rate', 1.5);
 
         return round($amount + ($hourlyRate * $context->unpricedOvertimeHours * $rate), 2);

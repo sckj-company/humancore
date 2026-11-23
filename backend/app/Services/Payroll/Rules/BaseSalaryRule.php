@@ -39,6 +39,6 @@ class BaseSalaryRule implements PayrollRuleInterface
 
     public function calculate(PayrollContext $context): float
     {
-        return (float) $context->contract->base_salary;
+        return $context->effectiveBaseSalary();
     }
 }

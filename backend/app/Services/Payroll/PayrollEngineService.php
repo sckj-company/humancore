@@ -29,6 +29,8 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollEngineService
 {
+    public const LEGAL_LOCKED_CODES = ['inss', 'irt', 'employer_inss'];
+
     /**
      * @var PayrollRuleInterface[]
      */
@@ -92,6 +94,7 @@ class PayrollEngineService
         }
 
         $context = $this->buildContext($employee, $contract, $period, $manualAdjustments);
+        $effectiveBaseSalary = $context->effectiveBaseSalary();
         $componentBreakdown = $this->calculateSalaryComponents($context);
         $manualComponents = $context->manualAdjustments['components'] ?? [];
 
@@ -99,7 +102,10 @@ class PayrollEngineService
 
         foreach ($this->rules as $rule) {
             $ruleCode = $rule->getCode();
-            $hasManualOverride = array_key_exists($ruleCode, $manualComponents) && $manualComponents[$ruleCode] !== null;
+            $isLegalLocked = in_array($ruleCode, self::LEGAL_LOCKED_CODES, true);
+            $hasManualOverride = ! $isLegalLocked
+                && array_key_exists($ruleCode, $manualComponents)
+                && $manualComponents[$ruleCode] !== null;
 
             if (! $hasManualOverride && ! $rule->applies($context)) {
                 continue;
@@ -137,9 +143,19 @@ class PayrollEngineService
                 })(),
                 'absence' => max(0, (float) $context->setting('payroll.discounts.absence_daily_amount', 0)),
                 'lateness' => (int) $context->setting('payroll.discounts.lateness_weekly_accumulation_minutes', 0) === 0
-                    ? max(0, (float) $context->setting('payroll.discounts.lateness_hourly_amount', 0))
+                    ? (function () use ($context, $effectiveBaseSalary): ?float {
+                        $configured = max(0, (float) $context->setting('payroll.discounts.lateness_hourly_amount', 0));
+                        if ($configured > 0) {
+                            return $configured;
+                        }
+                        if (isset($context->manualAdjustments['late_minutes']) && (int) $context->manualAdjustments['late_minutes'] > 0) {
+                            return round($effectiveBaseSalary / 220, 2);
+                        }
+
+                        return 0.0;
+                    })()
                     : null,
-                'overtime' => (function () use ($context, $amount): ?float {
+                'overtime' => (function () use ($context, $amount, $effectiveBaseSalary): ?float {
                     if ($context->overtimeHours > 0 && $amount > 0) {
                         return round(abs($amount) / $context->overtimeHours, 2);
                     }
@@ -152,7 +168,7 @@ class PayrollEngineService
                     }
                     $rate = (float) $context->setting('payroll.overtime.rate', 1.5);
 
-                    return round(((float) $context->contract->base_salary / 220) * $rate, 2);
+                    return round(($effectiveBaseSalary / 220) * $rate, 2);
                 })(),
                 default => null,
             };
@@ -206,8 +222,8 @@ class PayrollEngineService
         }
 
         $inssEmployeeAmount = $context->inssAmount;
-        $inssBase = $context->inssBase ?: (float) $contract->base_salary;
-        $employerInssBase = $context->employerInssBase ?: (float) $contract->base_salary;
+        $inssBase = $context->inssBase ?: $effectiveBaseSalary;
+        $employerInssBase = $context->employerInssBase ?: $effectiveBaseSalary;
         $employerInssRate = (float) ($context->inssRule?->employer_rate ?? (float) ($context->setting('payroll.inss.employer_rate', 8.0)));
         $employerInss = round($employerInssBase * ($employerInssRate / 100), 2);
         $irtTaxableBase = max(0, $context->irtBase - $inssEmployeeAmount);
@@ -218,6 +234,7 @@ class PayrollEngineService
             $employee,
             $contract,
             $context,
+            $effectiveBaseSalary,
             $breakdown,
             $gross,
             $net,
@@ -238,7 +255,7 @@ class PayrollEngineService
                 [
                     'tenant_id' => $period->tenant_id,
                     'contract_id' => $contract->id,
-                    'base_salary' => $contract->base_salary,
+                    'base_salary' => $effectiveBaseSalary,
                     'gross_salary' => $gross,
                     'total_earnings' => $gross,
                     'total_deductions' => $totalDeductions,
@@ -275,7 +292,9 @@ class PayrollEngineService
                     ],
                     'engine_version' => '2.0.0',
                     'validation_errors' => $context->validationWarnings ?: null,
-                    'status' => 'calculated',
+                    'status' => $period->status === 'approved' ? 'approved' : 'calculated',
+                    'approved_at' => $period->status === 'approved' ? ($period->approved_at ?? now()) : null,
+                    'approved_by' => $period->status === 'approved' ? ($period->approved_by ?? auth()->id()) : null,
                     'is_outdated' => false,
                     'outdated_reason' => null,
                 ],
@@ -305,7 +324,7 @@ class PayrollEngineService
                     'deduction_installment_id' => $item['deduction_installment_id'] ?? null,
                     'regulation_id' => $item['regulation_id'] ?? null,
                     'base_amount' => $item['base_amount'] ?? match ($item['code']) {
-                        'base_salary' => $contract->base_salary,
+                        'base_salary' => $effectiveBaseSalary,
                         'inss' => $inssBase,
                         'irt' => $irtTaxableBase,
                         default => null,
@@ -376,8 +395,8 @@ class PayrollEngineService
      */
     public function recalculatePeriodRecords(PayrollPeriod $period, array $recordsPayload): array
     {
-        if ($period->isClosed()) {
-            throw new \RuntimeException('Não é possível recalcular um período fechado.');
+        if ($period->isClosed() || in_array($period->status, ['approved', 'closed', 'paid', 'cancelled'], true)) {
+            throw new \RuntimeException('Não é possível editar ou recalcular uma folha salarial já aprovada, fechada ou paga.');
         }
 
         $recalculated = 0;
@@ -398,8 +417,12 @@ class PayrollEngineService
                 if (! empty($entry['components']) && is_array($entry['components'])) {
                     $components = [];
                     foreach ($entry['components'] as $code => $val) {
+                        $normalizedCode = (string) $code;
+                        if (in_array($normalizedCode, self::LEGAL_LOCKED_CODES, true)) {
+                            continue;
+                        }
                         if ($val !== null) {
-                            $components[(string) $code] = max(0, (float) $val);
+                            $components[$normalizedCode] = max(0, (float) $val);
                         }
                     }
                     if ($components !== []) {
@@ -443,18 +466,87 @@ class PayrollEngineService
         $totalGross = (float) $records->sum('gross_salary');
         $totalNet = (float) $records->sum('net_salary');
         $totalEmployerCost = (float) $records->sum('employer_cost');
+        $totalInssEmployee = (float) $records->sum('total_deductions');
+        $totalEmployerInss = (float) $records->sum('employer_inss');
+        $totalIrt = (float) $records->sum('total_taxes');
+        $count = $records->count();
 
         $period->update([
-            'employee_count' => $records->count(),
-            'total_gross' => $totalGross,
-            'total_net' => $totalNet,
+            'progress_total' => $count,
+            'progress_done' => $count,
             'totals_snapshot' => [
                 'total_gross' => $totalGross,
                 'total_net' => $totalNet,
+                'total_inss_employee' => $totalInssEmployee,
+                'total_employer_inss' => $totalEmployerInss,
+                'total_irt' => $totalIrt,
                 'total_employer_cost' => $totalEmployerCost,
-                'employee_count' => $records->count(),
+                'employee_count' => $count,
+                'records_count' => $count,
+                'approved_at' => $period->approved_at?->toIso8601String(),
             ],
         ]);
+    }
+
+    /**
+     * Remove um ou vários registos de funcionários da folha salarial (até ao estado aprovado) e recalcula os totais do período.
+     *
+     * @param  array<int>  $recordIds
+     * @return array{deleted: int, remaining: int, employee_ids: array<int>}
+     */
+    public function deletePeriodRecords(PayrollPeriod $period, array $recordIds): array
+    {
+        if ($period->isClosed() || in_array($period->status, ['approved', 'closed', 'paid', 'cancelled'], true)) {
+            throw new \RuntimeException('Não é possível eliminar funcionários de uma folha já aprovada, fechada ou paga.');
+        }
+
+        $deleted = 0;
+        $employeeIds = [];
+
+        DB::transaction(function () use ($period, $recordIds, &$deleted, &$employeeIds): void {
+            $records = $period->records()
+                ->whereIn('id', array_values(array_unique(array_map('intval', $recordIds))))
+                ->get();
+
+            foreach ($records as $record) {
+                $employeeIds[] = (int) $record->employee_id;
+
+                // Caso alguma parcela estivesse vinculada a este registo, libertamo-la para pending
+                $linkedInstallments = \App\Models\DeductionInstallment::query()
+                    ->where('payroll_record_id', $record->id)
+                    ->get();
+
+                foreach ($linkedInstallments as $installment) {
+                    if ($installment->status === 'paid' && $installment->deduction) {
+                        $deduction = $installment->deduction;
+                        $newPaid = max(0, round((float) $deduction->paid_amount - (float) $installment->amount, 2));
+                        $deduction->update([
+                            'paid_amount' => $newPaid,
+                            'status' => 'active',
+                        ]);
+                    }
+
+                    $installment->update([
+                        'status' => 'pending',
+                        'payroll_period_id' => null,
+                        'payroll_record_id' => null,
+                        'paid_at' => null,
+                    ]);
+                }
+
+                $record->items()->delete();
+                $record->delete();
+                $deleted++;
+            }
+
+            $this->refreshPeriodTotals($period);
+        });
+
+        return [
+            'deleted' => $deleted,
+            'remaining' => $period->records()->count(),
+            'employee_ids' => $employeeIds,
+        ];
     }
 
     /**
@@ -892,7 +984,7 @@ class PayrollEngineService
 
     protected function calculateSalaryComponents(PayrollContext $context): array
     {
-        $baseSalary = (float) $context->contract->base_salary;
+        $baseSalary = $context->effectiveBaseSalary();
         $componentAmounts = [
             'base_salary' => $baseSalary,
             'gross_salary' => $baseSalary,

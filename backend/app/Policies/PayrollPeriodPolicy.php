@@ -33,7 +33,20 @@ class PayrollPeriodPolicy
 
     public function process(User $user, PayrollPeriod $period): bool
     {
-        return $user->can('process_payroll') && ! $period->isClosed() && ! in_array($period->status, ['paid', 'cancelled'], true);
+        return $user->can('process_payroll')
+            && ! $period->isClosed()
+            && ! in_array($period->status, ['approved', 'closed', 'paid', 'cancelled'], true);
+    }
+
+    public function delete(User $user, PayrollPeriod $period): bool
+    {
+        if (in_array($period->status, ['approved', 'closed', 'paid'], true)) {
+            return false;
+        }
+
+        return $user->can('delete_payroll')
+            || $user->can('process_payroll')
+            || $user->can('create_payroll');
     }
 
     public function approve(User $user, PayrollPeriod $period): bool

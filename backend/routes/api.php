@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Compensation\DeductionController;
 use App\Http\Controllers\Api\V1\Contract\ContractController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Document\EmployeeDocumentController;
+use App\Http\Controllers\Api\V1\Employee\EmployeeAssetController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeEducationController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeIdentityOcrController;
@@ -195,9 +196,18 @@ Route::prefix('v1')->group(function () {
                 Route::get('employees/{employee}/timeline', [EmployeeController::class, 'timeline']);
                 Route::post('employees/{employee}/contracts', [EmployeeController::class, 'storeContract']);
 
-                // Contratos
+                // Activos atribuídos aos funcionários
+                Route::get('employees/{employee}/assets', [EmployeeAssetController::class, 'index']);
+                Route::post('employees/{employee}/assets', [EmployeeAssetController::class, 'store']);
+                Route::put('employees/{employee}/assets/{asset}', [EmployeeAssetController::class, 'update']);
+                Route::delete('employees/{employee}/assets/{asset}', [EmployeeAssetController::class, 'destroy']);
+
+                // Contratos & Rescisão Contratual
                 Route::apiResource('contracts', ContractController::class);
                 Route::post('contracts/{contract}/deactivate', [ContractController::class, 'deactivate']);
+                Route::post('contracts/{contract}/termination-preview', [ContractController::class, 'terminationPreview']);
+                Route::post('contracts/{contract}/terminate', [ContractController::class, 'terminate']);
+                Route::get('contracts/{contract}/termination.pdf', [ContractController::class, 'terminationPdf']);
             });
 
             // Educação / Advertências
@@ -233,8 +243,11 @@ Route::prefix('v1')->group(function () {
                 Route::get('payroll/periods', [PayrollController::class, 'index']);
                 Route::post('payroll/periods', [PayrollController::class, 'store']);
                 Route::get('payroll/periods/{period}', [PayrollController::class, 'show']);
+                Route::delete('payroll/periods/{period}', [PayrollController::class, 'destroy']);
                 Route::post('payroll/periods/{period}/process', [PayrollController::class, 'process']);
                 Route::post('payroll/periods/{period}/recalculate', [PayrollController::class, 'recalculate']);
+                Route::delete('payroll/periods/{period}/records/{record}', [PayrollController::class, 'destroyRecord']);
+                Route::post('payroll/periods/{period}/records/bulk-delete', [PayrollController::class, 'bulkDestroyRecords']);
                 Route::get('payroll/periods/{period}/progress', [PayrollController::class, 'progress']);
                 Route::get('payroll/periods/{period}/processable-employees', [PayrollController::class, 'processableEmployees']);
                 Route::get('payroll/periods/{period}/validations', [PayrollController::class, 'validations']);
@@ -279,6 +292,7 @@ Route::prefix('v1')->group(function () {
                     Route::post('payroll/inss-rules/{rule}/validate', [PayrollInssRuleController::class, 'validateRule']);
                     Route::post('payroll/inss-rules/{rule}/activate', [PayrollInssRuleController::class, 'activate']);
                     Route::post('payroll/inss-rules/{rule}/revoke', [PayrollInssRuleController::class, 'revoke']);
+                    Route::post('payroll/inss-rules/{rule}/assign-tenants', [PayrollInssRuleController::class, 'assignToTenants']);
                     Route::delete('payroll/inss-rules/{rule}', [PayrollInssRuleController::class, 'destroy']);
 
                     Route::get('payroll/irt-tables', [PayrollIrtTableController::class, 'index']);
@@ -289,6 +303,7 @@ Route::prefix('v1')->group(function () {
                     Route::post('payroll/irt-tables/{irtTable}/validate', [PayrollIrtTableController::class, 'validateTable']);
                     Route::post('payroll/irt-tables/{irtTable}/activate', [PayrollIrtTableController::class, 'activate']);
                     Route::post('payroll/irt-tables/{irtTable}/revoke', [PayrollIrtTableController::class, 'revoke']);
+                    Route::post('payroll/irt-tables/{irtTable}/assign-tenants', [PayrollIrtTableController::class, 'assignToTenants']);
                     Route::delete('payroll/irt-tables/{irtTable}', [PayrollIrtTableController::class, 'destroy']);
                 });
 
@@ -378,6 +393,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('documents', [EmployeeDocumentController::class, 'index']);
                 Route::post('documents', [EmployeeDocumentController::class, 'store'])->middleware('plan.quota:max_storage_mb');
                 Route::patch('documents/{document}/verify', [EmployeeDocumentController::class, 'toggleVerify']);
+                Route::get('documents/{document}/preview', [EmployeeDocumentController::class, 'preview']);
                 Route::get('documents/{document}/download', [EmployeeDocumentController::class, 'download']);
                 Route::delete('documents/{document}', [EmployeeDocumentController::class, 'destroy']);
             });

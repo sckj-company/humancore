@@ -1,7 +1,21 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Play, Users, AlertTriangle, CheckCircle2, XCircle, Search } from 'lucide-react'
+import {
+  Loader2,
+  Play,
+  Users,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Search,
+  Info,
+  CreditCard,
+  Clock,
+  Package,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -40,6 +54,7 @@ export function ProcessPeriodDialog({
   const [phase, setPhase] = useState<Phase>('select')
   const [manualSelection, setManualSelection] = useState<Set<number> | null>(null)
   const [employeeSearch, setEmployeeSearch] = useState('')
+  const [showPendingDetails, setShowPendingDetails] = useState(true)
 
   const { data: employees, isLoading, isError } = useQuery({
     queryKey: ['payroll-processable-employees', periodId],
@@ -64,6 +79,37 @@ export function ProcessPeriodDialog({
     () => manualSelection ?? new Set(eligible.map((e) => e.id)),
     [manualSelection, eligible],
   )
+
+  const fmtAmount = (value?: number | string | null) =>
+    new Intl.NumberFormat('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value ?? 0))
+
+  // Funcionários selecionados com adiantamentos, parcelas ou pendências que vão impactar o processamento da folha
+  const selectedPendingInfo = useMemo(() => {
+    const selectedList = (employees ?? []).filter((e) => selectedIds.has(e.id))
+    const withAdvances = selectedList.filter((e) => (e.advances_and_deductions?.length ?? 0) > 0)
+    const withAttendanceOrAssets = selectedList.filter(
+      (e) =>
+        (e.pending_impacts?.deductible_absence_days ?? 0) > 0 ||
+        (e.pending_impacts?.late_minutes ?? 0) > 0 ||
+        (e.pending_impacts?.unreturned_assets_count ?? 0) > 0,
+    )
+    const totalAdvancesDiscount = withAdvances.reduce(
+      (acc, emp) => acc + Number(emp.total_discount_this_period ?? 0),
+      0,
+    )
+    const totalInstallmentsCount = withAdvances.reduce(
+      (acc, emp) => acc + (emp.advances_and_deductions?.length ?? 0),
+      0,
+    )
+
+    return {
+      withAdvances,
+      withAttendanceOrAssets,
+      totalAdvancesDiscount,
+      totalInstallmentsCount,
+      hasAnyImpact: withAdvances.length > 0 || withAttendanceOrAssets.length > 0,
+    }
+  }, [employees, selectedIds])
 
   const progressEnabled = open && (phase === 'running' || phase === 'done')
   const { data: progress } = useQuery({
@@ -132,7 +178,7 @@ export function ProcessPeriodDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="flex h-[85vh] max-h-[85vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-3xl">
+      <DialogContent className="flex h-[90vh] max-h-[90vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-4xl">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -165,6 +211,132 @@ export function ProcessPeriodDialog({
             )}
             {eligible.length > 0 && (
               <>
+                {/* Quadro Informativo de Adiantamentos, Parcelas e Pendências com Impacto na Folha */}
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Info className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
+                      <div>
+                        <p className="font-bold text-amber-900 dark:text-amber-200">
+                          {t('payroll.processDialog.informativeAdvancesTitle', {
+                            defaultValue: 'Resumo Informativo de Adiantamentos, Parcelas e Pendências no Processamento',
+                          })}
+                        </p>
+                        <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90">
+                          {selectedPendingInfo.withAdvances.length > 0
+                            ? `${selectedPendingInfo.withAdvances.length} funcionário(s) com adiantamentos/descontos ativos (${selectedPendingInfo.totalInstallmentsCount} rubrica(s)) · Total a descontar nesta folha: ${fmtAmount(selectedPendingInfo.totalAdvancesDiscount)} AOA`
+                            : 'Nenhum funcionário selecionado possui adiantamentos ou parcelas pendentes para descontar neste período.'}
+                        </p>
+                      </div>
+                    </div>
+                    {selectedPendingInfo.hasAnyImpact && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs text-amber-900 dark:text-amber-200"
+                        onClick={() => setShowPendingDetails((v) => !v)}
+                      >
+                        {showPendingDetails ? (
+                          <>
+                            <ChevronUp className="mr-1 h-3.5 w-3.5" /> Ocultar detalhes
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="mr-1 h-3.5 w-3.5" /> Ver detalhes ({selectedPendingInfo.withAdvances.length + selectedPendingInfo.withAttendanceOrAssets.length})
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+
+                  {showPendingDetails && selectedPendingInfo.hasAnyImpact && (
+                    <div className="mt-2.5 max-h-44 overflow-y-auto rounded-lg border border-amber-500/30 bg-background/95 divide-y divide-border">
+                      {selectedPendingInfo.withAdvances.map((emp) => (
+                        <div key={`adv-${emp.id}`} className="p-2.5 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-foreground">
+                              {emp.full_name}{' '}
+                              <span className="font-mono text-muted-foreground">({emp.employee_code})</span>
+                            </span>
+                            <Badge variant="outline" className="font-mono text-[11px] border-destructive/30 text-destructive">
+                              Desconto na folha: - {fmtAmount(emp.total_discount_this_period)} AOA
+                            </Badge>
+                          </div>
+                          <div className="space-y-1">
+                            {(emp.advances_and_deductions ?? []).map((adv) => (
+                              <div
+                                key={adv.id}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-[11px]"
+                              >
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <CreditCard className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                  <span className="font-semibold text-foreground">
+                                    {adv.type_label}: {adv.name}
+                                  </span>
+                                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-semibold">
+                                    Parcela a descontar: {adv.current_installment_label}
+                                  </Badge>
+                                  {adv.installment_count > 0 && (
+                                    <span className="text-muted-foreground">
+                                      (Total: {adv.installment_count} parcelas · Restam: {adv.remaining_installments_count})
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 font-mono">
+                                  <span className="text-muted-foreground">
+                                    Saldo: {fmtAmount(adv.remaining_balance)} / {fmtAmount(adv.total_amount)}
+                                  </span>
+                                  <span className="font-bold text-destructive">
+                                    {adv.will_discount_this_period
+                                      ? `- ${fmtAmount(adv.discount_amount_this_period)} AOA`
+                                      : '0,00 AOA (outro mês)'}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {selectedPendingInfo.withAttendanceOrAssets.map((emp) => {
+                        const imp = emp.pending_impacts
+                        if (!imp) return null
+                        return (
+                          <div
+                            key={`imp-${emp.id}`}
+                            className="px-2.5 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px]"
+                          >
+                            <span className="font-medium text-foreground">
+                              {emp.full_name}{' '}
+                              <span className="font-mono text-muted-foreground">({emp.employee_code})</span>
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {imp.deductible_absence_days > 0 && (
+                                <Badge variant="outline" className="text-[10px] border-red-500/30 text-red-600">
+                                  {imp.deductible_absence_days} dia(s) falta dedutível
+                                </Badge>
+                              )}
+                              {imp.late_minutes > 0 && (
+                                <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700">
+                                  <Clock className="mr-1 h-3 w-3" />
+                                  {imp.late_minutes} min atraso ({imp.late_days_count} dia(s))
+                                </Badge>
+                              )}
+                              {imp.unreturned_assets_count > 0 && (
+                                <Badge variant="outline" className="text-[10px] border-orange-500/30 text-orange-700">
+                                  <Package className="mr-1 h-3 w-3" />
+                                  {imp.unreturned_assets_count} activo(s) atribuído(s) ({fmtAmount(imp.unreturned_assets_liability)} AOA)
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -191,42 +363,67 @@ export function ProcessPeriodDialog({
                 </div>
                 <ScrollArea className="min-h-32 flex-1 rounded-lg border border-border">
                   <ul className="divide-y divide-border">
-                    {filteredEmployees.map((emp) => (
-                      <li key={emp.id} className="flex min-h-16 items-center gap-3 px-3 py-2.5">
-                        <Checkbox
-                          checked={selectedIds.has(emp.id)}
-                          disabled={!emp.eligible}
-                          onCheckedChange={() => toggle(emp.id)}
-                          aria-label={`Seleccionar ${emp.full_name}`}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <button
-                            type="button"
+                    {filteredEmployees.map((emp) => {
+                      const advances = emp.advances_and_deductions ?? []
+                      const impacts = emp.pending_impacts
+                      return (
+                        <li key={emp.id} className="flex min-h-16 items-center gap-3 px-3 py-2.5">
+                          <Checkbox
+                            checked={selectedIds.has(emp.id)}
                             disabled={!emp.eligible}
-                            aria-pressed={selectedIds.has(emp.id)}
-                            onClick={() => toggle(emp.id)}
-                            className="block max-w-full truncate text-left text-sm font-medium hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {emp.full_name}
-                          </button>
-                          <p className="truncate text-xs text-muted-foreground">{emp.employee_code}</p>
-                          {emp.position && (
-                            <p className="truncate text-xs text-muted-foreground">{emp.position}</p>
+                            onCheckedChange={() => toggle(emp.id)}
+                            aria-label={`Seleccionar ${emp.full_name}`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={!emp.eligible}
+                                aria-pressed={selectedIds.has(emp.id)}
+                                onClick={() => toggle(emp.id)}
+                                className="truncate text-left text-sm font-medium hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {emp.full_name}
+                              </button>
+                              {advances.map((adv) => (
+                                <Badge
+                                  key={adv.id}
+                                  variant="outline"
+                                  className="text-[10px] h-4 px-1.5 bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30"
+                                >
+                                  {adv.type_label}: {adv.current_installment_label} (-{fmtAmount(adv.discount_amount_this_period)})
+                                </Badge>
+                              ))}
+                              {(impacts?.deductible_absence_days ?? 0) > 0 && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-red-500/30 text-red-600">
+                                  {impacts!.deductible_absence_days}d falta
+                                </Badge>
+                              )}
+                              {(impacts?.late_minutes ?? 0) > 0 && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500/30 text-amber-700">
+                                  {impacts!.late_minutes}m atraso
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {emp.employee_code}
+                              {emp.position ? ` · ${emp.position}` : ''}
+                            </p>
+                          </div>
+                          {emp.is_contract_expired ? (
+                            <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20">
+                              Contrato Expirado
+                            </Badge>
+                          ) : (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {emp.base_salary != null
+                                ? new Intl.NumberFormat('pt-AO').format(Number(emp.base_salary))
+                                : '—'}
+                            </span>
                           )}
-                        </div>
-                        {emp.is_contract_expired ? (
-                          <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20">
-                            Contrato Expirado
-                          </Badge>
-                        ) : (
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {emp.base_salary != null
-                              ? new Intl.NumberFormat('pt-AO').format(Number(emp.base_salary))
-                              : '—'}
-                          </span>
-                        )}
-                      </li>
-                    ))}
+                        </li>
+                      )
+                    })}
                     {filteredEmployees.length === 0 && (
                       <li className="px-4 py-10 text-center text-sm text-muted-foreground">
                         {t('payroll.processDialog.notFound')}
@@ -301,43 +498,33 @@ export function ProcessPeriodDialog({
           </div>
         )}
 
-        <DialogFooter className="shrink-0">
+        <DialogFooter className="shrink-0 flex-wrap gap-2 [&>button]:h-auto [&>button]:min-h-8 [&>button]:whitespace-normal [&>button]:text-center">
           {phase === 'select' && (
             <>
-              <Button type="button" variant="outline" onClick={() => handleClose(false)}>
+              <Button variant="outline" onClick={() => handleClose(false)}>
                 {t('payroll.processDialog.cancel')}
               </Button>
               <Button
-                type="button"
-                onClick={() => processMutation.mutate(Array.from(selectedIds))}
                 disabled={selectedIds.size === 0 || processMutation.isPending}
+                onClick={() => processMutation.mutate(Array.from(selectedIds))}
               >
-                <Play className="mr-1.5 h-3.5 w-3.5" />
-                {t('payroll.processDialog.process')} {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
+                {processMutation.isPending ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {t('payroll.processDialog.processButton')} ({selectedIds.size})
               </Button>
             </>
           )}
           {phase === 'running' && (
             <Button variant="outline" disabled>
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> {t('payroll.processDialog.working')}
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              {t('payroll.processDialog.processingButton')}
             </Button>
           )}
           {(phase === 'done' || phase === 'error') && (
-            <>
-              {phase === 'error' && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setPhase('select')
-                    processMutation.reset()
-                  }}
-                >
-                  {t('payroll.processDialog.tryAgain')}
-                </Button>
-              )}
-              <Button type="button" onClick={() => handleClose(false)}>{t('payroll.processDialog.close')}</Button>
-            </>
+            <Button onClick={() => handleClose(false)}>{t('payroll.processDialog.close')}</Button>
           )}
         </DialogFooter>
       </DialogContent>

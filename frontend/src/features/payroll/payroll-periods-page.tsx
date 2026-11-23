@@ -20,6 +20,7 @@ import {
   Clock,
   Save,
   FileCheck2,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -200,6 +201,15 @@ export function PayrollPeriodsPage() {
       invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao reabrir')),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`payroll/periods/${id}`),
+    onSuccess: () => {
+      toast.success(t('payroll.feedback.deleted', { defaultValue: 'Período salarial eliminado com sucesso.' }))
+      invalidate()
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'Não foi possível eliminar o período salarial.')),
   })
 
   return (
@@ -470,6 +480,29 @@ export function PayrollPeriodsPage() {
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
+                          {!['approved', 'closed', 'paid'].includes(p.status) &&
+                            (hasPermission(user, 'delete_payroll') ||
+                              hasPermission(user, 'process_payroll') ||
+                              hasPermission(user, 'create_payroll')) && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                title={t('payroll.periodsPage.delete', { defaultValue: 'Eliminar período / folha' })}
+                                disabled={deleteMutation.isPending}
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `Confirma a eliminação da folha salarial "${p.name}"? Esta ação apenas é permitida antes da aprovação e remove os registos calculados deste período.`,
+                                    )
+                                  ) {
+                                    deleteMutation.mutate(p.id)
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                         </div>
                       </td>
                     </tr>

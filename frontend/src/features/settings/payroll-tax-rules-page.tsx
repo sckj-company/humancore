@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -20,11 +20,12 @@ import {
   FileCheck2,
   Info,
   Eye,
+  Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { cloudinaryAttachmentUrl } from '@/lib/cloudinary'
-import { useAuthStore, hasPermission, hasAnyRole } from '@/stores/auth-store'
+import { useAuthStore, hasPermission, hasAnyRole, isPlatformAdmin } from '@/stores/auth-store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -40,7 +41,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
-import type { PayrollInssRule, PayrollIrtTable, PayrollIrtBracket } from '@/types'
+import type { Paginated, PayrollInssRule, PayrollIrtTable, PayrollIrtBracket, Tenant } from '@/types'
 
 const statusColors: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground border-border',
@@ -59,11 +60,45 @@ export function PayrollTaxRulesPage({
   const { t, i18n } = useTranslation()
   const locale = i18n.language || 'pt-PT'
   const user = useAuthStore((s) => s.user)
-  const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
+  const isPlatformUser = isPlatformAdmin(user)
+  const canListTenants = hasPermission(user, 'view_any_tenant')
   const canConfigure = hasAnyRole(user, ['super-admin', 'admin', 'hr-manager']) || hasPermission(user, 'configure_payroll')
   const qc = useQueryClient()
 
   const effectiveTenantId = embeddedTenantId || localStorage.getItem('hrms_selected_tenant') || String(user?.tenant?.id || '')
+
+  const { data: tenantPage } = useQuery({
+    queryKey: ['superadmin', 'tenant-switcher'],
+    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
+    enabled: isPlatformUser && canListTenants,
+  })
+
+  const availableTenants = useMemo(
+    () =>
+      (isPlatformUser && canListTenants ? tenantPage?.data : undefined)
+      ?? user?.accessible_tenants
+      ?? (user?.tenant ? [user.tenant] : []),
+    [isPlatformUser, canListTenants, tenantPage?.data, user?.accessible_tenants, user?.tenant],
+  )
+  const canAssignMultipleCompanies = canConfigure && (isPlatformUser || availableTenants.length > 1)
+
+  const [createTargetTenantIds, setCreateTargetTenantIds] = useState<number[]>([])
+  const [createAutoActivate, setCreateAutoActivate] = useState(true)
+
+  const [assignTarget, setAssignTarget] = useState<{
+    type: 'inss' | 'irt'
+    id: number
+    label: string
+    isActive: boolean
+  } | null>(null)
+  const [assignTenantIds, setAssignTenantIds] = useState<number[]>([])
+  const [assignActivate, setAssignActivate] = useState(true)
+
+  const openAssignModal = (type: 'inss' | 'irt', id: number, label: string, isActive: boolean) => {
+    setAssignTarget({ type, id, label, isActive })
+    setAssignTenantIds(effectiveTenantId ? [Number(effectiveTenantId)] : [])
+    setAssignActivate(true)
+  }
 
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') || 'inss'
@@ -144,13 +179,18 @@ export function PayrollTaxRulesPage({
 
   // Mutations INSS
   const createInssMutation = useMutation({
-    mutationFn: (data: any) => api.post('payroll/inss-rules', {
+    mutationFn: (data: Record<string, unknown>) => api.post('payroll/inss-rules', {
       ...data,
       ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
     }),
     onSuccess: () => {
-      toast.success(t('payrollTaxRulesPage.inssCreated'))
+      toast.success(
+        createTargetTenantIds.length > 0
+          ? t('payrollTaxRulesPage.assignSuccess', { defaultValue: 'Configuração aplicada às empresas selecionadas com sucesso.' })
+          : t('payrollTaxRulesPage.inssCreated'),
+      )
       setIsInssCreateOpen(false)
+      setCreateTargetTenantIds([])
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
       qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
       qc.invalidateQueries({ queryKey: ['payroll-period'] })
@@ -182,18 +222,43 @@ export function PayrollTaxRulesPage({
 
   // Mutations IRT
   const createIrtMutation = useMutation({
-    mutationFn: (data: any) => api.post('payroll/irt-tables', {
+    mutationFn: (data: Record<string, unknown>) => api.post('payroll/irt-tables', {
       ...data,
       ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
     }),
     onSuccess: () => {
-      toast.success(t('payrollTaxRulesPage.irtCreated'))
+      toast.success(
+        createTargetTenantIds.length > 0
+          ? t('payrollTaxRulesPage.assignSuccess', { defaultValue: 'Configuração aplicada às empresas selecionadas com sucesso.' })
+          : t('payrollTaxRulesPage.irtCreated'),
+      )
       setIsIrtCreateOpen(false)
+      setCreateTargetTenantIds([])
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
       qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
       qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.irtCreateError'))),
+  })
+
+  const assignTenantsMutation = useMutation({
+    mutationFn: ({ type, id, tenantIds, activate }: { type: 'inss' | 'irt'; id: number; tenantIds: number[]; activate: boolean }) => {
+      const path = type === 'inss' ? 'payroll/inss-rules' : 'payroll/irt-tables'
+      return api.post(`${path}/${id}/assign-tenants`, {
+        tenant_ids: tenantIds,
+        activate,
+      })
+    },
+    onSuccess: () => {
+      toast.success(t('payrollTaxRulesPage.assignSuccess', { defaultValue: 'Configuração aplicada às empresas selecionadas com sucesso.' }))
+      setAssignTarget(null)
+      setAssignTenantIds([])
+      qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+      qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.assignError', { defaultValue: 'Não foi possível aplicar a configuração às empresas selecionadas.' }))),
   })
 
   const validateIrtMutation = useMutation({
@@ -535,6 +600,24 @@ export function PayrollTaxRulesPage({
                                   <Download className="h-4 w-4" />
                                 </Button>
                               ))}
+                              {canAssignMultipleCompanies && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs gap-1"
+                                  onClick={() =>
+                                    openAssignModal(
+                                      'inss',
+                                      rule.id,
+                                      `INSS v${rule.version} (${rule.employee_rate}% / ${rule.employer_rate}%) — ${formatDate(rule.effective_from)}`,
+                                      rule.status === 'active',
+                                    )
+                                  }
+                                >
+                                  <Building2 className="h-3.5 w-3.5 text-primary" />
+                                  {t('payrollTaxRulesPage.assignToCompanies', { defaultValue: 'Aplicar a empresas' })}
+                                </Button>
+                              )}
                               {rule.status === 'draft' && canConfigure && (
                                 <Button
                                   size="sm"
@@ -660,7 +743,25 @@ export function PayrollTaxRulesPage({
                               : `(${t('payrollTaxRulesPage.current')})`}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {canAssignMultipleCompanies && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs gap-1"
+                              onClick={() =>
+                                openAssignModal(
+                                  'irt',
+                                  table.id,
+                                  `${t('payrollTaxRulesPage.irtTableVersion', { version: table.version })} (${table.brackets?.length ?? 0} ${t('payrollTaxRulesPage.bracket').toLowerCase()}s) — ${formatDate(table.effective_from)}`,
+                                  table.status === 'active',
+                                )
+                              }
+                            >
+                              <Building2 className="h-3.5 w-3.5 text-primary" />
+                              {t('payrollTaxRulesPage.assignToCompanies', { defaultValue: 'Aplicar a empresas' })}
+                            </Button>
+                          )}
                           {table.status === 'draft' && canConfigure && (
                             <Button
                               size="sm"
@@ -769,7 +870,7 @@ export function PayrollTaxRulesPage({
 
       {/* Modal Criar Regra INSS */}
       <Dialog open={isInssCreateOpen} onOpenChange={setIsInssCreateOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('payrollTaxRulesPage.newInssRuleTitle')}</DialogTitle>
             <DialogDescription>
@@ -825,6 +926,17 @@ export function PayrollTaxRulesPage({
                 onChange={(e) => setInssForm({ ...inssForm, legal_reference: e.target.value })}
               />
             </div>
+
+            {canAssignMultipleCompanies && (
+              <MultiCompanySelectorSection
+                tenants={availableTenants}
+                currentTenantId={effectiveTenantId ? Number(effectiveTenantId) : null}
+                selectedIds={createTargetTenantIds}
+                onChangeSelectedIds={setCreateTargetTenantIds}
+                autoActivate={createAutoActivate}
+                onChangeAutoActivate={setCreateAutoActivate}
+              />
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsInssCreateOpen(false)}>
@@ -841,11 +953,19 @@ export function PayrollTaxRulesPage({
                   effective_from: inssForm.effective_from,
                   effective_to: inssForm.effective_to || undefined,
                   legal_reference: inssForm.legal_reference || undefined,
+                  ...(createTargetTenantIds.length > 0
+                    ? { tenant_ids: createTargetTenantIds, activate: createAutoActivate }
+                    : {}),
                 })
               }}
             >
               {createInssMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('payrollTaxRulesPage.createDraft')}
+              {createTargetTenantIds.length > 0
+                ? t('payrollTaxRulesPage.assignConfirmButton', {
+                    count: createTargetTenantIds.length,
+                    defaultValue: `Aplicar a ${createTargetTenantIds.length} empresa(s)`,
+                  })
+                : t('payrollTaxRulesPage.createDraft')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1055,6 +1175,17 @@ export function PayrollTaxRulesPage({
                   </p>
                 </div>
               </div>
+
+              {canAssignMultipleCompanies && (
+                <MultiCompanySelectorSection
+                  tenants={availableTenants}
+                  currentTenantId={effectiveTenantId ? Number(effectiveTenantId) : null}
+                  selectedIds={createTargetTenantIds}
+                  onChangeSelectedIds={setCreateTargetTenantIds}
+                  autoActivate={createAutoActivate}
+                  onChangeAutoActivate={setCreateAutoActivate}
+                />
+              )}
             </div>
           </div>
 
@@ -1072,11 +1203,76 @@ export function PayrollTaxRulesPage({
                   effective_to: irtForm.effective_to || undefined,
                   legal_reference: irtForm.legal_reference || undefined,
                   brackets: irtForm.brackets,
+                  ...(createTargetTenantIds.length > 0
+                    ? { tenant_ids: createTargetTenantIds, activate: createAutoActivate }
+                    : {}),
                 })
               }}
             >
               {createIrtMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('payrollTaxRulesPage.createIrtTable')}
+              {createTargetTenantIds.length > 0
+                ? t('payrollTaxRulesPage.assignConfirmButton', {
+                    count: createTargetTenantIds.length,
+                    defaultValue: `Aplicar a ${createTargetTenantIds.length} empresa(s)`,
+                  })
+                : t('payrollTaxRulesPage.createIrtTable')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Aplicar Regra INSS ou Tabela IRT a Várias Empresas */}
+      <Dialog open={!!assignTarget} onOpenChange={(open) => !open && setAssignTarget(null)}>
+        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              {assignTarget?.type === 'inss'
+                ? t('payrollTaxRulesPage.assignModalTitleInss', { defaultValue: 'Aplicar Regra de INSS a Várias Empresas' })
+                : t('payrollTaxRulesPage.assignModalTitleIrt', { defaultValue: 'Aplicar Tabela de IRT a Várias Empresas' })}
+            </DialogTitle>
+            <DialogDescription>
+              {t('payrollTaxRulesPage.assignModalDescription', {
+                defaultValue: 'Selecione as empresas que devem receber esta configuração fiscal.',
+              })}
+              {assignTarget?.label ? ` — ${assignTarget.label}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          <MultiCompanySelectorSection
+            tenants={availableTenants}
+            currentTenantId={effectiveTenantId ? Number(effectiveTenantId) : null}
+            selectedIds={assignTenantIds}
+            onChangeSelectedIds={setAssignTenantIds}
+            autoActivate={assignActivate}
+            onChangeAutoActivate={setAssignActivate}
+          />
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setAssignTarget(null)}>
+              {t('payrollTaxRulesPage.cancel')}
+            </Button>
+            <Button
+              disabled={assignTenantIds.length === 0 || assignTenantsMutation.isPending}
+              onClick={() => {
+                if (!assignTarget) return
+                if (assignTenantIds.length === 0) {
+                  toast.error(t('payrollTaxRulesPage.selectAtLeastOneCompany', { defaultValue: 'Selecione pelo menos uma empresa.' }))
+                  return
+                }
+                assignTenantsMutation.mutate({
+                  type: assignTarget.type,
+                  id: assignTarget.id,
+                  tenantIds: assignTenantIds,
+                  activate: assignActivate,
+                })
+              }}
+            >
+              {assignTenantsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('payrollTaxRulesPage.assignConfirmButton', {
+                count: assignTenantIds.length,
+                defaultValue: `Aplicar a ${assignTenantIds.length} empresa(s)`,
+              })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1114,6 +1310,126 @@ export function PayrollTaxRulesPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function MultiCompanySelectorSection({
+  tenants,
+  currentTenantId,
+  selectedIds,
+  onChangeSelectedIds,
+  autoActivate,
+  onChangeAutoActivate,
+}: {
+  tenants: Array<{ id: number; name: string; tax_id?: string | null }>
+  currentTenantId: number | null
+  selectedIds: number[]
+  onChangeSelectedIds: (ids: number[]) => void
+  autoActivate: boolean
+  onChangeAutoActivate: (val: boolean) => void
+}) {
+  const { t } = useTranslation()
+  const [search, setSearch] = useState('')
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase()
+    if (!q) return tenants
+    return tenants.filter((tnt) => `${tnt.name} ${tnt.tax_id ?? ''}`.toLocaleLowerCase().includes(q))
+  }, [tenants, search])
+
+  const toggleCompany = (id: number) => {
+    if (selectedIds.includes(id)) {
+      onChangeSelectedIds(selectedIds.filter((item) => item !== id))
+    } else {
+      onChangeSelectedIds([...selectedIds, id])
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label className="text-xs font-semibold flex items-center gap-1.5">
+          <Building2 className="h-3.5 w-3.5 text-primary" />
+          {t('payrollTaxRulesPage.selectCompaniesLabel', { defaultValue: 'Aplicar às empresas selecionadas' })}
+        </Label>
+        <Badge variant="secondary" className="text-[11px]">
+          {selectedIds.length} / {tenants.length}
+        </Badge>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[180px] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('superAdminPage.searchCompanies', { defaultValue: 'Pesquisar empresas por nome ou NIF...' })}
+            className="h-8 pl-8 text-xs bg-background"
+          />
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 text-xs"
+          onClick={() => onChangeSelectedIds(filtered.map((item) => item.id))}
+        >
+          {t('superAdminPage.selectAllCompanies', { defaultValue: 'Selecionar todas' })}
+        </Button>
+        {currentTenantId != null && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 text-xs"
+            onClick={() => onChangeSelectedIds([])}
+          >
+            {t('payrollTaxRulesPage.onlyCurrentCompany', { defaultValue: 'Apenas empresa atual' })}
+          </Button>
+        )}
+      </div>
+
+      <div className="grid max-h-48 gap-2 overflow-y-auto rounded border border-border/60 bg-background p-2 sm:grid-cols-2">
+        {filtered.map((tnt) => {
+          const checked = selectedIds.includes(tnt.id)
+          return (
+            <label
+              key={tnt.id}
+              className={`flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-2 transition-colors ${
+                checked ? 'border-primary/50 bg-primary/10' : 'border-border/60 hover:bg-muted/40'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                checked={checked}
+                onChange={() => toggleCompany(tnt.id)}
+              />
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="truncate text-xs font-medium leading-tight">{tnt.name}</p>
+                <p className="truncate font-mono text-[11px] leading-tight text-muted-foreground">
+                  NIF: {tnt.tax_id?.trim() || '—'}
+                </p>
+              </div>
+            </label>
+          )
+        })}
+      </div>
+
+      <label className="flex cursor-pointer items-center gap-2 pt-1 text-xs font-medium">
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-primary"
+          checked={autoActivate}
+          onChange={(e) => onChangeAutoActivate(e.target.checked)}
+        />
+        <span>
+          {t('payrollTaxRulesPage.autoActivateInCompanies', {
+            defaultValue: 'Validar e ativar imediatamente nas empresas selecionadas',
+          })}
+        </span>
+      </label>
     </div>
   )
 }

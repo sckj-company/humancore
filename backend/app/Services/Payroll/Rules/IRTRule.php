@@ -71,7 +71,7 @@ class IRTRule extends AbstractPayrollRule
 
     protected function taxableBase(PayrollContext $context): float
     {
-        $gross = $context->irtBase > 0 ? $context->irtBase : (float) $context->contract->base_salary;
+        $gross = $context->irtBase > 0 ? $context->irtBase : $context->effectiveBaseSalary();
 
         return max(0, $gross - $context->inssAmount);
     }

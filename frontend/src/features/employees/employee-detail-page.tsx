@@ -6,7 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Briefcase, Trash2, Eye,
   Download, Plus, Upload, ExternalLink, FileCheck, AlertCircle, Building2, User,
   CreditCard, Clock, CheckCircle2, DollarSign, Loader2, Sun, Moon, UserCheck,
-  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil, UploadCloud, X, FileWarning, FileDown, ZoomIn, ZoomOut,
+  Activity, RotateCcw, ChevronRight, Save, BedDouble, PowerOff, Pencil, UploadCloud, X, FileWarning, FileDown, ZoomIn, ZoomOut, Package, Scale,
 } from 'lucide-react'
 import { api, getApiErrorMessage } from '@/lib/api'
 import { compressImageIfNeeded } from '@/lib/file-upload'
@@ -27,12 +27,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LoadingState, ErrorState } from '@/components/shared/page-header'
 import { useAuthStore, hasAnyRole, hasFieldPermission, hasPermission } from '@/stores/auth-store'
 import { toast } from 'sonner'
-import type { Department, Employee, EmployeeContract, EmployeeDocument, AttendanceRecord, LeaveRequest, Paginated, Position } from '@/types'
+import type { Department, DocxPreviewResponse, Employee, EmployeeAssetsResponse, EmployeeContract, EmployeeDocument, AttendanceRecord, LeaveRequest, Paginated, Position } from '@/types'
 import { LeaveDocumentActions } from '@/features/leave/leave-document-actions'
 import { LeaveTypeCreateDialog } from '@/features/leave/leave-type-create-dialog'
 import { EmployeeEditDialog } from '@/features/employees/employee-edit-dialog'
 import { EmployeePayrollTab } from '@/features/employees/employee-payroll-tab'
 import { EmployeeEducationTab } from '@/features/employees/components/employee-education-tab'
+import { EmployeeAssetsTab } from '@/features/employees/components/employee-assets-tab'
+import { ContractTerminationDialog } from '@/features/employees/components/contract-termination-dialog'
 
 const statusColors: Record<string, string> = { active: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', inactive: 'bg-muted text-muted-foreground border-border', on_leave: 'bg-blue-500/10 text-blue-600 border-blue-500/20', probation: 'bg-amber-500/10 text-amber-600 border-amber-500/20', suspended: 'bg-rose-500/10 text-rose-600 border-rose-500/20', terminated: 'bg-red-500/10 text-red-600 border-red-500/20' }
 const attendanceStatusColors: Record<string, string> = { present: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', late: 'bg-amber-500/10 text-amber-600 border-amber-500/20', absent: 'bg-red-500/10 text-red-600 border-red-500/20', half_day: 'bg-blue-500/10 text-blue-600 border-blue-500/20', excused: 'bg-gray-500/10 text-gray-600 border-gray-500/20', justified: 'bg-gray-500/10 text-gray-600 border-gray-500/20', vacation: 'bg-sky-500/10 text-sky-600 border-sky-500/20', sick: 'bg-rose-500/10 text-rose-600 border-rose-500/20' }
@@ -177,6 +179,7 @@ export function EmployeeDetailPage() {
     notes: '',
   })
   const [isDeactivateContractOpen, setIsDeactivateContractOpen] = useState(false)
+  const [isTerminateContractOpen, setIsTerminateContractOpen] = useState(false)
   const [deactivateContractForm, setDeactivateContractForm] = useState({ reason: '', end_date: new Date().toISOString().slice(0, 10) })
   const [isContractDialogOpen, setIsContractDialogOpen] = useState(false)
   const [editingContract, setEditingContract] = useState<EmployeeContract | null>(null)
@@ -194,15 +197,51 @@ export function EmployeeDetailPage() {
     signed_at: '',
     notes: '',
   })
+  const [historyCategory, setHistoryCategory] = useState('all')
+  const [historySearch, setHistorySearch] = useState('')
   const todayStr = new Date().toISOString().slice(0, 10)
 
   const { data, isLoading, isError, refetch } = useQuery<Employee>({ queryKey: ['employees', id], queryFn: () => api.get<Employee>(`employees/${id}`) })
-  const { data: timeline } = useQuery({ queryKey: ['employees', id, 'timeline'], queryFn: () => api.get<{ type: string; title: string; date: string; description: string }[]>(`employees/${id}/timeline`) })
+  const { data: timeline, isLoading: isLoadingTimeline } = useQuery({
+    queryKey: ['employees', id, 'timeline'],
+    queryFn: () =>
+      api.get<Array<{
+        id?: string
+        source?: string
+        category?: string
+        category_label?: string
+        event?: string
+        event_label?: string
+        title: string
+        date: string
+        occurred_at?: string
+        description: string
+        actor?: { id: number; name: string } | null
+        changes?: Array<{ field: string; label: string; old: string | null; new: string | null }>
+      }>>(`employees/${id}/timeline`),
+    enabled: !!id,
+  })
   const { data: contracts = [] } = useQuery<EmployeeContract[]>({ queryKey: ['employee-contracts', id], queryFn: () => api.get<EmployeeContract[]>(`employees/${id}/contracts`), enabled: !!id && activeTab === 'contract' })
   const { data: contractPositions } = useQuery<Paginated<Position>>({ queryKey: ['contract-positions'], queryFn: () => api.get<Paginated<Position>>('positions', { per_page: 100 }), enabled: isContractDialogOpen })
   const { data: contractDepartments } = useQuery<Paginated<Department>>({ queryKey: ['contract-departments'], queryFn: () => api.get<Paginated<Department>>('departments', { per_page: 100 }), enabled: isContractDialogOpen })
   const { data: contractManagers } = useQuery<Paginated<{ id: number; full_name: string; employee_code: string }>>({ queryKey: ['contract-managers'], queryFn: () => api.get<Paginated<{ id: number; full_name: string; employee_code: string }>>('employees', { per_page: 200 }), enabled: isContractDialogOpen })
   const { data: documents } = useQuery<EmployeeDocument[]>({ queryKey: ['employee-documents', id], queryFn: () => api.get<{ data: EmployeeDocument[] }>('documents', { employee_id: id, per_page: 100 }).then((res) => (Array.isArray(res) ? res : (res as any).data ?? [])), enabled: !!id })
+  const { data: assetsOverview } = useQuery<EmployeeAssetsResponse>({ queryKey: ['employee-assets', Number(id)], queryFn: () => api.get<EmployeeAssetsResponse>(`employees/${id}/assets`), enabled: !!id })
+  const isDocxDoc = (doc?: EmployeeDocument | null) => {
+    if (!doc) return false
+    const mime = (doc.mime_type ?? '').toLowerCase()
+    const fileName = `${doc.original_name ?? ''} ${doc.name ?? ''} ${doc.file_path ?? ''}`.toLowerCase()
+    return mime.includes('officedocument.wordprocessingml.document') || /\.docx(\b|$|\?)/i.test(fileName)
+  }
+  const {
+    data: docxPreview,
+    isLoading: isLoadingDocxPreview,
+    isError: isDocxPreviewError,
+  } = useQuery<DocxPreviewResponse>({
+    queryKey: ['document-docx-preview', previewDoc?.id],
+    queryFn: () => api.get<DocxPreviewResponse>(`documents/${previewDoc!.id}/preview`),
+    enabled: !!previewDoc && isDocxDoc(previewDoc),
+  })
   const { data: attendanceData, refetch: refetchAttendance } = useQuery<Paginated<AttendanceRecord>>({ queryKey: ['attendance', id], queryFn: () => api.get<Paginated<AttendanceRecord>>('attendance', { employee_id: id, per_page: 50 }), enabled: !!id && activeTab === 'attendance' })
   const { data: todayAttendance, refetch: refetchToday } = useQuery<AttendanceRecord | null>({ queryKey: ['attendance-today', id, attendanceShiftId], queryFn: () => api.get<AttendanceRecord | null>('attendance/today', { employee_id: id, ...(attendanceShiftId ? { shift_id: Number(attendanceShiftId) } : {}) }), enabled: !!id })
   const { data: leaveBalance, refetch: refetchBalance } = useQuery({ queryKey: ['leave-balance', id], queryFn: () => api.get<{ annual_entitlement: number; days_used: number; days_remaining: number; days_pending: number }>('leaves/balance', { employee_id: id }), enabled: !!id && activeTab === 'leaves' })
@@ -877,6 +916,15 @@ export function EmployeeDetailPage() {
           <TabsTrigger value="leaves" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><BedDouble className="h-3.5 w-3.5" />{t('employeeDetail.text.leavesTab')}</TabsTrigger>
           <TabsTrigger value="shift" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><RotateCcw className="h-3.5 w-3.5" />{t('employeeDetail.text.shiftTab')}</TabsTrigger>
           <TabsTrigger value="education" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><FileWarning className="h-3.5 w-3.5" />{t('employeeDetail.text.educationTab', { defaultValue: 'Educação' })}</TabsTrigger>
+          <TabsTrigger value="assets" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs">
+            <Package className="h-3.5 w-3.5" />
+            {t('employeeDetail.text.assetsTab', { defaultValue: 'Activos' })}
+            {(assetsOverview?.summary?.assigned_count ?? 0) > 0 && (
+              <Badge variant="secondary" className="ml-0.5 text-[10px] h-4 px-1 font-semibold">
+                {assetsOverview!.summary.assigned_count}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="history" className="h-auto min-h-8 whitespace-normal text-center gap-1.5 px-3 py-1.5 text-xs"><Calendar className="h-3.5 w-3.5" />{t('employeeDetail.text.historyTab')}</TabsTrigger>
         </TabsList>
 
@@ -944,17 +992,28 @@ export function EmployeeDetailPage() {
                     </Button>
                   )}
                   {data.active_contract?.is_active && !contractExpired && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-destructive hover:bg-destructive/10 border-destructive/30 text-xs h-8 gap-1.5"
-                      onClick={() => {
-                        setDeactivateContractForm({ reason: '', end_date: todayStr })
-                        setIsDeactivateContractOpen(true)
-                      }}
-                    >
-                      <PowerOff className="h-3.5 w-3.5" />{t('employeeDetail.text.deactivateContract')}
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="text-xs h-8 gap-1.5"
+                        onClick={() => setIsTerminateContractOpen(true)}
+                      >
+                        <Scale className="h-3.5 w-3.5" />
+                        {t('employeeDetail.text.terminateContract', { defaultValue: 'Rescindir Contrato' })}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive hover:bg-destructive/10 border-destructive/30 text-xs h-8 gap-1.5"
+                        onClick={() => {
+                          setDeactivateContractForm({ reason: '', end_date: todayStr })
+                          setIsDeactivateContractOpen(true)
+                        }}
+                      >
+                        <PowerOff className="h-3.5 w-3.5" />{t('employeeDetail.text.deactivateContract')}
+                      </Button>
+                    </>
                   )}
                 </div>
               </CardHeader>
@@ -1046,11 +1105,32 @@ export function EmployeeDetailPage() {
                           {' · '}{contract.is_active ? t('common.active') : t('common.inactive')}
                         </p>
                       </div>
-                      {canUpdateContracts && (
-                        <Button size="sm" variant="outline" onClick={() => openContractDialog(contract)}>
-                          <Pencil className="mr-1.5 h-3.5 w-3.5" />{t('common.edit')}
-                        </Button>
-                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {contract.termination_type && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                await api.downloadFile(
+                                  `contracts/${contract.id}/termination.pdf`,
+                                  `termo-rescisao-${data.employee_code}.pdf`,
+                                )
+                              } catch (err) {
+                                toast.error(getApiErrorMessage(err, 'Erro ao descarregar Termo de Rescisão PDF.'))
+                              }
+                            }}
+                          >
+                            <FileDown className="mr-1.5 h-3.5 w-3.5" />
+                            Termo de Rescisão (PDF)
+                          </Button>
+                        )}
+                        {canUpdateContracts && (
+                          <Button size="sm" variant="outline" onClick={() => openContractDialog(contract)}>
+                            <Pencil className="mr-1.5 h-3.5 w-3.5" />{t('common.edit')}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1094,17 +1174,20 @@ export function EmployeeDetailPage() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {documents.map((doc) => {
-                    const isImg = isImage(doc.mime_type), isPd = isPdf(doc.mime_type), isDl = downloadingId === doc.id
+                    const isImg = isImage(doc.mime_type), isPd = isPdf(doc.mime_type), isDx = isDocxDoc(doc), canPreview = isImg || isPd || isDx, isDl = downloadingId === doc.id
                     return (
                       <div key={doc.id} className="group flex flex-col justify-between rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-sm transition-all">
                         <div>
                           <div className="flex items-start gap-3">
                             <div className="shrink-0">
                               {isImg && doc.file_url ? (<img src={doc.file_url} alt={doc.name} className="h-12 w-12 rounded-lg object-cover border border-border cursor-pointer" onClick={() => setPreviewDoc(doc)} />)
-                                : (<div className={`flex h-12 w-12 items-center justify-center rounded-lg cursor-pointer ${isPd ? 'bg-red-500/10 text-red-500' : 'bg-primary/10 text-primary'}`} onClick={() => (isImg || isPd) && setPreviewDoc(doc)}>{isPd ? <FileText className="h-6 w-6" /> : <FileCheck className="h-6 w-6" />}</div>)}
+                                : (<div className={`flex h-12 w-12 items-center justify-center rounded-lg cursor-pointer ${isPd ? 'bg-red-500/10 text-red-500' : isDx ? 'bg-blue-500/10 text-blue-600' : 'bg-primary/10 text-primary'}`} onClick={() => canPreview && setPreviewDoc(doc)}>{isPd || isDx ? <FileText className="h-6 w-6" /> : <FileCheck className="h-6 w-6" />}</div>)}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary" title={doc.name} onClick={() => (isImg || isPd) && setPreviewDoc(doc)}>{doc.name}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary" title={doc.name} onClick={() => canPreview && setPreviewDoc(doc)}>{doc.name}</p>
+                                {isDx && <Badge variant="outline" className="text-[10px] h-4 px-1.5 bg-blue-500/10 text-blue-600 border-blue-500/30 shrink-0">.DOCX</Badge>}
+                              </div>
                               <p className="text-xs text-muted-foreground truncate mt-0.5">{t(`settingsPage.documentTypes.${doc.document_type}`, { defaultValue: docTypeLabels[doc.document_type] ?? doc.document_type })}</p>
                               <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
                                 {doc.size_label && <span>{doc.size_label}</span>}
@@ -1136,7 +1219,7 @@ export function EmployeeDetailPage() {
                         </div>
                         <div className="mt-4 pt-3 border-t border-border/60 flex flex-wrap items-center justify-between gap-1.5">
                           <div className="flex items-center gap-1">
-                            {(isImg || isPd) ? (<Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setPreviewDoc(doc)}><Eye className="mr-1 h-3.5 w-3.5" />{t('employeeDetail.text.view')}</Button>) : (<span className="text-xs text-muted-foreground px-1">{t('employeeDetail.text.file')}</span>)}
+                            {canPreview ? (<Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setPreviewDoc(doc)}><Eye className="mr-1 h-3.5 w-3.5" />{t('employeeDetail.text.view')}</Button>) : (<span className="text-xs text-muted-foreground px-1">{t('employeeDetail.text.file')}</span>)}
                             {canVerifyDocuments && (
                               <Button
                                 size="sm"
@@ -1404,16 +1487,167 @@ export function EmployeeDetailPage() {
           />
         </TabsContent>
 
+        {/* Tab: Activos */}
+        <TabsContent value="assets" className="mt-6 space-y-4">
+          <EmployeeAssetsTab
+            employeeId={Number(id)}
+            employeeName={data.full_name}
+            canManage={hasPermission(user, 'update_employee')}
+            currency={currency}
+            locale={locale}
+          />
+        </TabsContent>
+
         {/* Tab: Histórico */}
         <TabsContent value="history" className="mt-6 space-y-4">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Calendar className="h-4 w-4 text-primary" />{t('employeeDetail.text.timeline')}</CardTitle><CardDescription>{t('employeeDetail.text.timelineDescription')}</CardDescription></CardHeader>
-            <CardContent>
-              {timeline && timeline.length > 0 ? (
-                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
-                  {timeline.map((entry, idx) => (<div key={idx} className="relative"><div className="absolute -left-[19px] top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-primary ring-2 ring-primary/20" /><div><p className="text-sm font-semibold text-foreground">{entry.title}</p><p className="text-xs text-muted-foreground mt-0.5">{entry.description}</p><span className="inline-block mt-1 text-[11px] font-mono text-muted-foreground/80">{formatDate(entry.date)}</span></div></div>))}
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-primary" />
+                    {t('employeeDetail.text.timeline')}
+                    {(timeline ?? []).length > 0 && (
+                      <Badge variant="secondary" className="ml-1 text-xs">
+                        {timeline!.length} registos
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    Registo completo e auditável de todas as alterações e ações realizadas sobre este funcionário em todo o sistema.
+                  </CardDescription>
                 </div>
-              ) : (<div className="py-8 text-center text-sm text-muted-foreground">{t('employeeDetail.text.noTimeline')}</div>)}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Input
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  placeholder="Pesquisar no histórico (campo, motivo, utilizador, documento, activo...)"
+                  className="h-9 min-w-[220px] flex-1"
+                />
+                <Select value={historyCategory} onValueChange={setHistoryCategory}>
+                  <SelectTrigger className="h-9 w-full sm:w-56">
+                    <SelectValue placeholder="Filtrar por área" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as áreas do sistema</SelectItem>
+                    <SelectItem value="profile">Ficha / Perfil</SelectItem>
+                    <SelectItem value="contract">Contratos & Rescisões</SelectItem>
+                    <SelectItem value="payroll">Folha & Remuneração</SelectItem>
+                    <SelectItem value="deduction">Adiantamentos & Descontos</SelectItem>
+                    <SelectItem value="asset">Activos & Equipamentos</SelectItem>
+                    <SelectItem value="document">Documentos</SelectItem>
+                    <SelectItem value="attendance">Presenças & Atrasos</SelectItem>
+                    <SelectItem value="leave">Ausências & Férias</SelectItem>
+                    <SelectItem value="schedule">Turnos & Horários</SelectItem>
+                    <SelectItem value="education">Educação & Advertências</SelectItem>
+                    <SelectItem value="benefit">Benefícios</SelectItem>
+                    <SelectItem value="performance">Desempenho</SelectItem>
+                    <SelectItem value="training">Formações</SelectItem>
+                    <SelectItem value="onboarding">Onboarding</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingTimeline ? (
+                <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  A carregar histórico completo...
+                </div>
+              ) : (() => {
+                const q = historySearch.trim().toLowerCase()
+                const filteredTimeline = (timeline ?? []).filter((entry) => {
+                  if (historyCategory !== 'all' && entry.category !== historyCategory) return false
+                  if (q) {
+                    const hay = `${entry.title} ${entry.description} ${entry.category_label ?? ''} ${entry.actor?.name ?? ''} ${(entry.changes ?? []).map((c) => `${c.label} ${c.old ?? ''} ${c.new ?? ''}`).join(' ')}`.toLowerCase()
+                    if (!hay.includes(q)) return false
+                  }
+                  return true
+                })
+
+                if (filteredTimeline.length === 0) {
+                  return (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      {t('employeeDetail.text.noTimeline')}
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
+                    {filteredTimeline.map((entry, idx) => (
+                      <div key={entry.id ?? idx} className="relative rounded-lg border border-border/70 bg-muted/15 p-3.5">
+                        <div className="absolute -left-[22px] top-4 h-3 w-3 rounded-full border-2 border-background bg-primary ring-2 ring-primary/20" />
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {entry.category_label && (
+                              <Badge variant="outline" className="text-[10px] h-5 px-2 bg-background">
+                                {entry.category_label}
+                              </Badge>
+                            )}
+                            {entry.event_label && (
+                              <Badge
+                                variant="secondary"
+                                className={`text-[10px] h-5 px-2 ${
+                                  entry.event === 'deleted'
+                                    ? 'bg-destructive/15 text-destructive'
+                                    : entry.event === 'created'
+                                      ? 'bg-emerald-500/15 text-emerald-700'
+                                      : 'bg-blue-500/15 text-blue-700'
+                                }`}
+                              >
+                                {entry.event_label}
+                              </Badge>
+                            )}
+                            <p className="text-sm font-semibold text-foreground">{entry.title}</p>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+                            {entry.actor?.name && (
+                              <span className="font-sans bg-muted px-2 py-0.5 rounded">
+                                Por: <strong className="text-foreground">{entry.actor.name}</strong>
+                              </span>
+                            )}
+                            <span>
+                              {entry.occurred_at
+                                ? new Intl.DateTimeFormat(locale, {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  }).format(new Date(entry.occurred_at))
+                                : formatDate(entry.date)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground mt-1.5">{entry.description}</p>
+
+                        {entry.changes && entry.changes.length > 0 && (
+                          <div className="mt-2.5 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 border-t border-border/60 pt-2">
+                            {entry.changes.map((chg, cIdx) => (
+                              <div key={cIdx} className="rounded bg-background/80 px-2.5 py-1.5 text-[11px] border border-border/50">
+                                <span className="font-semibold text-foreground block truncate">{chg.label}</span>
+                                <span className="text-muted-foreground font-mono break-all">
+                                  {chg.old !== null && chg.old !== '' ? (
+                                    <>
+                                      <span className="line-through text-destructive/80 mr-1">{chg.old}</span>
+                                      → <span className="text-emerald-700 font-semibold">{chg.new ?? '—'}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-emerald-700 font-semibold">{chg.new ?? '—'}</span>
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1664,7 +1898,7 @@ export function EmployeeDetailPage() {
                 {docTypeLabels[previewDoc?.document_type ?? ''] ?? previewDoc?.document_type}{previewDoc?.size_label && ` · ${previewDoc.size_label}`}
               </DialogDescription>
             </div>
-            {previewDoc && (isImage(previewDoc.mime_type) || isPdf(previewDoc.mime_type)) && previewDoc.file_url && (
+            {previewDoc && (isImage(previewDoc.mime_type) || isPdf(previewDoc.mime_type) || isDocxDoc(previewDoc)) && (
               <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
                 <Button
                   type="button"
@@ -1723,7 +1957,29 @@ export function EmployeeDetailPage() {
                 className="m-auto w-full h-full min-h-[300px] rounded-md border border-border/60 bg-white"
               />
             )}
-            {previewDoc && !isImage(previewDoc.mime_type) && !isPdf(previewDoc.mime_type) && (<div className="m-auto text-center p-8"><FileCheck className="h-12 w-12 text-primary mx-auto mb-2" /><p className="text-sm font-semibold">{t('employeeDetail.text.previewUnavailable')}</p><p className="text-xs text-muted-foreground mt-1">{t('employeeDetail.text.downloadToView')}</p></div>)}
+            {previewDoc && isDocxDoc(previewDoc) && (
+              <div className="w-full flex justify-center">
+                {isLoadingDocxPreview ? (
+                  <div className="m-auto flex flex-col items-center gap-2 p-8 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm font-medium">A renderizar documento .docx…</p>
+                  </div>
+                ) : isDocxPreviewError || !docxPreview ? (
+                  <div className="m-auto text-center p-8">
+                    <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-2" />
+                    <p className="text-sm font-semibold">Não foi possível pré-visualizar este documento .docx</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('employeeDetail.text.downloadToView')}</p>
+                  </div>
+                ) : (
+                  <div
+                    style={{ zoom: previewZoom }}
+                    className="w-full max-w-3xl rounded-xl border border-border bg-white text-slate-900 shadow-lg p-8 sm:p-10 overflow-x-auto [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-4 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:mb-2.5 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-3 [&_li]:text-sm [&_li]:mb-1 [&_table]:w-full [&_table]:border-collapse [&_table]:my-4 [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-100 [&_th]:p-2 [&_th]:text-xs [&_th]:font-semibold [&_td]:border [&_td]:border-slate-300 [&_td]:p-2 [&_td]:text-xs [&_img]:max-w-full [&_img]:h-auto [&_img]:my-3 [&_img]:rounded"
+                    dangerouslySetInnerHTML={{ __html: docxPreview.html }}
+                  />
+                )}
+              </div>
+            )}
+            {previewDoc && !isImage(previewDoc.mime_type) && !isPdf(previewDoc.mime_type) && !isDocxDoc(previewDoc) && (<div className="m-auto text-center p-8"><FileCheck className="h-12 w-12 text-primary mx-auto mb-2" /><p className="text-sm font-semibold">{t('employeeDetail.text.previewUnavailable')}</p><p className="text-xs text-muted-foreground mt-1">{t('employeeDetail.text.downloadToView')}</p></div>)}
           </div>
           <div className="shrink-0 px-6 py-3.5 border-t border-border bg-card/80 flex flex-col sm:flex-row items-center justify-between gap-2.5">
             <Button variant="destructive" size="sm" disabled={deleteDoc.isPending} onClick={() => { if (previewDoc && window.confirm(t('employeeDetail.messages.confirmDeleteDocument', { name: previewDoc.name }))) deleteDoc.mutate(previewDoc.id) }}><Trash2 className="mr-1.5 h-3.5 w-3.5" />{t('employeeDetail.text.delete')}</Button>
@@ -2167,6 +2423,16 @@ export function EmployeeDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ContractTerminationDialog
+        contract={data.active_contract ?? contracts[0] ?? null}
+        employeeId={Number(id)}
+        employeeName={data.full_name}
+        currency={currency}
+        locale={locale}
+        open={isTerminateContractOpen}
+        onOpenChange={setIsTerminateContractOpen}
+      />
 
       <PdfLanguageDialog
         open={leavePdfPrompt.open}

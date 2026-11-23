@@ -8,6 +8,7 @@ use App\Http\Resources\V1\EmployeeDocumentResource;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Services\CloudinaryService;
+use App\Services\Document\DocxPreviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -164,6 +165,76 @@ class EmployeeDocumentController extends BaseController
         }
 
         return $this->error('Ficheiro não encontrado.', 404);
+    }
+
+    public function preview(EmployeeDocument $document, DocxPreviewService $docxPreview): JsonResponse
+    {
+        $this->authorize('view', $document);
+
+        $fileName = strtolower((string) ($document->original_name ?: $document->name ?: $document->file_path));
+        $mimeType = strtolower((string) $document->mime_type);
+        $isDocx = str_ends_with($fileName, '.docx')
+            || str_contains($mimeType, 'officedocument.wordprocessingml.document')
+            || str_ends_with(strtolower((string) $document->file_path), '.docx');
+
+        if (! $isDocx) {
+            return $this->error('A pré-visualização estruturada de texto é exclusiva para documentos .docx.', 422);
+        }
+
+        $binary = $this->resolveDocumentBinary($document);
+        if ($binary === null) {
+            return $this->error('Não foi possível carregar o ficheiro .docx para pré-visualização.', 404);
+        }
+
+        try {
+            $parsed = $docxPreview->convertBinaryToHtml($binary);
+        } catch (\Throwable $e) {
+            return $this->error('Não foi possível processar o documento .docx: '.$e->getMessage(), 422);
+        }
+
+        return $this->success([
+            'id' => $document->id,
+            'name' => $document->name,
+            'original_name' => $document->original_name,
+            'mime_type' => $document->mime_type,
+            'format' => 'docx',
+            ...$parsed,
+        ]);
+    }
+
+    protected function resolveDocumentBinary(EmployeeDocument $document): ?string
+    {
+        $path = (string) ($document->file_path ?? '');
+        if ($path === '') {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            try {
+                $contents = @file_get_contents($path);
+
+                return $contents !== false ? $contents : null;
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        $publicFile = public_path(ltrim($path, '/'));
+        if (file_exists($publicFile)) {
+            $contents = @file_get_contents($publicFile);
+
+            return $contents !== false ? $contents : null;
+        }
+
+        if (Storage::disk('local')->exists($path)) {
+            return Storage::disk('local')->get($path);
+        }
+
+        if (Storage::disk('public')->exists($path)) {
+            return Storage::disk('public')->get($path);
+        }
+
+        return null;
     }
 
     public function destroy(EmployeeDocument $document, CloudinaryService $cloudinary): JsonResponse

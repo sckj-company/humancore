@@ -87,4 +87,14 @@ class PayrollContext
     {
         return $this->settings[$key] ?? $default;
     }
+
+    public function effectiveBaseSalary(): float
+    {
+        $manualComponents = $this->manualAdjustments['components'] ?? [];
+        if (array_key_exists('base_salary', $manualComponents) && $manualComponents['base_salary'] !== null) {
+            return round(max(0, (float) $manualComponents['base_salary']), 2);
+        }
+
+        return round(max(0, (float) ($this->contract?->base_salary ?? 0)), 2);
+    }
 }

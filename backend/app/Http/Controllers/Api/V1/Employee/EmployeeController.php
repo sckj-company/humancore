@@ -12,8 +12,8 @@ use App\Http\Resources\V1\EmployeeResource;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
 use App\Models\EmployeeDocument;
-use App\Models\EmployeeLatenessEvent;
 use App\Services\CloudinaryService;
+use App\Services\Employee\EmployeeHistoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -366,50 +366,14 @@ class EmployeeController extends BaseController
         return $this->success(new ContractResource($contract->load('position', 'department')), 'Contrato criado com sucesso.', 201);
     }
 
-    public function timeline(Employee $employee): JsonResponse
+    public function timeline(Request $request, Employee $employee, EmployeeHistoryService $historyService): JsonResponse
     {
         $this->authorize('view', $employee);
 
-        $timeline = collect()
-            ->merge($employee->contracts()->get()->map(fn ($contract) => [
-                'type' => 'contract',
-                'title' => 'Contrato '.$contract->contract_type,
-                'date' => $contract->start_date?->format('Y-m-d'),
-                'description' => 'Salário base: '.number_format((float) $contract->base_salary, 2),
-            ]))
-            ->merge(EmployeeLatenessEvent::query()
-                ->where('employee_id', $employee->id)
-                ->get()
-                ->map(fn (EmployeeLatenessEvent $event) => [
-                    'type' => 'lateness_'.$event->event_type,
-                    'title' => match ($event->event_type) {
-                        'discount' => 'Desconto por atraso',
-                        'week_carry' => 'Transição do saldo de atraso',
-                        'month_reset' => 'Reinício mensal do saldo de atraso',
-                        default => 'Evento de atraso',
-                    },
-                    'date' => $event->occurred_on?->format('Y-m-d'),
-                    'description' => match ($event->event_type) {
-                        'discount' => sprintf(
-                            '%d minuto(s) de atraso acumulados; desconto aplicado: %s.',
-                            $event->minutes,
-                            number_format((float) $event->amount, 2),
-                        ),
-                        'week_carry' => sprintf(
-                            '%d minuto(s) restantes transitaram da semana de %s para a semana de %s.',
-                            $event->minutes,
-                            $event->details['from_week'] ?? '',
-                            $event->details['to_week'] ?? '',
-                        ),
-                        'month_reset' => sprintf(
-                            '%d minuto(s) restantes foram reiniciados no início do mês; não transitam para outro mês.',
-                            $event->minutes,
-                        ),
-                        default => sprintf('%d minuto(s) registados.', $event->minutes),
-                    },
-                ]))
-            ->sortByDesc('date')
-            ->values();
+        $timeline = $historyService->forEmployee($employee, [
+            'category' => $request->input('category'),
+            'search' => $request->input('search'),
+        ]);
 
         return $this->success($timeline);
     }

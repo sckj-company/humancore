@@ -2868,6 +2868,17 @@
     "toggleMandatoryAria": "Toggle required document"
   },
   "payrollTaxRulesPage": {
+    "assignToCompanies": "Apply to companies",
+    "assignModalTitleInss": "Apply INSS Rule to Multiple Companies",
+    "assignModalTitleIrt": "Apply IRT Table to Multiple Companies",
+    "assignModalDescription": "Select the companies that should receive this tax configuration.",
+    "selectCompaniesLabel": "Apply to selected companies",
+    "onlyCurrentCompany": "Current company only",
+    "autoActivateInCompanies": "Validate and activate immediately in selected companies",
+    "assignConfirmButton": "Apply to {{count}} company(ies)",
+    "assignSuccess": "Configuration applied to selected companies successfully.",
+    "assignError": "Could not apply configuration to selected companies.",
+    "selectAtLeastOneCompany": "Select at least one company.",
     "inssCreated": "INSS rule created as a draft.",
     "inssCreateError": "Error creating INSS rule.",
     "inssValidated": "INSS rule validated successfully.",

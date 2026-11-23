@@ -45,6 +45,18 @@ class EmployeeContract extends Model
         'signed_at',
         'document_path',
         'notes',
+        'termination_type',
+        'termination_reason',
+        'termination_date',
+        'notice_days_required',
+        'notice_days_served',
+        'unused_vacation_days',
+        'settlement_breakdown',
+        'gross_settlement',
+        'total_deductions_settlement',
+        'net_settlement',
+        'terminated_by',
+        'terminated_at',
     ];
 
     protected function casts(): array
@@ -55,7 +67,14 @@ class EmployeeContract extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'signed_at' => 'date',
+            'termination_date' => 'date',
+            'terminated_at' => 'datetime',
             'is_active' => 'boolean',
+            'unused_vacation_days' => 'decimal:2',
+            'settlement_breakdown' => 'array',
+            'gross_settlement' => 'decimal:2',
+            'total_deductions_settlement' => 'decimal:2',
+            'net_settlement' => 'decimal:2',
         ];
     }
 

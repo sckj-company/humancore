@@ -49,6 +49,9 @@ class LatenessRule extends AbstractPayrollRule
                 return $thresholds > 0 ? -1 * round($thresholds * $amountPerThreshold, 2) : 0.0;
             }
             $hourlyRate = (float) $context->setting('payroll.discounts.lateness_hourly_amount', 0);
+            if ($hourlyRate <= 0) {
+                $hourlyRate = round($context->effectiveBaseSalary() / 220, 4);
+            }
             $discount = round(($manualMinutes / 60) * $hourlyRate, 2);
 
             return $discount > 0 ? -1 * $discount : 0.0;

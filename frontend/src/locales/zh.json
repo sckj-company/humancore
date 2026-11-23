@@ -2808,6 +2808,17 @@
     "toggleMandatoryAria": "切换是否为必填文件"
   },
   "payrollTaxRulesPage": {
+    "assignToCompanies": "应用到多家公司",
+    "assignModalTitleInss": "将 INSS 规则应用到多家公司",
+    "assignModalTitleIrt": "将 IRT 税率表应用到多家公司",
+    "assignModalDescription": "选择需要接收此税费配置的公司。",
+    "selectCompaniesLabel": "应用到所选公司",
+    "onlyCurrentCompany": "仅当前公司",
+    "autoActivateInCompanies": "在所选公司中立即验证并启用",
+    "assignConfirmButton": "应用到 {{count}} 家公司",
+    "assignSuccess": "配置已成功应用到所选公司。",
+    "assignError": "无法将配置应用到所选公司。",
+    "selectAtLeastOneCompany": "请至少选择一家公司。",
     "inssCreated": "INSS 规则已创建为草稿。",
     "inssCreateError": "创建 INSS 规则时出错。",
     "inssValidated": "INSS 规则已成功验证。",

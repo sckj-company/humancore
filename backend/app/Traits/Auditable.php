@@ -47,11 +47,13 @@ trait Auditable
         $tenantId = $this->tenant_id
             ?? (app()->bound('currentTenant') ? app('currentTenant')?->id : null);
         $actingTenantId = auth()->check() ? auth()->user()?->tenant_id : null;
+        $employeeId = $this->resolveAuditEmployeeId($old, $new);
 
         $audit = Audit::query()->withoutGlobalScopes()->create([
             'user_id' => auth()->id(),
             'tenant_id' => $tenantId,
             'acting_tenant_id' => ($actingTenantId && $tenantId && (int) $actingTenantId !== (int) $tenantId) ? $actingTenantId : null,
+            'employee_id' => $employeeId,
             'event' => $event,
             'auditable_type' => $this->getMorphClass(),
             'auditable_id' => $this->getKey(),
@@ -92,5 +94,34 @@ trait Auditable
             ->all();
 
         return $data === [] ? null : $data;
+    }
+
+    protected function resolveAuditEmployeeId(?array $old, ?array $new): ?int
+    {
+        if ($this instanceof \App\Models\Employee) {
+            $id = $this->getKey();
+
+            return $id ? (int) $id : null;
+        }
+
+        $candidate = $this->getAttribute('employee_id')
+            ?? ($new['employee_id'] ?? null)
+            ?? ($old['employee_id'] ?? null);
+
+        if ($candidate) {
+            return (int) $candidate;
+        }
+
+        if ($this instanceof \App\Models\PayrollRecordItem) {
+            $record = $this->relationLoaded('payrollRecord')
+                ? $this->payrollRecord
+                : \App\Models\PayrollRecord::query()->withoutGlobalScopes()->select(['id', 'employee_id'])->find($this->payroll_record_id);
+
+            if ($record && $record->employee_id) {
+                return (int) $record->employee_id;
+            }
+        }
+
+        return null;
     }
 }

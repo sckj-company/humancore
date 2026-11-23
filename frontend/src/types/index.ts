@@ -224,8 +224,204 @@ export interface EmployeeContract {
   document_path?: string
   document_url?: string
   notes?: string
+  termination_type?: string | null
+  termination_reason?: string | null
+  termination_date?: string | null
+  notice_days_required?: number | null
+  notice_days_served?: number | null
+  unused_vacation_days?: number | null
+  settlement_breakdown?: ContractTerminationPreview | null
+  gross_settlement?: number | null
+  total_deductions_settlement?: number | null
+  net_settlement?: number | null
+  terminated_at?: string | null
   position?: Position
   department?: Department
+}
+
+export type EmployeeAssetCategory =
+  | 'computer'
+  | 'phone'
+  | 'vehicle'
+  | 'uniform'
+  | 'tool'
+  | 'furniture'
+  | 'access_card'
+  | 'other'
+
+export type EmployeeAssetCondition = 'new' | 'good' | 'fair' | 'damaged' | 'lost'
+
+export type EmployeeAssetStatus =
+  | 'assigned'
+  | 'returned'
+  | 'damaged_pending'
+  | 'lost_unreturned'
+  | 'maintenance'
+
+export interface EmployeeAsset {
+  id: number
+  employee_id: number
+  tenant_id: number
+  name: string
+  category: EmployeeAssetCategory
+  category_label?: string
+  asset_code?: string | null
+  serial_number?: string | null
+  brand_model?: string | null
+  condition: EmployeeAssetCondition
+  condition_label?: string
+  status: EmployeeAssetStatus
+  status_label?: string
+  estimated_value: number
+  chargeable_amount: number
+  pending_liability_amount: number
+  deduct_on_termination: boolean
+  is_settled: boolean
+  assigned_at?: string | null
+  expected_return_at?: string | null
+  returned_at?: string | null
+  assigned_by?: { id: number; name: string } | null
+  return_notes?: string | null
+  notes?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface EmployeeAssetsResponse {
+  items: EmployeeAsset[]
+  summary: {
+    total_count: number
+    assigned_count: number
+    returned_count: number
+    issue_count: number
+    total_estimated_value: number
+    active_assigned_value: number
+    pending_liability_amount: number
+  }
+}
+
+export interface ContractTerminationPreview {
+  contract_id: number
+  employee_id: number
+  employee_name?: string
+  employee_code?: string
+  department?: string | null
+  position?: string | null
+  termination_type: string
+  termination_type_label: string
+  legal_basis: string
+  termination_reason: string
+  hire_date: string
+  termination_date: string
+  base_salary: number
+  calendar_daily_rate: number
+  work_daily_rate: number
+  tenure: {
+    days: number
+    months: number
+    years: number
+    completed_years: number
+  }
+  parameters: {
+    worked_days_in_month: number
+    months_worked_in_year: number
+    unused_vacation_days: number
+    proportional_vacation_days: number
+    notice_days_required: number
+    notice_days_served: number
+    unserved_notice_days: number
+    unjustified_absence_days: number
+    include_vacation_subsidy: boolean
+    include_christmas_subsidy: boolean
+    include_severance: boolean
+    apply_taxes: boolean
+    discount_pending_deductions: boolean
+    discount_unreturned_assets: boolean
+    discount_attendance_pendencies: boolean
+  }
+  earnings_breakdown: Array<{
+    code: string
+    name: string
+    quantity?: number | null
+    unit_rate?: number | null
+    amount: number
+  }>
+  deductions_breakdown: Array<{
+    code: string
+    category: string
+    deduction_id?: number
+    asset_id?: number
+    name: string
+    amount: number
+  }>
+  pending_advances_and_deductions: Array<{
+    id: number
+    name: string
+    deduction_type: string
+    type_label: string
+    total_amount: number
+    paid_amount: number
+    remaining_balance: number
+    total_installments: number
+    paid_installments: number
+    pending_installments: number
+    next_installment?: {
+      installment_number: number
+      reference_month: string
+      amount: number
+    } | null
+  }>
+  pending_assets: Array<{
+    id: number
+    name: string
+    category: string
+    category_label: string
+    asset_code?: string | null
+    serial_number?: string | null
+    condition: string
+    condition_label: string
+    status: string
+    status_label: string
+    estimated_value: number
+    chargeable_amount: number
+    deduct_on_termination: boolean
+    liability_amount: number
+  }>
+  attendance_pendencies: {
+    unjustified_absence_days: number
+    late_minutes: number
+    estimated_deduction: number
+  }
+  totals: {
+    gross_settlement: number
+    total_deductions: number
+    pending_advances_total: number
+    pending_assets_total: number
+    taxes_total: number
+    net_settlement: number
+    remaining_employee_debt: number
+  }
+  legal_notes: string[]
+  termination_types_catalog: Array<{
+    code: string
+    label: string
+    legal_basis: string
+    default_notice_days: number
+    grants_severance: boolean
+  }>
+}
+
+export interface DocxPreviewResponse {
+  id: number
+  name: string
+  original_name?: string | null
+  mime_type?: string | null
+  format: 'docx'
+  html: string
+  text: string
+  paragraphs_count: number
+  tables_count: number
+  images_count: number
 }
 
 export interface Paginated<T> {
@@ -297,15 +493,50 @@ export interface PayrollPeriodProgress {
   processed_at?: string | null
 }
 
+export interface ProcessableEmployeeAdvance {
+  id: number
+  name: string
+  deduction_type: string
+  type_label: string
+  amount_type: 'fixed' | 'percentage'
+  percentage?: number | null
+  total_amount: number
+  paid_amount: number
+  remaining_balance: number
+  installment_count: number
+  paid_installments_count: number
+  remaining_installments_count: number
+  current_installment_number?: number | null
+  current_installment_label: string
+  current_reference_month?: string | null
+  discount_amount_this_period: number
+  will_discount_this_period: boolean
+}
+
+export interface ProcessableEmployeePendingImpacts {
+  deductible_absence_days: number
+  unjustified_absence_days: number
+  late_minutes: number
+  late_days_count: number
+  overtime_hours: number
+  unreturned_assets_count: number
+  unreturned_assets_liability: number
+  has_pending_impacts: boolean
+}
+
 export interface ProcessableEmployee {
   id: number
   employee_code: string
   full_name: string
   position?: string | null
+  department?: string | null
   base_salary?: number | string | null
   contract_end_date?: string | null
   is_contract_expired: boolean
   eligible: boolean
+  advances_and_deductions?: ProcessableEmployeeAdvance[]
+  total_discount_this_period?: number
+  pending_impacts?: ProcessableEmployeePendingImpacts
 }
 
 export interface PayrollPeriodTotalsSnapshot {
