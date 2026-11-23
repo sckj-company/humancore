@@ -259,6 +259,13 @@ class PayrollPeriodReportTest extends TestCase
         $inssBilingual = $this->get("/api/v1/payroll/periods/{$this->period->id}/inss-map.pdf?lang=bilingual");
         $inssBilingual->assertOk()->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringStartsWith('%PDF-', $inssBilingual->getContent());
+        $this->assertStringContainsString('DejaVuSans', $inssBilingual->getContent());
+        $this->assertStringContainsString('DroidSansFallback', $inssBilingual->getContent());
+
+        $periodPdfBilingual = $this->get("/api/v1/payroll/periods/{$this->period->id}/payslip.pdf?lang=bilingual");
+        $periodPdfBilingual->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('DejaVuSans', $periodPdfBilingual->getContent());
+        $this->assertStringContainsString('DroidSansFallback', $periodPdfBilingual->getContent());
 
         $inssInlinePt = $this->get("/api/v1/payroll/periods/{$this->period->id}/inss-map.pdf?lang=pt&disposition=inline");
         $inssInlinePt->assertOk()->assertHeader('Content-Type', 'application/pdf');

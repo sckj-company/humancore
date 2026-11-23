@@ -72,7 +72,7 @@
         }
         * { box-sizing: border-box; }
         body {
-            font-family: 'Droid Sans Fallback', 'DejaVu Sans', sans-serif;
+            font-family: 'DejaVu Sans', 'Droid Sans Fallback', sans-serif;
             font-size: 9.2px;
             line-height: 1.32;
             color: #1e293b;

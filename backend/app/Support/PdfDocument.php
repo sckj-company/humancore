@@ -43,7 +43,7 @@ class PdfDocument
             'font_dir' => $fontCache,
             'font_cache' => $fontCache,
             'chroot' => base_path(),
-            'default_font' => $resolvedLang === self::LANG_PT ? 'DejaVu Sans' : 'Droid Sans Fallback',
+            'default_font' => 'DejaVu Sans',
             'isFontSubsettingEnabled' => true,
         ])
             ->loadView($view, array_merge($data, [

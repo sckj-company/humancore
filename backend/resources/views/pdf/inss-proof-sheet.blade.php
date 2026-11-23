@@ -18,9 +18,15 @@
             font-weight: normal;
             font-style: normal;
         }
+        @font-face {
+            font-family: 'Droid Sans Fallback';
+            src: url('{{ resource_path('fonts/DroidSansFallbackFull.ttf') }}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
         @endif
         * { box-sizing: border-box; }
-        body { font-family: {{ $isBilingual ? "'Droid Sans Fallback', " : '' }}'DejaVu Sans', sans-serif; font-size: 9px; color: #1e293b; margin: 0; }
+        body { font-family: 'DejaVu Sans', 'Droid Sans Fallback', sans-serif; font-size: 9px; color: #1e293b; margin: 0; }
         table { width: 100%; border-collapse: collapse; }
         .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 7px; margin-bottom: 10px; }
         .company { font-size: 12px; font-weight: bold; }
