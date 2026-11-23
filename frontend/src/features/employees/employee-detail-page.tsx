@@ -294,13 +294,22 @@ export function EmployeeDetailPage() {
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (!uploadFile) throw new Error(t('employeeDetail.messages.selectFile'))
+      const fileToUpload = await compressImageIfNeeded(uploadFile)
       const fd = new FormData()
-      fd.append('employee_id', id!); fd.append('file', uploadFile); fd.append('name', uploadFormData.name || uploadFile.name); fd.append('document_type', uploadFormData.document_type)
+      fd.append('employee_id', id!); fd.append('file', fileToUpload); fd.append('name', uploadFormData.name || uploadFile.name); fd.append('document_type', uploadFormData.document_type)
       if (uploadFormData.expiry_date) fd.append('expiry_date', uploadFormData.expiry_date)
       if (uploadFormData.notes) fd.append('notes', uploadFormData.notes)
-      return api.post('documents', fd)
+      return api.upload('documents', fd)
     },
-    onSuccess: () => { toast.success(t('employeeDetail.messages.documentUploaded')); setIsUploadOpen(false); setUploadFile(null); setUploadFormData({ name: '', document_type: 'other', expiry_date: '', notes: '' }); qc.invalidateQueries({ queryKey: ['employee-documents', id] }) },
+    onSuccess: () => {
+      toast.success(t('employeeDetail.messages.documentUploaded'))
+      setIsUploadOpen(false)
+      setUploadFile(null)
+      setUploadFormData({ name: '', document_type: 'other', expiry_date: '', notes: '' })
+      qc.invalidateQueries({ queryKey: ['employee-documents', id] })
+      qc.invalidateQueries({ queryKey: ['employees', id] })
+      qc.invalidateQueries({ queryKey: ['documents'] })
+    },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.uploadError')))
   })
   const toggleAttendance = useMutation({ mutationFn: () => api.post('attendance/toggle', { employee_id: Number(id), ...(attendanceShiftId ? { shift_id: Number(attendanceShiftId) } : {}) }), onSuccess: (res: any) => { toast.success(res?.message ?? t('employeeDetail.messages.attendanceRecorded')); refetchToday(); refetchAttendance() }, onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.recordError'))) })
@@ -365,6 +374,8 @@ export function EmployeeDetailPage() {
       qc.invalidateQueries({ queryKey: ['employee-contracts', id] })
       qc.invalidateQueries({ queryKey: ['employee-documents', id] })
       qc.invalidateQueries({ queryKey: ['employees', id, 'timeline'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('employeeDetail.messages.contractSaveError'))),
   })
@@ -383,6 +394,8 @@ export function EmployeeDetailPage() {
       setDeactivateContractForm({ reason: '', end_date: new Date().toISOString().slice(0, 10) })
       qc.invalidateQueries({ queryKey: ['employees', id] })
       qc.invalidateQueries({ queryKey: ['employees', id, 'timeline'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.deactivateError')))
   })
@@ -431,6 +444,8 @@ export function EmployeeDetailPage() {
       refetchLeaves()
       refetchBalance()
       qc.invalidateQueries({ queryKey: ['leave-requests'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('employeeDetail.messages.recordError')))
   })
@@ -1455,7 +1470,7 @@ export function EmployeeDetailPage() {
                 <input
                   ref={docFileInputRef}
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                  accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                   className="hidden"
                   onChange={(e) => selectDocumentFile(e.target.files?.[0] || null)}
                 />

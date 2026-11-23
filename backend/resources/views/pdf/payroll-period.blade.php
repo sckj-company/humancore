@@ -118,7 +118,12 @@
         .records td.subtotal-gross, .records td.subtotal-deductions { font-weight: bold; }
         .records td.net-cell { font-weight: bold; border-left: 1.5px solid #475569; }
         .records .summary-row td { background: #f1f5f9; font-weight: bold; font-size: 5.7px; padding: 2.5px 1.8px; }
-        .footer { margin-top: 6px; text-align: center; color: #94a3b8; font-size: 6px; }
+        .signatures { width: 100%; margin-top: 14px; page-break-inside: avoid; }
+        .signatures td { width: 50%; padding: 0 36px; text-align: center; vertical-align: bottom; }
+        .sig-space { height: 26px; border-bottom: 1px solid #475569; margin-bottom: 3px; }
+        .sig-role { font-size: 7px; font-weight: bold; color: #0f172a; }
+        .sig-sub { font-size: 6px; color: #64748b; margin-top: 1.5px; }
+        .footer { margin-top: 8px; text-align: center; color: #94a3b8; font-size: 6px; }
     </style>
 </head>
 <body>
@@ -257,6 +262,21 @@
             <td><div class="total-label">{!! $bilingualLabel('INSS total (11%)', 'INSS 总额（11%）') !!}</div><div class="total-value">{{ number_format($employeeInssTotal + $employerInssTotal, 2) }} {{ $currency }}</div></td>
             <td><div class="total-label">{!! $bilingualLabel('IRT total', '工资所得税总额') !!}</div><div class="total-value">{{ number_format($irtTotal, 2) }} {{ $currency }}</div></td>
             <td><div class="total-label">{!! $bilingualLabel('Total líquido a pagar', '应付净额') !!}</div><div class="total-value">{{ number_format((float) $period->records->sum('net_salary'), 2) }} {{ $currency }}</div></td>
+        </tr>
+    </table>
+
+    <table class="signatures">
+        <tr>
+            <td>
+                <div class="sig-space"></div>
+                <div class="sig-role">{!! $bilingualLabel('Recursos Humanos (RH)', '人力资源部') !!}</div>
+                <div class="sig-sub">{{ $processedByName ?? $resolvedOperator }} · {!! $bilingualInline('Data', '日期') !!}: ___/___/_____</div>
+            </td>
+            <td>
+                <div class="sig-space"></div>
+                <div class="sig-role">{!! $bilingualLabel('A Empresa / Entidade Empregadora', '公司 / 雇主签章') !!}</div>
+                <div class="sig-sub">@if($approvedByName){{ $approvedByName }} · @endif{{ $period->tenant->name }} · {!! $bilingualInline('Data', '日期') !!}: ___/___/_____</div>
+            </td>
         </tr>
     </table>
 

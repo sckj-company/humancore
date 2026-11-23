@@ -68,6 +68,8 @@ export function PayrollTaxRulesPage({
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') || 'inss'
 
+  const defaultYearStart = `${new Date().getFullYear()}-01-01`
+
   // Modais INSS
   const [isInssCreateOpen, setIsInssCreateOpen] = useState(false)
   const [inssForm, setInssForm] = useState({
@@ -76,7 +78,7 @@ export function PayrollTaxRulesPage({
     employee_rate: '3.00',
     employer_rate: '8.00',
     max_base: '',
-    effective_from: new Date().toISOString().slice(0, 10),
+    effective_from: defaultYearStart,
     effective_to: '',
     legal_source: '',
     legal_reference: '',
@@ -95,7 +97,7 @@ export function PayrollTaxRulesPage({
   }>({
     country_code: 'AO',
     regime_code: 'standard',
-    effective_from: new Date().toISOString().slice(0, 10),
+    effective_from: defaultYearStart,
     effective_to: '',
     legal_source: '',
     legal_reference: '',
@@ -150,6 +152,8 @@ export function PayrollTaxRulesPage({
       toast.success(t('payrollTaxRulesPage.inssCreated'))
       setIsInssCreateOpen(false)
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.inssCreateError'))),
   })
@@ -159,6 +163,8 @@ export function PayrollTaxRulesPage({
     onSuccess: () => {
       toast.success(t('payrollTaxRulesPage.inssValidated'))
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.inssValidateError'))),
   })
@@ -168,6 +174,8 @@ export function PayrollTaxRulesPage({
     onSuccess: () => {
       toast.success(t('payrollTaxRulesPage.inssActivated'))
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.inssActivateError'))),
   })
@@ -182,6 +190,8 @@ export function PayrollTaxRulesPage({
       toast.success(t('payrollTaxRulesPage.irtCreated'))
       setIsIrtCreateOpen(false)
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.irtCreateError'))),
   })
@@ -191,6 +201,8 @@ export function PayrollTaxRulesPage({
     onSuccess: () => {
       toast.success(t('payrollTaxRulesPage.irtValidated'))
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.irtValidateError'))),
   })
@@ -200,6 +212,8 @@ export function PayrollTaxRulesPage({
     onSuccess: () => {
       toast.success(t('payrollTaxRulesPage.irtActivated'))
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.irtActivateError'))),
   })
@@ -220,6 +234,8 @@ export function PayrollTaxRulesPage({
       setRevokeReason('')
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.revokeError'))),
   })
@@ -234,6 +250,8 @@ export function PayrollTaxRulesPage({
       toast.success(t('payrollTaxRulesPage.deleted'))
       qc.invalidateQueries({ queryKey: ['payroll-inss-rules'] })
       qc.invalidateQueries({ queryKey: ['payroll-irt-tables'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      qc.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('payrollTaxRulesPage.deleteError'))),
   })

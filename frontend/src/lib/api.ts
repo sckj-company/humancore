@@ -24,6 +24,13 @@ class ApiClient {
       if (tenantId) {
         config.headers['X-Tenant-ID'] = tenantId
       }
+      if (config.data instanceof FormData && config.headers) {
+        if (typeof (config.headers as { delete?: (name: string) => void }).delete === 'function') {
+          (config.headers as { delete: (name: string) => void }).delete('Content-Type')
+        } else {
+          delete (config.headers as Record<string, unknown>)['Content-Type']
+        }
+      }
       return config
     })
 
@@ -87,6 +94,11 @@ class ApiClient {
   async downloadFilePost(url: string, data?: unknown, filename?: string, params?: Record<string, unknown>): Promise<void> {
     const response = await this.client.post(url, data, { params, responseType: 'blob' })
     this.triggerBlobDownload(response, filename)
+  }
+
+  async fetchBlobPost(url: string, data?: unknown, params?: Record<string, unknown>): Promise<Blob> {
+    const response = await this.client.post(url, data, { params, responseType: 'blob' })
+    return response.data as Blob
   }
 
   private triggerBlobDownload(response: { data: Blob; headers: Record<string, unknown> }, filename?: string): void {

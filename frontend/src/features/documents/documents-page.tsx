@@ -5,6 +5,7 @@ import { FileText, Upload, Download, Trash2, Loader2, Paperclip } from 'lucide-r
 import { toast } from 'sonner'
 import { api, getApiErrorMessage, type ApiResponse } from '@/lib/api'
 import { cloudinaryAttachmentUrl } from '@/lib/cloudinary'
+import { compressImageIfNeeded } from '@/lib/file-upload'
 import { useAuthStore, hasAnyRole } from '@/stores/auth-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -195,6 +196,7 @@ function UploadDialog({
   children?: React.ReactNode
 }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [employeeId, setEmployeeId] = useState('')
   const [name, setName] = useState('')
@@ -212,21 +214,24 @@ function UploadDialog({
   })
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const form = new FormData()
       form.append('employee_id', employeeId)
       form.append('name', name)
       form.append('document_type', docType)
       if (expiryDate) form.append('expiry_date', expiryDate)
       if (notes) form.append('notes', notes)
-      form.append('is_confidential', String(isConfidential))
-      if (file) form.append('file', file)
+      form.append('is_confidential', isConfidential ? '1' : '0')
+      if (file) {
+        form.append('file', await compressImageIfNeeded(file))
+      }
       return api.upload<ApiResponse<EmployeeDocument>>('documents', form, setProgress)
     },
     onSuccess: () => {
       toast.success(t('documents.uploaded'))
       setOpen(false)
       reset()
+      queryClient.invalidateQueries({ queryKey: ['employee-documents'] })
       refetch?.()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('documents.uploadError'))),

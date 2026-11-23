@@ -374,4 +374,111 @@ class SuperAdminTest extends TestCase
             ])
             ->assertForbidden();
     }
+
+    public function test_super_admin_can_create_and_update_platform_user_with_multiple_shared_tenant_accesses(): void
+    {
+        $creator = User::factory()->create(['is_active' => true]);
+        $creator->assignRole('super-admin');
+
+        $tenantA = Tenant::factory()->create(['name' => 'Empresa Alpha']);
+        $tenantB = Tenant::factory()->create(['name' => 'Empresa Beta']);
+
+        $deptA1 = \App\Models\Department::create([
+            'tenant_id' => $tenantA->id,
+            'name' => 'Operações Alpha',
+            'code' => 'OPA',
+            'status' => 'active',
+        ]);
+        $deptB1 = \App\Models\Department::create([
+            'tenant_id' => $tenantB->id,
+            'name' => 'Financeiro Beta',
+            'code' => 'FINB',
+            'status' => 'active',
+        ]);
+
+        $group = \App\Models\PermissionGroup::create([
+            'tenant_id' => null,
+            'name' => 'RH Partilhado',
+            'permissions' => ['view_any_employee', 'view_employee', 'view_any_payroll'],
+            'created_by' => $creator->id,
+        ]);
+
+        $sharedPermissions = ['view_any_employee', 'view_employee', 'view_any_payroll'];
+
+        $created = $this->actingAs($creator, 'sanctum')
+            ->postJson('/api/v1/superadmin/platform-users', [
+                'name' => 'Coordenador Multi-Empresa',
+                'email' => 'multi-empresa@platform.test',
+                'password' => 'secure-password',
+                'permissions' => ['view_any_tenant', ...$sharedPermissions],
+                'tenant_accesses' => [
+                    [
+                        'tenant_id' => $tenantA->id,
+                        'permission_group_id' => $group->id,
+                        'role_name' => 'hr-manager',
+                        'permissions' => $sharedPermissions,
+                        'department_ids' => [$deptA1->id],
+                    ],
+                    [
+                        'tenant_id' => $tenantB->id,
+                        'permission_group_id' => $group->id,
+                        'role_name' => 'hr-manager',
+                        'permissions' => $sharedPermissions,
+                        'department_ids' => [$deptB1->id],
+                    ],
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonCount(2, 'data.tenant_accesses');
+
+        $createdUserId = $created->json('data.id');
+
+        $this->assertDatabaseHas('user_tenant_accesses', [
+            'user_id' => $createdUserId,
+            'tenant_id' => $tenantA->id,
+            'permission_group_id' => $group->id,
+            'role_name' => 'hr-manager',
+        ]);
+        $this->assertDatabaseHas('user_tenant_accesses', [
+            'user_id' => $createdUserId,
+            'tenant_id' => $tenantB->id,
+            'permission_group_id' => $group->id,
+            'role_name' => 'hr-manager',
+        ]);
+
+        $updatedPermissions = ['view_any_employee', 'view_employee'];
+
+        $this->actingAs($creator, 'sanctum')
+            ->putJson("/api/v1/superadmin/platform-users/{$createdUserId}", [
+                'permissions' => ['view_any_tenant', ...$updatedPermissions],
+                'tenant_accesses' => [
+                    [
+                        'tenant_id' => $tenantA->id,
+                        'permission_group_id' => null,
+                        'role_name' => 'manager',
+                        'permissions' => $updatedPermissions,
+                        'department_ids' => [$deptA1->id],
+                    ],
+                    [
+                        'tenant_id' => $tenantB->id,
+                        'permission_group_id' => null,
+                        'role_name' => 'manager',
+                        'permissions' => $updatedPermissions,
+                        'department_ids' => [],
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonCount(2, 'data.tenant_accesses')
+            ->assertJsonPath('data.tenant_accesses.0.role_name', 'manager')
+            ->assertJsonPath('data.tenant_accesses.1.role_name', 'manager');
+
+        $accessB = \App\Models\UserTenantAccess::query()
+            ->where('user_id', $createdUserId)
+            ->where('tenant_id', $tenantB->id)
+            ->firstOrFail();
+
+        $this->assertNull($accessB->department_ids);
+        $this->assertSame($updatedPermissions, $accessB->permissions);
+    }
 }

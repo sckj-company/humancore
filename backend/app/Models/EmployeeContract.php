@@ -20,7 +20,10 @@ class EmployeeContract extends Model
     protected static function booted(): void
     {
         static::saved(function (self $contract): void {
-            if ($contract->wasChanged('base_salary') || ($contract->wasRecentlyCreated && $contract->is_active)) {
+            if (
+                $contract->wasChanged(['base_salary', 'start_date', 'end_date', 'is_active'])
+                || ($contract->wasRecentlyCreated && $contract->is_active)
+            ) {
                 app(PayrollSyncService::class)->syncOnContractSalaryChanged($contract);
             }
         });

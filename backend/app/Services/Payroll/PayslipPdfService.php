@@ -6,6 +6,7 @@ use App\Models\PayrollPeriod;
 use App\Models\PayrollRecord;
 use App\Support\PdfDocument;
 use Barryvdh\DomPDF\PDF as DomPdfDocument;
+use Illuminate\Support\Collection;
 
 class PayslipPdfService
 {
@@ -20,6 +21,29 @@ class PayslipPdfService
             view: 'pdf.payslip',
             data: [
                 'record' => $record,
+                'operatorName' => $operatorName,
+            ],
+            paper: 'a4',
+            orientation: 'portrait',
+            lang: $lang,
+        );
+    }
+
+    /**
+     * @param  Collection<int, PayrollRecord>  $records
+     */
+    public function renderBulk(Collection $records, ?string $lang = null): DomPdfDocument
+    {
+        $first = $records->first();
+        $operatorName = auth()->user()?->name
+            ?? $first?->period?->processedBy?->name
+            ?? $first?->approvedBy?->name
+            ?? 'Sistema';
+
+        return PdfDocument::make(
+            view: 'pdf.payslips-bulk',
+            data: [
+                'records' => $records,
                 'operatorName' => $operatorName,
             ],
             paper: 'a4',

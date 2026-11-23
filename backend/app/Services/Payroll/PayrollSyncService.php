@@ -90,24 +90,34 @@ class PayrollSyncService
         $periods = PayrollPeriod::query()
             ->where('tenant_id', $contract->tenant_id)
             ->whereIn('status', self::RECALCULABLE_STATUSES)
-            ->whereHas('records', fn ($q) => $q
-                ->where('employee_id', $employee->id)
-                ->where(fn ($inner) => $inner->where('contract_id', $contract->id)->orWhereNull('contract_id')))
+            ->whereHas('records', fn ($q) => $q->where('employee_id', $employee->id))
             ->get();
 
         $recalculated = 0;
         foreach ($periods as $period) {
+            if ($employee->status !== 'active') {
+                continue;
+            }
+
             try {
                 $this->engine->calculateForEmployee($period, $employee);
                 $this->engine->refreshPeriodTotals($period);
                 $recalculated++;
+
+                $freshPeriod = $period->fresh();
+                if ($freshPeriod && $freshPeriod->status === 'failed') {
+                    $report = app(PayrollValidationService::class)->validate($freshPeriod);
+                    if ($report['blocking_count'] === 0 && $freshPeriod->records()->exists()) {
+                        $freshPeriod->transitionTo($report['warning_count'] > 0 ? 'pending_validation' : 'completed');
+                    }
+                }
             } catch (\Throwable) {
                 PayrollRecord::query()
                     ->where('payroll_period_id', $period->id)
                     ->where('employee_id', $employee->id)
                     ->update([
                         'is_outdated' => true,
-                        'outdated_reason' => 'Salário base do contrato alterado após o cálculo da folha.',
+                        'outdated_reason' => 'Contrato alterado após o cálculo da folha.',
                     ]);
             }
         }

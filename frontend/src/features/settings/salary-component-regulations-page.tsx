@@ -68,7 +68,7 @@ interface SalaryComponentForm {
 
 const emptyForm = (): RegulationForm => ({
   regime_code: 'standard',
-  effective_from: new Date().toISOString().slice(0, 10),
+  effective_from: `${new Date().getFullYear()}-01-01`,
   effective_to: '',
   employee_inss_applicable: 'unknown',
   employer_inss_applicable: 'unknown',
@@ -192,6 +192,8 @@ export function SalaryComponentRegulationsPage({
       setDialogOpen(false)
       setLegalDocument(null)
       queryClient.invalidateQueries({ queryKey: ['payroll', 'salary-component-regulations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('salaryRegulations.formError'))),
   })
@@ -204,6 +206,8 @@ export function SalaryComponentRegulationsPage({
     onSuccess: (result) => {
       toast.success(t('salaryRegulations.initialized', result))
       queryClient.invalidateQueries({ queryKey: ['payroll', 'salary-component-regulations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('salaryRegulations.formError'))),
   })
@@ -218,6 +222,8 @@ export function SalaryComponentRegulationsPage({
       setComponentDialogOpen(false)
       setComponentForm(emptyComponentForm())
       queryClient.invalidateQueries({ queryKey: ['payroll', 'salary-component-regulations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('salaryRegulations.formError'))),
   })
@@ -227,6 +233,8 @@ export function SalaryComponentRegulationsPage({
     onSuccess: () => {
       toast.success(t('salaryRegulations.deleted'))
       queryClient.invalidateQueries({ queryKey: ['payroll', 'salary-component-regulations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('salaryRegulations.formError'))),
   })
@@ -237,6 +245,8 @@ export function SalaryComponentRegulationsPage({
     onSuccess: () => {
       toast.success(t('salaryRegulations.revoked'))
       queryClient.invalidateQueries({ queryKey: ['payroll', 'salary-component-regulations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('salaryRegulations.formError'))),
   })
@@ -263,6 +273,8 @@ export function SalaryComponentRegulationsPage({
     onSuccess: (_result, variables) => {
       toast.success(t(`salaryRegulations.${variables.operation === 'validate' ? 'validated' : 'activated'}`))
       queryClient.invalidateQueries({ queryKey: ['payroll', 'salary-component-regulations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('salaryRegulations.formError'))),
   })

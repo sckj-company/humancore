@@ -30,7 +30,7 @@ class PayrollPeriod extends Model
         'approved' => ['closed', 'paid'],
         'closed' => ['paid', 'open'],
         'paid' => [],
-        'failed' => ['processing', 'open'],
+        'failed' => ['processing', 'open', 'pending_validation', 'completed'],
         'cancelled' => [],
     ];
 

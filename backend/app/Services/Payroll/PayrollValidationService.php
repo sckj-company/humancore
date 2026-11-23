@@ -31,6 +31,8 @@ class PayrollValidationService
 
         $periodStart = new DateTimeImmutable($period->period_start->toDateString());
         $periodEnd = new DateTimeImmutable($period->period_end->toDateString());
+        $periodStartFmt = $period->period_start->format('d/m/Y');
+        $periodEndFmt = $period->period_end->format('d/m/Y');
 
         // 1. Regra INSS deve cobrir todo o período (regras anuais valem para todos os períodos do ano)
         $hasInss = PayrollInssRule::query()
@@ -42,6 +44,10 @@ class PayrollValidationService
             $errors[] = [
                 'code' => 'MISSING_INSS_RULE',
                 'message' => 'Não existe regra de Segurança Social (INSS) ativa que cubra todo o período. Defina a regra uma única vez para o ano (ou para a vigência que abrange o período).',
+                'params' => [
+                    'period_start' => $periodStartFmt,
+                    'period_end' => $periodEndFmt,
+                ],
             ];
         }
 
@@ -55,6 +61,10 @@ class PayrollValidationService
             $errors[] = [
                 'code' => 'MISSING_IRT_TABLE',
                 'message' => 'Não existe tabela de IRT ativa que cubra todo o período. Defina a tabela uma única vez para o ano (ou para a vigência que abrange o período).',
+                'params' => [
+                    'period_start' => $periodStartFmt,
+                    'period_end' => $periodEndFmt,
+                ],
             ];
         }
 
@@ -64,6 +74,7 @@ class PayrollValidationService
             $warnings[] = [
                 'code' => 'NO_RECORDS',
                 'message' => 'O período ainda não foi processado. Processe a folha antes de submeter.',
+                'params' => [],
             ];
         }
 
@@ -91,6 +102,10 @@ class PayrollValidationService
                     'employee_name' => $emp->full_name,
                     'code' => 'EXPIRED_CONTRACT',
                     'message' => "Funcionário {$emp->full_name} ({$emp->employee_code}) tem contrato expirado (data de fim anterior a hoje) e foi excluído do processamento.",
+                    'params' => [
+                        'employee_name' => $emp->full_name,
+                        'employee_code' => $emp->employee_code,
+                    ],
                 ];
 
                 continue;
@@ -101,6 +116,10 @@ class PayrollValidationService
                 'employee_name' => $emp->full_name,
                 'code' => 'MISSING_CONTRACT',
                 'message' => "Funcionário {$emp->full_name} ({$emp->employee_code}) está ativo mas sem contrato vigente no período.",
+                'params' => [
+                    'employee_name' => $emp->full_name,
+                    'employee_code' => $emp->employee_code,
+                ],
             ];
         }
 
@@ -116,19 +135,37 @@ class PayrollValidationService
                     'employee_name' => $record->employee?->full_name,
                     'code' => 'MATH_INTEGRITY_VIOLATION',
                     'message' => "Divergência matemática no funcionário {$record->employee?->full_name}: Bruto ({$record->gross_salary}) − Deduções ({$record->total_deductions}) − Impostos ({$record->total_taxes}) ≠ Líquido ({$record->net_salary}).",
+                    'params' => [
+                        'employee_name' => $record->employee?->full_name ?? '',
+                        'gross' => $record->gross_salary,
+                        'deductions' => $record->total_deductions,
+                        'taxes' => $record->total_taxes,
+                        'net' => $record->net_salary,
+                    ],
                 ];
             }
 
             // Erros bloqueantes do próprio motor (suporta is_blocking e severity)
             if (! empty($record->validation_errors)) {
                 foreach ($record->validation_errors as $err) {
+                    $code = (string) ($err['code'] ?? 'ENGINE_ERROR');
+                    // Contratos e tabelas fiscais já são validados ao vivo acima;
+                    // não re-emitir alertas antigos em cache quando o problema já foi resolvido.
+                    if (in_array($code, ['MISSING_CONTRACT', 'EXPIRED_CONTRACT'], true)) {
+                        continue;
+                    }
+                    if (($code === 'MISSING_INSS_RULE' && $hasInss) || ($code === 'MISSING_IRT_TABLE' && $hasIrt)) {
+                        continue;
+                    }
+
                     $isError = ! empty($err['is_blocking'])
                         || (($err['severity'] ?? 'error') === 'error');
                     $entry = [
                         'employee_id' => $record->employee_id,
                         'employee_name' => $record->employee?->full_name,
-                        'code' => $err['code'] ?? 'ENGINE_ERROR',
+                        'code' => $code,
                         'message' => $err['message'] ?? 'Erro no processamento salarial',
+                        'params' => $err['params'] ?? ['error' => $err['message'] ?? ''],
                     ];
 
                     if ($isError) {
@@ -152,6 +189,9 @@ class PayrollValidationService
             $warnings[] = [
                 'code' => 'PENDING_LEAVES',
                 'message' => "Existem {$pendingLeaves} pedidos de licença pendentes de aprovação que intersectam o período.",
+                'params' => [
+                    'count' => $pendingLeaves,
+                ],
             ];
         }
 
@@ -176,6 +216,10 @@ class PayrollValidationService
             $warnings[] = [
                 'code' => 'UNREGULATED_COMPONENT',
                 'message' => "O componente salarial '{$comp->name}' ({$comp->code}) está ativo mas não possui regulação legal validada para este período.",
+                'params' => [
+                    'component_name' => $comp->name,
+                    'component_code' => $comp->code,
+                ],
             ];
         }
 

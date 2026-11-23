@@ -278,6 +278,7 @@ Route::prefix('v1')->group(function () {
                     Route::get('payroll/records/{record}/payslip', [PayslipController::class, 'show']);
                     Route::get('payroll/records/{record}/payslip.pdf', [PayslipController::class, 'download']);
                     Route::get('payroll/periods/{period}/payslip.pdf', [PayslipController::class, 'downloadPeriod']);
+                    Route::post('payroll/periods/{period}/payslips/bulk.pdf', [PayslipController::class, 'downloadBulk']);
                     Route::get('payroll/my-payslips', [MyPayslipsController::class, 'index']);
                 });
             });

@@ -656,4 +656,176 @@ class PayrollPhase3ValidationAndFlowTest extends TestCase
             'employee_ids' => [],
         ])->assertUnprocessable();
     }
+
+    public function test_resolving_missing_contract_and_expired_contract_clears_validation_errors_immediately(): void
+    {
+        [$tenant, $admin] = $this->setupTenantWithAdmin();
+        Permission::findOrCreate('create_contract', 'web');
+        Permission::findOrCreate('update_contract', 'web');
+        $admin->givePermissionTo(['create_contract', 'update_contract']);
+        $this->actingAs($admin, 'sanctum');
+
+        PayrollInssRule::factory()->for($tenant)->create([
+            'effective_from' => '2026-01-01',
+            'effective_to' => null,
+            'status' => 'active',
+            'validated_at' => now(),
+            'validated_by' => $admin->id,
+        ]);
+        PayrollIrtTable::factory()->for($tenant)->create([
+            'effective_from' => '2026-01-01',
+            'effective_to' => null,
+            'status' => 'active',
+            'validated_at' => now(),
+            'validated_by' => $admin->id,
+        ]);
+
+        $employeeNoContract = Employee::factory()->for($tenant)->create([
+            'status' => 'active',
+            'approval_status' => 'approved',
+        ]);
+        $employeeExpired = Employee::factory()->for($tenant)->create([
+            'status' => 'active',
+            'approval_status' => 'approved',
+        ]);
+        $expiredContract = EmployeeContract::factory()->create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employeeExpired->id,
+            'start_date' => '2026-01-01',
+            'end_date' => now()->subDays(5)->toDateString(),
+            'is_active' => true,
+            'base_salary' => 200000,
+        ]);
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        // Processa o período com um funcionário sem contrato (gera failed + registo com MISSING_CONTRACT)
+        // e outro com contrato expirado (aviso EXPIRED_CONTRACT).
+        $this->postJson("/api/v1/payroll/periods/{$period->id}/process")
+            ->assertOk();
+
+        $this->assertSame('failed', $period->fresh()->status);
+
+        $beforeValidations = $this->getJson("/api/v1/payroll/periods/{$period->id}/validations")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertContains('MISSING_CONTRACT', array_column($beforeValidations['errors'], 'code'));
+        $this->assertContains('EXPIRED_CONTRACT', array_column($beforeValidations['warnings'], 'code'));
+
+        // Resolver o contrato em falta -> deve limpar o erro e recuperar o período de 'failed'
+        $this->postJson("/api/v1/employees/{$employeeNoContract->id}/contracts", [
+            'contract_type' => 'permanent',
+            'base_salary' => 250000,
+            'salary_frequency' => 'monthly',
+            'start_date' => '2026-01-01',
+        ])->assertCreated();
+
+        // Estender a data de fim do contrato expirado -> deve limpar EXPIRED_CONTRACT
+        $this->putJson("/api/v1/contracts/{$expiredContract->id}", [
+            'contract_type' => 'fixed_term',
+            'base_salary' => 200000,
+            'salary_frequency' => 'monthly',
+            'start_date' => '2026-01-01',
+            'end_date' => '2027-12-31',
+        ])->assertOk();
+
+        $afterValidations = $this->getJson("/api/v1/payroll/periods/{$period->id}/validations")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertTrue($afterValidations['is_valid']);
+        $this->assertSame(0, $afterValidations['blocking_count']);
+        $this->assertNotContains('MISSING_CONTRACT', array_column($afterValidations['errors'], 'code'));
+        $this->assertNotContains('EXPIRED_CONTRACT', array_column($afterValidations['warnings'], 'code'));
+        $this->assertNotSame('failed', $period->fresh()->status);
+
+        $resolvedRecord = PayrollRecord::query()
+            ->where('payroll_period_id', $period->id)
+            ->where('employee_id', $employeeNoContract->id)
+            ->firstOrFail();
+        $this->assertEmpty($resolvedRecord->validation_errors);
+        $this->assertSame('calculated', $resolvedRecord->status);
+    }
+
+    public function test_activating_inss_and_irt_rules_clears_validation_errors_and_exposes_params(): void
+    {
+        [$tenant, $admin] = $this->setupTenantWithAdmin();
+        Permission::findOrCreate('configure_payroll', 'web');
+        $admin->givePermissionTo('configure_payroll');
+        $this->actingAs($admin, 'sanctum');
+
+        $employee = Employee::factory()->for($tenant)->create([
+            'status' => 'active',
+            'approval_status' => 'approved',
+        ]);
+        EmployeeContract::factory()->create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $employee->id,
+            'start_date' => '2026-01-01',
+            'end_date' => null,
+            'is_active' => true,
+            'base_salary' => 250000,
+        ]);
+
+        $period = PayrollPeriod::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Novembro/2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        $initial = $this->getJson("/api/v1/payroll/periods/{$period->id}/validations")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertFalse($initial['is_valid']);
+        $errorsByCode = collect($initial['errors'])->keyBy('code');
+        $this->assertTrue($errorsByCode->has('MISSING_INSS_RULE'));
+        $this->assertTrue($errorsByCode->has('MISSING_IRT_TABLE'));
+        $this->assertSame('01/11/2026', $errorsByCode['MISSING_INSS_RULE']['params']['period_start']);
+        $this->assertSame('30/11/2026', $errorsByCode['MISSING_INSS_RULE']['params']['period_end']);
+
+        // Criar, validar e ativar regra INSS
+        $inssId = $this->postJson('/api/v1/payroll/inss-rules', [
+            'country_code' => 'AO',
+            'regime_code' => 'standard',
+            'employee_rate' => 3.0,
+            'employer_rate' => 8.0,
+            'effective_from' => '2026-01-01',
+        ])->assertCreated()->json('data.id');
+        $this->postJson("/api/v1/payroll/inss-rules/{$inssId}/validate")->assertOk();
+        $this->postJson("/api/v1/payroll/inss-rules/{$inssId}/activate")->assertOk();
+
+        // Criar, validar e ativar tabela IRT
+        $irtId = $this->postJson('/api/v1/payroll/irt-tables', [
+            'country_code' => 'AO',
+            'regime_code' => 'standard',
+            'effective_from' => '2026-01-01',
+            'brackets' => [
+                ['lower_bound' => 0, 'upper_bound' => 100000, 'rate' => 0, 'fixed_amount' => 0],
+                ['lower_bound' => 100000, 'upper_bound' => null, 'rate' => 10, 'fixed_amount' => 0],
+            ],
+        ])->assertCreated()->json('data.id');
+        $this->postJson("/api/v1/payroll/irt-tables/{$irtId}/validate")->assertOk();
+        $this->postJson("/api/v1/payroll/irt-tables/{$irtId}/activate")->assertOk();
+
+        $resolved = $this->getJson("/api/v1/payroll/periods/{$period->id}/validations")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertTrue($resolved['is_valid']);
+        $this->assertSame(0, $resolved['blocking_count']);
+        $this->assertNotContains('MISSING_INSS_RULE', array_column($resolved['errors'], 'code'));
+        $this->assertNotContains('MISSING_IRT_TABLE', array_column($resolved['errors'], 'code'));
+    }
 }

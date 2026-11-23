@@ -679,7 +679,13 @@ export function SuperAdminPage() {
       toast.error(t('superAdminPage.tenantPermissionRequired'))
       return
     }
-    createPlatformUser.mutate({ ...platformUserForm, tenant_accesses: platformUserAccesses })
+    createPlatformUser.mutate({
+      ...platformUserForm,
+      tenant_accesses: platformUserAccesses.map((a) => ({
+        ...a,
+        permissions: normalizeTenantPermissions(a.permissions),
+      })),
+    })
   }
 
   const openPlatformUserEdit = (user: PlatformUser) => {
@@ -697,7 +703,10 @@ export function SuperAdminPage() {
     updatePlatformUser.mutate({
       id: editingPlatformUser.id,
       permissions: platformUserPermissions,
-      tenant_accesses: editingPlatformUserAccesses,
+      tenant_accesses: editingPlatformUserAccesses.map((a) => ({
+        ...a,
+        permissions: normalizeTenantPermissions(a.permissions),
+      })),
     })
   }
 
@@ -721,9 +730,22 @@ export function SuperAdminPage() {
     setUserForm((prev) => ({ ...prev, role, permissions: defaults }))
   }
 
+  const platformOnlyPerms = new Set([
+    'manage_platform',
+    'manage_super_admins',
+    'view_any_tenant',
+    'view_tenant',
+    'create_tenant',
+    'update_tenant',
+    'delete_tenant',
+    'restore_tenant',
+    'force_delete_tenant',
+  ])
+
   const normalizeTenantPermissions = (perms: string[]) => {
     const allowed = new Set((tenantPermissionsQuery.data?.permissions ?? []).map((p) => p.name))
-    const filtered = allowed.size > 0 ? perms.filter((p) => allowed.has(p)) : [...perms]
+    const withoutPlatform = perms.filter((p) => !platformOnlyPerms.has(p))
+    const filtered = allowed.size > 0 ? withoutPlatform.filter((p) => allowed.has(p)) : withoutPlatform
     return [...new Set(filtered)]
   }
 
@@ -1929,13 +1951,14 @@ export function SuperAdminPage() {
             </div>
 
             <TenantAccessScopeEditor
+              key={`create-platform-user-${platformUserDialogOpen}`}
               tenants={scopeTenantsList}
               permissionGroups={permissionGroupsList}
-              allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : platformPermissionList}
+              allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : normalizeTenantPermissions(platformPermissionList.map((p) => p.name)).map((name) => ({ name, group_name: platformPermissionList.find((p) => p.name === name)?.group_name ?? null }))}
               accesses={platformUserAccesses}
               onChange={setPlatformUserAccesses}
               defaultRole="hr-manager"
-              basePermissions={platformUserForm.permissions}
+              basePermissions={normalizeTenantPermissions(platformUserForm.permissions)}
             />
 
             <div className="flex justify-end gap-2">
@@ -1996,13 +2019,14 @@ export function SuperAdminPage() {
             />
 
             <TenantAccessScopeEditor
+              key={`edit-platform-user-${editingPlatformUser?.id ?? 'none'}`}
               tenants={scopeTenantsList}
               permissionGroups={permissionGroupsList}
-              allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : platformPermissionList}
+              allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : normalizeTenantPermissions(platformPermissionList.map((p) => p.name)).map((name) => ({ name, group_name: platformPermissionList.find((p) => p.name === name)?.group_name ?? null }))}
               accesses={editingPlatformUserAccesses}
               onChange={setEditingPlatformUserAccesses}
               defaultRole="hr-manager"
-              basePermissions={platformUserPermissions}
+              basePermissions={normalizeTenantPermissions(platformUserPermissions)}
             />
 
             <div className="flex justify-end gap-2">

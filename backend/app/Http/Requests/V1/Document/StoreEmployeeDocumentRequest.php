@@ -13,6 +13,21 @@ class StoreEmployeeDocumentRequest extends FormRequest
         return $this->user()->can('create', EmployeeDocument::class);
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('is_confidential')) {
+            $raw = $this->input('is_confidential');
+            if (is_string($raw)) {
+                $normalized = strtolower(trim($raw));
+                if ($normalized === 'true') {
+                    $this->merge(['is_confidential' => true]);
+                } elseif ($normalized === 'false') {
+                    $this->merge(['is_confidential' => false]);
+                }
+            }
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */

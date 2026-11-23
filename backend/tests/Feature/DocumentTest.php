@@ -79,6 +79,41 @@ class DocumentTest extends TestCase
         ]);
     }
 
+    public function test_hr_manager_can_upload_document_with_string_boolean_and_optional_metadata(): void
+    {
+        [$tenant, , $user] = $this->setupEmployeeUser('hr-manager');
+        $other = Employee::factory()->create(['tenant_id' => $tenant->id]);
+        $this->mock(CloudinaryService::class)
+            ->shouldReceive('upload')
+            ->twice()
+            ->andReturn(['url' => 'https://res.cloudinary.com/test/raw/upload/outro.pdf', 'bytes' => 512]);
+
+        $this->actingAs($user, 'sanctum');
+
+        $this->post('/api/v1/documents', [
+            'employee_id' => $other->id,
+            'name' => 'Comprovativo de Residência',
+            'document_type' => 'other',
+            'expiry_date' => '2028-12-31',
+            'notes' => 'Documento entregue presencialmente',
+            'is_confidential' => 'false',
+            'file' => UploadedFile::fake()->create('residencia.pdf', 512, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('data.is_confidential', false)
+            ->assertJsonPath('data.expiry_date', '2028-12-31');
+
+        $this->post('/api/v1/documents', [
+            'employee_id' => $other->id,
+            'name' => 'Registo Confidencial',
+            'document_type' => 'other',
+            'is_confidential' => 'true',
+            'file' => UploadedFile::fake()->create('confidencial.pdf', 512, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('data.is_confidential', true);
+    }
+
     public function test_employee_cannot_upload_document(): void
     {
         [$tenant, $employee, $user] = $this->setupEmployeeUser('employee');

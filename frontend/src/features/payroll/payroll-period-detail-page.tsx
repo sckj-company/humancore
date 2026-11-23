@@ -7,6 +7,7 @@ import {
   TrendingUp, Wallet, Building2, AlertTriangle, AlertCircle, Info,
   Loader2, Clock, Calendar, FileText, BarChart3, XCircle, Send,
   Banknote, RotateCcw, History, X, ExternalLink, Settings2, Calculator, Plus, Trash2, Search,
+  Printer, RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getApiErrorMessage } from '@/lib/api'
@@ -36,6 +37,7 @@ import type {
   PayrollPeriod,
   PayrollPeriodEvent,
   PayrollRecord,
+  PayrollValidationIssue,
   PayrollValidationReport,
 } from '@/types'
 
@@ -78,6 +80,51 @@ function formatSignedAmount(amount: number | null | undefined): string {
   if (amount == null || !Number.isFinite(amount)) return '—'
   const abs = Math.abs(amount)
   return `${amount < 0 ? '-' : ''}${fmtCurrency(abs)}`
+}
+
+const LIVE_CHECKED_VALIDATION_CODES = new Set([
+  'MISSING_CONTRACT',
+  'EXPIRED_CONTRACT',
+  'MISSING_INSS_RULE',
+  'MISSING_IRT_TABLE',
+])
+
+function formatValidationIssueMessage(
+  t: ReturnType<typeof useTranslation>['t'],
+  issue: {
+    code: string
+    message: string
+    employee_name?: string
+    params?: Record<string, string | number | null | undefined>
+  },
+  fallbackEmployeeName?: string,
+): string {
+  const employeeName = issue.employee_name ?? issue.params?.employee_name ?? fallbackEmployeeName ?? ''
+  return t(`payroll.detail.validation.issues.${issue.code}`, {
+    ...(issue.params ?? {}),
+    employee_name: employeeName,
+    defaultValue: issue.message,
+  })
+}
+
+function getValidationIssueAction(issue: PayrollValidationIssue): { to: string; labelKey: string; defaultLabel: string } | null {
+  switch (issue.code) {
+    case 'MISSING_INSS_RULE':
+      return { to: '/settings/payroll-tax-rules?tab=inss', labelKey: 'payroll.detail.validation.resolveInss', defaultLabel: 'Configurar INSS' }
+    case 'MISSING_IRT_TABLE':
+      return { to: '/settings/payroll-tax-rules?tab=irt', labelKey: 'payroll.detail.validation.resolveIrt', defaultLabel: 'Configurar IRT' }
+    case 'MISSING_CONTRACT':
+    case 'EXPIRED_CONTRACT':
+      return issue.employee_id
+        ? { to: `/employees/${issue.employee_id}?tab=contract`, labelKey: 'payroll.detail.validation.resolveContract', defaultLabel: 'Gerir contrato' }
+        : null
+    case 'UNREGULATED_COMPONENT':
+      return { to: '/settings/salary-component-regulations', labelKey: 'payroll.detail.validation.resolveRegulation', defaultLabel: 'Regulamentar' }
+    case 'PENDING_LEAVES':
+      return { to: '/leave', labelKey: 'payroll.detail.validation.resolveLeaves', defaultLabel: 'Ver licenças' }
+    default:
+      return null
+  }
 }
 
 // ─── Status config ──────────────────────────────────────────────────────────
@@ -152,6 +199,9 @@ export function PayrollPeriodDetailPage() {
     queryKey: ['payroll-period', id],
     queryFn: () => api.get<PayrollPeriod>(`payroll/periods/${id}`),
     enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     refetchInterval: (query) => (query.state.data?.status === 'processing' ? 800 : false),
   })
 
@@ -163,10 +213,17 @@ export function PayrollPeriodDetailPage() {
     statusNow === 'completed' ||
     statusNow === 'pending_validation'
 
-  const { data: validationReport } = useQuery({
+  const {
+    data: validationReport,
+    refetch: refetchValidations,
+    isFetching: isValidating,
+  } = useQuery({
     queryKey: ['payroll-period-validations', id],
     queryFn: () => api.get<PayrollValidationReport>(`payroll/periods/${id}/validations`),
     enabled: !!id && needsValidation,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   })
 
   const invalidate = () => {
@@ -180,56 +237,56 @@ export function PayrollPeriodDetailPage() {
   const submitMutation = useMutation({
     mutationFn: () => api.post(`payroll/periods/${id}/submit`),
     onSuccess: () => {
-      toast.success('Período submetido para aprovação')
+      toast.success(t('payroll.detail.messages.submitted', { defaultValue: 'Período submetido para aprovação' }))
       setWarningsAck(false)
       invalidate()
       setSearchParams({ tab: 'validations' }, { replace: true })
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao submeter')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.messages.submitError', { defaultValue: 'Erro ao submeter' }))),
   })
 
   const approveMutation = useMutation({
     mutationFn: () => api.post(`payroll/periods/${id}/approve`),
     onSuccess: () => {
-      toast.success('Folha aprovada com sucesso')
+      toast.success(t('payroll.detail.messages.approved', { defaultValue: 'Folha aprovada com sucesso' }))
       setApproveOpen(false)
       invalidate()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao aprovar')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.messages.approveError', { defaultValue: 'Erro ao aprovar' }))),
   })
 
   const rejectMutation = useMutation({
     mutationFn: (reason: string) => api.post(`payroll/periods/${id}/reject`, { reason }),
     onSuccess: () => {
-      toast.success('Folha rejeitada; devolvida para correções')
+      toast.success(t('payroll.detail.messages.rejected', { defaultValue: 'Folha rejeitada; devolvida para correções' }))
       setRejectOpen(false)
       setRejectReason('')
       invalidate()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao rejeitar')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.messages.rejectError', { defaultValue: 'Erro ao rejeitar' }))),
   })
 
   const closeMutation = useMutation({
     mutationFn: () => api.post(`payroll/periods/${id}/close`),
-    onSuccess: () => { toast.success('Período fechado'); invalidate() },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao fechar')),
+    onSuccess: () => { toast.success(t('payroll.detail.messages.closed', { defaultValue: 'Período fechado' })); invalidate() },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.messages.closeError', { defaultValue: 'Erro ao fechar' }))),
   })
 
   const reopenMutation = useMutation({
     mutationFn: (reason: string) => api.post(`payroll/periods/${id}/reopen`, { reason }),
     onSuccess: () => {
-      toast.success('Período reaberto para recálculo')
+      toast.success(t('payroll.detail.messages.reopened', { defaultValue: 'Período reaberto para recálculo' }))
       setReopenOpen(false)
       setReopenReason('')
       invalidate()
     },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao reabrir')),
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.messages.reopenError', { defaultValue: 'Erro ao reabrir' }))),
   })
 
   const payMutation = useMutation({
     mutationFn: () => api.post(`payroll/periods/${id}/pay`),
-    onSuccess: () => { toast.success('Pagamento registado'); invalidate() },
-    onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao registar pagamento')),
+    onSuccess: () => { toast.success(t('payroll.detail.messages.paid', { defaultValue: 'Pagamento registado' })); invalidate() },
+    onError: (e) => toast.error(getApiErrorMessage(e, t('payroll.detail.messages.payError', { defaultValue: 'Erro ao registar pagamento' }))),
   })
 
   const recalculateMutation = useMutation({
@@ -267,35 +324,67 @@ export function PayrollPeriodDetailPage() {
     })
   }
 
+  const printBulkPayslips = (recordIds: number[]) => {
+    if (recordIds.length === 0) {
+      toast.warning(t('payroll.detail.selectAtLeastOneEmployee', { defaultValue: 'Selecione pelo menos um funcionário.' }))
+      return
+    }
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      const printWindow = window.open('', '_blank')
+      const tid = toast.loading(t('payroll.detail.bulkPayslipsGenerating', { defaultValue: 'A gerar recibos selecionados…' }))
+      try {
+        const blob = await api.fetchBlobPost(
+          `payroll/periods/${id}/payslips/bulk.pdf`,
+          { record_ids: recordIds, lang, disposition: 'inline' },
+        )
+        const blobUrl = URL.createObjectURL(blob)
+        if (printWindow) {
+          printWindow.location.href = blobUrl
+          window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+        } else {
+          const anchor = document.createElement('a')
+          anchor.href = blobUrl
+          anchor.download = `recibos-lote-${id}.pdf`
+          document.body.appendChild(anchor)
+          anchor.click()
+          anchor.remove()
+          window.setTimeout(() => URL.revokeObjectURL(blobUrl), 5_000)
+        }
+        toast.success(t('payroll.detail.bulkPayslipsReady', { defaultValue: 'Recibos prontos para impressão.' }), { id: tid })
+      } catch (error) {
+        printWindow?.close()
+        toast.error(getApiErrorMessage(error, t('payroll.detail.bulkPayslipsError', { defaultValue: 'Não foi possível gerar os recibos em massa.' })), { id: tid })
+      }
+    })
+  }
+
+  const downloadBulkPayslips = (recordIds: number[], filename: string) => {
+    if (recordIds.length === 0) {
+      toast.warning(t('payroll.detail.selectAtLeastOneEmployee', { defaultValue: 'Selecione pelo menos um funcionário.' }))
+      return
+    }
+    pdfPrompt.requestPdf(async (lang: PdfLanguage) => {
+      const tid = toast.loading(t('payroll.detail.bulkPayslipsGenerating', { defaultValue: 'A gerar recibos selecionados…' }))
+      try {
+        await api.downloadFilePost(
+          `payroll/periods/${id}/payslips/bulk.pdf`,
+          { record_ids: recordIds, lang, disposition: 'attachment' },
+          filename,
+        )
+        toast.success(t('payslips.downloaded'), { id: tid })
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, t('payroll.detail.bulkPayslipsError', { defaultValue: 'Não foi possível gerar os recibos em massa.' })), { id: tid })
+      }
+    })
+  }
+
   if (isLoading) return <LoadingState />
-  if (isError) return <ErrorState message="Não foi possível carregar o período." onRetry={refetch} />
+  if (isError) return <ErrorState message={t('payroll.detail.messages.loadError', { defaultValue: 'Não foi possível carregar o período.' })} onRetry={refetch} />
   if (!data) return null
 
   const records = data.records ?? []
   const status = statusConfig[data.status] ?? { label: data.status, color: 'bg-muted text-muted-foreground' }
 
-  const blockingCount = validationReport?.blocking_count ?? 0
-  const warningCount = validationReport?.warning_count ?? 0
-  const canSubmit =
-    (data.status === 'completed' || data.status === 'pending_validation') &&
-    hasPermission(user, 'process_payroll') &&
-    blockingCount === 0 &&
-    (warningCount === 0 || warningsAck)
-  const submitDisabledReason =
-    blockingCount > 0
-      ? `Existem ${blockingCount} erro(s) impeditivo(s). Corrija antes de submeter.`
-      : warningCount > 0 && !warningsAck
-        ? 'Confirme que reviu os avisos antes de submeter.'
-        : undefined
-
-  // KPI calculations
-  const totalGross = data.total_gross ?? records.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
-  const totalNet = data.total_net ?? records.reduce((s, r) => s + (r.net_salary ?? 0), 0)
-  const totalEmployerCost = data.totals_snapshot?.total_employer_cost
-    ?? records.reduce((s, r) => s + (r.employer_cost ?? r.gross_salary ?? 0), 0)
-  const employeeCount = data.employee_count ?? records.length
-
-  // Validations
   const recordsWithErrors = records.filter(
     (r) => r.validation_errors && r.validation_errors.length > 0,
   )
@@ -305,6 +394,33 @@ export function PayrollPeriodDetailPage() {
   const warnings = recordsWithErrors.filter((r) =>
     r.validation_errors?.every((e) => e.severity !== 'error' && e.severity !== 'blocking'),
   )
+
+  const hasLiveReport = validationReport !== undefined
+  const blockingCount = hasLiveReport ? validationReport.blocking_count : blockingErrors.length
+  const warningCount = hasLiveReport ? validationReport.warning_count : warnings.length
+  const canSubmit =
+    (data.status === 'completed' || data.status === 'pending_validation') &&
+    hasPermission(user, 'process_payroll') &&
+    blockingCount === 0 &&
+    (warningCount === 0 || warningsAck)
+  const submitDisabledReason =
+    blockingCount > 0
+      ? t('payroll.detail.validation.submitBlockedErrors', {
+          count: blockingCount,
+          defaultValue: `Existem ${blockingCount} erro(s) impeditivo(s). Corrija antes de submeter.`,
+        })
+      : warningCount > 0 && !warningsAck
+        ? t('payroll.detail.validation.submitConfirmWarnings', {
+            defaultValue: 'Confirme que reviu os avisos antes de submeter.',
+          })
+        : undefined
+
+  // KPI calculations
+  const totalGross = data.total_gross ?? records.reduce((s, r) => s + (r.gross_salary ?? 0), 0)
+  const totalNet = data.total_net ?? records.reduce((s, r) => s + (r.net_salary ?? 0), 0)
+  const totalEmployerCost = data.totals_snapshot?.total_employer_cost
+    ?? records.reduce((s, r) => s + (r.employer_cost ?? r.gross_salary ?? 0), 0)
+  const employeeCount = data.employee_count ?? records.length
 
   const events = data.events ?? []
 
@@ -509,11 +625,15 @@ export function PayrollPeriodDetailPage() {
           <TabsTrigger value="validations" className="gap-1.5 px-3 py-1.5 text-xs">
             <AlertTriangle className="h-3.5 w-3.5" />
             {t('payroll.detail.validationsTab')}
-            {(recordsWithErrors.length > 0 || blockingCount > 0) && (
+            {blockingCount > 0 ? (
               <Badge variant="destructive" className="ml-0.5 text-[10px] h-4 px-1 font-semibold">
-                {Math.max(recordsWithErrors.length, blockingCount)}
+                {blockingCount}
               </Badge>
-            )}
+            ) : warningCount > 0 ? (
+              <Badge variant="outline" className="ml-0.5 text-[10px] h-4 px-1 font-semibold border-amber-500/40 bg-amber-500/10 text-amber-700">
+                {warningCount}
+              </Badge>
+            ) : null}
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5 px-3 py-1.5 text-xs">
             <History className="h-3.5 w-3.5" />{t('payroll.detail.historyTab')}
@@ -524,6 +644,7 @@ export function PayrollPeriodDetailPage() {
         <TabsContent value="summary" className="mt-4">
           <SummaryTab
             records={records}
+            validationReport={validationReport}
             periodStatus={data.status}
             periodId={data.id}
             canEditRecords={!['closed', 'paid', 'cancelled'].includes(data.status) && hasPermission(user, 'process_payroll')}
@@ -533,6 +654,8 @@ export function PayrollPeriodDetailPage() {
             }}
             onDownloadPeriod={downloadPeriodPayroll}
             onDownloadPayslip={downloadPayslip}
+            onPrintBulkPayslips={printBulkPayslips}
+            onDownloadBulkPayslips={downloadBulkPayslips}
           />
         </TabsContent>
 
@@ -542,13 +665,18 @@ export function PayrollPeriodDetailPage() {
             report={validationReport}
             blockingErrors={blockingErrors}
             warnings={warnings}
-            allClean={recordsWithErrors.length === 0 && (!validationReport || (validationReport.blocking_count === 0 && validationReport.warning_count === 0))}
+            allClean={blockingCount === 0 && warningCount === 0}
             warningsAck={warningsAck}
             onWarningsAckChange={setWarningsAck}
             canSubmit={canSubmit}
             submitDisabledReason={submitDisabledReason}
             isSubmitting={submitMutation.isPending}
             onSubmit={() => submitMutation.mutate()}
+            isValidating={isValidating}
+            onRevalidate={() => {
+              void refetch()
+              void refetchValidations()
+            }}
             showSubmit={
               (data.status === 'completed' || data.status === 'pending_validation') &&
               hasPermission(user, 'process_payroll')
@@ -829,6 +957,7 @@ function resolveLiveItemMetrics(
 
 function SummaryTab({
   records,
+  validationReport,
   periodStatus,
   periodId,
   canEditRecords,
@@ -836,8 +965,11 @@ function SummaryTab({
   onRecalculate,
   onDownloadPeriod,
   onDownloadPayslip,
+  onPrintBulkPayslips,
+  onDownloadBulkPayslips,
 }: {
   records: PayrollRecord[]
+  validationReport?: PayrollValidationReport
   periodStatus: string
   periodId: number
   canEditRecords: boolean
@@ -845,15 +977,41 @@ function SummaryTab({
   onRecalculate: (payload: Array<Record<string, unknown>>) => Promise<void>
   onDownloadPeriod: (filename: string) => void
   onDownloadPayslip: (id: number, filename: string) => void
+  onPrintBulkPayslips: (recordIds: number[]) => void
+  onDownloadBulkPayslips: (recordIds: number[], filename: string) => void
 }) {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const [selectedRecordIds, setSelectedRecordIds] = useState<Set<number>>(new Set())
   const [drafts, setDrafts] = useState<Record<number, RecordDraft>>({})
   const [search, setSearch] = useState('')
   const [departmentFilter, setDepartmentFilter] = useState('all')
   const [recordStatusFilter, setRecordStatusFilter] = useState('all')
   const [contractTypeFilter, setContractTypeFilter] = useState('all')
+
+  const validSelectedIds = useMemo(() => {
+    const existing = new Set(records.map((r) => r.id))
+    return new Set([...selectedRecordIds].filter((rid) => existing.has(rid)))
+  }, [records, selectedRecordIds])
+
+  const liveIssueKeySet = useMemo(() => {
+    if (!validationReport) return null
+    const keys = new Set<string>()
+    for (const issue of [...validationReport.errors, ...validationReport.warnings]) {
+      keys.add(`${issue.code}:${issue.employee_id ?? 'period'}`)
+    }
+    return keys
+  }, [validationReport])
+
+  const getActiveRecordAlerts = (r: PayrollRecord) => {
+    const raw = r.validation_errors ?? []
+    if (!liveIssueKeySet) return raw
+    return raw.filter((err) => {
+      if (!LIVE_CHECKED_VALIDATION_CODES.has(err.code)) return true
+      return liveIssueKeySet.has(`${err.code}:${r.employee_id}`) || liveIssueKeySet.has(`${err.code}:period`)
+    })
+  }
 
   const departmentOptions = useMemo(() => {
     const names = new Set<string>()
@@ -917,7 +1075,7 @@ function SummaryTab({
   const canEditAttendance = canEditRecords && hasFieldPermission(user, 'payroll', 'attendance_metrics', 'edit')
   const canEditAllowances = canEditRecords && hasFieldPermission(user, 'payroll', 'allowances', 'edit')
   const canEditDeductions = canEditRecords && hasFieldPermission(user, 'payroll', 'deductions', 'edit')
-  const visibleColumnCount = 3
+  const visibleColumnCount = 4
     + (canViewBase ? 1 : 0)
     + (canViewGross ? 1 : 0)
     + (canViewInss ? 1 : 0)
@@ -939,6 +1097,27 @@ function SummaryTab({
   }
 
   const allExpanded = filteredRecords.length > 0 && filteredRecords.every((r) => expandedIds.has(r.id))
+  const allFilteredSelected = filteredRecords.length > 0 && filteredRecords.every((r) => validSelectedIds.has(r.id))
+  const someFilteredSelected = filteredRecords.some((r) => validSelectedIds.has(r.id)) && !allFilteredSelected
+  const toggleSelectRecord = (recordId: number) => {
+    setSelectedRecordIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(recordId)) next.delete(recordId)
+      else next.add(recordId)
+      return next
+    })
+  }
+  const toggleSelectAllFiltered = () => {
+    setSelectedRecordIds((prev) => {
+      const next = new Set(prev)
+      if (allFilteredSelected) {
+        for (const r of filteredRecords) next.delete(r.id)
+      } else {
+        for (const r of filteredRecords) next.add(r.id)
+      }
+      return next
+    })
+  }
   const dirtyCount = Object.keys(drafts).length
   const outdatedRecords = records.filter((r) => r.is_outdated)
   const handleRecalculateOutdated = async () => {
@@ -1078,6 +1257,16 @@ function SummaryTab({
               </Button>
               <Button
                 size="sm"
+                variant={validSelectedIds.size > 0 ? 'default' : 'outline'}
+                onClick={() => onPrintBulkPayslips(Array.from(validSelectedIds))}
+              >
+                <Printer className="mr-1.5 h-4 w-4" />
+                {validSelectedIds.size > 0
+                  ? `${t('payroll.detail.printBulkPayslips', { defaultValue: 'Imprimir recibos' })} (${validSelectedIds.size})`
+                  : t('payroll.detail.printBulkPayslips', { defaultValue: 'Imprimir recibos' })}
+              </Button>
+              <Button
+                size="sm"
                 variant="outline"
                 onClick={() => onDownloadPeriod(`folha-salarial-${periodId}.pdf`)}
               >
@@ -1086,6 +1275,41 @@ function SummaryTab({
               </Button>
             </div>
           </div>
+          {validSelectedIds.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-primary/20 bg-primary/5 px-5 py-2.5">
+              <span className="text-xs font-medium text-primary">
+                {t('payroll.detail.selectedEmployeesCount', {
+                  count: validSelectedIds.size,
+                  defaultValue: `${validSelectedIds.size} funcionário(s) selecionado(s)`,
+                })}
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => onPrintBulkPayslips(Array.from(validSelectedIds))}
+                >
+                  <Printer className="mr-1.5 h-3.5 w-3.5" />
+                  {t('payroll.detail.printBulkPayslips', { defaultValue: 'Imprimir recibos' })} ({validSelectedIds.size})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onDownloadBulkPayslips(Array.from(validSelectedIds), `recibos-lote-${periodId}.pdf`)}
+                >
+                  <FileDown className="mr-1.5 h-3.5 w-3.5" />
+                  {t('payroll.detail.downloadBulkPayslips', { defaultValue: 'Descarregar PDF' })} ({validSelectedIds.size})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedRecordIds(new Set())}
+                >
+                  <X className="mr-1.5 h-3.5 w-3.5" />
+                  {t('payroll.detail.clearSelection', { defaultValue: 'Limpar seleção' })}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/15 px-5 py-3">
             <div className="relative min-w-[200px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1149,6 +1373,13 @@ function SummaryTab({
           <table className="w-full">
             <thead className="border-b border-border bg-muted/30 text-left text-xs uppercase text-muted-foreground">
               <tr>
+                <th className="w-10 px-4 py-3">
+                  <Checkbox
+                    checked={allFilteredSelected ? true : someFilteredSelected ? 'indeterminate' : false}
+                    onCheckedChange={toggleSelectAllFiltered}
+                    aria-label={t('payroll.detail.selectAllVisible', { defaultValue: 'Selecionar todos os funcionários visíveis' })}
+                  />
+                </th>
                 <th className="px-5 py-3 font-medium">{t('payroll.detail.employee')}</th>
                 {canViewBase && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.base')}</th>}
                 {canViewGross && <th className="px-5 py-3 font-medium text-right">{t('payroll.detail.gross')}</th>}
@@ -1172,8 +1403,10 @@ function SummaryTab({
                 const inssAmount = getPayrollComponent(r, 'inss')?.amount ?? null
                 const irtAmount = getPayrollComponent(r, 'irt')?.amount ?? Math.abs(r.total_taxes ?? 0)
                 const otherDeductions = Math.max(0, (r.total_deductions ?? 0) - (inssAmount ?? 0))
-                const hasErrors = Boolean(r.validation_errors && r.validation_errors.length > 0)
+                const activeAlerts = getActiveRecordAlerts(r)
+                const hasErrors = activeAlerts.length > 0
                 const isExpanded = expandedIds.has(r.id)
+                const isSelected = validSelectedIds.has(r.id)
                 const lateMinutes = r.details?.late_minutes ?? 0
                 const draft = drafts[r.employee_id]
                 const isDirty = Boolean(draft)
@@ -1184,8 +1417,18 @@ function SummaryTab({
                     <tr
                       onClick={() => toggleRow(r.id)}
                       aria-expanded={isExpanded}
-                      className={`cursor-pointer transition-colors hover:bg-muted/40 ${isExpanded ? 'bg-muted/30' : ''}`}
+                      className={`cursor-pointer transition-colors hover:bg-muted/40 ${isExpanded ? 'bg-muted/30' : isSelected ? 'bg-primary/[0.04]' : ''}`}
                     >
+                      <td className="w-10 px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelectRecord(r.id)}
+                          aria-label={t('payroll.detail.selectEmployee', {
+                            name: r.employee?.full_name ?? `#${r.employee_id}`,
+                            defaultValue: `Selecionar ${r.employee?.full_name ?? `#${r.employee_id}`}`,
+                          })}
+                        />
+                      </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2.5">
                           <span className="text-muted-foreground shrink-0">
@@ -1360,12 +1603,14 @@ function SummaryTab({
                                   {t('payroll.detail.validationAlerts')}
                                 </p>
                                 <ul className="space-y-1 text-xs text-muted-foreground">
-                                  {r.validation_errors?.map((err, idx) => (
-                                    <li key={idx} className="flex items-center gap-2">
-                                      <Badge variant={err.severity === 'error' || err.severity === 'blocking' ? 'destructive' : 'outline'} className="text-[10px] h-4 px-1">
-                                        {err.severity}
+                                  {activeAlerts.map((err, idx) => (
+                                    <li key={idx} className="flex items-start gap-2">
+                                      <Badge variant={err.severity === 'error' || err.severity === 'blocking' ? 'destructive' : 'outline'} className="text-[10px] h-4 px-1 shrink-0 mt-0.5">
+                                        {t(`payroll.detail.validation.severity.${err.severity}`, { defaultValue: err.severity })}
                                       </Badge>
-                                      <span>{err.message}</span>
+                                      <span className="whitespace-pre-line">
+                                        {formatValidationIssueMessage(t, err, r.employee?.full_name)}
+                                      </span>
                                     </li>
                                   ))}
                                 </ul>
@@ -1507,6 +1752,7 @@ function SummaryTab({
             {/* Footer totals */}
             <tfoot className="border-t-2 border-border bg-muted/40 text-sm font-semibold">
               <tr>
+                <td className="w-10 px-4 py-3" />
                 <td className="px-5 py-3 text-muted-foreground uppercase text-xs">{t('payroll.detail.totals')}</td>
                 {canViewBase && <td className="px-5 py-3 text-right font-mono">—</td>}
                 {canViewGross && <td className="px-5 py-3 text-right font-mono">{fmtCurrency(totalsGross)}</td>}
@@ -1950,9 +2196,15 @@ function EmployeeRecordDetail({
       {/* Snapshot info */}
       {record.engine_version && (
         <p className="text-xs text-muted-foreground text-right">
-          Motor salarial v{record.engine_version}
+          {t('payroll.detail.engineVersion', {
+            version: record.engine_version,
+            defaultValue: `Motor salarial v${record.engine_version}`,
+          })}
           {record.snapshot && typeof record.snapshot === 'object' && (record.snapshot as any).calculated_at
-            ? ` · Calculado em ${(record.snapshot as any).calculated_at}`
+            ? ` · ${t('payroll.detail.calculatedAt', {
+                date: (record.snapshot as any).calculated_at,
+                defaultValue: `Calculado em ${(record.snapshot as any).calculated_at}`,
+              })}`
             : ''}
         </p>
       )}
@@ -1996,6 +2248,8 @@ function ValidationsTab({
   submitDisabledReason,
   isSubmitting,
   onSubmit,
+  isValidating,
+  onRevalidate,
   showSubmit,
 }: {
   report?: PayrollValidationReport
@@ -2008,17 +2262,29 @@ function ValidationsTab({
   submitDisabledReason?: string
   isSubmitting: boolean
   onSubmit: () => void
+  isValidating: boolean
+  onRevalidate: () => void
   showSubmit: boolean
 }) {
   const { t } = useTranslation()
+  const hasLiveReport = report !== undefined
   const periodErrors = report?.errors ?? []
   const periodWarnings = report?.warnings ?? []
-  const hasBlocking = (report?.blocking_count ?? 0) > 0 || blockingErrors.length > 0
-  const hasWarnings = (report?.warning_count ?? 0) > 0 || warnings.length > 0
+  const displayBlockingCount = hasLiveReport ? report.blocking_count : blockingErrors.length
+  const displayWarningCount = hasLiveReport ? report.warning_count : warnings.length
+  const hasBlocking = displayBlockingCount > 0
+  const hasWarnings = displayWarningCount > 0
   const trulyClean = allClean && !hasBlocking && !hasWarnings
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <Button type="button" size="sm" variant="outline" onClick={onRevalidate} disabled={isValidating}>
+          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isValidating ? 'animate-spin' : ''}`} />
+          {t('payroll.detail.validation.revalidate', { defaultValue: 'Revalidar' })}
+        </Button>
+      </div>
+
       {showSubmit && (
         <Card className="border-border/80">
           <CardContent className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2077,22 +2343,36 @@ function ValidationsTab({
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-destructive">
               <XCircle className="h-4 w-4" />
-              {t('payroll.detail.validation.blockingTitle')} ({Math.max(report?.blocking_count ?? 0, blockingErrors.length)})
+              {t('payroll.detail.validation.blockingTitle')} ({displayBlockingCount})
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-3">
-            {periodErrors.map((e, i) => (
-              <div key={`period-err-${i}`} className="flex items-start gap-3 rounded-lg bg-destructive/5 border border-destructive/20 p-3">
-                <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-destructive">
-                    {e.employee_name ?? t('payroll.detail.validation.period')}
-                  </p>
-                  <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
+            {hasLiveReport ? periodErrors.map((e, i) => {
+              const action = getValidationIssueAction(e)
+              return (
+                <div key={`period-err-${i}`} className="flex items-start justify-between gap-3 rounded-lg bg-destructive/5 border border-destructive/20 p-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-destructive">
+                        {e.employee_name ?? t('payroll.detail.validation.period')}
+                      </p>
+                      <p className="text-xs text-muted-foreground whitespace-pre-line">
+                        {formatValidationIssueMessage(t, e)}
+                      </p>
+                    </div>
+                  </div>
+                  {action && (
+                    <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs" asChild>
+                      <Link to={action.to}>
+                        <ExternalLink className="mr-1 h-3 w-3" />
+                        {t(action.labelKey, { defaultValue: action.defaultLabel })}
+                      </Link>
+                    </Button>
+                  )}
                 </div>
-              </div>
-            ))}
-            {blockingErrors.map((r) =>
+              )
+            }) : blockingErrors.map((r) =>
               r.validation_errors
                 ?.filter((e) => e.severity === 'error' || e.severity === 'blocking')
                 .map((e, i) => (
@@ -2102,7 +2382,9 @@ function ValidationsTab({
                       <p className="text-sm font-medium text-destructive">
                         {r.employee?.full_name ?? `${t('payroll.detail.employee')} #${r.employee_id}`}
                       </p>
-                      <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
+                      <p className="text-xs text-muted-foreground whitespace-pre-line">
+                        {formatValidationIssueMessage(t, e, r.employee?.full_name)}
+                      </p>
                     </div>
                   </div>
                 )),
@@ -2116,22 +2398,36 @@ function ValidationsTab({
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-700">
               <AlertCircle className="h-4 w-4" />
-              {t('payroll.detail.validation.warningsTitle')} ({Math.max(report?.warning_count ?? 0, warnings.length)})
+              {t('payroll.detail.validation.warningsTitle')} ({displayWarningCount})
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-3">
-            {periodWarnings.map((e, i) => (
-              <div key={`period-warn-${i}`} className="flex items-start gap-3 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
-                <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-amber-700">
-                    {e.employee_name ?? t('payroll.detail.validation.period')}
-                  </p>
-                  <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
+            {hasLiveReport ? periodWarnings.map((e, i) => {
+              const action = getValidationIssueAction(e)
+              return (
+                <div key={`period-warn-${i}`} className="flex items-start justify-between gap-3 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-amber-700">
+                        {e.employee_name ?? t('payroll.detail.validation.period')}
+                      </p>
+                      <p className="text-xs text-muted-foreground whitespace-pre-line">
+                        {formatValidationIssueMessage(t, e)}
+                      </p>
+                    </div>
+                  </div>
+                  {action && (
+                    <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs" asChild>
+                      <Link to={action.to}>
+                        <ExternalLink className="mr-1 h-3 w-3" />
+                        {t(action.labelKey, { defaultValue: action.defaultLabel })}
+                      </Link>
+                    </Button>
+                  )}
                 </div>
-              </div>
-            ))}
-            {warnings.map((r) =>
+              )
+            }) : warnings.map((r) =>
               r.validation_errors
                 ?.filter((e) => e.severity !== 'error' && e.severity !== 'blocking')
                 .map((e, i) => (
@@ -2141,7 +2437,9 @@ function ValidationsTab({
                       <p className="text-sm font-medium text-amber-700">
                         {r.employee?.full_name ?? `${t('payroll.detail.employee')} #${r.employee_id}`}
                       </p>
-                      <p className="text-xs text-muted-foreground font-mono">[{e.code}] {e.message}</p>
+                      <p className="text-xs text-muted-foreground whitespace-pre-line">
+                        {formatValidationIssueMessage(t, e, r.employee?.full_name)}
+                      </p>
                     </div>
                   </div>
                 )),

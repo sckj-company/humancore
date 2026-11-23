@@ -168,6 +168,8 @@ function ApproveButton({ leave }: { leave: LeaveRequest }) {
       toast.success('Pedido aprovado')
       queryClient.invalidateQueries({ queryKey: ['leave-requests'] })
       queryClient.invalidateQueries({ queryKey: ['leave-balance'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao aprovar')),
   })
@@ -186,6 +188,8 @@ function RejectButton({ leave }: { leave: LeaveRequest }) {
     onSuccess: () => {
       toast.success('Pedido rejeitado')
       queryClient.invalidateQueries({ queryKey: ['leave-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'Erro ao rejeitar')),
   })
@@ -275,6 +279,8 @@ function LeaveRequestDialog({ leave }: { leave?: LeaveRequest }) {
       setSignedFile(null)
       queryClient.invalidateQueries({ queryKey: ['leave-requests'] })
       queryClient.invalidateQueries({ queryKey: ['leave-balance'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period-validations'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll-period'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t(leave ? 'leave.updateError' : 'leave.createError'))),
   })

@@ -255,6 +255,7 @@ export interface PayrollValidationIssue {
   employee_name?: string
   code: string
   message: string
+  params?: Record<string, string | number | null | undefined>
 }
 
 export interface PayrollValidationReport {
@@ -386,7 +387,7 @@ export interface PayrollRecord {
   employer_cost?: number | null
   currency?: string | null
   engine_version?: string | null
-  validation_errors?: Array<{ code: string; message: string; severity: string }> | null
+  validation_errors?: Array<{ code: string; message: string; severity: string; params?: Record<string, string | number | null | undefined> }> | null
   snapshot?: Record<string, unknown> | null
   manual_adjustments?: {
     work_days?: number | null
