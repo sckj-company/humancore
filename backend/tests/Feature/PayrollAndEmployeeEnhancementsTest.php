@@ -13,6 +13,7 @@ use App\Models\PayrollInssRule;
 use App\Models\PayrollIrtTable;
 use App\Models\PayrollPeriod;
 use App\Models\Position;
+use App\Models\Setting;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -632,5 +633,186 @@ XML);
         $html = (string) $res->json('data.html');
         $this->assertStringContainsString('<h1>Adenda ao Contrato de Trabalho</h1>', $html);
         $this->assertStringContainsString('<strong>Cláusula Primeira:</strong>', $html);
+    }
+
+    public function test_zero_net_salary_floor_and_automatic_excess_carry_over_to_next_month(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $department = Department::factory()->create(['tenant_id' => $this->tenant->id]);
+        $position = Position::factory()->create(['tenant_id' => $this->tenant->id, 'department_id' => $department->id]);
+        $employee = Employee::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'department_id' => $department->id,
+            'position_id' => $position->id,
+            'status' => 'active',
+            'approval_status' => 'approved',
+        ]);
+
+        EmployeeContract::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'employee_id' => $employee->id,
+            'department_id' => $department->id,
+            'position_id' => $position->id,
+            'contract_type' => 'permanent',
+            'base_salary' => 100000, // INSS 3% = 3,000; IRT = 0 -> após impostos = 97,000 disponíveis
+            'salary_frequency' => 'monthly',
+            'start_date' => '2025-01-01',
+            'is_active' => true,
+        ]);
+
+        $periodNov = PayrollPeriod::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Novembro 2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'payment_date' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/process", [
+            'employee_ids' => [$employee->id],
+        ])->assertOk();
+
+        // Desconto manual de 150.000 sobre 97.000 líquidos disponíveis -> trava líquido em 0,00 e transita 53.000 para 2026-12
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/recalculate", [
+            'records' => [
+                [
+                    'employee_id' => $employee->id,
+                    'extra_items' => [
+                        ['name' => 'Dano Operacional', 'type' => 'deduction', 'amount' => 150000],
+                    ],
+                ],
+            ],
+        ])->assertOk();
+
+        $novRecord = $periodNov->records()->where('employee_id', $employee->id)->firstOrFail();
+        $this->assertSame(0.0, (float) $novRecord->net_salary);
+        $this->assertSame(100000.0, (float) $novRecord->total_deductions); // 3,000 INSS + 97,000 aplicado
+        $this->assertSame(53000.0, (float) ($novRecord->details['deduction_cap']['total_deferred_amount'] ?? 0));
+        $this->assertSame('2026-12', $novRecord->details['deduction_cap']['target_month'] ?? null);
+
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/submit")->assertOk();
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/approve")->assertOk();
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/pay")->assertOk();
+
+        // Deve existir desconto ativo transitado para 2026-12 com 53.000
+        $carryDeduction = Deduction::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', 'active')
+            ->first();
+        $this->assertNotNull($carryDeduction);
+        $this->assertSame(53000.0, (float) $carryDeduction->total_amount);
+
+        // Ao processar Dezembro 2026, o excedente de 53.000 é descontado automaticamente
+        $periodDec = PayrollPeriod::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Dezembro 2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-12-01',
+            'period_end' => '2026-12-31',
+            'payment_date' => '2026-12-31',
+            'status' => 'open',
+        ]);
+
+        $this->postJson("/api/v1/payroll/periods/{$periodDec->id}/process", [
+            'employee_ids' => [$employee->id],
+        ])->assertOk();
+
+        $decRecord = $periodDec->records()->where('employee_id', $employee->id)->with('items')->firstOrFail();
+        $this->assertSame(-53000.0, (float) $decRecord->items->firstWhere('deduction_id', $carryDeduction->id)?->amount);
+        $this->assertSame(44000.0, (float) $decRecord->net_salary); // 100,000 - 3,000 INSS - 53,000
+    }
+
+    public function test_legal_percentage_cap_limits_installment_and_carries_over_remainder(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        // Configura teto legal LGT de 25% do salário base
+        Setting::updateOrCreate(
+            ['tenant_id' => $this->tenant->id, 'group' => 'payroll', 'key' => 'discounts.max_non_tax_deduction_percent'],
+            ['value' => 25],
+        );
+
+        $department = Department::factory()->create(['tenant_id' => $this->tenant->id]);
+        $position = Position::factory()->create(['tenant_id' => $this->tenant->id, 'department_id' => $department->id]);
+        $employee = Employee::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'department_id' => $department->id,
+            'position_id' => $position->id,
+            'status' => 'active',
+            'approval_status' => 'approved',
+        ]);
+
+        EmployeeContract::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'employee_id' => $employee->id,
+            'department_id' => $department->id,
+            'position_id' => $position->id,
+            'contract_type' => 'permanent',
+            'base_salary' => 200000, // Teto 25% = 50,000 por mês
+            'salary_frequency' => 'monthly',
+            'start_date' => '2025-01-01',
+            'is_active' => true,
+        ]);
+
+        $deduction = Deduction::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'employee_id' => $employee->id,
+            'name' => 'Adiantamento Elevado',
+            'deduction_type' => 'advance',
+            'amount_type' => 'fixed',
+            'amount' => 120000,
+            'total_amount' => 120000,
+            'paid_amount' => 0,
+            'installment_count' => 1,
+            'installment_amount' => 120000,
+            'starts_at' => '2026-11-01',
+            'is_recurring' => false,
+            'status' => 'active',
+        ]);
+
+        DeductionInstallment::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'deduction_id' => $deduction->id,
+            'employee_id' => $employee->id,
+            'installment_number' => 1,
+            'reference_month' => '2026-11',
+            'percentage' => 100,
+            'amount' => 120000,
+            'status' => 'pending',
+        ]);
+
+        $periodNov = PayrollPeriod::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Novembro 2026',
+            'period_type' => 'monthly',
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-30',
+            'payment_date' => '2026-11-30',
+            'status' => 'open',
+        ]);
+
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/process", [
+            'employee_ids' => [$employee->id],
+        ])->assertOk();
+
+        $novRecord = $periodNov->records()->where('employee_id', $employee->id)->with('items')->firstOrFail();
+        // Parcela de 120.000 limitada a 50.000 (25% de 200.000); 70.000 aguardam transição
+        $this->assertSame(-50000.0, (float) $novRecord->items->firstWhere('deduction_id', $deduction->id)?->amount);
+        $this->assertSame(70000.0, (float) ($novRecord->details['deduction_cap']['total_deferred_amount'] ?? 0));
+
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/submit")->assertOk();
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/approve")->assertOk();
+        $this->postJson("/api/v1/payroll/periods/{$periodNov->id}/pay")->assertOk();
+
+        // Parcela #1 ficou em 50.000 paid, Parcela #2 criada pendente para 2026-12 com 70.000 e Deduction permanece active
+        $deduction->refresh();
+        $this->assertSame('active', $deduction->status);
+        $this->assertSame(50000.0, (float) $deduction->paid_amount);
+        $nextInst = $deduction->installments()->where('reference_month', '2026-12')->where('status', 'pending')->first();
+        $this->assertNotNull($nextInst);
+        $this->assertSame(70000.0, (float) $nextInst->amount);
     }
 }

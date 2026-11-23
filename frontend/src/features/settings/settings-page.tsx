@@ -32,11 +32,13 @@ import type { DocumentRequirement, SettingGroups, SettingItem } from '@/types'
 
 type ScalarValue = string | number | boolean
 
-const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string }[] = [
+const DISCOUNT_SETTINGS: { key: string; labelKey: string; descriptionKey: string; defaultValue?: ScalarValue }[] = [
+  { key: 'discounts.max_non_tax_deduction_percent', labelKey: 'discounts.maxNonTaxPercent', descriptionKey: 'discounts.maxNonTaxPercentDescription', defaultValue: 0 },
+  { key: 'discounts.carry_over_excess_deductions', labelKey: 'discounts.carryOverExcess', descriptionKey: 'discounts.carryOverExcessDescription', defaultValue: true },
   { key: 'discounts.absence_daily_amount', labelKey: 'discounts.absenceDaily', descriptionKey: 'discounts.absenceDailyDescription' },
   { key: 'discounts.lateness_hourly_amount', labelKey: 'discounts.latenessHourly', descriptionKey: 'discounts.latenessHourlyDescription' },
   { key: 'discounts.lateness_accumulation_amount', labelKey: 'discounts.latenessThresholdAmount', descriptionKey: 'discounts.latenessThresholdAmountDescription' },
-  { key: 'discounts.lateness_free_occurrences_per_week', labelKey: 'discounts.freeLateness', descriptionKey: 'discounts.freeLatenessDescription' },
+  { key: 'discounts.lateness_free_occurrences_per_week', labelKey: 'discounts.freeLateness', descriptionKey: 'discounts.freeLatenessDescription', defaultValue: 1 },
   { key: 'discounts.lateness_weekly_accumulation_minutes', labelKey: 'discounts.weeklyAccumulation', descriptionKey: 'discounts.weeklyAccumulationDescription' },
   { key: 'discounts.dayoff_daily_amount', labelKey: 'discounts.dayOffDaily', descriptionKey: 'discounts.dayOffDailyDescription' },
   { key: 'discounts.default_amount', labelKey: 'discounts.default', descriptionKey: 'discounts.defaultDescription' },
@@ -165,7 +167,7 @@ export function SettingsPage() {
     onError: (e) => toast.error(getApiErrorMessage(e, t('settingsPage.saveError'))),
   })
   const addDiscountRule = useMutation({
-    mutationFn: ({ key, value }: { key: string; value: number }) =>
+    mutationFn: ({ key, value }: { key: string; value: ScalarValue }) =>
       api.put('settings/bulk', { group: 'payroll', values: { [key]: value } }),
     onSuccess: () => {
       toast.success(t('settingsPage.discountAdded'))
@@ -486,7 +488,7 @@ export function SettingsPage() {
                     disabled={addDiscountRule.isPending}
                     onClick={() => addDiscountRule.mutate({
                       key: rule.key,
-                      value: rule.key === 'discounts.lateness_free_occurrences_per_week' ? 1 : 0,
+                      value: rule.defaultValue ?? (rule.key === 'discounts.lateness_free_occurrences_per_week' ? 1 : 0),
                     })}
                   >
                     {addDiscountRule.isPending && addDiscountRule.variables?.key === rule.key
@@ -671,7 +673,14 @@ export function SettingsPage() {
 }
 
 // ─── Helper components ─────────────────────────────────────────────────────────
-const BOOLEAN_KEYS = new Set(['enabled', 'required', 'requires_approval', 'allow_negative_balance', 'overtime_enabled'])
+const BOOLEAN_KEYS = new Set([
+  'enabled',
+  'required',
+  'requires_approval',
+  'allow_negative_balance',
+  'overtime_enabled',
+  'discounts.carry_over_excess_deductions',
+])
 const JSON_KEYS = new Set(['brackets', 'branding', 'workweek'])
 
 function isEditable(s: SettingItem): boolean {

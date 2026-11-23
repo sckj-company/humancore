@@ -1082,7 +1082,8 @@
           "MATH_INTEGRITY_VIOLATION": "Mathematical discrepancy for {{employee_name}}: Gross ({{gross}}) − Deductions ({{deductions}}) − Taxes ({{taxes}}) ≠ Net ({{net}}).",
           "PENDING_LEAVES": "There are {{count}} pending leave request(s) intersecting this period.",
           "UNREGULATED_COMPONENT": "Salary component '{{component_name}}' ({{component_code}}) is active without a validated legal regulation for this period.",
-          "net_negative": "Total deductions and taxes exceed gross salary.",
+          "net_negative": "Total deductions exceeded available net pay; net salary was protected at 0.00 AOA and the excess carries over to the next month.",
+          "deduction_cap_applied": "Legal deduction cap ({{max_percent}}%) applied; the excess ({{deferred_amount}} AOA) carries over to {{target_month}}.",
           "CALC_ERROR": "Payroll calculation error: {{error}}"
         }
       },
@@ -2815,6 +2816,10 @@
     "discounts": {
       "advanceMonthlyLimit": "Monthly advance deduction limit",
       "advanceMonthlyLimitDescription": "Maximum total advance deductions per employee each month. If not configured, the limit is 0.",
+      "maxNonTaxPercent": "Maximum non-tax deduction cap (%)",
+      "maxNonTaxPercentDescription": "Maximum percentage of base salary that can be deducted in non-tax deductions per payroll (e.g. 25 or 30). If 0, caps only at zero net pay.",
+      "carryOverExcess": "Carry over excess deductions to next month",
+      "carryOverExcessDescription": "When enabled, any deduction/installment amount exceeding the cap or zero net pay automatically carries over to the next month upon payroll payment.",
       "absenceDaily": "Daily absence",
       "absenceDailyDescription": "Amount deducted for an unjustified absence or one without explicit consent.",
       "latenessHourly": "Hourly lateness",

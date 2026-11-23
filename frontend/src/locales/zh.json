@@ -1046,7 +1046,8 @@
           "MATH_INTEGRITY_VIOLATION": "员工 {{employee_name}} 金额校验不一致：应发（{{gross}}）− 扣款（{{deductions}}）− 税费（{{taxes}}）≠ 实发（{{net}}）。",
           "PENDING_LEAVES": "有 {{count}} 条待审批的请假/休假申请与本周期重叠。",
           "UNREGULATED_COMPONENT": "薪资项目 '{{component_name}}'（{{component_code}}）已启用，但在此周期缺少已验证的法规配置。",
-          "net_negative": "扣款和税费总额超过应发工资。",
+          "net_negative": "扣款总额超过可用实发工资；实发工资已保底为 0.00 AOA，超出部分将结转至下月。",
+          "deduction_cap_applied": "已应用法定扣款上限（{{max_percent}}%）；超出部分（{{deferred_amount}} AOA）将结转至 {{target_month}}。",
           "CALC_ERROR": "薪资计算错误：{{error}}"
         }
       },
@@ -2755,6 +2756,10 @@
     "discounts": {
       "advanceMonthlyLimit": "每月工资预支扣款上限",
       "advanceMonthlyLimitDescription": "每位员工每月可扣除的工资预支总额上限。未配置时上限为 0。",
+      "maxNonTaxPercent": "非税扣款法定上限 (%)",
+      "maxNonTaxPercentDescription": "每期工资单中允许扣除的非税扣款占基本工资的最大比例（例如 25 或 30）。若为 0，仅在实发工资为 0 时限制。",
+      "carryOverExcess": "超额扣款自动结转至下月",
+      "carryOverExcessDescription": "启用后，超出上限或使实发工资归零的扣款余额将在工资发放后自动结转到下个月。",
       "absenceDaily": "每日缺勤",
       "absenceDailyDescription": "对无正当理由或未经明确同意的缺勤所扣金额。",
       "latenessHourly": "每小时迟到",

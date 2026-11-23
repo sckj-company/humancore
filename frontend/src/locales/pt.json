@@ -1190,7 +1190,8 @@
           "MATH_INTEGRITY_VIOLATION": "Divergência matemática em {{employee_name}}: Bruto ({{gross}}) − Deduções ({{deductions}}) − Impostos ({{taxes}}) ≠ Líquido ({{net}}).",
           "PENDING_LEAVES": "Existem {{count}} pedidos de licença pendentes de aprovação que intersectam o período.",
           "UNREGULATED_COMPONENT": "O componente salarial '{{component_name}}' ({{component_code}}) está ativo mas não possui regulação legal validada para este período.",
-          "net_negative": "O total de descontos e impostos ultrapassa o salário ilíquido.",
+          "net_negative": "O total de descontos ultrapassava o líquido disponível; o salário líquido foi protegido em 0,00 AOA e o excedente transita para o mês seguinte.",
+          "deduction_cap_applied": "Teto legal de descontos ({{max_percent}}%) aplicado; o excedente ({{deferred_amount}} AOA) transita para {{target_month}}.",
           "CALC_ERROR": "Erro no cálculo salarial: {{error}}"
         }
       },
@@ -2815,6 +2816,10 @@
     "discounts": {
       "advanceMonthlyLimit": "Limite mensal de desconto de adiantamentos",
       "advanceMonthlyLimitDescription": "Valor máximo total de adiantamentos que pode ser descontado por funcionário em cada mês. Se não for configurado, o limite é 0.",
+      "maxNonTaxPercent": "Teto legal máximo de descontos não fiscais (%)",
+      "maxNonTaxPercentDescription": "Percentagem máxima do salário base que pode ser descontada em adiantamentos, faltas e descontos manuais por folha (ex.: 25 ou 30). Se 0, trava apenas quando o líquido atingir 0,00.",
+      "carryOverExcess": "Transitar excedente de descontos para o mês seguinte",
+      "carryOverExcessDescription": "Quando ativado, o valor dos descontos/parcelas que ultrapassar o teto legal ou zerar o salário líquido transita automaticamente para o próximo mês ao pagar a folha.",
       "absenceDaily": "Falta diária",
       "absenceDailyDescription": "Valor descontado por falta injustificada ou sem consentimento explícito.",
       "latenessHourly": "Atraso por hora",

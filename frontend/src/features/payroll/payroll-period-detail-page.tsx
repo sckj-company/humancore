@@ -1738,6 +1738,11 @@ function SummaryTab({
                                   {t('payroll.detail.pendingRecalculation')}
                                 </Badge>
                               )}
+                              {(r.details?.deferred_deductions?.length ?? 0) > 0 && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1.5 bg-sky-500/10 text-sky-700 border-sky-500/30">
+                                  {t('payroll.detail.excessCarriedOverBadge', { defaultValue: 'Excedente transitado' })}
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground font-mono">{r.employee?.employee_code}</p>
                           </div>
@@ -1877,6 +1882,47 @@ function SummaryTab({
                               <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-800 flex items-center gap-2">
                                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                                 <span>{r.outdated_reason}</span>
+                              </div>
+                            )}
+
+                            {(r.details?.deferred_deductions?.length ?? 0) > 0 && (
+                              <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-2 text-xs">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="font-semibold text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
+                                    <Info className="h-3.5 w-3.5 shrink-0" />
+                                    {r.details?.deduction_cap?.max_non_tax_percent
+                                      ? `Teto legal aplicado (${r.details.deduction_cap.max_non_tax_percent}% do salário base) e proteção de líquido ≥ 0,00`
+                                      : 'Proteção de salário líquido mínimo (0,00 AOA) aplicada aos descontos'}
+                                  </p>
+                                  <Badge variant="outline" className="font-mono text-[11px] border-sky-500/40 text-sky-800 dark:text-sky-200">
+                                    Excedente: {fmtCurrency(r.details?.deduction_cap?.total_deferred_amount ?? 0)} AOA →{' '}
+                                    {r.details?.deduction_cap?.carry_over_enabled
+                                      ? `Transita para ${r.details?.deduction_cap?.target_month}`
+                                      : 'Sem transição automática'}
+                                  </Badge>
+                                </div>
+                                <div className="overflow-x-auto rounded border border-sky-500/20 bg-background/80">
+                                  <table className="w-full text-[11px]">
+                                    <thead className="bg-muted/40 text-left uppercase text-muted-foreground">
+                                      <tr>
+                                        <th className="px-2.5 py-1.5 font-semibold">Desconto Limitado</th>
+                                        <th className="px-2.5 py-1.5 font-semibold text-right">Valor Solicitado</th>
+                                        <th className="px-2.5 py-1.5 font-semibold text-right">Descontado Neste Mês</th>
+                                        <th className="px-2.5 py-1.5 font-semibold text-right">Excedente Transitado ({r.details?.deduction_cap?.target_month})</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border">
+                                      {r.details!.deferred_deductions!.map((def, idx) => (
+                                        <tr key={idx}>
+                                          <td className="px-2.5 py-1.5 font-medium">{def.name}</td>
+                                          <td className="px-2.5 py-1.5 text-right font-mono">{fmtCurrency(def.requested_amount)}</td>
+                                          <td className="px-2.5 py-1.5 text-right font-mono text-emerald-700">{fmtCurrency(def.applied_amount)}</td>
+                                          <td className="px-2.5 py-1.5 text-right font-mono font-semibold text-sky-700">{fmtCurrency(def.deferred_amount)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
                             )}
 

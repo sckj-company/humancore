@@ -200,9 +200,6 @@ class PayrollEngineService
         $totalEarnings = collect($breakdown)
             ->whereIn('type', ['earning', 'benefit'])
             ->sum(fn ($item) => max(0, $item['amount']));
-        $totalDeductions = collect($breakdown)
-            ->where('type', 'deduction')
-            ->sum(fn ($item) => abs(min(0, $item['amount'])));
         $totalTaxes = collect($breakdown)
             ->where('type', 'tax')
             ->sum(fn ($item) => abs($item['amount']));
@@ -210,18 +207,119 @@ class PayrollEngineService
             ->where('type', 'contribution')
             ->sum(fn ($item) => max(0, $item['amount']));
 
-        $gross = $totalEarnings;
-        $net = $gross - $totalDeductions - $totalTaxes;
+        $gross = round($totalEarnings, 2);
+        $inssEmployeeAmount = round($context->inssAmount, 2);
 
-        if ($net < 0) {
-            $context->validationWarnings[] = [
-                'code' => 'net_negative',
-                'severity' => 'warning',
-                'message' => 'O total de descontos e impostos ultrapassa o salário ilíquido.',
-            ];
+        $rawNonTaxDeductions = round(
+            collect($breakdown)
+                ->filter(fn ($item) => ($item['type'] ?? '') === 'deduction' && ($item['code'] ?? '') !== 'inss')
+                ->sum(fn ($item) => abs(min(0, (float) $item['amount']))),
+            2
+        );
+        $originalNetBeforeCap = round($gross - $inssEmployeeAmount - $rawNonTaxDeductions - $totalTaxes, 2);
+
+        $maxNonTaxPercent = max(0.0, min(100.0, (float) ($context->setting('payroll.discounts.max_non_tax_deduction_percent', 0) ?? 0)));
+        $rawCarryOverSetting = $context->setting('payroll.discounts.carry_over_excess_deductions', true);
+        $carryOverEnabled = $rawCarryOverSetting === null
+            ? true
+            : (filter_var($rawCarryOverSetting, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true);
+
+        $afterTaxAvailable = max(0.0, round($gross - $inssEmployeeAmount - $totalTaxes, 2));
+        $legalPercentCap = ($maxNonTaxPercent > 0 && $maxNonTaxPercent <= 100)
+            ? round($effectiveBaseSalary * ($maxNonTaxPercent / 100), 2)
+            : null;
+        $maxAllowedNonTax = $legalPercentCap !== null
+            ? min($afterTaxAvailable, $legalPercentCap)
+            : $afterTaxAvailable;
+
+        $deferredDeductions = [];
+        $targetNextMonth = Carbon::parse($period->period_start)->addMonthNoOverflow()->format('Y-m');
+        $capReason = ($legalPercentCap !== null && $legalPercentCap < $afterTaxAvailable)
+            ? 'legal_cap'
+            : 'zero_net_floor';
+
+        if ($rawNonTaxDeductions > $maxAllowedNonTax + 0.009) {
+            $nonTaxIndexes = [];
+            foreach ($breakdown as $idx => $item) {
+                if (($item['type'] ?? '') === 'deduction' && ($item['code'] ?? '') !== 'inss' && abs(min(0, (float) $item['amount'])) > 0) {
+                    $code = (string) ($item['code'] ?? '');
+                    $priorityGroup = match (true) {
+                        str_starts_with($code, 'deduction_') => 1,
+                        in_array($code, ['absence', 'lateness'], true) => 2,
+                        str_starts_with($code, 'manual_deduction_') => 3,
+                        default => 2,
+                    };
+                    $nonTaxIndexes[] = ['idx' => $idx, 'group' => $priorityGroup];
+                }
+            }
+
+            usort($nonTaxIndexes, fn ($a, $b) => ($a['group'] <=> $b['group']) ?: ($a['idx'] <=> $b['idx']));
+
+            $remainingBudget = $maxAllowedNonTax;
+            foreach ($nonTaxIndexes as $entry) {
+                $idx = $entry['idx'];
+                $item = $breakdown[$idx];
+                $requested = round(abs(min(0, (float) $item['amount'])), 2);
+                $applied = round(min($requested, max(0.0, $remainingBudget)), 2);
+                $deferred = round(max(0.0, $requested - $applied), 2);
+                $remainingBudget = round(max(0.0, $remainingBudget - $applied), 2);
+
+                $breakdown[$idx]['amount'] = $applied > 0 ? -$applied : 0.0;
+
+                if ($deferred > 0) {
+                    $deferredDeductions[] = [
+                        'code' => (string) ($item['code'] ?? 'deduction'),
+                        'name' => (string) ($item['name'] ?? 'Desconto'),
+                        'deduction_id' => $item['deduction_id'] ?? null,
+                        'deduction_installment_id' => $item['deduction_installment_id'] ?? null,
+                        'requested_amount' => $requested,
+                        'applied_amount' => $applied,
+                        'deferred_amount' => $deferred,
+                        'target_month' => $targetNextMonth,
+                        'reason' => $capReason,
+                    ];
+                }
+            }
+
+            $totalDeferredAmount = round((float) collect($deferredDeductions)->sum('deferred_amount'), 2);
+            $carryMsg = $carryOverEnabled
+                ? " O excedente de {$totalDeferredAmount} AOA transita automaticamente para {$targetNextMonth}."
+                : '';
+
+            if ($originalNetBeforeCap < 0) {
+                $context->validationWarnings[] = [
+                    'code' => 'net_negative',
+                    'severity' => 'warning',
+                    'message' => 'Os descontos ultrapassam o salário líquido disponível; o valor líquido a pagar foi protegido em 0,00 AOA.'.$carryMsg,
+                    'params' => [
+                        'deferred_amount' => $totalDeferredAmount,
+                        'target_month' => $targetNextMonth,
+                    ],
+                ];
+            } else {
+                $context->validationWarnings[] = [
+                    'code' => 'deduction_cap_applied',
+                    'severity' => 'warning',
+                    'message' => "Teto legal de descontos ({$maxNonTaxPercent}% do salário base) aplicado.{$carryMsg}",
+                    'params' => [
+                        'max_percent' => $maxNonTaxPercent,
+                        'deferred_amount' => $totalDeferredAmount,
+                        'target_month' => $targetNextMonth,
+                    ],
+                ];
+            }
         }
 
-        $inssEmployeeAmount = $context->inssAmount;
+        $totalDeductions = round(
+            collect($breakdown)
+                ->where('type', 'deduction')
+                ->sum(fn ($item) => abs(min(0, (float) $item['amount']))),
+            2
+        );
+        $net = round($gross - $totalDeductions - $totalTaxes, 2);
+        $appliedNonTaxDeductions = round(max(0.0, $totalDeductions - $inssEmployeeAmount), 2);
+        $totalDeferredSummary = round((float) collect($deferredDeductions)->sum('deferred_amount'), 2);
+
         $inssBase = $context->inssBase ?: $effectiveBaseSalary;
         $employerInssBase = $context->employerInssBase ?: $effectiveBaseSalary;
         $employerInssRate = (float) ($context->inssRule?->employer_rate ?? (float) ($context->setting('payroll.inss.employer_rate', 8.0)));
@@ -245,7 +343,15 @@ class PayrollEngineService
             $employerInssRate,
             $employerInss,
             $irtTaxableBase,
-            $employerCost
+            $employerCost,
+            $deferredDeductions,
+            $maxNonTaxPercent,
+            $maxAllowedNonTax,
+            $rawNonTaxDeductions,
+            $appliedNonTaxDeductions,
+            $totalDeferredSummary,
+            $carryOverEnabled,
+            $targetNextMonth
         ) {
             $record = PayrollRecord::updateOrCreate(
                 [
@@ -278,6 +384,16 @@ class PayrollEngineService
                         'absent_days' => $context->absentDays,
                         'late_minutes' => $context->lateMinutes,
                         'overtime_hours' => $context->overtimeHours,
+                        'deferred_deductions' => $deferredDeductions,
+                        'deduction_cap' => [
+                            'max_non_tax_percent' => $maxNonTaxPercent,
+                            'max_allowed_non_tax_deductions' => $maxAllowedNonTax,
+                            'total_requested_non_tax_deductions' => $rawNonTaxDeductions,
+                            'total_applied_non_tax_deductions' => $appliedNonTaxDeductions,
+                            'total_deferred_amount' => $totalDeferredSummary,
+                            'carry_over_enabled' => $carryOverEnabled,
+                            'target_month' => $targetNextMonth,
+                        ],
                     ],
                     'manual_adjustments' => $context->manualAdjustments ?: null,
                     'snapshot' => [

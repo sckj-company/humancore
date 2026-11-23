@@ -874,6 +874,26 @@ export interface PayrollRecord {
     absent_days?: number
     late_minutes?: number
     overtime_hours?: number
+    deferred_deductions?: Array<{
+      code: string
+      name: string
+      deduction_id?: number | null
+      deduction_installment_id?: number | null
+      requested_amount: number
+      applied_amount: number
+      deferred_amount: number
+      target_month: string
+      reason: 'legal_cap' | 'zero_net_floor' | string
+    }>
+    deduction_cap?: {
+      max_non_tax_percent: number
+      max_allowed_non_tax_deductions: number
+      total_requested_non_tax_deductions: number
+      total_applied_non_tax_deductions: number
+      total_deferred_amount: number
+      carry_over_enabled: boolean
+      target_month: string
+    }
   }
   items?: PayrollRecordItem[]
   employee?: EmployeeSummary

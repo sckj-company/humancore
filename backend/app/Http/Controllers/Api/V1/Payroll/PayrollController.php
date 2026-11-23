@@ -787,16 +787,137 @@ class PayrollController extends BaseController
 
                     $paidAmount = round((float) $deduction->paid_amount + $amount, 2);
                     $updates = ['paid_amount' => $paidAmount];
-                    $hasRemainingInstallments = $deduction->installments()->where('status', 'pending')->exists();
-                    $isComplete = (! $hasRemainingInstallments && $deduction->installments()->exists())
-                        || ($deduction->total_amount !== null && $paidAmount >= (float) $deduction->total_amount)
-                        || (! $deduction->is_recurring && $deduction->total_amount === null);
+                    $deduction->update($updates);
+                }
 
-                    if ($isComplete && $deduction->status !== 'cancelled') {
-                        $updates['status'] = 'completed';
+                // Transitar automaticamente para o mês seguinte qualquer excedente de descontos/parcelas limitado por teto ou trava de líquido 0
+                foreach ($records as $record) {
+                    $deferredList = $record->details['deferred_deductions'] ?? [];
+                    $carryEnabled = $record->details['deduction_cap']['carry_over_enabled'] ?? true;
+                    if (! $carryEnabled || ! is_array($deferredList) || $deferredList === []) {
+                        continue;
                     }
 
-                    $deduction->update($updates);
+                    foreach ($deferredList as $deferred) {
+                        $deferredAmount = round(max(0, (float) ($deferred['deferred_amount'] ?? 0)), 2);
+                        if ($deferredAmount <= 0) {
+                            continue;
+                        }
+
+                        $targetMonth = (string) ($deferred['target_month'] ?? Carbon::parse($period->period_start)->addMonthNoOverflow()->format('Y-m'));
+                        $appliedAmount = round(max(0, (float) ($deferred['applied_amount'] ?? 0)), 2);
+                        $deductionId = $deferred['deduction_id'] ?? null;
+                        $installmentId = $deferred['deduction_installment_id'] ?? null;
+
+                        if ($deductionId) {
+                            $deduction = Deduction::query()->lockForUpdate()->with('installments')->find($deductionId);
+                            if (! $deduction) {
+                                continue;
+                            }
+
+                            if ($deduction->installments->isNotEmpty()) {
+                                if ($installmentId) {
+                                    $paidInst = $deduction->installments->firstWhere('id', $installmentId);
+                                    if ($paidInst) {
+                                        $paidInst->update(['amount' => $appliedAmount]);
+                                    }
+                                }
+
+                                $nextInstNumber = ((int) $deduction->installments()->max('installment_number')) + 1;
+                                DeductionInstallment::query()->create([
+                                    'tenant_id' => $period->tenant_id,
+                                    'deduction_id' => $deduction->id,
+                                    'employee_id' => $record->employee_id,
+                                    'installment_number' => $nextInstNumber,
+                                    'reference_month' => $targetMonth,
+                                    'percentage' => ($deduction->total_amount && (float) $deduction->total_amount > 0)
+                                        ? round(($deferredAmount / (float) $deduction->total_amount) * 100, 2)
+                                        : 0,
+                                    'amount' => $deferredAmount,
+                                    'status' => 'pending',
+                                ]);
+
+                                $deduction->update([
+                                    'installment_count' => $deduction->installments()->count(),
+                                    'status' => 'active',
+                                    'notes' => trim(($deduction->notes ? $deduction->notes."\n" : '')."[Excedente de ".number_format($deferredAmount, 2, ',', '.')." transitado de {$periodMonth} para {$targetMonth}]"),
+                                ]);
+                            } elseif ($deduction->total_amount === null) {
+                                $carryDeduction = Deduction::query()->create([
+                                    'tenant_id' => $period->tenant_id,
+                                    'employee_id' => $record->employee_id,
+                                    'name' => "Excedente transitado ({$periodMonth}): {$deduction->name}",
+                                    'deduction_type' => $deduction->deduction_type,
+                                    'amount_type' => 'fixed',
+                                    'amount' => $deferredAmount,
+                                    'total_amount' => $deferredAmount,
+                                    'paid_amount' => 0,
+                                    'installment_count' => 1,
+                                    'installment_amount' => $deferredAmount,
+                                    'starts_at' => "{$targetMonth}-01",
+                                    'is_recurring' => false,
+                                    'status' => 'active',
+                                    'notes' => "Excedente transitado automaticamente da folha {$period->displayName()}.",
+                                ]);
+
+                                DeductionInstallment::query()->create([
+                                    'tenant_id' => $period->tenant_id,
+                                    'deduction_id' => $carryDeduction->id,
+                                    'employee_id' => $record->employee_id,
+                                    'installment_number' => 1,
+                                    'reference_month' => $targetMonth,
+                                    'percentage' => 100,
+                                    'amount' => $deferredAmount,
+                                    'status' => 'pending',
+                                ]);
+                            }
+                        } else {
+                            $carryDeduction = Deduction::query()->create([
+                                'tenant_id' => $period->tenant_id,
+                                'employee_id' => $record->employee_id,
+                                'name' => "Excedente transitado ({$periodMonth}): ".(string) ($deferred['name'] ?? 'Desconto'),
+                                'deduction_type' => 'other',
+                                'amount_type' => 'fixed',
+                                'amount' => $deferredAmount,
+                                'total_amount' => $deferredAmount,
+                                'paid_amount' => 0,
+                                'installment_count' => 1,
+                                'installment_amount' => $deferredAmount,
+                                'starts_at' => "{$targetMonth}-01",
+                                'is_recurring' => false,
+                                'status' => 'active',
+                                'notes' => "Excedente de desconto transitado automaticamente da folha {$period->displayName()}.",
+                            ]);
+
+                            DeductionInstallment::query()->create([
+                                'tenant_id' => $period->tenant_id,
+                                'deduction_id' => $carryDeduction->id,
+                                'employee_id' => $record->employee_id,
+                                'installment_number' => 1,
+                                'reference_month' => $targetMonth,
+                                'percentage' => 100,
+                                'amount' => $deferredAmount,
+                                'status' => 'pending',
+                            ]);
+                        }
+                    }
+                }
+
+                // Concluir apenas os descontos sem parcelas pendentes nem saldo remanescente
+                foreach ($deductionAmounts->keys() as $deductionId) {
+                    $deduction = Deduction::query()->lockForUpdate()->find($deductionId);
+                    if (! $deduction || $deduction->status === 'cancelled') {
+                        continue;
+                    }
+                    $paidAmount = (float) $deduction->paid_amount;
+                    $hasRemainingInstallments = $deduction->installments()->where('status', 'pending')->exists();
+                    $isComplete = (! $hasRemainingInstallments && $deduction->installments()->exists())
+                        || (! $hasRemainingInstallments && $deduction->total_amount !== null && $paidAmount >= (float) $deduction->total_amount)
+                        || (! $hasRemainingInstallments && ! $deduction->is_recurring && $deduction->total_amount === null);
+
+                    if ($isComplete) {
+                        $deduction->update(['status' => 'completed']);
+                    }
                 }
 
                 $period->transitionTo('paid');
