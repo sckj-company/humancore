@@ -9,6 +9,12 @@ class PermissionGroup extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::saved(static fn () => User::clearDepartmentPermissionCache());
+        static::deleted(static fn () => User::clearDepartmentPermissionCache());
+    }
+
     protected $fillable = [
         'tenant_id',
         'name',

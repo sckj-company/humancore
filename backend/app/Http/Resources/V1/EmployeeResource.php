@@ -20,6 +20,8 @@ class EmployeeResource extends JsonResource
         $canContractTerms = ! $user || $isSelf || $user->hasFieldPermission('contract', 'compensation_terms', 'view');
         $canContractDates = ! $user || $isSelf || $user->hasFieldPermission('contract', 'dates_notes', 'view');
 
+        $departments = $canOrg ? $this->resolvedDepartmentsPayload() : [];
+
         return [
             'id' => $this->id,
             'tenant_id' => $this->tenant_id,
@@ -57,6 +59,8 @@ class EmployeeResource extends JsonResource
             'termination_at' => $canOrg ? $this->termination_at?->format('Y-m-d') : null,
             'termination_reason' => $canOrg ? $this->termination_reason : null,
             'department_id' => $canOrg ? $this->department_id : null,
+            'department_ids' => $canOrg ? array_column($departments, 'id') : [],
+            'departments' => $departments,
             'position_id' => $canOrg ? $this->position_id : null,
             'manager_id' => $canOrg ? $this->manager_id : null,
             'department' => $canOrg ? $this->whenLoaded('department', fn () => [

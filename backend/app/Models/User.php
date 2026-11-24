@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Contracts\Permission as PermissionContract;
 use Spatie\Permission\Models\Permission;
@@ -21,6 +22,20 @@ class User extends Authenticatable
     use Auditable, HasApiTokens, HasFactory, Notifiable;
     use HasRoles {
         hasPermissionTo as spatieHasPermissionTo;
+    }
+
+    /** @var array<string, array<int, string>|null> */
+    protected static array $departmentPermissionsCache = [];
+
+    public static function clearDepartmentPermissionCache(): void
+    {
+        static::$departmentPermissionsCache = [];
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(static fn () => static::clearDepartmentPermissionCache());
+        static::deleted(static fn () => static::clearDepartmentPermissionCache());
     }
 
     public const PLATFORM_ONLY_PERMISSIONS = [
@@ -123,16 +138,95 @@ class User extends Authenticatable
         return $access;
     }
 
+    /**
+     * @return array<int, string>|null
+     */
+    public function activeDepartmentPermissions(?int $tenantId = null): ?array
+    {
+        if ($this->hasRole('super-admin') || $this->hasRole('admin')) {
+            return null;
+        }
+
+        $resolvedTenantId = $tenantId ?? $this->activeTenantId();
+        if (! $resolvedTenantId) {
+            return null;
+        }
+
+        $requestKey = app()->bound('request') ? (string) spl_object_id(app('request')) : 'cli';
+        $cacheKey = "{$requestKey}:{$this->id}:{$resolvedTenantId}";
+        if (array_key_exists($cacheKey, static::$departmentPermissionsCache)) {
+            return static::$departmentPermissionsCache[$cacheKey];
+        }
+
+        $employee = null;
+        if ($this->employee_id) {
+            $employee = Employee::withoutGlobalScopes()
+                ->where('id', $this->employee_id)
+                ->where('tenant_id', $resolvedTenantId)
+                ->first(['id', 'tenant_id', 'department_id']);
+        }
+
+        if (! $employee) {
+            $employee = Employee::withoutGlobalScopes()
+                ->where('user_id', $this->id)
+                ->where('tenant_id', $resolvedTenantId)
+                ->first(['id', 'tenant_id', 'department_id']);
+        }
+
+        if (! $employee) {
+            return static::$departmentPermissionsCache[$cacheKey] = null;
+        }
+
+        $pivotDeptIds = DB::table('department_employee')
+            ->where('employee_id', $employee->id)
+            ->pluck('department_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $deptIds = array_values(array_unique(array_filter(array_merge(
+            $employee->department_id ? [(int) $employee->department_id] : [],
+            $pivotDeptIds,
+        ))));
+
+        if ($deptIds === []) {
+            return static::$departmentPermissionsCache[$cacheKey] = null;
+        }
+
+        $departments = Department::withoutGlobalScopes()
+            ->with('permissionGroup')
+            ->where('tenant_id', $resolvedTenantId)
+            ->whereIn('id', $deptIds)
+            ->get();
+
+        $combined = [];
+        $hasConfigured = false;
+
+        foreach ($departments as $department) {
+            if ($department->hasConfiguredPermissions()) {
+                $hasConfigured = true;
+                $combined = array_merge($combined, $department->resolvedPermissions());
+            }
+        }
+
+        if (! $hasConfigured) {
+            return static::$departmentPermissionsCache[$cacheKey] = null;
+        }
+
+        return static::$departmentPermissionsCache[$cacheKey] = array_values(array_unique($combined));
+    }
+
     public function hasTenantScopedAccess(?int $tenantId = null): bool
     {
-        return $this->activeTenantAccess($tenantId) !== null;
+        return $this->activeTenantAccess($tenantId) !== null
+            || $this->activeDepartmentPermissions($tenantId) !== null;
     }
 
     public function hasExplicitTenantPermissions(?int $tenantId = null): bool
     {
         $access = $this->activeTenantAccess($tenantId);
 
-        return $access !== null && $access->hasExplicitPermissions();
+        return ($access !== null && $access->hasExplicitPermissions())
+            || $this->activeDepartmentPermissions($tenantId) !== null;
     }
 
     /**
@@ -155,6 +249,11 @@ class User extends Authenticatable
                 : [];
 
             return collect(array_merge($access->resolvedPermissions(), $platformPerms))->unique()->values();
+        }
+
+        $deptPerms = $this->activeDepartmentPermissions($resolvedTenantId);
+        if ($deptPerms !== null) {
+            return collect($deptPerms)->values();
         }
 
         // Caso esteja a aceder a uma empresa gerida através da sua empresa gestora (sem UserTenantAccess direto)
@@ -182,6 +281,11 @@ class User extends Authenticatable
         $access = $this->activeTenantAccess($resolvedTenantId);
         if ($access && $access->hasExplicitPermissions()) {
             return in_array($permission, $access->resolvedPermissions(), true);
+        }
+
+        $deptPerms = $this->activeDepartmentPermissions($resolvedTenantId);
+        if ($deptPerms !== null) {
+            return in_array($permission, $deptPerms, true);
         }
 
         if ($resolvedTenantId && $this->tenant_id && (int) $this->tenant_id !== (int) $resolvedTenantId) {

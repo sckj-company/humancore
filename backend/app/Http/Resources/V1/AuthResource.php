@@ -60,6 +60,7 @@ class AuthResource extends JsonResource
             'accessible_tenants' => $accessibleTenants->values(),
             'active_department_ids' => $this->allowedDepartmentIds($activeTenantId),
             'active_permission_group_id' => $activeAccess?->permission_group_id,
+            'has_explicit_permissions' => $this->hasExplicitTenantPermissions($activeTenantId),
             'employee_id' => $this->employee_id,
             'employee' => $this->whenLoaded('employee', fn () => [
                 'id' => $this->employee->id,

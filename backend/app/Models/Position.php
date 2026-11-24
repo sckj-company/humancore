@@ -18,6 +18,8 @@ class Position extends Model
     protected $fillable = [
         'tenant_id',
         'department_id',
+        'parent_id',
+        'level',
         'title',
         'code',
         'description',
@@ -30,6 +32,7 @@ class Position extends Model
     protected function casts(): array
     {
         return [
+            'level' => 'integer',
             'is_management' => 'boolean',
             'salary_min' => 'decimal:2',
             'salary_max' => 'decimal:2',
@@ -44,6 +47,16 @@ class Position extends Model
     public function department()
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_id');
     }
 
     public function employees()

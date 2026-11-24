@@ -80,7 +80,12 @@ class EmployeePolicy
             return true;
         }
 
-        return $employee->department_id !== null
-            && in_array((int) $employee->department_id, $allowedDepartments, true);
+        foreach ($allowedDepartments as $deptId) {
+            if ($employee->belongsToDepartment((int) $deptId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

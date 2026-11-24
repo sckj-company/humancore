@@ -27,8 +27,13 @@ class EmployeeController extends BaseController
         $allowedDeptIds = $request->user()?->allowedDepartmentIds();
 
         $employees = Employee::query()
-            ->with(['department', 'position', 'activeContract', 'latestContract'])
-            ->when($allowedDeptIds !== null, fn ($q) => $q->whereIn('department_id', $allowedDeptIds))
+            ->with(['department', 'departments:id,name', 'position', 'activeContract', 'latestContract'])
+            ->when($allowedDeptIds !== null, function ($q) use ($allowedDeptIds): void {
+                $q->where(function ($sub) use ($allowedDeptIds): void {
+                    $sub->whereIn('department_id', $allowedDeptIds)
+                        ->orWhereHas('departments', fn ($dq) => $dq->whereIn('departments.id', $allowedDeptIds));
+                });
+            })
             ->when($request->filled('search'), fn ($q) => $q->search($request->string('search')))
             ->when($request->filled('approval_status'), fn ($q) => $q->where('approval_status', $request->string('approval_status')))
             ->when($request->filled('status'), function ($q) use ($request) {
@@ -39,7 +44,13 @@ class EmployeeController extends BaseController
                     $q->where('status', $statusFilter);
                 }
             })
-            ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
+            ->when($request->filled('department_id'), function ($q) use ($request): void {
+                $deptId = $request->integer('department_id');
+                $q->where(function ($sub) use ($deptId): void {
+                    $sub->where('department_id', $deptId)
+                        ->orWhereHas('departments', fn ($dq) => $dq->where('departments.id', $deptId));
+                });
+            })
             ->when($request->filled('position_id'), fn ($q) => $q->where('position_id', $request->integer('position_id')))
             ->orderBy($request->string('sort_by', 'first_name'), $request->string('sort_dir', 'asc'))
             ->paginate($request->integer('per_page', 15));
@@ -192,7 +203,7 @@ class EmployeeController extends BaseController
     {
         $this->authorize('view', $employee);
 
-        return $this->success(new EmployeeResource($employee->load('department', 'position', 'manager', 'activeContract', 'latestContract', 'activeSchedule.shift')));
+        return $this->success(new EmployeeResource($employee->load('department', 'departments:id,name', 'position', 'manager', 'activeContract', 'latestContract', 'activeSchedule.shift')));
     }
 
     public function update(UpdateEmployeeRequest $request, Employee $employee): JsonResponse

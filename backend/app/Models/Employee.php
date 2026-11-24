@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Employee extends Model
 {
@@ -15,6 +16,23 @@ class Employee extends Model
     use HasFactory;
     use HasTenant;
     use SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saved(function (Employee $employee): void {
+            if ($employee->department_id !== null) {
+                $now = now();
+                DB::table('department_employee')->insertOrIgnore([
+                    'department_id' => (int) $employee->department_id,
+                    'employee_id' => (int) $employee->id,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+            User::clearDepartmentPermissionCache();
+        });
+        static::deleted(static fn () => User::clearDepartmentPermissionCache());
+    }
 
     protected $fillable = [
         'tenant_id',
@@ -91,6 +109,80 @@ class Employee extends Model
     public function department()
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function departments()
+    {
+        return $this->belongsToMany(Department::class, 'department_employee')->withTimestamps();
+    }
+
+    public function attachDepartment(int $departmentId): void
+    {
+        $this->departments()->syncWithoutDetaching([$departmentId]);
+
+        if ($this->department_id === null) {
+            $this->update(['department_id' => $departmentId]);
+        } else {
+            User::clearDepartmentPermissionCache();
+        }
+    }
+
+    public function detachDepartment(int $departmentId): void
+    {
+        $this->departments()->detach($departmentId);
+
+        if ((int) $this->department_id === $departmentId) {
+            $nextDeptId = DB::table('department_employee')
+                ->where('employee_id', $this->id)
+                ->orderBy('id')
+                ->value('department_id');
+
+            $this->update(['department_id' => $nextDeptId ? (int) $nextDeptId : null]);
+        } else {
+            User::clearDepartmentPermissionCache();
+        }
+    }
+
+    public function belongsToDepartment(int $departmentId): bool
+    {
+        if ((int) $this->department_id === $departmentId) {
+            return true;
+        }
+
+        if ($this->relationLoaded('departments')) {
+            return $this->departments->contains('id', $departmentId);
+        }
+
+        return $this->departments()->whereKey($departmentId)->exists();
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string}>
+     */
+    public function resolvedDepartmentsPayload(): array
+    {
+        $items = collect();
+
+        if ($this->relationLoaded('departments')) {
+            $items = $this->departments->map(fn (Department $d) => [
+                'id' => (int) $d->id,
+                'name' => (string) $d->name,
+            ]);
+        } elseif ($this->relationLoaded('department') && $this->department) {
+            $items = collect([[
+                'id' => (int) $this->department->id,
+                'name' => (string) $this->department->name,
+            ]]);
+        }
+
+        if ($this->department_id && ! $items->contains('id', (int) $this->department_id)) {
+            $primaryName = $this->relationLoaded('department') ? $this->department?->name : null;
+            if ($primaryName !== null) {
+                $items->prepend(['id' => (int) $this->department_id, 'name' => (string) $primaryName]);
+            }
+        }
+
+        return $items->unique('id')->values()->all();
     }
 
     public function position()

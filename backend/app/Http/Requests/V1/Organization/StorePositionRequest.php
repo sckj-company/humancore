@@ -18,6 +18,8 @@ class StorePositionRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:50'],
             'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('tenant_id', tenant_id())],
+            'parent_id' => ['nullable', 'integer', Rule::exists('positions', 'id')->where('tenant_id', tenant_id())],
+            'level' => ['nullable', 'integer', 'min:1', 'max:20'],
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
             'salary_min' => ['nullable', 'numeric', 'min:0'],

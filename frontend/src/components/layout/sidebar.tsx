@@ -206,7 +206,7 @@ export function Sidebar() {
   const isSuperAdmin = user?.roles?.includes('super-admin') ?? false
   const hasPlatformRole = isPlatformAdmin(user)
   const enforceAssignedPermissions = hasPlatformRole && !isSuperAdmin
-  const hasPermissionScope = enforceAssignedPermissions || Boolean(user?.active_permission_group_id)
+  const hasPermissionScope = enforceAssignedPermissions || Boolean(user?.active_permission_group_id) || Boolean(user?.has_explicit_permissions)
   const hasSelectedTenant = Boolean(localStorage.getItem('hrms_selected_tenant') || user?.tenant?.id)
 
   const isItemVisible = (item: NavItem) => {

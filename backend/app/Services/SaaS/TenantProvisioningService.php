@@ -2,8 +2,10 @@
 
 namespace App\Services\SaaS;
 
+use App\Models\Department;
 use App\Models\LeaveType;
 use App\Models\Plan;
+use App\Models\Position;
 use App\Models\SalaryComponent;
 use App\Models\Tenant;
 use App\Models\TenantSubscription;
@@ -111,6 +113,165 @@ class TenantProvisioningService
                 ['tenant_id' => $tenant->id, 'code' => $sc['code']],
                 $sc,
             );
+        }
+
+        $this->seedDefaultOrganizationStructure($tenant, true);
+    }
+
+    public function seedDefaultOrganizationStructure(Tenant $tenant, bool $onlyIfEmpty = true): void
+    {
+        /** @var TenantManager $manager */
+        $manager = app(TenantManager::class);
+        $previousTenant = $manager->get();
+        $manager->set($tenant);
+
+        try {
+            $shouldSeedDepartments = ! $onlyIfEmpty || Department::query()
+                ->withoutGlobalScopes()
+                ->withTrashed()
+                ->where('tenant_id', $tenant->id)
+                ->doesntExist();
+
+            if ($shouldSeedDepartments) {
+                $dg = Department::query()->withoutGlobalScopes()->firstOrCreate(
+                    ['tenant_id' => $tenant->id, 'code' => 'DG'],
+                    [
+                        'tenant_id' => $tenant->id,
+                        'name' => 'Direção Geral',
+                        'level' => 1,
+                        'parent_id' => null,
+                        'description' => 'Direção executiva e coordenação estratégica da empresa.',
+                        'status' => 'active',
+                    ],
+                );
+
+                $level2Departments = [
+                    [
+                        'code' => 'RH',
+                        'name' => 'Recursos Humanos',
+                        'description' => 'Gestão de pessoas, recrutamento, contratos, assiduidade e processamento salarial.',
+                    ],
+                    [
+                        'code' => 'FIN',
+                        'name' => 'Financeiro e Contabilidade',
+                        'description' => 'Controlo financeiro, tesouraria, contabilidade e obrigações fiscais.',
+                    ],
+                    [
+                        'code' => 'ADM',
+                        'name' => 'Administrativo',
+                        'description' => 'Serviços gerais, expediente administrativo e apoio institucional.',
+                    ],
+                    [
+                        'code' => 'OPS',
+                        'name' => 'Operações',
+                        'description' => 'Execução operacional, logística e entrega de serviços ou produção.',
+                    ],
+                    [
+                        'code' => 'COM',
+                        'name' => 'Comercial e Vendas',
+                        'description' => 'Desenvolvimento comercial, atendimento ao cliente e gestão de vendas.',
+                    ],
+                    [
+                        'code' => 'TI',
+                        'name' => 'Tecnologia e Sistemas',
+                        'description' => 'Infraestrutura tecnológica, suporte técnico e sistemas de informação.',
+                    ],
+                ];
+
+                foreach ($level2Departments as $dept) {
+                    Department::query()->withoutGlobalScopes()->firstOrCreate(
+                        ['tenant_id' => $tenant->id, 'code' => $dept['code']],
+                        [
+                            'tenant_id' => $tenant->id,
+                            'name' => $dept['name'],
+                            'parent_id' => $dg->id,
+                            'level' => 2,
+                            'description' => $dept['description'],
+                            'status' => 'active',
+                        ],
+                    );
+                }
+            }
+
+            $shouldSeedPositions = ! $onlyIfEmpty || Position::query()
+                ->withoutGlobalScopes()
+                ->withTrashed()
+                ->where('tenant_id', $tenant->id)
+                ->doesntExist();
+
+            if ($shouldSeedPositions) {
+                $deptIdsByCode = Department::query()
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->whereNotNull('code')
+                    ->pluck('id', 'code');
+
+                $director = Position::query()->withoutGlobalScopes()->firstOrCreate(
+                    ['tenant_id' => $tenant->id, 'code' => 'DG-01'],
+                    [
+                        'tenant_id' => $tenant->id,
+                        'title' => 'Diretor Geral',
+                        'department_id' => $deptIdsByCode->get('DG'),
+                        'parent_id' => null,
+                        'level' => 1,
+                        'is_management' => true,
+                        'description' => 'Liderança executiva geral da organização.',
+                    ],
+                );
+
+                $level2Positions = [
+                    ['code' => 'RH-01', 'title' => 'Gestor de Recursos Humanos', 'dept' => 'RH'],
+                    ['code' => 'FIN-01', 'title' => 'Gestor Financeiro', 'dept' => 'FIN'],
+                    ['code' => 'ADM-01', 'title' => 'Coordenador Administrativo', 'dept' => 'ADM'],
+                    ['code' => 'OPS-01', 'title' => 'Coordenador de Operações', 'dept' => 'OPS'],
+                    ['code' => 'COM-01', 'title' => 'Gestor Comercial', 'dept' => 'COM'],
+                    ['code' => 'TI-01', 'title' => 'Responsável de TI', 'dept' => 'TI'],
+                ];
+
+                $managersByCode = [];
+                foreach ($level2Positions as $pos) {
+                    $managersByCode[$pos['code']] = Position::query()->withoutGlobalScopes()->firstOrCreate(
+                        ['tenant_id' => $tenant->id, 'code' => $pos['code']],
+                        [
+                            'tenant_id' => $tenant->id,
+                            'title' => $pos['title'],
+                            'department_id' => $deptIdsByCode->get($pos['dept']),
+                            'parent_id' => $director->id,
+                            'level' => 2,
+                            'is_management' => true,
+                        ],
+                    );
+                }
+
+                $level3Positions = [
+                    ['code' => 'RH-02', 'title' => 'Técnico de Recursos Humanos', 'dept' => 'RH', 'parent' => 'RH-01'],
+                    ['code' => 'FIN-02', 'title' => 'Contabilista', 'dept' => 'FIN', 'parent' => 'FIN-01'],
+                    ['code' => 'ADM-02', 'title' => 'Assistente Administrativo', 'dept' => 'ADM', 'parent' => 'ADM-01'],
+                    ['code' => 'OPS-02', 'title' => 'Técnico Operacional', 'dept' => 'OPS', 'parent' => 'OPS-01'],
+                    ['code' => 'COM-02', 'title' => 'Comercial / Vendedor', 'dept' => 'COM', 'parent' => 'COM-01'],
+                    ['code' => 'TI-02', 'title' => 'Técnico de Informática', 'dept' => 'TI', 'parent' => 'TI-01'],
+                ];
+
+                foreach ($level3Positions as $pos) {
+                    Position::query()->withoutGlobalScopes()->firstOrCreate(
+                        ['tenant_id' => $tenant->id, 'code' => $pos['code']],
+                        [
+                            'tenant_id' => $tenant->id,
+                            'title' => $pos['title'],
+                            'department_id' => $deptIdsByCode->get($pos['dept']),
+                            'parent_id' => $managersByCode[$pos['parent']]->id ?? $director->id,
+                            'level' => 3,
+                            'is_management' => false,
+                        ],
+                    );
+                }
+            }
+        } finally {
+            if ($previousTenant) {
+                $manager->set($previousTenant);
+            } else {
+                $manager->clear();
+            }
         }
     }
 

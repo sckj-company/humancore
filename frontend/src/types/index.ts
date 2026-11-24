@@ -12,6 +12,7 @@ export interface User {
   accessible_tenants?: Array<{ id: number; name: string; slug: string; tax_id?: string | null; status?: string; logo_path?: string | null; is_managed?: boolean }>
   active_department_ids?: number[] | null
   active_permission_group_id?: number | null
+  has_explicit_permissions?: boolean
   employee?: EmployeeSummary | null
   tenant?: Tenant | null
   entitlements?: TenantEntitlements | null
@@ -69,6 +70,8 @@ export interface EmployeeSummary {
   photo_path?: string
   position?: string
   department?: string
+  department_ids?: number[]
+  departments?: Array<{ id: number; name: string }>
   address?: string
   city?: string
   state?: string
@@ -134,6 +137,8 @@ export interface Employee {
   termination_at?: string
   termination_reason?: string
   department_id?: number
+  department_ids?: number[]
+  departments?: Array<{ id: number; name: string }>
   position_id?: number
   manager_id?: number
   department?: Department

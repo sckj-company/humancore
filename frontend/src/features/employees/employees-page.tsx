@@ -237,7 +237,19 @@ export function EmployeesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-3 text-muted-foreground">{e.position ?? '—'}</td>
-                      <td className="px-6 py-3 text-muted-foreground">{e.department ?? '—'}</td>
+                      <td className="px-6 py-3 text-muted-foreground">
+                        {e.departments && e.departments.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {e.departments.map((dept) => (
+                              <Badge key={dept.id} variant="secondary" className="text-xs font-normal">
+                                {dept.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          e.department ?? '—'
+                        )}
+                      </td>
                       <td className="px-6 py-3">
                         <Badge className={statusColor[displayStatus] ?? 'bg-muted text-foreground'} variant="secondary">
                           {t(`employeesPage.status.${displayStatus}`, { defaultValue: displayStatus })}

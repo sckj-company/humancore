@@ -9,14 +9,20 @@ export interface Department {
   name: string
   code?: string | null
   parent_id?: number | null
+  level: number
   manager_id?: number | null
   cost_center?: string | null
   description?: string | null
   status: 'active' | 'inactive'
+  permission_group_id?: number | null
+  permission_group_name?: string | null
+  default_permissions?: string[]
+  default_role_name?: string | null
+  effective_permissions_count?: number
   employee_count?: number
   branch?: { id: number; name: string } | null
   manager?: { id: number; full_name: string } | null
-  parent?: { id: number; name: string } | null
+  parent?: { id: number; name: string; level?: number } | null
   children?: Department[]
 }
 
@@ -25,6 +31,7 @@ export interface DepartmentPayload {
   code?: string | null
   branch_id?: number | null
   parent_id?: number | null
+  level?: number | null
   manager_id?: number | null
   cost_center?: string | null
   description?: string | null
@@ -35,6 +42,8 @@ export interface Position {
   id: number
   tenant_id?: number
   department_id?: number | null
+  parent_id?: number | null
+  level: number
   title: string
   code?: string | null
   description?: string | null
@@ -42,13 +51,17 @@ export interface Position {
   salary_min?: number | null
   salary_max?: number | null
   is_management: boolean
+  employee_count?: number
   department?: { id: number; name: string } | null
+  parent?: { id: number; title: string; level?: number } | null
 }
 
 export interface PositionPayload {
   title: string
   code?: string | null
   department_id?: number | null
+  parent_id?: number | null
+  level?: number | null
   description?: string | null
   requirements?: string | null
   salary_min?: number | null
@@ -89,6 +102,125 @@ export interface EmployeeSummary {
   employee_code?: string
   full_name: string
   email?: string
+  photo_path?: string | null
+  department_id?: number | null
+  department?: string | null
+  department_ids?: number[]
+  departments?: Array<{ id: number; name: string }>
+  position_id?: number | null
+  position?: string | null
+  status?: string
+}
+
+export interface PermissionCatalogItem {
+  id: number
+  name: string
+  group_name: string | null
+}
+
+export interface PermissionGroupSummary {
+  id: number
+  tenant_id?: number | null
+  name: string
+  description?: string | null
+  permissions: string[]
+  is_system: boolean
+}
+
+export interface PermissionsCatalogResponse {
+  permissions: PermissionCatalogItem[]
+  permission_groups: PermissionGroupSummary[]
+  can_manage_permissions: boolean
+}
+
+export interface DepartmentEmployeeItem {
+  id: number
+  employee_code?: string | null
+  full_name: string
+  email?: string | null
+  photo_path?: string | null
+  status: string
+  departments?: Array<{ id: number; name: string }>
+  position?: { id: number; title: string; level: number } | null
+  has_user_account: boolean
+  user_id?: number | null
+  user_email?: string | null
+  user_is_active: boolean
+  role_name?: string | null
+  permission_source: 'individual' | 'department' | 'role' | 'none'
+  permission_group_id?: number | null
+  permission_group_name?: string | null
+  effective_permissions: string[]
+  custom_permissions?: string[] | null
+  department_scope_ids: number[]
+}
+
+export interface DepartmentEmployeesResponse {
+  department: Department
+  employees: DepartmentEmployeeItem[]
+  can_manage_permissions: boolean
+  can_manage_employees?: boolean
+}
+
+export interface PositionEmployeeItem {
+  id: number
+  employee_code?: string | null
+  full_name: string
+  email?: string | null
+  photo_path?: string | null
+  status: string
+  department_id?: number | null
+  department?: { id: number; name: string } | null
+  departments?: Array<{ id: number; name: string }>
+}
+
+export interface PositionEmployeesResponse {
+  position: Position
+  employees: PositionEmployeeItem[]
+  can_manage_employees: boolean
+}
+
+export interface DepartmentPermissionsPayload {
+  permissions?: string[] | null
+  permission_group_id?: number | null
+  role_name?: string | null
+  apply_to_existing_overrides?: boolean
+}
+
+export interface AssignEmployeePermissionsPayload {
+  employee_ids: number[]
+  clear_individual?: boolean
+  permissions?: string[] | null
+  permission_group_id?: number | null
+  role_name?: string | null
+  scope_to_department?: boolean
+  auto_create_accounts?: boolean
+  default_password?: string | null
+  employee_emails?: Record<number, string>
+}
+
+export interface AssignEmployeePermissionsResponse {
+  updated_count: number
+  created_accounts_count: number
+  skipped: Array<{ employee_id: number; name: string; reason: string }>
+}
+
+export function collectDescendantIds<T extends { id: number; parent_id?: number | null }>(
+  items: T[],
+  rootId: number,
+): Set<number> {
+  const excluded = new Set<number>([rootId])
+  let added = true
+  while (added) {
+    added = false
+    for (const item of items) {
+      if (item.parent_id != null && excluded.has(item.parent_id) && !excluded.has(item.id)) {
+        excluded.add(item.id)
+        added = true
+      }
+    }
+  }
+  return excluded
 }
 
 // ================= Departments Hooks =================
@@ -115,6 +247,7 @@ export const useUpdateDepartment = () => {
       api.put<Department>(`departments/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
     },
   })
 }
@@ -125,6 +258,85 @@ export const useDeleteDepartment = () => {
     mutationFn: (id: number) => api.delete(`departments/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+    },
+  })
+}
+
+export const usePermissionsCatalog = () =>
+  useQuery({
+    queryKey: ['departments-permissions-catalog'],
+    queryFn: () => api.get<PermissionsCatalogResponse>('departments/permissions-catalog'),
+  })
+
+export const useDepartmentEmployees = (departmentId: number | null, search?: string) =>
+  useQuery({
+    queryKey: ['department-employees', departmentId, search ?? ''],
+    queryFn: () =>
+      api.get<DepartmentEmployeesResponse>(`departments/${departmentId}/employees`, {
+        ...(search ? { search } : {}),
+      }),
+    enabled: departmentId !== null,
+  })
+
+export const useUpdateDepartmentPermissions = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ departmentId, data }: { departmentId: number; data: DepartmentPermissionsPayload }) =>
+      api.put<{ department: Department; affected_employees_count: number }>(
+        `departments/${departmentId}/permissions`,
+        data,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+    },
+  })
+}
+
+export const useAssignDepartmentEmployeesPermissions = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ departmentId, data }: { departmentId: number; data: AssignEmployeePermissionsPayload }) =>
+      api.post<AssignEmployeePermissionsResponse>(
+        `departments/${departmentId}/employees/permissions`,
+        data,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-picker'] })
+    },
+  })
+}
+
+export const useAddDepartmentEmployees = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ departmentId, employeeIds }: { departmentId: number; employeeIds: number[] }) =>
+      api.post<{ added_count: number; department: Department }>(`departments/${departmentId}/employees`, {
+        employee_ids: employeeIds,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-picker'] })
+    },
+  })
+}
+
+export const useRemoveDepartmentEmployee = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ departmentId, employeeId }: { departmentId: number; employeeId: number }) =>
+      api.delete<{ department: Department }>(`departments/${departmentId}/employees/${employeeId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-picker'] })
     },
   })
 }
@@ -153,6 +365,7 @@ export const useUpdatePosition = () => {
       api.put<Position>(`positions/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['positions'] })
+      queryClient.invalidateQueries({ queryKey: ['position-employees'] })
     },
   })
 }
@@ -163,6 +376,59 @@ export const useDeletePosition = () => {
     mutationFn: (id: number) => api.delete(`positions/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['positions'] })
+      queryClient.invalidateQueries({ queryKey: ['position-employees'] })
+    },
+  })
+}
+
+export const usePositionEmployees = (positionId: number | null, search?: string) =>
+  useQuery({
+    queryKey: ['position-employees', positionId, search ?? ''],
+    queryFn: () =>
+      api.get<PositionEmployeesResponse>(`positions/${positionId}/employees`, {
+        ...(search ? { search } : {}),
+      }),
+    enabled: positionId !== null,
+  })
+
+export const useAddPositionEmployees = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      positionId,
+      employeeIds,
+      syncDepartment,
+    }: {
+      positionId: number
+      employeeIds: number[]
+      syncDepartment?: boolean
+    }) =>
+      api.post<{ added_count: number; position: Position }>(`positions/${positionId}/employees`, {
+        employee_ids: employeeIds,
+        sync_department: syncDepartment,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['positions'] })
+      queryClient.invalidateQueries({ queryKey: ['position-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-picker'] })
+    },
+  })
+}
+
+export const useRemovePositionEmployee = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ positionId, employeeId }: { positionId: number; employeeId: number }) =>
+      api.delete<{ position: Position }>(`positions/${positionId}/employees/${employeeId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['positions'] })
+      queryClient.invalidateQueries({ queryKey: ['position-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-picker'] })
     },
   })
 }
@@ -216,4 +482,17 @@ export const useEmployeesSummary = () =>
       const res = await api.get<Paginated<EmployeeSummary>>('employees', { per_page: 200 })
       return res.data ?? []
     },
+  })
+
+export const useEmployeesPicker = (search: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['employees-picker', search],
+    queryFn: async () => {
+      const res = await api.get<Paginated<EmployeeSummary>>('employees', {
+        per_page: 200,
+        ...(search.trim() ? { search: search.trim() } : {}),
+      })
+      return res.data ?? []
+    },
+    enabled,
   })

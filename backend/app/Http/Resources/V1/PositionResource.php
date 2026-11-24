@@ -13,6 +13,8 @@ class PositionResource extends JsonResource
             'id' => $this->id,
             'tenant_id' => $this->tenant_id,
             'department_id' => $this->department_id,
+            'parent_id' => $this->parent_id,
+            'level' => (int) ($this->level ?? 1),
             'title' => $this->title,
             'code' => $this->code,
             'description' => $this->description,
@@ -20,10 +22,16 @@ class PositionResource extends JsonResource
             'salary_min' => $this->salary_min,
             'salary_max' => $this->salary_max,
             'is_management' => $this->is_management,
-            'department' => $this->whenLoaded('department', fn () => [
+            'employee_count' => $this->whenCounted('employees'),
+            'department' => $this->whenLoaded('department', fn () => $this->department ? [
                 'id' => $this->department->id,
                 'name' => $this->department->name,
-            ]),
+            ] : null),
+            'parent' => $this->whenLoaded('parent', fn () => $this->parent ? [
+                'id' => $this->parent->id,
+                'title' => $this->parent->title,
+                'level' => (int) ($this->parent->level ?? 1),
+            ] : null),
         ];
     }
 }

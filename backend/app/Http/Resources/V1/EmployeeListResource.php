@@ -15,6 +15,8 @@ class EmployeeListResource extends JsonResource
         $canContact = ! $user || $isSelf || $user->hasFieldPermission('employee', 'contact_address', 'view');
         $canOrg = ! $user || $isSelf || $user->hasFieldPermission('employee', 'organization', 'view');
 
+        $departments = $canOrg ? $this->resolvedDepartmentsPayload() : [];
+
         return [
             'id' => $this->id,
             'employee_code' => $this->employee_code,
@@ -26,7 +28,11 @@ class EmployeeListResource extends JsonResource
             'approval_status' => $this->approval_status ?? 'approved',
             'approved_at' => $this->approved_at?->toIso8601String(),
             'hired_at' => $canOrg ? $this->hired_at?->format('Y-m-d') : null,
+            'department_id' => $canOrg ? $this->department_id : null,
             'department' => $canOrg ? $this->whenLoaded('department', fn () => $this->department?->name) : null,
+            'department_ids' => $canOrg ? array_column($departments, 'id') : [],
+            'departments' => $departments,
+            'position_id' => $canOrg ? $this->position_id : null,
             'position' => $canOrg ? $this->whenLoaded('position', fn () => $this->position?->title) : null,
             'active_contract' => $this->whenLoaded('activeContract', fn () => $this->activeContract ? [
                 'base_salary' => $canSalary ? $this->activeContract->base_salary : null,

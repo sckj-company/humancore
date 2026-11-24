@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\V1\Onboarding\OnboardingTaskController;
 use App\Http\Controllers\Api\V1\Onboarding\OnboardingTemplateController;
 use App\Http\Controllers\Api\V1\Organization\BranchController;
 use App\Http\Controllers\Api\V1\Organization\DepartmentController;
+use App\Http\Controllers\Api\V1\Organization\DepartmentPermissionController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
 use App\Http\Controllers\Api\V1\Payroll\EmployeePayrollSettingsController;
 use App\Http\Controllers\Api\V1\Payroll\MyPayslipsController;
@@ -183,8 +184,17 @@ Route::prefix('v1')->group(function () {
 
             // Estrutura organizacional
             Route::middleware('plan.feature:departments_positions')->group(function () {
+                Route::get('departments/permissions-catalog', [DepartmentPermissionController::class, 'catalog']);
                 Route::apiResource('departments', DepartmentController::class)->middleware('plan.quota:max_departments');
+                Route::get('departments/{department}/employees', [DepartmentPermissionController::class, 'employees']);
+                Route::post('departments/{department}/employees', [DepartmentPermissionController::class, 'addEmployees']);
+                Route::delete('departments/{department}/employees/{employee}', [DepartmentPermissionController::class, 'removeEmployee']);
+                Route::put('departments/{department}/permissions', [DepartmentPermissionController::class, 'updateDepartmentPermissions']);
+                Route::post('departments/{department}/employees/permissions', [DepartmentPermissionController::class, 'assignEmployeePermissions']);
                 Route::apiResource('positions', PositionController::class);
+                Route::get('positions/{position}/employees', [PositionController::class, 'employees']);
+                Route::post('positions/{position}/employees', [PositionController::class, 'addEmployees']);
+                Route::delete('positions/{position}/employees/{employee}', [PositionController::class, 'removeEmployee']);
             });
             Route::apiResource('branches', BranchController::class)
                 ->middleware(['plan.feature:branches', 'plan.quota:max_branches']);
