@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\CompanyPayrollReportController;
+use App\Http\Controllers\Api\V1\Admin\ExecutiveDashboardController;
 use App\Http\Controllers\Api\V1\Admin\PlanController;
 use App\Http\Controllers\Api\V1\Admin\PlatformBillingController;
 use App\Http\Controllers\Api\V1\Admin\SuperAdminController;
@@ -87,6 +88,8 @@ Route::prefix('v1')->group(function () {
         // Super Admin — gestão global da plataforma
         Route::prefix('superadmin')->group(function () {
             Route::get('dashboard', [SuperAdminController::class, 'dashboard']);
+            Route::get('executive-dashboard', [ExecutiveDashboardController::class, 'index']);
+            Route::get('executive-dashboard/companies/{tenant}', [ExecutiveDashboardController::class, 'company']);
             Route::get('tenants', [SuperAdminController::class, 'tenants']);
             Route::post('tenants', [SuperAdminController::class, 'storeTenant']);
             Route::get('tenants/{tenant}', [SuperAdminController::class, 'showTenant']);
