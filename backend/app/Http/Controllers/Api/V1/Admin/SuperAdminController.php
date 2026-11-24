@@ -13,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\TenantRelationship;
 use App\Models\User;
 use App\Models\UserTenantAccess;
+use App\Scopes\TenantScope;
 use App\Services\Audit\AuditService;
 use App\Services\SaaS\PlanEntitlementService;
 use App\Services\SaaS\TenantHierarchyService;
@@ -75,10 +76,10 @@ class SuperAdminController extends BaseController
         $activeTenants = $tenantScope(Tenant::query())->where('status', 'active')->count();
         $inactiveTenants = $tenantScope(Tenant::query())->where('status', 'inactive')->count();
         $suspendedTenants = $tenantScope(Tenant::query())->where('status', 'suspended')->count();
-        $totalEmployees = Employee::withoutGlobalScopes()
+        $totalEmployees = Employee::withoutGlobalScope(TenantScope::class)
             ->when($scopedFilter !== null, fn ($q) => $q->whereIn('tenant_id', $scopedFilter))
             ->count();
-        $activeEmployees = Employee::withoutGlobalScopes()
+        $activeEmployees = Employee::withoutGlobalScope(TenantScope::class)
             ->when($scopedFilter !== null, fn ($q) => $q->whereIn('tenant_id', $scopedFilter))
             ->where('status', 'active')
             ->count();
@@ -110,7 +111,9 @@ class SuperAdminController extends BaseController
         ];
 
         $byTenant = $tenantScope(Tenant::query())
-            ->withCount('employees')
+            ->withCount([
+                'employees' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+            ])
             ->orderByDesc('created_at')
             ->get()
             ->map(function (Tenant $tenant) use (&$segments) {
@@ -364,7 +367,12 @@ class SuperAdminController extends BaseController
                 'latestSubscription.plan:id,name,slug,currency,base_price',
                 'activeManagerRelationship.managerTenant:id,name,slug',
             ])
-            ->withCount(['employees', 'users', 'departments', 'activeManagedRelationships'])
+            ->withCount([
+                'employees' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+                'users',
+                'departments' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+                'activeManagedRelationships',
+            ])
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = $request->string('search');
                 $q->where(function ($sub) use ($term) {
@@ -422,6 +430,7 @@ class SuperAdminController extends BaseController
             'email'              => ['nullable', 'email', 'max:255'],
             'billing_email'      => ['nullable', 'email', 'max:255'],
             'phone'              => ['nullable', 'string', 'max:50'],
+            'website'            => ['nullable', 'url', 'max:255'],
             'tax_id'             => ['nullable', 'string', 'max:100'],
             'inss_number'        => ['nullable', 'string', 'max:100'],
             'legal_entity_type'  => ['nullable', 'string', 'max:50'],
@@ -430,6 +439,7 @@ class SuperAdminController extends BaseController
             'city'               => ['nullable', 'string', 'max:150'],
             'province'           => ['nullable', 'string', 'max:150'],
             'country'            => ['nullable', 'string', 'max:100'],
+            'postal_code'        => ['nullable', 'string', 'max:50'],
             'currency'           => ['nullable', 'string', 'size:3'],
             'locale'             => ['nullable', 'string', 'max:10'],
             'timezone'           => ['nullable', 'string', 'max:100'],
@@ -685,7 +695,7 @@ class SuperAdminController extends BaseController
             return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
         }
 
-        $departments = Department::withoutGlobalScopes()
+        $departments = Department::withoutGlobalScope(TenantScope::class)
             ->where('tenant_id', $tenant->id)
             ->orderBy('name')
             ->get(['id', 'name', 'tenant_id']);
@@ -794,7 +804,7 @@ class SuperAdminController extends BaseController
 
             $deptIds = array_values(array_unique(array_map('intval', $entry['department_ids'] ?? [])));
             if ($deptIds !== []) {
-                $validDeptIds = Department::withoutGlobalScopes()
+                $validDeptIds = Department::withoutGlobalScope(TenantScope::class)
                     ->where('tenant_id', $tenantId)
                     ->whereIn('id', $deptIds)
                     ->pluck('id')
@@ -902,7 +912,11 @@ class SuperAdminController extends BaseController
         }
 
         return $this->success(new TenantResource(
-            $tenant->loadCount(['employees', 'users', 'departments'])
+            $tenant->loadCount([
+                'employees' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+                'users',
+                'departments' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+            ])
         ));
     }
 
@@ -917,8 +931,18 @@ class SuperAdminController extends BaseController
             'name' => ['sometimes', 'string', 'max:255'],
             'slug' => ['sometimes', 'string', 'max:255', 'regex:/^[a-z0-9-]+$/', 'unique:tenants,slug,'.$tenant->id],
             'email' => ['nullable', 'email', 'max:255'],
+            'billing_email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'website' => ['nullable', 'url', 'max:255'],
             'tax_id' => ['nullable', 'string', 'max:100'],
+            'inss_number' => ['nullable', 'string', 'max:100'],
+            'legal_entity_type' => ['nullable', 'string', 'max:50'],
+            'economic_sector' => ['nullable', 'string', 'max:150'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'city' => ['nullable', 'string', 'max:150'],
+            'province' => ['nullable', 'string', 'max:150'],
+            'country' => ['nullable', 'string', 'max:100'],
+            'postal_code' => ['nullable', 'string', 'max:50'],
             'currency' => ['nullable', 'string', 'size:3'],
             'locale' => ['nullable', 'string', 'max:10'],
             'timezone' => ['nullable', 'string', 'max:100'],
@@ -940,7 +964,7 @@ class SuperAdminController extends BaseController
             return $this->error('Sem permissão para aceder à empresa solicitada.', 403);
         }
 
-        if ($tenant->employees()->exists()) {
+        if ($tenant->employees()->withoutGlobalScope(TenantScope::class)->exists()) {
             return $this->error('Não é possível eliminar uma empresa com funcionários associados.', 422);
         }
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeContract;
 use App\Models\Tenant;
@@ -626,5 +627,235 @@ class SuperAdminTest extends TestCase
             ->getJson('/api/v1/employees')
             ->assertOk();
         $this->assertEquals(450000, (float) $employeesLegacyRes->json('data.data.0.active_contract.base_salary'));
+    }
+
+    public function test_super_admin_tenant_list_and_dashboard_return_real_counts_across_tenants(): void
+    {
+        $tenantA = Tenant::factory()->create(['name' => 'Empresa A']);
+        $tenantB = Tenant::factory()->create(['name' => 'Empresa B']);
+
+        $superAdmin = User::factory()->create([
+            'tenant_id' => $tenantA->id,
+            'is_active' => true,
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        User::factory()->create(['tenant_id' => $tenantA->id, 'is_active' => true]);
+        User::factory()->count(2)->create(['tenant_id' => $tenantB->id, 'is_active' => true]);
+
+        Department::factory()->count(1)->create(['tenant_id' => $tenantA->id]);
+        Department::factory()->count(3)->create(['tenant_id' => $tenantB->id]);
+        $deletedDeptB = Department::factory()->create(['tenant_id' => $tenantB->id]);
+        $deletedDeptB->delete();
+
+        Employee::factory()->count(2)->create(['tenant_id' => $tenantA->id, 'status' => 'active']);
+        $deletedEmpA = Employee::factory()->create(['tenant_id' => $tenantA->id, 'status' => 'active']);
+        $deletedEmpA->delete();
+
+        Employee::factory()->count(4)->create(['tenant_id' => $tenantB->id, 'status' => 'active']);
+        $deletedEmpB = Employee::factory()->create(['tenant_id' => $tenantB->id, 'status' => 'active']);
+        $deletedEmpB->delete();
+
+        $listResponse = $this->actingAs($superAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->getJson('/api/v1/superadmin/tenants?per_page=50')
+            ->assertOk();
+
+        $rows = collect($listResponse->json('data.data'))->keyBy('id');
+        $this->assertSame(2, $rows[$tenantA->id]['stats']['employees']);
+        $this->assertSame(1, $rows[$tenantA->id]['stats']['departments']);
+        $this->assertSame(2, $rows[$tenantA->id]['stats']['users']);
+
+        $this->assertSame(4, $rows[$tenantB->id]['stats']['employees']);
+        $this->assertSame(3, $rows[$tenantB->id]['stats']['departments']);
+        $this->assertSame(2, $rows[$tenantB->id]['stats']['users']);
+
+        $dashboardResponse = $this->actingAs($superAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->getJson('/api/v1/superadmin/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.kpis.total_employees', 6)
+            ->assertJsonPath('data.kpis.active_employees', 6)
+            ->assertJsonPath('data.kpis.total_users', 4);
+
+        $byTenant = collect($dashboardResponse->json('data.by_tenant'))->keyBy('id');
+        $this->assertSame(2, $byTenant[$tenantA->id]['employees']);
+        $this->assertSame(4, $byTenant[$tenantB->id]['employees']);
+
+        // Remoção de empresa B deve detectar funcionários mesmo com currentTenant = tenantA
+        $this->actingAs($superAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $tenantA->id)
+            ->deleteJson("/api/v1/superadmin/tenants/{$tenantB->id}")
+            ->assertStatus(422);
+    }
+
+    public function test_super_admin_update_tenant_persists_all_editable_fields(): void
+    {
+        $superAdmin = User::factory()->create(['is_active' => true]);
+        $superAdmin->assignRole('super-admin');
+
+        $tenant = Tenant::factory()->create(['name' => 'Empresa Original']);
+
+        $payload = [
+            'name' => 'Empresa Atualizada Lda',
+            'slug' => 'empresa-atualizada-lda',
+            'email' => 'contacto@atualizada.co.ao',
+            'billing_email' => 'faturacao@atualizada.co.ao',
+            'phone' => '+244923000111',
+            'website' => 'https://atualizada.co.ao',
+            'tax_id' => '5417123456',
+            'inss_number' => 'INSS-998877',
+            'legal_entity_type' => 'lda',
+            'economic_sector' => 'Tecnologia e Telecomunicações',
+            'address' => 'Rua Comandante Gika, 120',
+            'city' => 'Luanda',
+            'province' => 'Luanda',
+            'country' => 'Angola',
+            'postal_code' => '1000-001',
+            'currency' => 'AOA',
+            'locale' => 'pt',
+            'timezone' => 'Africa/Luanda',
+            'status' => 'active',
+        ];
+
+        $this->actingAs($superAdmin, 'sanctum')
+            ->putJson("/api/v1/superadmin/tenants/{$tenant->id}", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.legal_entity_type', 'lda')
+            ->assertJsonPath('data.inss_number', 'INSS-998877')
+            ->assertJsonPath('data.economic_sector', 'Tecnologia e Telecomunicações')
+            ->assertJsonPath('data.website', 'https://atualizada.co.ao')
+            ->assertJsonPath('data.province', 'Luanda')
+            ->assertJsonPath('data.postal_code', '1000-001');
+
+        $this->assertDatabaseHas('tenants', [
+            'id' => $tenant->id,
+            'name' => 'Empresa Atualizada Lda',
+            'billing_email' => 'faturacao@atualizada.co.ao',
+            'inss_number' => 'INSS-998877',
+            'legal_entity_type' => 'lda',
+            'economic_sector' => 'Tecnologia e Telecomunicações',
+            'website' => 'https://atualizada.co.ao',
+            'address' => 'Rua Comandante Gika, 120',
+            'city' => 'Luanda',
+            'province' => 'Luanda',
+            'country' => 'Angola',
+            'postal_code' => '1000-001',
+        ]);
+    }
+
+    public function test_created_tenant_user_persists_verified_updates_company_stats_and_can_authenticate(): void
+    {
+        $tenant = Tenant::factory()->create(['name' => 'Empresa Utilizadores']);
+        $superAdmin = User::factory()->create(['is_active' => true]);
+        $superAdmin->assignRole('super-admin');
+
+        $createResponse = $this->actingAs($superAdmin, 'sanctum')
+            ->postJson("/api/v1/superadmin/tenants/{$tenant->id}/users", [
+                'name' => 'Gestor RH Novo',
+                'email' => 'gestor.novo@empresa.co.ao',
+                'password' => 'Secret1234!',
+                'role' => 'hr-manager',
+                'permissions' => ['view_any_employee', 'view_employee'],
+            ])
+            ->assertCreated();
+
+        $createdUserId = $createResponse->json('data.id');
+        $createdUser = User::query()->findOrFail($createdUserId);
+
+        $this->assertNotNull($createdUser->email_verified_at);
+        $this->assertSame($tenant->id, $createdUser->tenant_id);
+        $this->assertTrue($createdUser->hasRole('hr-manager'));
+        $this->assertTrue($createdUser->hasDirectPermission('view_any_employee'));
+
+        // Listagem de empresas passa a refletir stats.users = 1
+        $this->actingAs($superAdmin, 'sanctum')
+            ->getJson('/api/v1/superadmin/tenants')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.stats.users', 1);
+
+        // Utilizador criado consegue autenticar e aceder à API
+        auth()->shouldUse('web');
+        auth()->forgetGuards();
+
+        $loginResponse = $this->postJson('/api/v1/auth/login', [
+            'email' => 'gestor.novo@empresa.co.ao',
+            'password' => 'Secret1234!',
+        ])->assertOk();
+
+        $token = $loginResponse->json('data.access_token');
+        $this->assertNotEmpty($token);
+
+        $this->withToken($token)
+            ->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.email', 'gestor.novo@empresa.co.ao');
+
+        $this->withToken($token)
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+    }
+
+    public function test_accessible_companies_endpoint_returns_all_active_tenants_with_nif_and_supports_db_search(): void
+    {
+        $atlantico = Tenant::factory()->create([
+            'name' => 'Empresa Atlântico',
+            'tax_id' => '5000111222',
+            'status' => 'active',
+        ]);
+        $kwanza = Tenant::factory()->create([
+            'name' => 'Banco Kwanza',
+            'tax_id' => '5000999888',
+            'status' => 'active',
+        ]);
+        Tenant::factory()->create([
+            'name' => 'Empresa Suspensa',
+            'tax_id' => '5000777666',
+            'status' => 'suspended',
+        ]);
+        Tenant::factory()->create([
+            'name' => 'Empresa Inativa',
+            'tax_id' => '5000555444',
+            'status' => 'inactive',
+        ]);
+
+        $superAdmin = User::factory()->create(['is_active' => true]);
+        $superAdmin->assignRole('super-admin');
+
+        $allActive = $this->actingAs($superAdmin, 'sanctum')
+            ->getJson('/api/v1/companies/accessible')
+            ->assertOk();
+
+        $this->assertCount(2, $allActive->json('data'));
+        $byId = collect($allActive->json('data'))->keyBy('id');
+        $this->assertSame('5000111222', $byId[$atlantico->id]['tax_id']);
+        $this->assertSame('5000999888', $byId[$kwanza->id]['tax_id']);
+
+        $byNif = $this->actingAs($superAdmin, 'sanctum')
+            ->getJson('/api/v1/companies/accessible?search=5000999888')
+            ->assertOk();
+        $this->assertCount(1, $byNif->json('data'));
+        $this->assertSame($kwanza->id, $byNif->json('data.0.id'));
+        $this->assertSame('Banco Kwanza', $byNif->json('data.0.name'));
+        $this->assertSame('5000999888', $byNif->json('data.0.tax_id'));
+
+        $byName = $this->actingAs($superAdmin, 'sanctum')
+            ->getJson('/api/v1/companies/accessible?search=Atlântico')
+            ->assertOk();
+        $this->assertCount(1, $byName->json('data'));
+        $this->assertSame($atlantico->id, $byName->json('data.0.id'));
+
+        $regularUser = User::factory()->create([
+            'tenant_id' => $atlantico->id,
+            'is_active' => true,
+        ]);
+        $regularUser->assignRole('admin');
+
+        $regularRes = $this->actingAs($regularUser, 'sanctum')
+            ->getJson('/api/v1/companies/accessible')
+            ->assertOk();
+        $this->assertCount(1, $regularRes->json('data'));
+        $this->assertSame($atlantico->id, $regularRes->json('data.0.id'));
+        $this->assertSame('5000111222', $regularRes->json('data.0.tax_id'));
     }
 }

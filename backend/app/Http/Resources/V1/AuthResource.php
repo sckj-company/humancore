@@ -48,6 +48,7 @@ class AuthResource extends JsonResource
                 'id' => $tenant->id,
                 'name' => $tenant->name,
                 'slug' => $tenant->slug,
+                'tax_id' => $tenant->tax_id,
                 'currency' => $tenant->currency,
                 'locale' => $tenant->locale,
                 'timezone' => $tenant->timezone,

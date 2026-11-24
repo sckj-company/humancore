@@ -72,6 +72,7 @@ Route::prefix('v1')->group(function () {
 
         // Empresa / subscrição / faturação própria
         Route::get('company', [TenantController::class, 'current']);
+        Route::get('companies/accessible', [TenantController::class, 'accessible']);
         Route::get('company/subscription', [CompanyBillingController::class, 'subscription']);
         Route::get('company/billing/invoices', [CompanyBillingController::class, 'invoices']);
         Route::post('company/billing/invoices/{invoice}/payments', [CompanyBillingController::class, 'submitPayment']);

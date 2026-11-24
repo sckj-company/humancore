@@ -40,6 +40,7 @@ class User extends Authenticatable
         'employee_id',
         'name',
         'email',
+        'email_verified_at',
         'password',
         'locale',
         'timezone',
@@ -285,22 +286,35 @@ class User extends Authenticatable
     }
 
     /**
-     * @return Collection<int, array{id: int, name: string, slug: string, status: string, logo_path: string|null, is_managed?: bool}>
+     * @return Collection<int, array{id: int, name: string, slug: string, tax_id: string|null, status: string, logo_path: string|null, is_managed?: bool}>
      */
-    public function accessibleTenants(): Collection
+    public function accessibleTenants(?string $search = null, ?string $status = null): Collection
     {
-        $query = Tenant::query()->orderBy('name');
+        $searchTerm = $search !== null ? trim($search) : '';
+        $query = Tenant::query()
+            ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
+            ->when($searchTerm !== '', function ($q) use ($searchTerm): void {
+                $q->where(function ($sub) use ($searchTerm): void {
+                    $sub->where('name', 'like', "%{$searchTerm}%")
+                        ->orWhere('tax_id', 'like', "%{$searchTerm}%")
+                        ->orWhere('slug', 'like', "%{$searchTerm}%");
+                });
+            })
+            ->orderBy('name');
+
+        $columns = ['id', 'name', 'slug', 'tax_id', 'status', 'logo_path'];
+        $mapTenant = static fn (Tenant $t, bool $isManaged = false): array => [
+            'id' => $t->id,
+            'name' => $t->name,
+            'slug' => $t->slug,
+            'tax_id' => $t->tax_id,
+            'status' => $t->status,
+            'logo_path' => $t->logo_path,
+            'is_managed' => $isManaged,
+        ];
 
         if ($this->hasRole('super-admin')) {
-            return $query->get(['id', 'name', 'slug', 'status', 'logo_path'])
-                ->map(fn (Tenant $t) => [
-                    'id' => $t->id,
-                    'name' => $t->name,
-                    'slug' => $t->slug,
-                    'status' => $t->status,
-                    'logo_path' => $t->logo_path,
-                    'is_managed' => false,
-                ]);
+            return $query->get($columns)->map(fn (Tenant $t) => $mapTenant($t));
         }
 
         $accessTenantIds = $this->tenantAccesses()
@@ -310,15 +324,7 @@ class User extends Authenticatable
             ->all();
 
         if ($this->hasRole('super-admin-limited') && $accessTenantIds === []) {
-            return $query->get(['id', 'name', 'slug', 'status', 'logo_path'])
-                ->map(fn (Tenant $t) => [
-                    'id' => $t->id,
-                    'name' => $t->name,
-                    'slug' => $t->slug,
-                    'status' => $t->status,
-                    'logo_path' => $t->logo_path,
-                    'is_managed' => false,
-                ]);
+            return $query->get($columns)->map(fn (Tenant $t) => $mapTenant($t));
         }
 
         $managedIds = app(\App\Services\SaaS\TenantHierarchyService::class)->accessibleManagedTenantIdsForUser($this);
@@ -335,15 +341,11 @@ class User extends Authenticatable
         }
 
         return $query->whereIn('id', $ids)
-            ->get(['id', 'name', 'slug', 'status', 'logo_path'])
-            ->map(fn (Tenant $t) => [
-                'id' => $t->id,
-                'name' => $t->name,
-                'slug' => $t->slug,
-                'status' => $t->status,
-                'logo_path' => $t->logo_path,
-                'is_managed' => in_array((int) $t->id, $managedIds, true) && (int) $t->id !== (int) $this->tenant_id,
-            ]);
+            ->get($columns)
+            ->map(fn (Tenant $t) => $mapTenant(
+                $t,
+                in_array((int) $t->id, $managedIds, true) && (int) $t->id !== (int) $this->tenant_id,
+            ));
     }
 
     public function isActive(): bool

@@ -9,7 +9,7 @@ export interface User {
   permissions: string[]
   tenant_id?: number | null
   home_tenant_id?: number | null
-  accessible_tenants?: Array<{ id: number; name: string; slug: string; status?: string; logo_path?: string | null; is_managed?: boolean }>
+  accessible_tenants?: Array<{ id: number; name: string; slug: string; tax_id?: string | null; status?: string; logo_path?: string | null; is_managed?: boolean }>
   active_department_ids?: number[] | null
   active_permission_group_id?: number | null
   employee?: EmployeeSummary | null

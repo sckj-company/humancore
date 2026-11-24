@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Building2, Layers, Search, Shield, Trash2 } from 'lucide-react'
+import { Building2, ChevronDown, Eye, Layers, Search, Shield, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,6 +49,123 @@ const STANDARD_ACTIONS = [
   'configure',
 ] as const
 
+const VIEW_ACTIONS = new Set(['view_any', 'view', 'export', 'print'])
+
+const MANAGE_ACTIONS = new Set([
+  'view_any',
+  'view',
+  'export',
+  'print',
+  'create',
+  'update',
+  'approve',
+  'reject',
+  'process',
+  'configure',
+])
+
+const MODULE_RELEVANT_ACTIONS: Record<string, Set<string>> = {
+  tenant: new Set(['view_any', 'view', 'create', 'update', 'delete']),
+  user: new Set(['view_any', 'view', 'create', 'update', 'delete']),
+  employee: new Set(['view_any', 'view', 'create', 'update', 'delete', 'export', 'print']),
+  department: new Set(['view_any', 'view', 'create', 'update', 'delete']),
+  position: new Set(['view_any', 'view', 'create', 'update', 'delete']),
+  branch: new Set(['view_any', 'view', 'create', 'update', 'delete']),
+  contract: new Set(['view_any', 'view', 'create', 'update', 'delete', 'print', 'export']),
+  attendance: new Set(['view_any', 'view', 'create', 'update', 'delete', 'approve', 'reject', 'export']),
+  leave: new Set(['view_any', 'view', 'create', 'update', 'delete', 'approve', 'reject', 'export']),
+  payroll: new Set(['view_any', 'view', 'create', 'update', 'process', 'close', 'export', 'print', 'configure']),
+  payslip: new Set(['view_any', 'view', 'export', 'print']),
+  'salary-component': new Set(['view_any', 'view', 'create', 'update', 'delete', 'configure']),
+  benefit: new Set(['view_any', 'view', 'create', 'update', 'delete', 'approve']),
+  deduction: new Set(['view_any', 'view', 'create', 'update', 'delete', 'approve']),
+  recruitment: new Set(['view_any', 'view', 'create', 'update', 'delete', 'approve']),
+  document: new Set(['view_any', 'view', 'create', 'update', 'delete', 'export', 'print']),
+  performance: new Set(['view_any', 'view', 'create', 'update', 'delete', 'approve']),
+  training: new Set(['view_any', 'view', 'create', 'update', 'delete', 'approve']),
+  report: new Set(['view_any', 'view', 'export', 'print']),
+  setting: new Set(['view_any', 'view', 'update', 'configure']),
+  audit: new Set(['view_any', 'view', 'export']),
+  'email-template': new Set(['view_any', 'view', 'create', 'update', 'delete']),
+}
+
+const MANAGER_SAFE_FIELD_PERMISSIONS = new Set([
+  'field.employee.personal_identity.view',
+  'field.employee.contact_address.view',
+  'field.employee.organization.view',
+  'field.contract.dates_notes.view',
+  'field.attendance.clock_times.view',
+  'field.attendance.overtime_lateness.view',
+  'field.leave.balances.view',
+  'field.leave.documents.view',
+])
+
+const SALARY_FIELD_PREFIXES = [
+  'field.employee.salary.',
+  'field.contract.base_salary.',
+  'field.contract.compensation_terms.',
+  'field.payroll.',
+  'field.payslip.salary_details.',
+  'field.attendance.salary_deduction.',
+  'field.benefit.amounts.',
+  'field.deduction.amounts.',
+  'field.report.salary_costs.',
+]
+
+const PERSONAL_FISCAL_FIELD_PREFIXES = [
+  'field.employee.fiscal_ids.',
+  'field.employee.personal_identity.',
+  'field.employee.contact_address.',
+]
+
+type ModuleAccessLevel = 'none' | 'view' | 'manage' | 'full' | 'custom'
+type PresetKey = 'readOnly' | 'hrOps' | 'payroll' | 'teamManager' | 'fullAccess'
+
+interface ModuleBucket {
+  group: string
+  relevantActions: PermissionItem[]
+  technicalActions: PermissionItem[]
+  fields: PermissionItem[]
+  viewNames: string[]
+  manageNames: string[]
+  fullNames: string[]
+  allNames: string[]
+}
+
+interface PairedFieldRow {
+  key: string
+  resource: string
+  field: string
+  viewPerm?: PermissionItem
+  editPerm?: PermissionItem
+}
+
+function getActionFromPermission(name: string): string | null {
+  return STANDARD_ACTIONS.find((candidate) => name.startsWith(`${candidate}_`)) ?? null
+}
+
+function setsEqual(actual: string[], expected: string[]): boolean {
+  if (actual.length !== expected.length) return false
+  const actualSet = new Set(actual)
+  return expected.every((item) => actualSet.has(item))
+}
+
+function getFieldDisplayLabel(t: TFunction, resource: string, field: string): string {
+  const isBilingual = typeof localStorage !== 'undefined' && localStorage.getItem('hrms_bilingual') === 'true'
+  const pt = t(`superAdminPage.fieldPermissions.${resource}.${field}`, {
+    ...(isBilingual ? { lng: 'pt', postProcess: [] as string[] } : {}),
+    defaultValue: field.replaceAll('_', ' '),
+  })
+  if (!isBilingual) return pt
+  const zh = t(`superAdminPage.fieldPermissions.${resource}.${field}`, {
+    lng: 'zh',
+    postProcess: [] as string[],
+    defaultValue: '',
+  })
+  if (!zh || pt === zh) return pt
+  return `${pt} / ${zh}`
+}
+
 function translateSingleLocale(
   t: TFunction,
   name: string,
@@ -73,7 +191,7 @@ function translateSingleLocale(
   if (globalLabel) return globalLabel
 
   // 3. Ação padrão: <action>_<resource>
-  const action = STANDARD_ACTIONS.find((candidate) => name.startsWith(`${candidate}_`))
+  const action = getActionFromPermission(name)
   if (!action) {
     return t('superAdminPage.permissionFallback', { ...opts, name, defaultValue: name })
   }
@@ -130,16 +248,21 @@ export function PermissionSelector({
 }) {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
+  const [activeView, setActiveView] = useState<'modules' | 'fields'>('modules')
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const [showTechnicalGroups, setShowTechnicalGroups] = useState<Record<string, boolean>>({})
 
   const lockedSet = useMemo(() => new Set(lockedPermissions), [lockedPermissions])
   const selectedSet = useMemo(() => new Set(selectedPermissions), [selectedPermissions])
 
-  const { actionPerms, fieldPerms, selectedActionCount, selectedFieldCount } = useMemo(() => {
+  const { actionPerms, fieldPerms, selectedActionCount, selectedFieldCount, availableSet } = useMemo(() => {
     const actions: PermissionItem[] = []
     const fields: PermissionItem[] = []
+    const allNames = new Set<string>()
     let selActions = 0
     let selFields = 0
     for (const perm of permissions) {
+      allNames.add(perm.name)
       if (perm.name.startsWith('field.')) {
         fields.push(perm)
         if (selectedSet.has(perm.name)) selFields++
@@ -153,96 +276,376 @@ export function PermissionSelector({
       fieldPerms: fields,
       selectedActionCount: selActions,
       selectedFieldCount: selFields,
+      availableSet: allNames,
     }
   }, [permissions, selectedSet])
 
-  const selectAllPermissions = () => {
-    const next = new Set(permissions.map((p) => p.name))
-    for (const locked of lockedSet) next.add(locked)
+  const moduleBuckets = useMemo<ModuleBucket[]>(() => {
+    const byGroup = new Map<string, { actions: PermissionItem[]; fields: PermissionItem[] }>()
+
+    for (const perm of permissions) {
+      const group = perm.group_name ?? 'other'
+      let entry = byGroup.get(group)
+      if (!entry) {
+        entry = { actions: [], fields: [] }
+        byGroup.set(group, entry)
+      }
+      if (perm.name.startsWith('field.')) {
+        entry.fields.push(perm)
+      } else {
+        entry.actions.push(perm)
+      }
+    }
+
+    const buckets: ModuleBucket[] = []
+    for (const [group, { actions, fields }] of byGroup.entries()) {
+      const relevantSet = MODULE_RELEVANT_ACTIONS[group]
+      const relevantActions: PermissionItem[] = []
+      const technicalActions: PermissionItem[] = []
+
+      for (const perm of actions) {
+        const action = getActionFromPermission(perm.name)
+        if (!relevantSet || action === null || relevantSet.has(action) || lockedSet.has(perm.name)) {
+          relevantActions.push(perm)
+        } else {
+          technicalActions.push(perm)
+        }
+      }
+
+      const viewNames = [
+        ...relevantActions
+          .filter((p) => {
+            const action = getActionFromPermission(p.name)
+            return action !== null && VIEW_ACTIONS.has(action)
+          })
+          .map((p) => p.name),
+        ...fields.filter((p) => p.name.endsWith('.view')).map((p) => p.name),
+      ]
+
+      const manageNames = [
+        ...relevantActions
+          .filter((p) => {
+            const action = getActionFromPermission(p.name)
+            return action === null || MANAGE_ACTIONS.has(action)
+          })
+          .map((p) => p.name),
+        ...fields.map((p) => p.name),
+      ]
+
+      const fullNames = [...relevantActions.map((p) => p.name), ...fields.map((p) => p.name)]
+      const allNames = [...fullNames, ...technicalActions.map((p) => p.name)]
+
+      buckets.push({
+        group,
+        relevantActions,
+        technicalActions,
+        fields,
+        viewNames,
+        manageNames,
+        fullNames,
+        allNames,
+      })
+    }
+
+    return buckets
+  }, [permissions, lockedSet])
+
+  const commitSelection = (next: Set<string>) => {
+    for (const locked of lockedSet) {
+      if (availableSet.has(locked) || selectedSet.has(locked)) {
+        next.add(locked)
+      }
+    }
     onChange([...next])
   }
 
   const clearAllPermissions = () => {
-    onChange([...lockedSet])
+    commitSelection(new Set())
   }
 
   const enableAllFieldPermissions = () => {
     const next = new Set(selectedSet)
     for (const fieldPerm of fieldPerms) next.add(fieldPerm.name)
-    for (const locked of lockedSet) next.add(locked)
-    onChange([...next])
+    commitSelection(next)
   }
 
-  const grouped = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase()
-    const map: Record<string, { actions: PermissionItem[]; fields: PermissionItem[] }> = {}
-
-    for (const perm of permissions) {
-      const group = perm.group_name ?? 'other'
-      const label = getPermissionDisplayLabel(t, perm.name)
-      const groupLabel = t(`superAdminPage.permissionGroups.${group}`, { defaultValue: group })
-      if (query && !`${label} ${perm.name} ${groupLabel}`.toLocaleLowerCase().includes(query)) {
-        continue
+  const applyFieldPrivacyAction = (action: 'viewAll' | 'editAll' | 'hideSalaries' | 'hidePersonalFiscal') => {
+    const next = new Set(selectedSet)
+    if (action === 'viewAll') {
+      for (const fieldPerm of fieldPerms) {
+        if (fieldPerm.name.endsWith('.view')) next.add(fieldPerm.name)
       }
+    } else if (action === 'editAll') {
+      for (const fieldPerm of fieldPerms) {
+        next.add(fieldPerm.name)
+      }
+    } else if (action === 'hideSalaries') {
+      for (const name of [...next]) {
+        if (SALARY_FIELD_PREFIXES.some((prefix) => name.startsWith(prefix))) {
+          next.delete(name)
+        }
+      }
+    } else if (action === 'hidePersonalFiscal') {
+      for (const name of [...next]) {
+        if (PERSONAL_FISCAL_FIELD_PREFIXES.some((prefix) => name.startsWith(prefix))) {
+          next.delete(name)
+        }
+      }
+    }
+    commitSelection(next)
+  }
 
-      map[group] ??= { actions: [], fields: [] }
-      if (perm.name.startsWith('field.')) {
-        map[group].fields.push(perm)
-      } else {
-        map[group].actions.push(perm)
+  const applyPreset = (preset: PresetKey) => {
+    const next = new Set<string>()
+    const bucketMap = new Map(moduleBuckets.map((b) => [b.group, b]))
+
+    if (preset === 'fullAccess') {
+      for (const perm of permissions) next.add(perm.name)
+    } else if (preset === 'readOnly') {
+      for (const bucket of moduleBuckets) {
+        if (bucket.group === 'system') continue
+        for (const name of bucket.viewNames) next.add(name)
+      }
+    } else if (preset === 'hrOps') {
+      const manageGroups = [
+        'employee', 'department', 'position', 'branch', 'contract',
+        'attendance', 'leave', 'document', 'recruitment',
+        'performance', 'training', 'benefit', 'deduction',
+      ]
+      const viewGroups = ['report', 'payslip', 'setting', 'audit']
+      for (const g of manageGroups) {
+        for (const name of bucketMap.get(g)?.manageNames ?? []) next.add(name)
+      }
+      for (const g of viewGroups) {
+        for (const name of bucketMap.get(g)?.viewNames ?? []) next.add(name)
+      }
+    } else if (preset === 'payroll') {
+      const fullGroups = ['payroll', 'payslip', 'salary-component', 'benefit', 'deduction']
+      const viewGroups = ['employee', 'contract', 'attendance', 'leave', 'report', 'audit']
+      for (const g of fullGroups) {
+        for (const name of bucketMap.get(g)?.fullNames ?? []) next.add(name)
+      }
+      for (const g of viewGroups) {
+        for (const name of bucketMap.get(g)?.viewNames ?? []) next.add(name)
+      }
+    } else if (preset === 'teamManager') {
+      for (const g of ['attendance', 'leave']) {
+        const bucket = bucketMap.get(g)
+        if (!bucket) continue
+        for (const p of bucket.relevantActions) {
+          const action = getActionFromPermission(p.name)
+          if (action === null || MANAGE_ACTIONS.has(action)) next.add(p.name)
+        }
+      }
+      for (const g of ['employee', 'contract', 'document', 'report']) {
+        const bucket = bucketMap.get(g)
+        if (!bucket) continue
+        for (const p of bucket.relevantActions) {
+          const action = getActionFromPermission(p.name)
+          if (action !== null && VIEW_ACTIONS.has(action)) next.add(p.name)
+        }
+      }
+      for (const fieldPerm of fieldPerms) {
+        if (MANAGER_SAFE_FIELD_PERMISSIONS.has(fieldPerm.name)) {
+          next.add(fieldPerm.name)
+        }
       }
     }
 
-    return map
-  }, [permissions, search, t])
+    commitSelection(next)
+  }
+
+  const getModuleLevel = (bucket: ModuleBucket): ModuleAccessLevel => {
+    const selectedInModule = bucket.allNames.filter((n) => selectedSet.has(n))
+    if (selectedInModule.length === 0) return 'none'
+    if (bucket.fullNames.length > 0 && bucket.fullNames.every((n) => selectedSet.has(n))) {
+      return 'full'
+    }
+    if (bucket.manageNames.length > 0 && setsEqual(selectedInModule, bucket.manageNames)) {
+      return 'manage'
+    }
+    if (bucket.viewNames.length > 0 && setsEqual(selectedInModule, bucket.viewNames)) {
+      return 'view'
+    }
+    return 'custom'
+  }
+
+  const setModuleLevel = (bucket: ModuleBucket, level: Exclude<ModuleAccessLevel, 'custom'>) => {
+    const next = new Set(selectedSet)
+    for (const name of bucket.allNames) {
+      if (!lockedSet.has(name)) next.delete(name)
+    }
+    const toAdd =
+      level === 'none'
+        ? []
+        : level === 'view'
+          ? bucket.viewNames
+          : level === 'manage'
+            ? bucket.manageNames
+            : bucket.fullNames
+    for (const name of toAdd) next.add(name)
+    commitSelection(next)
+  }
 
   const toggleSingle = (name: string, checked: boolean) => {
     if (lockedSet.has(name)) return
     const next = new Set(selectedSet)
     if (checked) next.add(name)
     else next.delete(name)
-    for (const locked of lockedSet) next.add(locked)
-    onChange([...next])
+    commitSelection(next)
   }
 
-  const toggleGroup = (items: PermissionItem[], checked: boolean) => {
+  const toggleFieldPair = (row: PairedFieldRow, mode: 'view' | 'edit', checked: boolean) => {
     const next = new Set(selectedSet)
-    for (const item of items) {
-      if (lockedSet.has(item.name)) continue
-      if (checked) next.add(item.name)
-      else next.delete(item.name)
+    if (mode === 'view') {
+      if (row.viewPerm) {
+        if (checked) next.add(row.viewPerm.name)
+        else {
+          next.delete(row.viewPerm.name)
+          if (row.editPerm) next.delete(row.editPerm.name)
+        }
+      }
+    } else if (row.editPerm) {
+      if (checked) {
+        next.add(row.editPerm.name)
+        if (row.viewPerm) next.add(row.viewPerm.name)
+      } else {
+        next.delete(row.editPerm.name)
+      }
     }
-    for (const locked of lockedSet) next.add(locked)
-    onChange([...next])
+    commitSelection(next)
   }
+
+  const normalizedQuery = search.trim().toLocaleLowerCase()
+
+  const filteredModules = useMemo(() => {
+    return moduleBuckets
+      .map((bucket) => {
+        const groupLabel = t(`superAdminPage.permissionGroups.${bucket.group}`, {
+          defaultValue: t('superAdminPage.otherPermissions'),
+        })
+        if (!normalizedQuery) {
+          return {
+            bucket,
+            groupLabel,
+            relevantMatches: bucket.relevantActions,
+            technicalMatches: bucket.technicalActions,
+            groupMatched: false,
+          }
+        }
+
+        const groupMatched = `${groupLabel} ${bucket.group}`.toLocaleLowerCase().includes(normalizedQuery)
+        if (groupMatched) {
+          return {
+            bucket,
+            groupLabel,
+            relevantMatches: bucket.relevantActions,
+            technicalMatches: bucket.technicalActions,
+            groupMatched: true,
+          }
+        }
+
+        const matchesPerm = (p: PermissionItem) =>
+          `${getPermissionDisplayLabel(t, p.name)} ${p.name}`.toLocaleLowerCase().includes(normalizedQuery)
+
+        const relevantMatches = bucket.relevantActions.filter(matchesPerm)
+        const technicalMatches = bucket.technicalActions.filter(matchesPerm)
+        const fieldMatched = bucket.fields.some(matchesPerm)
+
+        if (relevantMatches.length === 0 && technicalMatches.length === 0 && !fieldMatched) {
+          return null
+        }
+
+        return {
+          bucket,
+          groupLabel,
+          relevantMatches,
+          technicalMatches,
+          groupMatched: false,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+  }, [moduleBuckets, normalizedQuery, t])
+
+  const groupedFieldRows = useMemo(() => {
+    const groups: Array<{ group: string; groupLabel: string; rows: PairedFieldRow[] }> = []
+    for (const bucket of moduleBuckets) {
+      if (bucket.fields.length === 0) continue
+      const groupLabel = t(`superAdminPage.permissionGroups.${bucket.group}`, {
+        defaultValue: t('superAdminPage.otherPermissions'),
+      })
+      const pairMap = new Map<string, PairedFieldRow>()
+      for (const perm of bucket.fields) {
+        const [, resource, field, mode] = perm.name.split('.')
+        if (!resource || !field || !mode) continue
+        const key = `${resource}.${field}`
+        let row = pairMap.get(key)
+        if (!row) {
+          row = { key, resource, field }
+          pairMap.set(key, row)
+        }
+        if (mode === 'view') row.viewPerm = perm
+        else if (mode === 'edit') row.editPerm = perm
+      }
+
+      const groupMatched = normalizedQuery
+        ? `${groupLabel} ${bucket.group}`.toLocaleLowerCase().includes(normalizedQuery)
+        : true
+
+      const rows = [...pairMap.values()].filter((row) => {
+        if (!normalizedQuery || groupMatched) return true
+        const fieldLabel = getFieldDisplayLabel(t, row.resource, row.field)
+        return `${fieldLabel} ${row.resource}.${row.field}`.toLocaleLowerCase().includes(normalizedQuery)
+      })
+
+      if (rows.length > 0) {
+        groups.push({ group: bucket.group, groupLabel, rows })
+      }
+    }
+    return groups
+  }, [moduleBuckets, normalizedQuery, t])
+
+  const presetItems: Array<{ key: PresetKey; label: string }> = [
+    { key: 'readOnly', label: t('superAdminPage.presetReadOnly', { defaultValue: 'Só Leitura' }) },
+    { key: 'hrOps', label: t('superAdminPage.presetHrOps', { defaultValue: 'RH Operacional' }) },
+    { key: 'payroll', label: t('superAdminPage.presetPayroll', { defaultValue: 'Folha & Financeiro' }) },
+    { key: 'teamManager', label: t('superAdminPage.presetTeamManager', { defaultValue: 'Gestor de Equipa' }) },
+    { key: 'fullAccess', label: t('superAdminPage.presetFullAccess', { defaultValue: 'Acesso Total' }) },
+  ]
+
+  const levelButtons: Array<{ level: Exclude<ModuleAccessLevel, 'custom'>; label: string }> = [
+    { level: 'none', label: t('superAdminPage.levelNone', { defaultValue: 'Sem acesso' }) },
+    { level: 'view', label: t('superAdminPage.levelView', { defaultValue: 'Ver' }) },
+    { level: 'manage', label: t('superAdminPage.levelManage', { defaultValue: 'Gerir' }) },
+    { level: 'full', label: t('superAdminPage.levelFull', { defaultValue: 'Total' }) },
+  ]
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[180px] flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('superAdminPage.searchPermissions', { defaultValue: 'Filtrar permissões ou campos...' })}
-            className="h-8 pl-8 text-xs"
-          />
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-8 text-xs"
-          disabled={permissions.length === 0 || (selectedActionCount + selectedFieldCount === permissions.length)}
-          onClick={selectAllPermissions}
-        >
-          {t('superAdminPage.selectAllPermissions', { defaultValue: 'Selecionar todas' })}
-        </Button>
+    <div className="space-y-2.5">
+      {/* Barra de Perfis Rápidos */}
+      <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border/70 bg-muted/30 p-2">
+        <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+          <Sparkles className="h-3 w-3 text-primary" />
+          {t('superAdminPage.presetsLabel', { defaultValue: 'Perfis rápidos:' })}
+        </span>
+        {presetItems.map((preset) => (
+          <Button
+            key={preset.key}
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2.5 text-xs"
+            disabled={permissions.length === 0}
+            onClick={() => applyPreset(preset.key)}
+          >
+            {preset.label}
+          </Button>
+        ))}
         <Button
           type="button"
           size="sm"
           variant="ghost"
-          className="h-8 text-xs"
+          className="ml-auto h-7 px-2 text-xs text-muted-foreground"
           disabled={selectedPermissions.length <= lockedSet.size}
           onClick={clearAllPermissions}
         >
@@ -250,17 +653,63 @@ export function PermissionSelector({
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>
+      {/* Pesquisa + Contagem */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[180px] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('superAdminPage.searchPermissions', { defaultValue: 'Filtrar módulos, permissões ou campos...' })}
+            className="h-8 pl-8 text-xs"
+          />
+        </div>
+        <span className="text-[11px] text-muted-foreground">
           {t('superAdminPage.permissionsSummaryCount', {
             actions: selectedActionCount,
             totalActions: actionPerms.length,
             fields: selectedFieldCount,
             totalFields: fieldPerms.length,
-            defaultValue: `${selectedActionCount}/${actionPerms.length} ações de módulo · ${selectedFieldCount}/${fieldPerms.length} campos/colunas`,
+            defaultValue: `${selectedActionCount}/${actionPerms.length} ações · ${selectedFieldCount}/${fieldPerms.length} campos`,
           })}
         </span>
       </div>
+
+      {/* Abas: Módulos vs Dados Sensíveis */}
+      {fieldPerms.length > 0 && (
+        <div className="inline-flex rounded-md border border-border/70 bg-muted/40 p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setActiveView('modules')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded px-3 py-1 font-medium transition-colors',
+              activeView === 'modules'
+                ? 'bg-background text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            {t('superAdminPage.modulesTab', { defaultValue: 'Módulos' })}
+            <span className="text-[11px] text-muted-foreground">({selectedActionCount})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('fields')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded px-3 py-1 font-medium transition-colors',
+              activeView === 'fields'
+                ? 'bg-background text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            {t('superAdminPage.sensitiveFieldsTab', { defaultValue: 'Dados Sensíveis / Colunas' })}
+            <span className="text-[11px] text-muted-foreground">
+              ({selectedFieldCount}/{fieldPerms.length})
+            </span>
+          </button>
+        </div>
+      )}
 
       {selectedActionCount > 0 && selectedFieldCount === 0 && fieldPerms.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
@@ -281,98 +730,254 @@ export function PermissionSelector({
         </div>
       )}
 
-      <div className={`${maxHeightClass} space-y-2 overflow-y-auto rounded-md border p-2.5`}>
-        {Object.keys(grouped).length === 0 ? (
-          <p className="py-4 text-center text-xs text-muted-foreground">{t('common.no_data')}</p>
-        ) : (
-          Object.entries(grouped).map(([group, { actions, fields }]) => {
-            const allGroupItems = [...actions, ...fields]
-            const allSelected = allGroupItems.length > 0 && allGroupItems.every((p) => selectedSet.has(p.name))
-            const selectedCount = allGroupItems.filter((p) => selectedSet.has(p.name)).length
+      {activeView === 'modules' || fieldPerms.length === 0 ? (
+        <div className={`${maxHeightClass} space-y-2 overflow-y-auto rounded-md border p-2.5`}>
+          {filteredModules.length === 0 ? (
+            <p className="py-4 text-center text-xs text-muted-foreground">{t('common.no_data')}</p>
+          ) : (
+            filteredModules.map(({ bucket, groupLabel, relevantMatches, technicalMatches }) => {
+              const level = getModuleLevel(bucket)
+              const hasSelectedTechnical = bucket.technicalActions.some((p) => selectedSet.has(p.name))
+              const isTechnicalShown = Boolean(showTechnicalGroups[bucket.group]) || hasSelectedTechnical || (Boolean(normalizedQuery) && technicalMatches.length > 0)
+              const isExpanded = Boolean(expandedGroups[bucket.group]) || (Boolean(normalizedQuery) && (relevantMatches.length > 0 || technicalMatches.length > 0))
 
-            return (
-              <div key={group} className="rounded-md border border-border/70 px-3 py-2">
-                <div className="flex items-start justify-between gap-3">
-                  <details className="min-w-0 flex-1">
-                    <summary className="cursor-pointer select-none text-sm font-medium">
-                      {t(`superAdminPage.permissionGroups.${group}`, {
-                        defaultValue: t('superAdminPage.otherPermissions'),
-                      })}{' '}
-                      <span className="text-xs font-normal text-muted-foreground">
-                        ({selectedCount}/{allGroupItems.length})
+              const visibleBaseCount = bucket.relevantActions.length + bucket.fields.length
+              const selectedVisibleBaseCount =
+                bucket.relevantActions.filter((p) => selectedSet.has(p.name)).length +
+                bucket.fields.filter((p) => selectedSet.has(p.name)).length
+              const selectedAllCount = bucket.allNames.filter((n) => selectedSet.has(n)).length
+
+              const totalToShow = isTechnicalShown ? bucket.allNames.length : visibleBaseCount
+              const selectedToShow = isTechnicalShown ? selectedAllCount : selectedVisibleBaseCount
+
+              return (
+                <div key={bucket.group} className="rounded-md border border-border/70 px-3 py-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-medium">{groupLabel}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        ({selectedToShow}/{totalToShow})
                       </span>
-                    </summary>
+                      {level === 'custom' && (
+                        <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px]">
+                          {t('superAdminPage.levelCustom', { defaultValue: 'Personalizado' })}
+                        </Badge>
+                      )}
+                    </div>
 
-                    <div className="mt-2.5 space-y-3">
-                      {actions.length > 0 && (
-                        <div className="space-y-1.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            {t('superAdminPage.moduleActionsHeading', { defaultValue: 'Ações do módulo' })}
-                          </p>
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {actions.map((permission) => {
-                              const checked = selectedSet.has(permission.name)
-                              const locked = lockedSet.has(permission.name)
-                              return (
-                                <label key={permission.name} className="flex items-start gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    className="mt-0.5 shrink-0"
-                                    checked={checked}
-                                    disabled={locked}
-                                    onChange={(event) => toggleSingle(permission.name, event.target.checked)}
-                                  />
-                                  <span className="leading-snug">
-                                    {getPermissionDisplayLabel(t, permission.name)}
-                                    {locked ? ` (${t('superAdminPage.required')})` : ''}
-                                  </span>
-                                </label>
-                              )
-                            })}
-                          </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="inline-flex rounded-md border border-border/70 bg-muted/40 p-0.5">
+                        {levelButtons.map((btn) => {
+                          const active = level === btn.level
+                          return (
+                            <button
+                              key={btn.level}
+                              type="button"
+                              onClick={() => setModuleLevel(bucket, btn.level)}
+                              className={cn(
+                                'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+                                active
+                                  ? btn.level === 'none'
+                                    ? 'bg-background text-foreground shadow-xs'
+                                    : 'bg-primary text-primary-foreground shadow-xs'
+                                  : 'text-muted-foreground hover:text-foreground',
+                              )}
+                            >
+                              {btn.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 gap-1 px-2 text-[11px] text-muted-foreground"
+                        onClick={() =>
+                          setExpandedGroups((prev) => ({
+                            ...prev,
+                            [bucket.group]: !isExpanded,
+                          }))
+                        }
+                      >
+                        {t('superAdminPage.advancedToggle', { defaultValue: 'Avançado' })}
+                        <ChevronDown
+                          className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')}
+                        />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="mt-2.5 space-y-2 border-t border-border/50 pt-2.5">
+                      {relevantMatches.length > 0 && (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {relevantMatches.map((permission) => {
+                            const checked = selectedSet.has(permission.name)
+                            const locked = lockedSet.has(permission.name)
+                            return (
+                              <label key={permission.name} className="flex items-start gap-2 text-xs">
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5 shrink-0"
+                                  checked={checked}
+                                  disabled={locked}
+                                  onChange={(event) => toggleSingle(permission.name, event.target.checked)}
+                                />
+                                <span className="leading-snug">
+                                  {getPermissionDisplayLabel(t, permission.name)}
+                                  {locked ? ` (${t('superAdminPage.required')})` : ''}
+                                </span>
+                              </label>
+                            )
+                          })}
                         </div>
                       )}
 
-                      {fields.length > 0 && (
-                        <div className="space-y-1.5 border-t border-border/50 pt-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-primary/80">
-                            {t('superAdminPage.fieldPermissionsHeading', { defaultValue: 'Permissões por campo / colunas' })}
-                          </p>
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {fields.map((permission) => {
-                              const checked = selectedSet.has(permission.name)
-                              return (
-                                <label key={permission.name} className="flex items-start gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    className="mt-0.5 shrink-0"
-                                    checked={checked}
-                                    onChange={(event) => toggleSingle(permission.name, event.target.checked)}
-                                  />
-                                  <span className="leading-snug">{getPermissionDisplayLabel(t, permission.name)}</span>
-                                </label>
-                              )
-                            })}
-                          </div>
+                      {bucket.technicalActions.length > 0 && (
+                        <div className="space-y-1.5 pt-1">
+                          {!hasSelectedTechnical && (
+                            <button
+                              type="button"
+                              className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                              onClick={() =>
+                                setShowTechnicalGroups((prev) => ({
+                                  ...prev,
+                                  [bucket.group]: !prev[bucket.group],
+                                }))
+                              }
+                            >
+                              {t('superAdminPage.showTechnicalActions', {
+                                count: bucket.technicalActions.length,
+                                defaultValue: `Mostrar técnicas (+${bucket.technicalActions.length})`,
+                              })}
+                            </button>
+                          )}
+
+                          {isTechnicalShown && technicalMatches.length > 0 && (
+                            <div className="grid gap-2 rounded-md bg-muted/30 p-2 sm:grid-cols-2">
+                              {technicalMatches.map((permission) => {
+                                const checked = selectedSet.has(permission.name)
+                                const locked = lockedSet.has(permission.name)
+                                return (
+                                  <label key={permission.name} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                    <input
+                                      type="checkbox"
+                                      className="mt-0.5 shrink-0"
+                                      checked={checked}
+                                      disabled={locked}
+                                      onChange={(event) => toggleSingle(permission.name, event.target.checked)}
+                                    />
+                                    <span className="leading-snug">
+                                      {getPermissionDisplayLabel(t, permission.name)}
+                                      {locked ? ` (${t('superAdminPage.required')})` : ''}
+                                    </span>
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  </details>
-
-                  <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={(event) => toggleGroup(allGroupItems, event.target.checked)}
-                    />
-                    <span>{t('superAdminPage.selectAllGroup')}</span>
-                  </label>
+                  )}
                 </div>
-              </div>
-            )
-          })
-        )}
-      </div>
+              )
+            })
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => applyFieldPrivacyAction('viewAll')}
+            >
+              {t('superAdminPage.fieldsViewAll', { defaultValue: 'Ver todos os dados' })}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => applyFieldPrivacyAction('editAll')}
+            >
+              {t('superAdminPage.fieldsEditAll', { defaultValue: 'Editar todos os dados' })}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => applyFieldPrivacyAction('hideSalaries')}
+            >
+              {t('superAdminPage.fieldsHideSalaries', { defaultValue: 'Ocultar salários' })}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => applyFieldPrivacyAction('hidePersonalFiscal')}
+            >
+              {t('superAdminPage.fieldsHidePersonalFiscal', { defaultValue: 'Ocultar dados pessoais/fiscais' })}
+            </Button>
+          </div>
+
+          <div className={`${maxHeightClass} space-y-2.5 overflow-y-auto rounded-md border p-2.5`}>
+            {groupedFieldRows.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">{t('common.no_data')}</p>
+            ) : (
+              groupedFieldRows.map(({ group, groupLabel, rows }) => (
+                <div key={group} className="rounded-md border border-border/70 px-3 py-2">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {groupLabel}
+                  </p>
+                  <div className="divide-y divide-border/50">
+                    {rows.map((row) => {
+                      const viewChecked = row.viewPerm ? selectedSet.has(row.viewPerm.name) : false
+                      const editChecked = row.editPerm ? selectedSet.has(row.editPerm.name) : false
+                      return (
+                        <div key={row.key} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-xs">
+                          <span className="font-medium text-foreground">
+                            {getFieldDisplayLabel(t, row.resource, row.field)}
+                          </span>
+                          <div className="flex items-center gap-4">
+                            {row.viewPerm && (
+                              <label className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={viewChecked}
+                                  onChange={(e) => toggleFieldPair(row, 'view', e.target.checked)}
+                                />
+                                <span>{t('superAdminPage.fieldModes.view', { defaultValue: 'Ver' })}</span>
+                              </label>
+                            )}
+                            {row.editPerm && (
+                              <label className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={editChecked}
+                                  onChange={(e) => toggleFieldPair(row, 'edit', e.target.checked)}
+                                />
+                                <span>{t('superAdminPage.fieldModes.edit', { defaultValue: 'Editar' })}</span>
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

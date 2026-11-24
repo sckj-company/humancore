@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
-import { Building2, Check, ChevronsUpDown, CornerUpLeft, Search } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
+import { Building2, Check, ChevronsUpDown, CornerUpLeft, Loader2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -16,36 +16,66 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { NotificationBell } from '@/components/layout/notification-bell'
 import { LanguageSwitcher } from '@/components/shared/language-switcher'
-import type { Paginated, Tenant } from '@/types'
+
+interface AccessibleTenantOption {
+  id: number
+  name: string
+  slug: string
+  tax_id?: string | null
+  status?: string
+  logo_path?: string | null
+  is_managed?: boolean
+}
 
 export function Header() {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
-  const isFullSuperAdmin = user?.roles?.includes('super-admin') ?? false
   const isSuperAdmin = isPlatformAdmin(user)
-  const canListTenants = hasPermission(user, 'view_any_tenant')
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false)
   const [companySearch, setCompanySearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const selectedTenantId = localStorage.getItem('hrms_selected_tenant') ?? String(user?.tenant?.id ?? '')
-  const { data: tenantPage } = useQuery({
-    queryKey: ['superadmin', 'tenant-switcher'],
-    queryFn: () => api.get<Paginated<Tenant>>('superadmin/tenants', { per_page: 1000 }),
-    enabled: isSuperAdmin && canListTenants,
+
+  useEffect(() => {
+    if (!companyDialogOpen) {
+      setCompanySearch('')
+      setDebouncedSearch('')
+      return
+    }
+    const trimmed = companySearch.trim()
+    if (!trimmed) {
+      setDebouncedSearch('')
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(trimmed)
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [companySearch, companyDialogOpen])
+
+  const { data: switcherTenants, isFetching: isSearchingTenants } = useQuery({
+    queryKey: ['companies', 'accessible', debouncedSearch],
+    queryFn: () =>
+      api.get<AccessibleTenantOption[]>('companies/accessible', {
+        search: debouncedSearch || undefined,
+        status: 'active',
+      }),
+    enabled: companyDialogOpen,
+    placeholderData: keepPreviousData,
   })
 
-  const availableTenants = (isFullSuperAdmin
-    ? (canListTenants ? tenantPage?.data : undefined)
-    : (user?.accessible_tenants?.length ? user.accessible_tenants : (canListTenants ? tenantPage?.data : undefined)))
-    ?? user?.accessible_tenants
-    ?? (user?.tenant ? [user.tenant] : [])
-  const canSwitchCompany = isSuperAdmin || availableTenants.length > 1
+  const initialTenants: AccessibleTenantOption[] = user?.accessible_tenants?.length
+    ? user.accessible_tenants
+    : (user?.tenant ? [user.tenant] : [])
+  const modalTenants = switcherTenants ?? initialTenants.filter((tenant) => !tenant.status || tenant.status === 'active')
+  const canSwitchCompany = isSuperAdmin || initialTenants.length > 1
 
-  const activeTenant = availableTenants.find((tenant) => String(tenant.id) === selectedTenantId) ?? user?.tenant
+  const activeTenant =
+    switcherTenants?.find((tenant) => String(tenant.id) === selectedTenantId)
+    ?? initialTenants.find((tenant) => String(tenant.id) === selectedTenantId)
+    ?? user?.tenant
   const isOperatingInManaged = Boolean(
     user?.home_tenant_id && activeTenant?.id && Number(user.home_tenant_id) !== Number(activeTenant.id),
-  )
-  const filteredTenants = availableTenants.filter((tenant) =>
-    `${tenant.name} ${tenant.slug}`.toLocaleLowerCase().includes(companySearch.trim().toLocaleLowerCase()),
   )
 
   return (
@@ -106,17 +136,25 @@ export function Header() {
         <DialogContent className="flex h-[75vh] max-h-[85vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-lg">
           <DialogHeader className="shrink-0">
             <DialogTitle>{t('tenant.select', { defaultValue: 'Selecionar empresa' })}</DialogTitle>
-            <DialogDescription>{t('tenant.selectDescription', { defaultValue: 'Escolha a empresa ativa para gerir.' })}</DialogDescription>
+            <DialogDescription className="flex items-center justify-between gap-2">
+              <span>{t('tenant.selectDescription', { defaultValue: 'Escolha a empresa ativa para gerir.' })}</span>
+              <span className="shrink-0 text-xs font-medium tabular-nums">
+                {t('tenant.activeCount', { count: modalTenants.length, defaultValue: '{{count}} empresas ativas' })}
+              </span>
+            </DialogDescription>
           </DialogHeader>
           <div className="relative shrink-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={companySearch}
               onChange={(event) => setCompanySearch(event.target.value)}
-              placeholder={t('tenant.search', { defaultValue: 'Pesquisar empresa...' })}
-              aria-label={t('tenant.search', { defaultValue: 'Pesquisar empresas' })}
-              className="pl-9"
+              placeholder={t('tenant.searchByNameOrNif', { defaultValue: 'Pesquisar por nome ou NIF...' })}
+              aria-label={t('tenant.searchByNameOrNif', { defaultValue: 'Pesquisar por nome ou NIF...' })}
+              className="pl-9 pr-9"
             />
+            {isSearchingTenants && (
+              <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {isSuperAdmin && !user?.home_tenant_id && (
@@ -137,7 +175,7 @@ export function Header() {
                 {!selectedTenantId && <Check className="h-4 w-4 shrink-0 text-primary" />}
               </button>
             )}
-            {filteredTenants.length ? filteredTenants.map((tenant) => {
+            {modalTenants.length ? modalTenants.map((tenant) => {
               const isSelected = String(tenant.id) === selectedTenantId
               return (
                 <button
@@ -153,7 +191,9 @@ export function Header() {
                   <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{tenant.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{tenant.slug}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      NIF: <span className="font-mono">{tenant.tax_id || '—'}</span>
+                    </span>
                   </span>
                   {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" />}
                 </button>

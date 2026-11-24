@@ -351,10 +351,13 @@ export function SuperAdminPage() {
   const [statusFilter, setStatusFilter] = useState(
     urlStatus && ['all', 'active', 'inactive', 'suspended'].includes(urlStatus) ? urlStatus : 'all',
   )
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(20)
 
   useEffect(() => {
     if (urlStatus && ['all', 'active', 'inactive', 'suspended'].includes(urlStatus)) {
       setStatusFilter(urlStatus)
+      setPage(1)
     }
   }, [urlStatus])
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -408,14 +411,21 @@ export function SuperAdminPage() {
   })
 
   const { data: tenants, isLoading: loadingTenants } = useQuery({
-    queryKey: ['superadmin', 'tenants', search, statusFilter],
+    queryKey: ['superadmin', 'tenants', search, statusFilter, page, perPage],
     queryFn: () =>
       api.get<Paginated<Tenant>>('superadmin/tenants', {
         search: search || undefined,
         status: statusFilter === 'all' ? undefined : statusFilter,
-        per_page: 20,
+        page,
+        per_page: perPage,
       }),
   })
+
+  useEffect(() => {
+    if (tenants?.meta && tenants.meta.last_page > 0 && page > tenants.meta.last_page) {
+      setPage(tenants.meta.last_page)
+    }
+  }, [tenants?.meta, page])
 
   const { data: tenantUsers, isLoading: loadingUsers } = useQuery({
     queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'],
@@ -447,6 +457,7 @@ export function SuperAdminPage() {
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['superadmin'] })
+    qc.invalidateQueries({ queryKey: ['dashboard', 'super-admin'] })
   }
 
   const openCreate = () => {
@@ -531,6 +542,7 @@ export function SuperAdminPage() {
       setUserForm(emptyUserForm)
       setUserTenantAccesses([])
       qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
+      invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('superAdminPage.tenantUserCreateError', { defaultValue: 'Erro ao criar utilizador' }))),
   })
@@ -560,6 +572,7 @@ export function SuperAdminPage() {
       setEditingTenantUser(null)
       setEditingTenantUserAccesses([])
       qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
+      invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('superAdminPage.tenantUserUpdateError', { defaultValue: 'Erro ao atualizar utilizador' }))),
   })
@@ -570,6 +583,7 @@ export function SuperAdminPage() {
     onSuccess: () => {
       toast.success(t('superAdminPage.tenantUserDeleted', { defaultValue: 'Utilizador eliminado' }))
       qc.invalidateQueries({ queryKey: ['superadmin', 'tenants', selectedTenant?.id, 'users'] })
+      invalidate()
     },
     onError: (e) => toast.error(getApiErrorMessage(e, t('common.error', { defaultValue: 'Erro' }))),
   })
@@ -595,6 +609,7 @@ export function SuperAdminPage() {
       setPlatformUserForm(emptyPlatformUser)
       setPlatformUserAccesses([])
       qc.invalidateQueries({ queryKey: ['superadmin', 'platform-users'] })
+      invalidate()
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('superAdminPage.createError'))),
   })
@@ -624,6 +639,7 @@ export function SuperAdminPage() {
     onSuccess: () => {
       toast.success(t('superAdminPage.deleted'))
       qc.invalidateQueries({ queryKey: ['superadmin', 'platform-users'] })
+      invalidate()
     },
     onError: (error) => toast.error(getApiErrorMessage(error, t('superAdminPage.deleteError'))),
   })
@@ -1058,13 +1074,19 @@ export function SuperAdminPage() {
                     className="pl-9"
                     placeholder={t('superAdminPage.searchTenantsPlaceholder')}
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                      setSearch(e.target.value)
+                      setPage(1)
+                    }}
                   />
                 </div>
                 <select
                   className="h-9 rounded-md border border-input bg-transparent px-3 text-sm sm:w-44"
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value)
+                    setPage(1)
+                  }}
                 >
                   <option value="all">{t('superAdminPage.allStatuses')}</option>
                   <option value="active">{t('superAdminPage.tenantStatuses.active')}</option>
@@ -1087,6 +1109,7 @@ export function SuperAdminPage() {
                         <th className="px-3 py-2.5 font-medium">{t('superAdminPage.status')}</th>
                         <th className="px-3 py-2.5 font-medium">{t('superAdminPage.employeesCol')}</th>
                         <th className="px-3 py-2.5 font-medium">{t('superAdminPage.departmentsCol')}</th>
+                        <th className="px-3 py-2.5 font-medium">{t('superAdminPage.usersCol', { defaultValue: 'Utilizadores' })}</th>
                         <th className="px-3 py-2.5 font-medium">{t('superAdminPage.createdAtCol')}</th>
                         <th className="px-3 py-2.5 text-right font-medium">{t('superAdminPage.actions')}</th>
                       </tr>
@@ -1129,6 +1152,12 @@ export function SuperAdminPage() {
                             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                               <Layers className="h-3.5 w-3.5" />
                               {tenantItem.stats?.departments ?? 0}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                              <Users className="h-3.5 w-3.5" />
+                              {tenantItem.stats?.users ?? 0}
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-muted-foreground">
@@ -1208,13 +1237,58 @@ export function SuperAdminPage() {
                       ))}
                       {!loadingTenants && (tenants?.data ?? []).length === 0 && (
                         <tr>
-                          <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
+                          <td colSpan={9} className="px-3 py-10 text-center text-muted-foreground">
                             {t('superAdminPage.noCompaniesFound')}
                           </td>
                         </tr>
                       )}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {!loadingTenants && (tenants?.meta?.total ?? 0) > 0 && tenants?.meta && (
+                <div className="flex flex-col gap-3 border-t border-border pt-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-muted-foreground">
+                    {t('superAdminPage.pagination', {
+                      current: tenants.meta.current_page,
+                      pages: tenants.meta.last_page,
+                      total: tenants.meta.total,
+                      defaultValue: 'Página {{current}} de {{pages}} · {{total}} no total',
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      aria-label={t('superAdminPage.perPageLabel', { defaultValue: 'Empresas por página' })}
+                      className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+                      value={perPage}
+                      onChange={(e) => {
+                        setPerPage(Number(e.target.value))
+                        setPage(1)
+                      }}
+                    >
+                      {[20, 50, 100].map((count) => (
+                        <option key={count} value={count}>
+                          {t('superAdminPage.perPage', { count, defaultValue: '{{count}} / página' })}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      {t('common.previous')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= tenants.meta.last_page}
+                      onClick={() => setPage((p) => Math.min(tenants.meta.last_page, p + 1))}
+                    >
+                      {t('common.next')}
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -1838,6 +1912,7 @@ export function SuperAdminPage() {
                 const defaultRole: UserForm['role'] = 'admin'
                 const defaultPerms = tenantPermissionsQuery.data?.role_permissions?.[defaultRole] ?? []
                 setUserForm({ ...emptyUserForm, role: defaultRole, permissions: defaultPerms })
+                setUserTenantAccesses([])
                 setUserErrors({})
                 setUserDialogOpen(true)
               }}

@@ -12,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\TenantRelationship;
 use App\Models\User;
 use App\Models\UserTenantAccess;
+use App\Scopes\TenantScope;
 use App\Services\SaaS\PlanEntitlementService;
 use App\Services\SaaS\TenantHierarchyService;
 use App\Services\Tenant\TenantManager;
@@ -137,7 +138,11 @@ class PortfolioController extends BaseController
                     'management_scope' => $rel->management_scope,
                     'notes' => $rel->notes,
                     'accepted_at' => $rel->accepted_at?->toIso8601String(),
-                    'tenant' => (new TenantResource($rel->managedTenant->loadCount(['employees', 'users', 'departments'])))->resolve(),
+                    'tenant' => (new TenantResource($rel->managedTenant->loadCount([
+                        'employees' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+                        'users',
+                        'departments' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+                    ])))->resolve(),
                     'stats' => [
                         'employees' => $rel->managedTenant->employees_count,
                         'users' => $rel->managedTenant->users_count,
