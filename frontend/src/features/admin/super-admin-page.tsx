@@ -250,6 +250,7 @@ interface NewPlatformUser {
   name: string
   email: string
   password: string
+  role: 'super-admin' | 'super-admin-limited'
   permissions: string[]
 }
 
@@ -257,6 +258,7 @@ const emptyPlatformUser: NewPlatformUser = {
   name: '',
   email: '',
   password: '',
+  role: 'super-admin-limited',
   permissions: ['view_any_tenant'],
 }
 
@@ -338,8 +340,9 @@ export function SuperAdminPage() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const currentUser = useAuthStore((state) => state.user)
-  const canManagePlatform = currentUser?.roles.includes('super-admin') || hasPermission(currentUser, 'manage_platform')
-  const canManagePlatformUsers = currentUser?.roles.includes('super-admin') || hasPermission(currentUser, 'manage_super_admins')
+  const isFullSuperAdmin = currentUser?.roles.includes('super-admin') ?? false
+  const canManagePlatform = isFullSuperAdmin || hasPermission(currentUser, 'manage_platform')
+  const canManagePlatformUsers = isFullSuperAdmin || hasPermission(currentUser, 'manage_super_admins')
   const canCreateTenant = hasPermission(currentUser, 'create_tenant')
   const canUpdateTenant = hasPermission(currentUser, 'update_tenant')
   const canDeleteTenant = hasPermission(currentUser, 'delete_tenant')
@@ -382,6 +385,7 @@ export function SuperAdminPage() {
   const [platformUserForm, setPlatformUserForm] = useState<NewPlatformUser>(emptyPlatformUser)
   const [platformUserAccesses, setPlatformUserAccesses] = useState<TenantAccessDraft[]>([])
   const [editingPlatformUser, setEditingPlatformUser] = useState<PlatformUser | null>(null)
+  const [editingPlatformUserRole, setEditingPlatformUserRole] = useState<'super-admin' | 'super-admin-limited'>('super-admin-limited')
   const [platformUserPermissions, setPlatformUserPermissions] = useState<string[]>([])
   const [editingPlatformUserAccesses, setEditingPlatformUserAccesses] = useState<TenantAccessDraft[]>([])
   const [permissionGroupDialogOpen, setPermissionGroupDialogOpen] = useState(false)
@@ -601,7 +605,14 @@ export function SuperAdminPage() {
   })
 
   const createPlatformUser = useMutation({
-    mutationFn: (data: NewPlatformUser & { tenant_accesses?: TenantAccessDraft[] }) =>
+    mutationFn: (data: {
+      name: string
+      email: string
+      password: string
+      role: 'super-admin' | 'super-admin-limited'
+      permissions?: string[]
+      tenant_accesses?: TenantAccessDraft[]
+    }) =>
       api.post<PlatformUser>('superadmin/platform-users', data),
     onSuccess: () => {
       toast.success(t('superAdminPage.created'))
@@ -617,14 +628,16 @@ export function SuperAdminPage() {
   const updatePlatformUser = useMutation({
     mutationFn: ({
       id,
+      role,
       permissions,
       tenant_accesses,
     }: {
       id: number
-      permissions: string[]
+      role: 'super-admin' | 'super-admin-limited'
+      permissions?: string[]
       tenant_accesses?: TenantAccessDraft[]
     }) =>
-      api.put<PlatformUser>(`superadmin/platform-users/${id}`, { permissions, tenant_accesses }),
+      api.put<PlatformUser>(`superadmin/platform-users/${id}`, { role, permissions, tenant_accesses }),
     onSuccess: () => {
       toast.success(t('superAdminPage.permissionsUpdated'))
       setEditingPlatformUser(null)
@@ -709,6 +722,15 @@ export function SuperAdminPage() {
       toast.error(t('superAdminPage.requiredFields'))
       return
     }
+    if (platformUserForm.role === 'super-admin') {
+      createPlatformUser.mutate({
+        name: platformUserForm.name,
+        email: platformUserForm.email,
+        password: platformUserForm.password,
+        role: 'super-admin',
+      })
+      return
+    }
     if (!platformUserForm.permissions.includes('view_any_tenant')) {
       toast.error(t('superAdminPage.tenantPermissionRequired'))
       return
@@ -723,19 +745,33 @@ export function SuperAdminPage() {
   }
 
   const openPlatformUserEdit = (user: PlatformUser) => {
+    const isFull = user.roles.includes('super-admin')
     setEditingPlatformUser(user)
-    setPlatformUserPermissions([...user.permissions])
+    setEditingPlatformUserRole(isFull ? 'super-admin' : 'super-admin-limited')
+    setPlatformUserPermissions(
+      isFull
+        ? normalizePlatformPermissions(user.permissions ?? [])
+        : [...user.permissions],
+    )
     setEditingPlatformUserAccesses(toTenantAccessDrafts(user.tenant_accesses))
   }
 
   const handlePlatformUserPermissionsSubmit = () => {
     if (!editingPlatformUser) return
+    if (editingPlatformUserRole === 'super-admin') {
+      updatePlatformUser.mutate({
+        id: editingPlatformUser.id,
+        role: 'super-admin',
+      })
+      return
+    }
     if (!platformUserPermissions.includes('view_any_tenant')) {
       toast.error(t('superAdminPage.tenantPermissionRequired'))
       return
     }
     updatePlatformUser.mutate({
       id: editingPlatformUser.id,
+      role: 'super-admin-limited',
       permissions: platformUserPermissions,
       tenant_accesses: editingPlatformUserAccesses.map((a) => ({
         ...a,
@@ -1497,7 +1533,7 @@ export function SuperAdminPage() {
                                     <KeyRound className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
-                                {platformUser.roles.includes('super-admin-limited') && platformUser.id !== currentUser?.id && (
+                                {(platformUser.roles.includes('super-admin-limited') || isFullSuperAdmin) && platformUser.id !== currentUser?.id && (
                                   <>
                                     <Button
                                       size="sm"
@@ -2016,9 +2052,17 @@ export function SuperAdminPage() {
       <Dialog open={platformUserDialogOpen} onOpenChange={setPlatformUserDialogOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{t('superAdminPage.dialogTitle')}</DialogTitle>
+            <DialogTitle>
+              {platformUserForm.role === 'super-admin'
+                ? t('superAdminPage.dialogTitleFull', { defaultValue: 'Criar super-administrador total' })
+                : t('superAdminPage.dialogTitle')}
+            </DialogTitle>
             <DialogDescription>
-              {t('superAdminPage.dialogDescription')}
+              {platformUserForm.role === 'super-admin'
+                ? t('superAdminPage.dialogDescriptionFull', {
+                    defaultValue: 'Este utilizador terá acesso total e irrestrito a toda a plataforma e a todas as empresas, igual ao seu perfil.',
+                  })
+                : t('superAdminPage.dialogDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -2036,48 +2080,112 @@ export function SuperAdminPage() {
                 <Input type="password" minLength={8} value={platformUserForm.password} onChange={(event) => setPlatformUserForm((current) => ({ ...current, password: event.target.value }))} />
               </div>
             </div>
-            <div className="space-y-2">
-              <div>
-                <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
-                <p className="text-xs text-muted-foreground">{t('superAdminPage.permissionsDescription')}</p>
-              </div>
-              <CopyPermissionsControls
-                users={platformUsersQuery.data?.users ?? []}
-                copied={copiedPlatformPermissions}
-                selectPlaceholder={t('superAdminPage.copyFromUser')}
-                pasteLabel={t('superAdminPage.pastePermissionsFrom', { name: copiedPlatformPermissions?.sourceUserName ?? '' })}
-                onSelectUser={(userId) => {
-                  const source = (platformUsersQuery.data?.users ?? []).find((u) => u.id === userId)
-                  if (!source) return
-                  const next = normalizePlatformPermissions(source.permissions ?? [])
-                  setPlatformUserForm((current) => ({ ...current, permissions: next }))
-                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: source.name }))
-                }}
-                onPasteCopied={() => {
-                  if (!copiedPlatformPermissions) return
-                  const next = normalizePlatformPermissions(copiedPlatformPermissions.permissions)
-                  setPlatformUserForm((current) => ({ ...current, permissions: next }))
-                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedPlatformPermissions.sourceUserName }))
-                }}
-              />
-              <PermissionSelector
-                permissions={platformPermissionList}
-                selectedPermissions={platformUserForm.permissions}
-                lockedPermissions={['view_any_tenant']}
-                onChange={(permissions) => setPlatformUserForm((current) => ({ ...current, permissions }))}
-              />
-            </div>
 
-            <TenantAccessScopeEditor
-              key={`create-platform-user-${platformUserDialogOpen}`}
-              tenants={scopeTenantsList}
-              permissionGroups={permissionGroupsList}
-              allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : normalizeTenantPermissions(platformPermissionList.map((p) => p.name)).map((name) => ({ name, group_name: platformPermissionList.find((p) => p.name === name)?.group_name ?? null }))}
-              accesses={platformUserAccesses}
-              onChange={setPlatformUserAccesses}
-              defaultRole="hr-manager"
-              basePermissions={normalizeTenantPermissions(platformUserForm.permissions)}
-            />
+            {isFullSuperAdmin && (
+              <div className="space-y-2">
+                <Label>{t('superAdminPage.platformRoleLabel', { defaultValue: 'Tipo de Super-Administrador' })}</Label>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setPlatformUserForm((current) => ({ ...current, role: 'super-admin' }))}
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      platformUserForm.role === 'super-admin'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-background hover:bg-muted/40'
+                    }`}
+                  >
+                    <p className="flex items-center gap-1.5 text-sm font-semibold">
+                      <ShieldCheck className="h-4 w-4 text-primary" />
+                      {t('superAdminPage.fullAdmin')}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('superAdminPage.fullAdminRoleHint', {
+                        defaultValue: 'Acesso total igual ao seu: todas as permissões da plataforma e todas as empresas.',
+                      })}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlatformUserForm((current) => ({ ...current, role: 'super-admin-limited' }))}
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      platformUserForm.role === 'super-admin-limited'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-background hover:bg-muted/40'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold">{t('superAdminPage.restrictedAdmin')}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('superAdminPage.restrictedAdminRoleHint', {
+                        defaultValue: 'Escolher exatamente quais ações, campos e empresas pode gerir.',
+                      })}
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {platformUserForm.role === 'super-admin' ? (
+              <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3.5 text-sm">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="space-y-1">
+                  <p className="font-medium">
+                    {t('superAdminPage.fullAdminBannerTitle', {
+                      defaultValue: 'Super-administrador total (sem restrições)',
+                    })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('superAdminPage.fullAdminBannerBody', {
+                      defaultValue: 'Recebe automaticamente todas as permissões do sistema (incluindo gestão da plataforma, criação de outros super-admins e acesso irrestrito a todas as empresas).',
+                    })}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
+                    <p className="text-xs text-muted-foreground">{t('superAdminPage.permissionsDescription')}</p>
+                  </div>
+                  <CopyPermissionsControls
+                    users={platformUsersQuery.data?.users ?? []}
+                    copied={copiedPlatformPermissions}
+                    selectPlaceholder={t('superAdminPage.copyFromUser')}
+                    pasteLabel={t('superAdminPage.pastePermissionsFrom', { name: copiedPlatformPermissions?.sourceUserName ?? '' })}
+                    onSelectUser={(userId) => {
+                      const source = (platformUsersQuery.data?.users ?? []).find((u) => u.id === userId)
+                      if (!source) return
+                      const next = normalizePlatformPermissions(source.permissions ?? [])
+                      setPlatformUserForm((current) => ({ ...current, permissions: next }))
+                      toast.success(t('superAdminPage.permissionsAppliedFrom', { name: source.name }))
+                    }}
+                    onPasteCopied={() => {
+                      if (!copiedPlatformPermissions) return
+                      const next = normalizePlatformPermissions(copiedPlatformPermissions.permissions)
+                      setPlatformUserForm((current) => ({ ...current, permissions: next }))
+                      toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedPlatformPermissions.sourceUserName }))
+                    }}
+                  />
+                  <PermissionSelector
+                    permissions={platformPermissionList}
+                    selectedPermissions={platformUserForm.permissions}
+                    lockedPermissions={['view_any_tenant']}
+                    onChange={(permissions) => setPlatformUserForm((current) => ({ ...current, permissions }))}
+                  />
+                </div>
+
+                <TenantAccessScopeEditor
+                  key={`create-platform-user-${platformUserDialogOpen}`}
+                  tenants={scopeTenantsList}
+                  permissionGroups={permissionGroupsList}
+                  allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : normalizeTenantPermissions(platformPermissionList.map((p) => p.name)).map((name) => ({ name, group_name: platformPermissionList.find((p) => p.name === name)?.group_name ?? null }))}
+                  accesses={platformUserAccesses}
+                  onChange={setPlatformUserAccesses}
+                  defaultRole="hr-manager"
+                  basePermissions={normalizeTenantPermissions(platformUserForm.permissions)}
+                />
+              </>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setPlatformUserDialogOpen(false)}>{t('common.cancel')}</Button>
@@ -2104,48 +2212,114 @@ export function SuperAdminPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
-              <p className="text-xs text-muted-foreground">{t('superAdminPage.permissionsDescription')}</p>
-              <CopyPermissionsControls
-                users={(platformUsersQuery.data?.users ?? []).filter((u) => u.id !== editingPlatformUser?.id)}
-                copied={copiedPlatformPermissions && copiedPlatformPermissions.sourceUserId !== editingPlatformUser?.id ? copiedPlatformPermissions : null}
-                selectPlaceholder={t('superAdminPage.copyFromUser')}
-                pasteLabel={t('superAdminPage.pastePermissionsFrom', { name: copiedPlatformPermissions?.sourceUserName ?? '' })}
-                onSelectUser={(userId) => {
-                  const source = (platformUsersQuery.data?.users ?? []).find((u) => u.id === userId)
-                  if (!source) return
-                  const next = normalizePlatformPermissions(source.permissions ?? [])
-                  setPlatformUserPermissions(next)
-                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: source.name }))
-                }}
-                onPasteCopied={() => {
-                  if (!copiedPlatformPermissions) return
-                  const next = normalizePlatformPermissions(copiedPlatformPermissions.permissions)
-                  setPlatformUserPermissions(next)
-                  toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedPlatformPermissions.sourceUserName }))
-                }}
-              />
-            </div>
+            {isFullSuperAdmin && (
+              <div className="space-y-2">
+                <Label>{t('superAdminPage.platformRoleLabel', { defaultValue: 'Tipo de Super-Administrador' })}</Label>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingPlatformUserRole('super-admin')}
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      editingPlatformUserRole === 'super-admin'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-background hover:bg-muted/40'
+                    }`}
+                  >
+                    <p className="flex items-center gap-1.5 text-sm font-semibold">
+                      <ShieldCheck className="h-4 w-4 text-primary" />
+                      {t('superAdminPage.fullAdmin')}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('superAdminPage.fullAdminRoleHint', {
+                        defaultValue: 'Acesso total igual ao seu: todas as permissões da plataforma e todas as empresas.',
+                      })}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPlatformUserRole('super-admin-limited')
+                      setPlatformUserPermissions((prev) => normalizePlatformPermissions(prev))
+                    }}
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      editingPlatformUserRole === 'super-admin-limited'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-background hover:bg-muted/40'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold">{t('superAdminPage.restrictedAdmin')}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('superAdminPage.restrictedAdminRoleHint', {
+                        defaultValue: 'Escolher exatamente quais ações, campos e empresas pode gerir.',
+                      })}
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
 
-            <PermissionSelector
-              permissions={platformPermissionList}
-              selectedPermissions={platformUserPermissions}
-              lockedPermissions={['view_any_tenant']}
-              onChange={setPlatformUserPermissions}
-              maxHeightClass="max-h-[45vh]"
-            />
+            {editingPlatformUserRole === 'super-admin' ? (
+              <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3.5 text-sm">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="space-y-1">
+                  <p className="font-medium">
+                    {t('superAdminPage.fullAdminBannerTitle', {
+                      defaultValue: 'Super-administrador total (sem restrições)',
+                    })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('superAdminPage.fullAdminBannerBody', {
+                      defaultValue: 'Recebe automaticamente todas as permissões do sistema (incluindo gestão da plataforma, criação de outros super-admins e acesso irrestrito a todas as empresas).',
+                    })}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">{t('superAdminPage.permissions')}</h3>
+                  <p className="text-xs text-muted-foreground">{t('superAdminPage.permissionsDescription')}</p>
+                  <CopyPermissionsControls
+                    users={(platformUsersQuery.data?.users ?? []).filter((u) => u.id !== editingPlatformUser?.id)}
+                    copied={copiedPlatformPermissions && copiedPlatformPermissions.sourceUserId !== editingPlatformUser?.id ? copiedPlatformPermissions : null}
+                    selectPlaceholder={t('superAdminPage.copyFromUser')}
+                    pasteLabel={t('superAdminPage.pastePermissionsFrom', { name: copiedPlatformPermissions?.sourceUserName ?? '' })}
+                    onSelectUser={(userId) => {
+                      const source = (platformUsersQuery.data?.users ?? []).find((u) => u.id === userId)
+                      if (!source) return
+                      const next = normalizePlatformPermissions(source.permissions ?? [])
+                      setPlatformUserPermissions(next)
+                      toast.success(t('superAdminPage.permissionsAppliedFrom', { name: source.name }))
+                    }}
+                    onPasteCopied={() => {
+                      if (!copiedPlatformPermissions) return
+                      const next = normalizePlatformPermissions(copiedPlatformPermissions.permissions)
+                      setPlatformUserPermissions(next)
+                      toast.success(t('superAdminPage.permissionsAppliedFrom', { name: copiedPlatformPermissions.sourceUserName }))
+                    }}
+                  />
+                </div>
 
-            <TenantAccessScopeEditor
-              key={`edit-platform-user-${editingPlatformUser?.id ?? 'none'}`}
-              tenants={scopeTenantsList}
-              permissionGroups={permissionGroupsList}
-              allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : normalizeTenantPermissions(platformPermissionList.map((p) => p.name)).map((name) => ({ name, group_name: platformPermissionList.find((p) => p.name === name)?.group_name ?? null }))}
-              accesses={editingPlatformUserAccesses}
-              onChange={setEditingPlatformUserAccesses}
-              defaultRole="hr-manager"
-              basePermissions={normalizeTenantPermissions(platformUserPermissions)}
-            />
+                <PermissionSelector
+                  permissions={platformPermissionList}
+                  selectedPermissions={platformUserPermissions}
+                  lockedPermissions={['view_any_tenant']}
+                  onChange={setPlatformUserPermissions}
+                  maxHeightClass="max-h-[45vh]"
+                />
+
+                <TenantAccessScopeEditor
+                  key={`edit-platform-user-${editingPlatformUser?.id ?? 'none'}`}
+                  tenants={scopeTenantsList}
+                  permissionGroups={permissionGroupsList}
+                  allPermissions={tenantPermissionList.length > 0 ? tenantPermissionList : normalizeTenantPermissions(platformPermissionList.map((p) => p.name)).map((name) => ({ name, group_name: platformPermissionList.find((p) => p.name === name)?.group_name ?? null }))}
+                  accesses={editingPlatformUserAccesses}
+                  onChange={setEditingPlatformUserAccesses}
+                  defaultRole="hr-manager"
+                  basePermissions={normalizeTenantPermissions(platformUserPermissions)}
+                />
+              </>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditingPlatformUser(null)}>{t('common.cancel')}</Button>

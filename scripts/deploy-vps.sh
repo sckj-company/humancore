@@ -40,6 +40,9 @@ docker compose stop worker app
 echo ">> A aplicar todas as migrações pendentes..."
 docker compose run --rm app php artisan migrate --force
 
+echo ">> A limpar cache de permissões..."
+docker compose run --rm app php artisan permission:cache-reset
+
 echo ">> A iniciar a API e o frontend atualizados..."
 docker compose up -d app frontend
 

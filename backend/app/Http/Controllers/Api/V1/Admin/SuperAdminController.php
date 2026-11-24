@@ -203,7 +203,8 @@ class SuperAdminController extends BaseController
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8'],
-            'permissions' => ['required', 'array'],
+            'role' => ['sometimes', 'string', 'in:super-admin,super-admin-limited'],
+            'permissions' => ['required_unless:role,super-admin', 'array'],
             'permissions.*' => ['required', 'string', 'distinct', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
             'tenant_accesses' => ['sometimes', 'array'],
             'tenant_accesses.*.tenant_id' => ['required', 'integer', 'exists:tenants,id'],
@@ -214,6 +215,55 @@ class SuperAdminController extends BaseController
             'tenant_accesses.*.department_ids' => ['nullable', 'array'],
             'tenant_accesses.*.department_ids.*' => ['integer'],
         ]);
+
+        $targetRole = $data['role'] ?? 'super-admin-limited';
+
+        if ($targetRole === 'super-admin') {
+            if (! $request->user()->hasRole('super-admin')) {
+                return $this->error('Apenas um super-administrador total pode criar outro super-administrador total.', 403);
+            }
+
+            $user = DB::transaction(function () use ($data): User {
+                $fullRole = Role::query()->firstOrCreate(
+                    ['name' => 'super-admin', 'guard_name' => 'web'],
+                    [
+                        'description' => 'Acesso total à plataforma e todos os tenants',
+                        'is_system' => true,
+                    ],
+                );
+
+                if ($fullRole->wasRecentlyCreated) {
+                    $fullRole->syncPermissions(Permission::query()->where('guard_name', 'web')->get());
+                }
+
+                $user = User::query()->create([
+                    'tenant_id' => null,
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'password' => Hash::make($data['password']),
+                    'locale' => 'pt',
+                    'timezone' => 'Africa/Luanda',
+                    'email_verified_at' => now(),
+                    'is_active' => true,
+                ]);
+                $user->assignRole($fullRole);
+
+                return $user;
+            });
+
+            $user->load(['roles', 'permissions', 'tenantAccesses.tenant:id,name,slug', 'tenantAccesses.permissionGroup:id,name']);
+
+            return $this->success([
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'is_active' => $user->is_active,
+                'roles' => $user->getRoleNames(),
+                'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                'tenant_accesses' => [],
+            ], 'Super-admin total criado com sucesso.', 201);
+        }
+
         $this->validateAssignablePlatformUserPermissions($request, $data['permissions']);
 
         $user = DB::transaction(function () use ($request, $data): User {
@@ -265,12 +315,13 @@ class SuperAdminController extends BaseController
         if ($request->user()->is($user)) {
             return $this->error('Não é possível alterar as permissões da própria conta nesta página.', 403);
         }
-        if (! $user->hasRole('super-admin-limited')) {
-            return $this->error('Só é possível gerir super-admins limitados.', 403);
+        if (! $user->isSuperAdmin()) {
+            return $this->error('Só é possível gerir utilizadores da plataforma.', 403);
         }
 
         $data = $request->validate([
-            'permissions' => ['required', 'array'],
+            'role' => ['sometimes', 'string', 'in:super-admin,super-admin-limited'],
+            'permissions' => ['required_unless:role,super-admin', 'array'],
             'permissions.*' => ['required', 'string', 'distinct', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
             'tenant_accesses' => ['sometimes', 'array'],
             'tenant_accesses.*.tenant_id' => ['required', 'integer', 'exists:tenants,id'],
@@ -281,15 +332,56 @@ class SuperAdminController extends BaseController
             'tenant_accesses.*.department_ids' => ['nullable', 'array'],
             'tenant_accesses.*.department_ids.*' => ['integer'],
         ]);
-        $this->validateAssignablePlatformUserPermissions($request, $data['permissions']);
 
-        DB::transaction(function () use ($request, $user, $data): void {
-            $user->syncPermissions($data['permissions']);
+        $targetRole = $data['role'] ?? ($user->hasRole('super-admin') ? 'super-admin' : 'super-admin-limited');
 
-            if (array_key_exists('tenant_accesses', $data)) {
-                $this->syncUserTenantAccesses($request, $user, $data['tenant_accesses'], true);
+        if ($user->hasRole('super-admin') || $targetRole === 'super-admin') {
+            if (! $request->user()->hasRole('super-admin')) {
+                return $this->error('Apenas um super-administrador total pode gerir super-administradores totais.', 403);
             }
-        });
+        }
+
+        if ($targetRole === 'super-admin') {
+            DB::transaction(function () use ($user): void {
+                $fullRole = Role::query()->firstOrCreate(
+                    ['name' => 'super-admin', 'guard_name' => 'web'],
+                    [
+                        'description' => 'Acesso total à plataforma e todos os tenants',
+                        'is_system' => true,
+                    ],
+                );
+
+                if ($fullRole->wasRecentlyCreated) {
+                    $fullRole->syncPermissions(Permission::query()->where('guard_name', 'web')->get());
+                }
+
+                $user->syncRoles([$fullRole]);
+                $user->syncPermissions([]);
+                $user->tenantAccesses()->delete();
+            });
+        } else {
+            $permissions = $data['permissions'] ?? null;
+            if (! is_array($permissions)) {
+                abort(422, 'É obrigatório definir as permissões do super-admin limitado.');
+            }
+            $this->validateAssignablePlatformUserPermissions($request, $permissions);
+
+            DB::transaction(function () use ($request, $user, $data, $permissions): void {
+                $restrictedRole = Role::query()->firstOrCreate(
+                    ['name' => 'super-admin-limited', 'guard_name' => 'web'],
+                    [
+                        'description' => 'Acesso global limitado às permissões atribuídas',
+                        'is_system' => true,
+                    ],
+                );
+                $user->syncRoles([$restrictedRole]);
+                $user->syncPermissions($permissions);
+
+                if (array_key_exists('tenant_accesses', $data)) {
+                    $this->syncUserTenantAccesses($request, $user, $data['tenant_accesses'], true);
+                }
+            });
+        }
 
         $user->refresh()->load(['roles', 'permissions', 'tenantAccesses.tenant:id,name,slug', 'tenantAccesses.permissionGroup:id,name']);
 
@@ -311,8 +403,24 @@ class SuperAdminController extends BaseController
         if ($request->user()->is($user)) {
             return $this->error('Não é possível eliminar a própria conta nesta página.', 403);
         }
-        if (! $user->hasRole('super-admin-limited')) {
-            return $this->error('Só é possível eliminar super-admins limitados.', 403);
+        if (! $user->isSuperAdmin()) {
+            return $this->error('Só é possível eliminar utilizadores da plataforma.', 403);
+        }
+
+        if ($user->hasRole('super-admin')) {
+            if (! $request->user()->hasRole('super-admin')) {
+                return $this->error('Apenas um super-administrador total pode eliminar outro super-administrador total.', 403);
+            }
+
+            $otherActiveFullAdminExists = User::query()
+                ->where('id', '!=', $user->id)
+                ->where('is_active', true)
+                ->whereHas('roles', fn ($q) => $q->where('name', 'super-admin'))
+                ->exists();
+
+            if (! $otherActiveFullAdminExists) {
+                return $this->error('Não é possível eliminar o único super-administrador total ativo.', 422);
+            }
         }
 
         DB::transaction(function () use ($user): void {
@@ -320,7 +428,7 @@ class SuperAdminController extends BaseController
             $user->delete();
         });
 
-        return $this->success(null, 'Super-admin limitado eliminado com sucesso.');
+        return $this->success(null, 'Super-admin eliminado com sucesso.');
     }
 
     /**

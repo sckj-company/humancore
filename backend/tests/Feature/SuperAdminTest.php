@@ -858,4 +858,162 @@ class SuperAdminTest extends TestCase
         $this->assertSame($atlantico->id, $regularRes->json('data.0.id'));
         $this->assertSame('5000111222', $regularRes->json('data.0.tax_id'));
     }
+
+    public function test_full_super_admin_can_create_another_full_super_admin_with_all_permissions(): void
+    {
+        $creator = User::factory()->create(['is_active' => true]);
+        $creator->assignRole('super-admin');
+        $tenant = Tenant::factory()->create();
+
+        $created = $this->actingAs($creator, 'sanctum')
+            ->postJson('/api/v1/superadmin/platform-users', [
+                'name' => 'Segundo Super Admin',
+                'email' => 'segundo-super@platform.test',
+                'password' => 'secure-password',
+                'role' => 'super-admin',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.roles.0', 'super-admin');
+
+        $perms = $created->json('data.permissions');
+        $this->assertContains('manage_platform', $perms);
+        $this->assertContains('manage_super_admins', $perms);
+        $this->assertContains('view_any_tenant', $perms);
+
+        $clone = User::query()->where('email', 'segundo-super@platform.test')->firstOrFail();
+        $this->assertTrue($clone->hasRole('super-admin'));
+        $this->assertEqualsCanonicalizing(
+            $creator->getAllPermissions()->pluck('name')->all(),
+            $clone->getAllPermissions()->pluck('name')->all(),
+        );
+
+        $this->actingAs($clone, 'sanctum')
+            ->getJson('/api/v1/superadmin/platform-users')
+            ->assertOk();
+
+        $this->actingAs($clone, 'sanctum')
+            ->getJson('/api/v1/superadmin/executive-dashboard')
+            ->assertOk();
+
+        $this->actingAs($clone, 'sanctum')
+            ->putJson("/api/v1/superadmin/tenants/{$tenant->id}", ['status' => 'active'])
+            ->assertOk();
+
+        $this->actingAs($clone, 'sanctum')
+            ->postJson('/api/v1/superadmin/platform-users', [
+                'name' => 'Terceiro Super Admin',
+                'email' => 'terceiro-super@platform.test',
+                'password' => 'secure-password',
+                'role' => 'super-admin',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.roles.0', 'super-admin');
+    }
+
+    public function test_limited_super_admin_cannot_create_promote_edit_or_delete_a_full_super_admin(): void
+    {
+        $fullAdmin = User::factory()->create(['is_active' => true]);
+        $fullAdmin->assignRole('super-admin');
+
+        $limitedManager = User::factory()->create(['is_active' => true]);
+        $limitedManager->assignRole('super-admin-limited');
+        $limitedManager->givePermissionTo(['manage_super_admins', 'view_any_tenant']);
+
+        $limitedTarget = User::factory()->create(['is_active' => true]);
+        $limitedTarget->assignRole('super-admin-limited');
+        $limitedTarget->givePermissionTo(['view_any_tenant']);
+
+        // Cannot create a full super-admin
+        $this->actingAs($limitedManager, 'sanctum')
+            ->postJson('/api/v1/superadmin/platform-users', [
+                'name' => 'Escalado',
+                'email' => 'escalado@platform.test',
+                'password' => 'secure-password',
+                'role' => 'super-admin',
+            ])
+            ->assertForbidden();
+
+        // Cannot promote a limited super-admin to full super-admin
+        $this->actingAs($limitedManager, 'sanctum')
+            ->putJson("/api/v1/superadmin/platform-users/{$limitedTarget->id}", [
+                'role' => 'super-admin',
+            ])
+            ->assertForbidden();
+
+        // Cannot edit an existing full super-admin
+        $this->actingAs($limitedManager, 'sanctum')
+            ->putJson("/api/v1/superadmin/platform-users/{$fullAdmin->id}", [
+                'role' => 'super-admin-limited',
+                'permissions' => ['view_any_tenant'],
+            ])
+            ->assertForbidden();
+
+        // Cannot delete an existing full super-admin
+        $this->actingAs($limitedManager, 'sanctum')
+            ->deleteJson("/api/v1/superadmin/platform-users/{$fullAdmin->id}")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('users', ['id' => $fullAdmin->id]);
+    }
+
+    public function test_full_super_admin_can_promote_demote_and_delete_another_full_super_admin(): void
+    {
+        $primary = User::factory()->create(['is_active' => true]);
+        $primary->assignRole('super-admin');
+
+        $tenant = Tenant::factory()->create();
+
+        $other = User::factory()->create(['is_active' => true]);
+        $other->assignRole('super-admin-limited');
+        $other->givePermissionTo(['view_any_tenant']);
+        UserTenantAccess::query()->create([
+            'user_id' => $other->id,
+            'tenant_id' => $tenant->id,
+            'role_name' => 'admin',
+            'is_active' => true,
+        ]);
+
+        // Promote limited -> full super-admin
+        $this->actingAs($primary, 'sanctum')
+            ->putJson("/api/v1/superadmin/platform-users/{$other->id}", [
+                'role' => 'super-admin',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.roles.0', 'super-admin');
+
+        $other->refresh();
+        $this->assertTrue($other->hasRole('super-admin'));
+        $this->assertFalse($other->hasRole('super-admin-limited'));
+        $this->assertCount(0, $other->tenantAccesses);
+
+        // Downgrade full -> limited super-admin
+        $this->actingAs($primary, 'sanctum')
+            ->putJson("/api/v1/superadmin/platform-users/{$other->id}", [
+                'role' => 'super-admin-limited',
+                'permissions' => ['view_any_tenant', 'view_any_employee'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.roles.0', 'super-admin-limited');
+
+        $other->refresh();
+        $this->assertTrue($other->hasRole('super-admin-limited'));
+        $this->assertFalse($other->hasRole('super-admin'));
+
+        // Promote again and then delete another full super-admin (while self-delete remains forbidden)
+        $this->actingAs($primary, 'sanctum')
+            ->putJson("/api/v1/superadmin/platform-users/{$other->id}", [
+                'role' => 'super-admin',
+            ])
+            ->assertOk();
+
+        $this->actingAs($primary, 'sanctum')
+            ->deleteJson("/api/v1/superadmin/platform-users/{$primary->id}")
+            ->assertForbidden();
+
+        $this->actingAs($primary, 'sanctum')
+            ->deleteJson("/api/v1/superadmin/platform-users/{$other->id}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('users', ['id' => $other->id]);
+    }
 }
