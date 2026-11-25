@@ -2126,9 +2126,11 @@
     "pageDescription": "Monitor the platform and manage companies (tenants), users and permissions",
     "newCompany": "New company",
     "kpiCompanies": "Total Companies ({{active}} active)",
+    "kpiActiveCompanies": "Active Companies",
     "kpiEmployees": "Employees ({{active}} active)",
     "kpiUsers": "Users ({{superAdmins}} super-admins)",
     "kpiSuspended": "Suspended Companies",
+    "kpiInactiveAndSuspended": "Inactive & Suspended Companies",
     "trendTitle": "Company Growth (12 months)",
     "trendDescription": "New companies registered per month",
     "companiesSeries": "Companies",
@@ -2143,7 +2145,8 @@
     "tenantStatuses": {
       "active": "Active",
       "inactive": "Inactive",
-      "suspended": "Suspended"
+      "suspended": "Suspended",
+      "inactiveOrSuspended": "Inactive & suspended"
     },
     "taxIdShort": "Tax ID",
     "locationLabel": "Location",
@@ -2945,6 +2948,9 @@
       "hideSalariesBtn": "Hide salaries",
       "restoreDefaultBtn": "Use global default",
       "blockBtn": "Block access in this company",
+      "hidingSalariesProgress": "Hiding salaries…",
+      "restoringDefaultProgress": "Restoring default…",
+      "blockingProgress": "Blocking access…",
       "colUser": "User",
       "colOrigin": "Source / Profile",
       "colRule": "Rule in this company",

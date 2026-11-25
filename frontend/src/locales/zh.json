@@ -2079,9 +2079,11 @@
     "pageDescription": "监控平台并管理企业（租户）、用户和权限",
     "newCompany": "新建企业",
     "kpiCompanies": "企业总数（{{active}} 家活跃）",
+    "kpiActiveCompanies": "活跃企业",
     "kpiEmployees": "员工总数（{{active}} 名在职）",
     "kpiUsers": "用户总数（{{superAdmins}} 名超级管理员）",
     "kpiSuspended": "已暂停企业",
+    "kpiInactiveAndSuspended": "未激活与已暂停企业",
     "trendTitle": "企业增长（12个月）",
     "trendDescription": "每月新注册企业数量",
     "companiesSeries": "企业",
@@ -2096,7 +2098,8 @@
     "tenantStatuses": {
       "active": "活跃",
       "inactive": "停用",
-      "suspended": "已暂停"
+      "suspended": "已暂停",
+      "inactiveOrSuspended": "未激活与已暂停"
     },
     "taxIdShort": "税号",
     "locationLabel": "所在地",
@@ -2896,6 +2899,9 @@
       "hideSalariesBtn": "隐藏薪资",
       "restoreDefaultBtn": "恢复全局默认",
       "blockBtn": "禁止访问此公司",
+      "hidingSalariesProgress": "正在隐藏薪资…",
+      "restoringDefaultProgress": "正在恢复默认…",
+      "blockingProgress": "正在封禁访问…",
       "colUser": "用户",
       "colOrigin": "来源 / 角色",
       "colRule": "本公司规则",

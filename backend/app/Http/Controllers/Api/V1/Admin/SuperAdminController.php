@@ -142,7 +142,9 @@ class SuperAdminController extends BaseController
             'kpis' => [
                 'total_tenants' => $totalTenants,
                 'active_tenants' => $activeTenants,
+                'inactive_tenants' => $inactiveTenants,
                 'suspended_tenants' => $suspendedTenants,
+                'inactive_or_suspended_tenants' => $inactiveTenants + $suspendedTenants,
                 'total_employees' => $totalEmployees,
                 'active_employees' => $activeEmployees,
                 'total_users' => $totalUsers,
@@ -492,7 +494,14 @@ class SuperAdminController extends BaseController
                         ->orWhere('tax_id', 'like', "%{$term}%");
                 });
             })
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
+            ->when($request->filled('status'), function ($q) use ($request) {
+                $status = (string) $request->string('status');
+                if ($status === 'inactive_or_suspended') {
+                    $q->whereIn('status', ['inactive', 'suspended']);
+                } else {
+                    $q->where('status', $status);
+                }
+            })
             ->orderBy($request->string('sort_by', 'created_at'), $request->string('sort_dir', 'desc'))
             ->paginate($request->integer('per_page', 20));
 
@@ -1097,7 +1106,14 @@ class SuperAdminController extends BaseController
         $relationships = TenantRelationship::query()
             ->with(['managerTenant:id,name,slug,status', 'managedTenant:id,name,slug,status,tax_id'])
             ->when($request->filled('manager_tenant_id'), fn ($q) => $q->where('manager_tenant_id', $request->integer('manager_tenant_id')))
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
+            ->when($request->filled('status'), function ($q) use ($request) {
+                $status = (string) $request->string('status');
+                if ($status === 'inactive_or_suspended') {
+                    $q->whereIn('status', ['inactive', 'suspended']);
+                } else {
+                    $q->where('status', $status);
+                }
+            })
             ->latest('id')
             ->get();
 

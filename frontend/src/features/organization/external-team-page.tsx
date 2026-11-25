@@ -4,6 +4,7 @@ import {
   Ban,
   Building2,
   EyeOff,
+  Loader2,
   Lock,
   Plus,
   RotateCcw,
@@ -177,6 +178,11 @@ export function ExternalTeamPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([])
+  const [pendingAction, setPendingAction] = useState<{
+    mode: 'hide_salaries' | 'restore_default' | 'block'
+    userIds: number[]
+    source: 'row' | 'bulk'
+  } | null>(null)
 
   // Permissions dialog state
   const [permModalOpen, setPermModalOpen] = useState(false)
@@ -247,8 +253,10 @@ export function ExternalTeamPage() {
   const handleQuickAction = async (
     targetIds: number[],
     mode: 'hide_salaries' | 'restore_default' | 'block',
+    source: 'row' | 'bulk' = 'row',
   ) => {
     if (targetIds.length === 0) return
+    setPendingAction({ mode, userIds: targetIds, source })
     try {
       const res = await updateExternalMutation.mutateAsync({
         user_ids: targetIds,
@@ -286,6 +294,8 @@ export function ExternalTeamPage() {
           }),
         ),
       )
+    } finally {
+      setPendingAction(null)
     }
   }
 
@@ -508,12 +518,23 @@ export function ExternalTeamPage() {
                   variant="outline"
                   className="h-7 gap-1.5 px-2.5 text-xs"
                   disabled={updateExternalMutation.isPending}
-                  onClick={() => handleQuickAction(visibleSelectedIds, 'hide_salaries')}
+                  onClick={() => handleQuickAction(visibleSelectedIds, 'hide_salaries', 'bulk')}
                 >
-                  <EyeOff className="h-3.5 w-3.5" />
-                  {t('organizationPage.externalTeam.hideSalariesBtn', {
-                    defaultValue: 'Ocultar salários',
-                  })}
+                  {pendingAction?.source === 'bulk' && pendingAction.mode === 'hide_salaries' ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      {t('organizationPage.externalTeam.hidingSalariesProgress', {
+                        defaultValue: 'A ocultar salários…',
+                      })}
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="h-3.5 w-3.5" />
+                      {t('organizationPage.externalTeam.hideSalariesBtn', {
+                        defaultValue: 'Ocultar salários',
+                      })}
+                    </>
+                  )}
                 </Button>
                 <Button
                   type="button"
@@ -521,12 +542,23 @@ export function ExternalTeamPage() {
                   variant="outline"
                   className="h-7 gap-1.5 px-2.5 text-xs"
                   disabled={updateExternalMutation.isPending}
-                  onClick={() => handleQuickAction(visibleSelectedIds, 'restore_default')}
+                  onClick={() => handleQuickAction(visibleSelectedIds, 'restore_default', 'bulk')}
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  {t('organizationPage.externalTeam.restoreDefaultBtn', {
-                    defaultValue: 'Usar padrão global',
-                  })}
+                  {pendingAction?.source === 'bulk' && pendingAction.mode === 'restore_default' ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      {t('organizationPage.externalTeam.restoringDefaultProgress', {
+                        defaultValue: 'A restaurar padrão…',
+                      })}
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      {t('organizationPage.externalTeam.restoreDefaultBtn', {
+                        defaultValue: 'Usar padrão global',
+                      })}
+                    </>
+                  )}
                 </Button>
                 <Button
                   type="button"
@@ -605,6 +637,8 @@ export function ExternalTeamPage() {
               <TableBody>
                 {filtered.map((member) => {
                   const isChecked = visibleSelectedIds.includes(member.id)
+                  const isRowPending = pendingAction?.userIds.includes(member.id) ?? false
+                  const rowPendingMode = isRowPending ? pendingAction?.mode : null
                   const initials = member.name
                     .split(' ')
                     .filter(Boolean)
@@ -617,16 +651,19 @@ export function ExternalTeamPage() {
                       key={member.id}
                       data-state={isChecked ? 'selected' : undefined}
                       onClick={() => {
-                        if (!member.is_protected) {
+                        if (!member.is_protected && !isRowPending) {
                           toggleSelection(member.id, !isChecked)
                         }
                       }}
-                      className={cn(!member.is_protected && 'cursor-pointer')}
+                      className={cn(
+                        !member.is_protected && 'cursor-pointer',
+                        isRowPending && 'bg-primary/5 opacity-80 transition-opacity',
+                      )}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={isChecked}
-                          disabled={member.is_protected}
+                          disabled={member.is_protected || isRowPending}
                           onCheckedChange={(checked) => toggleSelection(member.id, checked === true)}
                           aria-label={member.name}
                         />
@@ -675,29 +712,51 @@ export function ExternalTeamPage() {
 
                       <TableCell className="whitespace-normal">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {member.status_in_company === 'global_default' && (
-                            <Badge variant="outline" className="text-xs">
-                              {t('organizationPage.externalTeam.statusGlobal', {
-                                defaultValue: 'Padrão Global',
-                              })}
-                            </Badge>
-                          )}
-                          {member.status_in_company === 'customized' && (
+                          {isRowPending ? (
                             <Badge
-                              variant="secondary"
-                              className="bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                              variant="outline"
+                              className="gap-1.5 border-primary/40 bg-primary/10 text-xs text-primary"
                             >
-                              {t('organizationPage.externalTeam.statusCustomized', {
-                                defaultValue: 'Personalizado nesta empresa',
-                              })}
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              {rowPendingMode === 'hide_salaries'
+                                ? t('organizationPage.externalTeam.hidingSalariesProgress', {
+                                    defaultValue: 'A ocultar salários…',
+                                  })
+                                : rowPendingMode === 'restore_default'
+                                  ? t('organizationPage.externalTeam.restoringDefaultProgress', {
+                                      defaultValue: 'A restaurar padrão…',
+                                    })
+                                  : t('organizationPage.externalTeam.blockingProgress', {
+                                      defaultValue: 'A bloquear acesso…',
+                                    })}
                             </Badge>
-                          )}
-                          {member.status_in_company === 'blocked' && (
-                            <Badge variant="destructive">
-                              {t('organizationPage.externalTeam.statusBlocked', {
-                                defaultValue: 'Bloqueado nesta empresa',
-                              })}
-                            </Badge>
+                          ) : (
+                            <>
+                              {member.status_in_company === 'global_default' && (
+                                <Badge variant="outline" className="text-xs">
+                                  {t('organizationPage.externalTeam.statusGlobal', {
+                                    defaultValue: 'Padrão Global',
+                                  })}
+                                </Badge>
+                              )}
+                              {member.status_in_company === 'customized' && (
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                                >
+                                  {t('organizationPage.externalTeam.statusCustomized', {
+                                    defaultValue: 'Personalizado nesta empresa',
+                                  })}
+                                </Badge>
+                              )}
+                              {member.status_in_company === 'blocked' && (
+                                <Badge variant="destructive">
+                                  {t('organizationPage.externalTeam.statusBlocked', {
+                                    defaultValue: 'Bloqueado nesta empresa',
+                                  })}
+                                </Badge>
+                              )}
+                            </>
                           )}
                           {member.permission_group_name && (
                             <span className="text-xs text-muted-foreground">
@@ -716,7 +775,22 @@ export function ExternalTeamPage() {
                       </TableCell>
 
                       <TableCell>
-                        {member.status_in_company === 'blocked' ? (
+                        {isRowPending &&
+                        (rowPendingMode === 'hide_salaries' || rowPendingMode === 'restore_default') ? (
+                          <Badge
+                            variant="outline"
+                            className="gap-1.5 border-primary/40 bg-primary/10 text-xs text-primary"
+                          >
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {rowPendingMode === 'hide_salaries'
+                              ? t('organizationPage.externalTeam.hidingSalariesProgress', {
+                                  defaultValue: 'A ocultar salários…',
+                                })
+                              : t('organizationPage.externalTeam.restoringDefaultProgress', {
+                                  defaultValue: 'A restaurar padrão…',
+                                })}
+                          </Badge>
+                        ) : member.status_in_company === 'blocked' ? (
                           <span className="text-xs text-muted-foreground">—</span>
                         ) : member.has_salary_access ? (
                           <Badge
@@ -756,6 +830,7 @@ export function ExternalTeamPage() {
                               type="button"
                               variant="ghost"
                               size="icon-sm"
+                              disabled={updateExternalMutation.isPending}
                               onClick={() => openCustomizeModal([member])}
                               title={t('organizationPage.externalTeam.customizeBtn', {
                                 defaultValue: 'Personalizar nesta empresa',
@@ -776,7 +851,11 @@ export function ExternalTeamPage() {
                                 })}
                                 className="text-muted-foreground hover:text-amber-600"
                               >
-                                <EyeOff className="h-4 w-4" />
+                                {isRowPending && rowPendingMode === 'hide_salaries' ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+                                ) : (
+                                  <EyeOff className="h-4 w-4" />
+                                )}
                               </Button>
                             )}
                             {member.status_in_company !== 'global_default' && (
@@ -791,7 +870,11 @@ export function ExternalTeamPage() {
                                 })}
                                 className="text-muted-foreground hover:text-emerald-600"
                               >
-                                <RotateCcw className="h-4 w-4" />
+                                {isRowPending && rowPendingMode === 'restore_default' ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                                ) : (
+                                  <RotateCcw className="h-4 w-4" />
+                                )}
                               </Button>
                             )}
                             {member.status_in_company !== 'blocked' && (
@@ -806,7 +889,11 @@ export function ExternalTeamPage() {
                                 })}
                                 className="text-muted-foreground hover:text-destructive"
                               >
-                                <Ban className="h-4 w-4" />
+                                {isRowPending && rowPendingMode === 'block' ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                                ) : (
+                                  <Ban className="h-4 w-4" />
+                                )}
                               </Button>
                             )}
                           </div>
@@ -1079,11 +1166,16 @@ export function ExternalTeamPage() {
                 {t('organizationPage.common.cancel')}
               </Button>
               <Button type="submit" disabled={createPlatformAdminMutation.isPending}>
-                {createPlatformAdminMutation.isPending
-                  ? t('organizationPage.common.saving')
-                  : t('organizationPage.externalTeam.createSubmit', {
-                      defaultValue: 'Criar utilizador',
-                    })}
+                {createPlatformAdminMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    {t('organizationPage.common.saving')}
+                  </>
+                ) : (
+                  t('organizationPage.externalTeam.createSubmit', {
+                    defaultValue: 'Criar utilizador',
+                  })
+                )}
               </Button>
             </DialogFooter>
           </form>

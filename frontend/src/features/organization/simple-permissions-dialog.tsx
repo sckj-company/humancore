@@ -5,6 +5,7 @@ import {
   Eye,
   KeyRound,
   Layers,
+  Loader2,
   Lock,
   Mail,
   Search,
@@ -398,6 +399,7 @@ function SimplePermissionsDialogBody({
   const [autoCreateAccounts, setAutoCreateAccounts] = useState(false)
   const [defaultPassword, setDefaultPassword] = useState('')
   const [employeeEmails, setEmployeeEmails] = useState<Record<number, string>>({})
+  const [savingAction, setSavingAction] = useState<'save' | 'clear' | 'revert' | null>(null)
 
   const moduleBuckets = useMemo<ModuleBucket[]>(() => {
     const byGroup = new Map<string, { actions: PermissionCatalogItem[]; fields: PermissionCatalogItem[] }>()
@@ -856,7 +858,7 @@ function SimplePermissionsDialogBody({
     )
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const cleanedEmails: Record<number, string> = {}
     if (mode === 'employees' && autoCreateAccounts) {
       for (const emp of missingEmailEmployees) {
@@ -865,42 +867,57 @@ function SimplePermissionsDialogBody({
       }
     }
 
-    onSave({
-      permissions: selectedGroupId ? null : selectedPermissions,
-      permission_group_id: selectedGroupId,
-      role_name: roleName,
-      ...(isEntityRuleMode
-        ? { apply_to_existing_overrides: applyToExistingOverrides }
-        : mode === 'external'
-          ? {
-              department_ids:
-                selectedDeptScopeIds.length > 0 ? selectedDeptScopeIds : null,
-            }
-          : {
-              scope_to_department: canScopeToDepartment ? scopeToDepartment : false,
-              auto_create_accounts: autoCreateAccounts,
-              default_password: autoCreateAccounts && defaultPassword ? defaultPassword : null,
-              ...(Object.keys(cleanedEmails).length > 0 ? { employee_emails: cleanedEmails } : {}),
-            }),
-    })
+    setSavingAction('save')
+    try {
+      await onSave({
+        permissions: selectedGroupId ? null : selectedPermissions,
+        permission_group_id: selectedGroupId,
+        role_name: roleName,
+        ...(isEntityRuleMode
+          ? { apply_to_existing_overrides: applyToExistingOverrides }
+          : mode === 'external'
+            ? {
+                department_ids:
+                  selectedDeptScopeIds.length > 0 ? selectedDeptScopeIds : null,
+              }
+            : {
+                scope_to_department: canScopeToDepartment ? scopeToDepartment : false,
+                auto_create_accounts: autoCreateAccounts,
+                default_password: autoCreateAccounts && defaultPassword ? defaultPassword : null,
+                ...(Object.keys(cleanedEmails).length > 0 ? { employee_emails: cleanedEmails } : {}),
+              }),
+      })
+    } finally {
+      setSavingAction(null)
+    }
   }
 
-  const handleClearDepartment = () => {
-    onSave({
-      permissions: [],
-      permission_group_id: null,
-      role_name: null,
-      apply_to_existing_overrides: applyToExistingOverrides,
-    })
+  const handleClearDepartment = async () => {
+    setSavingAction('clear')
+    try {
+      await onSave({
+        permissions: [],
+        permission_group_id: null,
+        role_name: null,
+        apply_to_existing_overrides: applyToExistingOverrides,
+      })
+    } finally {
+      setSavingAction(null)
+    }
   }
 
-  const handleUseDepartmentPermissions = () => {
-    onSave({
-      permissions: null,
-      permission_group_id: null,
-      role_name: null,
-      clear_individual: true,
-    })
+  const handleUseDepartmentPermissions = async () => {
+    setSavingAction('revert')
+    try {
+      await onSave({
+        permissions: null,
+        permission_group_id: null,
+        role_name: null,
+        clear_individual: true,
+      })
+    } finally {
+      setSavingAction(null)
+    }
   }
 
   const hasInvalidMissingEmail =
@@ -1487,6 +1504,9 @@ function SimplePermissionsDialogBody({
                 disabled={isSaving}
                 onClick={handleClearDepartment}
               >
+                {isSaving && savingAction === 'clear' && (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                )}
                 {t('organizationPage.permissions.clearDepartment', {
                   defaultValue: 'Remover regra do departamento',
                 })}
@@ -1502,6 +1522,9 @@ function SimplePermissionsDialogBody({
                 disabled={isSaving}
                 onClick={handleClearDepartment}
               >
+                {isSaving && savingAction === 'clear' && (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                )}
                 {t('organizationPage.permissions.clearPosition', {
                   defaultValue: 'Remover regra do cargo',
                 })}
@@ -1517,17 +1540,28 @@ function SimplePermissionsDialogBody({
                 disabled={isSaving}
                 onClick={handleUseDepartmentPermissions}
               >
-                {mode === 'external'
-                  ? t('organizationPage.externalTeam.restoreDefaultBtn', {
-                      defaultValue: 'Usar padrão global',
-                    })
-                  : position && !department
-                    ? t('organizationPage.permissions.usePositionDefault', {
-                        defaultValue: 'Usar permissões do cargo',
-                      })
-                    : t('organizationPage.permissions.useDepartmentDefault', {
-                        defaultValue: 'Usar permissões do departamento',
-                      })}
+                {isSaving && savingAction === 'revert' ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    {mode === 'external'
+                      ? t('organizationPage.externalTeam.restoringDefaultProgress', {
+                          defaultValue: 'A restaurar padrão…',
+                        })
+                      : t('organizationPage.common.saving')}
+                  </>
+                ) : mode === 'external' ? (
+                  t('organizationPage.externalTeam.restoreDefaultBtn', {
+                    defaultValue: 'Usar padrão global',
+                  })
+                ) : position && !department ? (
+                  t('organizationPage.permissions.usePositionDefault', {
+                    defaultValue: 'Usar permissões do cargo',
+                  })
+                ) : (
+                  t('organizationPage.permissions.useDepartmentDefault', {
+                    defaultValue: 'Usar permissões do departamento',
+                  })
+                )}
               </Button>
             )}
           </div>
@@ -1546,9 +1580,14 @@ function SimplePermissionsDialogBody({
               onClick={handleSave}
               disabled={isSaving || disableSaveForAccountCreation}
             >
-              {isSaving
-                ? t('organizationPage.common.saving')
-                : t('organizationPage.permissions.saveButton', { defaultValue: 'Guardar permissões' })}
+              {isSaving && (savingAction === 'save' || savingAction === null) ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  {t('organizationPage.common.saving')}
+                </>
+              ) : (
+                t('organizationPage.permissions.saveButton', { defaultValue: 'Guardar permissões' })
+              )}
             </Button>
           </div>
         </DialogFooter>

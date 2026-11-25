@@ -2282,9 +2282,11 @@
     "pageDescription": "Monitorize a plataforma, gira empresas (tenants), utilizadores e permissões",
     "newCompany": "Nova empresa",
     "kpiCompanies": "Total de Empresas ({{active}} ativas)",
+    "kpiActiveCompanies": "Empresas Ativas",
     "kpiEmployees": "Funcionários ({{active}} ativos)",
     "kpiUsers": "Utilizadores ({{superAdmins}} super-admins)",
     "kpiSuspended": "Empresas Suspensas",
+    "kpiInactiveAndSuspended": "Empresas Inativas e Suspensas",
     "trendTitle": "Crescimento de Empresas (12 meses)",
     "trendDescription": "Novas empresas registadas por mês",
     "companiesSeries": "Empresas",
@@ -2299,7 +2301,8 @@
     "tenantStatuses": {
       "active": "Ativa",
       "inactive": "Inativa",
-      "suspended": "Suspensa"
+      "suspended": "Suspensa",
+      "inactiveOrSuspended": "Inativas e suspensas"
     },
     "taxIdShort": "NIF",
     "locationLabel": "Localização",
@@ -2945,6 +2948,9 @@
       "hideSalariesBtn": "Ocultar salários",
       "restoreDefaultBtn": "Usar padrão global",
       "blockBtn": "Bloquear acesso nesta empresa",
+      "hidingSalariesProgress": "A ocultar salários…",
+      "restoringDefaultProgress": "A restaurar padrão…",
+      "blockingProgress": "A bloquear acesso…",
       "colUser": "Utilizador",
       "colOrigin": "Origem / Perfil",
       "colRule": "Regra nesta empresa",

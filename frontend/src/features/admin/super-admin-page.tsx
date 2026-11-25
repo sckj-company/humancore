@@ -210,7 +210,9 @@ interface SuperAdminDashboardData {
   kpis: {
     total_tenants: number
     active_tenants: number
+    inactive_tenants?: number
     suspended_tenants: number
+    inactive_or_suspended_tenants?: number
     total_employees: number
     active_employees: number
     total_users: number
@@ -352,13 +354,15 @@ export function SuperAdminPage() {
   const urlStatus = searchParams.get('status')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState(
-    urlStatus && ['all', 'active', 'inactive', 'suspended'].includes(urlStatus) ? urlStatus : 'all',
+    urlStatus && ['all', 'active', 'inactive', 'suspended', 'inactive_or_suspended'].includes(urlStatus)
+      ? urlStatus
+      : 'all',
   )
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(20)
 
   useEffect(() => {
-    if (urlStatus && ['all', 'active', 'inactive', 'suspended'].includes(urlStatus)) {
+    if (urlStatus && ['all', 'active', 'inactive', 'suspended', 'inactive_or_suspended'].includes(urlStatus)) {
       setStatusFilter(urlStatus)
       setPage(1)
     }
@@ -952,6 +956,12 @@ export function SuperAdminPage() {
     ...(!editing ? [{ id: 'admin' as const, label: t('superAdminPage.formTabs.admin') }] : []),
   ]
 
+  const activeTenantsCount = dashboardData?.kpis.active_tenants ?? 0
+  const inactiveAndSuspendedCount =
+    dashboardData?.kpis.inactive_or_suspended_tenants ??
+    (dashboardData?.kpis.inactive_tenants ?? dashboardData?.by_status?.inactive ?? 0) +
+      (dashboardData?.kpis.suspended_tenants ?? dashboardData?.by_status?.suspended ?? 0)
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -979,10 +989,14 @@ export function SuperAdminPage() {
       {/* ── Dashboard do Super Admin ─────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label={t('superAdminPage.kpiCompanies', { active: dashboardData?.kpis.active_tenants ?? 0 })}
-          value={dashboardData?.kpis.total_tenants ?? tenants?.meta?.total ?? 0}
+          label={t('superAdminPage.kpiActiveCompanies', { defaultValue: 'Empresas Ativas' })}
+          value={activeTenantsCount}
           icon={Building2}
           accent="primary"
+          onClick={() => {
+            setStatusFilter('active')
+            setPage(1)
+          }}
         />
         <KpiCard
           label={t('superAdminPage.kpiEmployees', { active: dashboardData?.kpis.active_employees ?? 0 })}
@@ -997,10 +1011,16 @@ export function SuperAdminPage() {
           accent="info"
         />
         <KpiCard
-          label={t('superAdminPage.kpiSuspended')}
-          value={dashboardData?.kpis.suspended_tenants ?? 0}
+          label={t('superAdminPage.kpiInactiveAndSuspended', {
+            defaultValue: 'Empresas Inativas e Suspensas',
+          })}
+          value={inactiveAndSuspendedCount}
           icon={AlertTriangle}
-          accent={(dashboardData?.kpis.suspended_tenants ?? 0) > 0 ? 'warning' : 'neutral'}
+          accent={inactiveAndSuspendedCount > 0 ? 'warning' : 'neutral'}
+          onClick={() => {
+            setStatusFilter('inactive_or_suspended')
+            setPage(1)
+          }}
         />
       </div>
 
@@ -1128,6 +1148,11 @@ export function SuperAdminPage() {
                   <option value="active">{t('superAdminPage.tenantStatuses.active')}</option>
                   <option value="inactive">{t('superAdminPage.tenantStatuses.inactive')}</option>
                   <option value="suspended">{t('superAdminPage.tenantStatuses.suspended')}</option>
+                  <option value="inactive_or_suspended">
+                    {t('superAdminPage.tenantStatuses.inactiveOrSuspended', {
+                      defaultValue: 'Inativas e suspensas',
+                    })}
+                  </option>
                 </select>
               </div>
 
