@@ -77,7 +77,7 @@ import {
   useUpdateDepartment,
   useUpdateDepartmentPermissions,
 } from './api'
-import { OrgChartView, type OrgChartNode } from './org-chart-view'
+import { OrgChartView, type OrgChartMovePayload, type OrgChartNode } from './org-chart-view'
 import { SimplePermissionsDialog, type SimplePermissionsSavePayload } from './simple-permissions-dialog'
 import { AssignEmployeesDialog, type AssignEmployeesSubmitPayload } from './assign-employees-dialog'
 import { getApiErrorMessage } from '@/lib/api'
@@ -357,6 +357,43 @@ export function DepartmentsPage() {
     setViewMode('columns')
   }
 
+  const handleMoveDepartment = async ({
+    nodeId,
+    newParentId,
+    newLevel,
+  }: OrgChartMovePayload) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: nodeId,
+        data: {
+          parent_id: newParentId,
+          level: newLevel,
+          cascade_levels: true,
+        },
+      })
+      toast.success(
+        newParentId === null
+          ? t('organizationPage.orgChart.movedToTopToast', {
+              level: newLevel,
+              defaultValue: `Movido para o Nível ${newLevel} (topo).`,
+            })
+          : t('organizationPage.orgChart.movedToParentToast', {
+              level: newLevel,
+              defaultValue: `Hierarquia atualizada para o Nível ${newLevel}.`,
+            }),
+      )
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(
+          err,
+          t('organizationPage.orgChart.moveError', {
+            defaultValue: 'Não foi possível reorganizar a hierarquia.',
+          }),
+        ),
+      )
+    }
+  }
+
   const allSelected =
     departmentEmployees.length > 0 && visibleSelectedEmployeeIds.length === departmentEmployees.length
 
@@ -541,6 +578,18 @@ export function DepartmentsPage() {
         </Badge>
       )
     }
+    if (emp.permission_source === 'department_and_position') {
+      return (
+        <Badge
+          variant="secondary"
+          className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+        >
+          {t('organizationPage.permissions.source.department_and_position', {
+            defaultValue: 'Depto + Cargo',
+          })}
+        </Badge>
+      )
+    }
     if (emp.permission_source === 'department') {
       return (
         <Badge
@@ -548,6 +597,16 @@ export function DepartmentsPage() {
           className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
         >
           {t('organizationPage.permissions.source.department', { defaultValue: 'Do departamento' })}
+        </Badge>
+      )
+    }
+    if (emp.permission_source === 'position') {
+      return (
+        <Badge
+          variant="secondary"
+          className="bg-sky-500/15 text-sky-700 dark:text-sky-300"
+        >
+          {t('organizationPage.permissions.source.position', { defaultValue: 'Do cargo' })}
         </Badge>
       )
     }
@@ -669,6 +728,8 @@ export function DepartmentsPage() {
             const dept = departments.find((d) => d.id === node.id)
             if (dept) setDeleteDepartmentTarget(dept)
           }}
+          onMoveNode={handleMoveDepartment}
+          isMoving={updateMutation.isPending}
           hintText={t('organizationPage.departments.orgChartHint', {
             defaultValue: 'Clique num departamento para gerir os seus funcionários e permissões.',
           })}
@@ -678,11 +739,11 @@ export function DepartmentsPage() {
         />
       )}
 
-      {/* Vista em Colunas 20% / 80% */}
+      {/* Vista em Colunas 25% / 75% */}
       {departments && filtered.length > 0 && viewMode === 'columns' && (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          {/* Coluna Esquerda (20%) - Lista de Departamentos */}
-          <Card className="w-full lg:w-[20%] lg:min-w-[220px] lg:shrink-0">
+          {/* Coluna Esquerda (25%) - Lista de Departamentos */}
+          <Card className="w-full lg:w-[25%] lg:min-w-[240px] lg:shrink-0">
             <CardContent className="p-2.5">
               <div className="mb-2 flex items-center justify-between px-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -802,7 +863,7 @@ export function DepartmentsPage() {
             </CardContent>
           </Card>
 
-          {/* Coluna Direita (80%) - Detalhe do Departamento + Tabela de Funcionários */}
+          {/* Coluna Direita (75%) - Detalhe do Departamento + Tabela de Funcionários */}
           <div className="w-full min-w-0 space-y-4 lg:flex-1">
             {activeDeptDetail && (
               <>

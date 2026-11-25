@@ -9,6 +9,7 @@ use App\Http\Resources\V1\DepartmentResource;
 use App\Models\Department;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DepartmentController extends BaseController
 {
@@ -78,6 +79,8 @@ class DepartmentController extends BaseController
         $this->authorize('update', $department);
 
         $validated = $request->validated();
+        $cascadeLevels = (bool) ($validated['cascade_levels'] ?? false);
+        unset($validated['cascade_levels']);
 
         if (array_key_exists('parent_id', $validated) && $validated['parent_id'] !== null) {
             $parentId = (int) $validated['parent_id'];
@@ -86,11 +89,28 @@ class DepartmentController extends BaseController
             }
         }
 
+        if ($cascadeLevels && (! array_key_exists('level', $validated) || $validated['level'] === null)) {
+            if (array_key_exists('parent_id', $validated)) {
+                if ($validated['parent_id'] !== null) {
+                    $parentLevel = (int) Department::query()->whereKey($validated['parent_id'])->value('level');
+                    $validated['level'] = min(20, ($parentLevel ?: 1) + 1);
+                } else {
+                    $validated['level'] = 1;
+                }
+            }
+        }
+
         if (array_key_exists('level', $validated) && $validated['level'] === null) {
             $validated['level'] = $department->level ?? 1;
         }
 
-        $department->update($validated);
+        DB::transaction(function () use ($department, $validated, $cascadeLevels): void {
+            $department->update($validated);
+            if ($cascadeLevels) {
+                $this->cascadeDescendantLevels($department->id, (int) ($department->level ?? 1));
+            }
+        });
+
         $fresh = $department->fresh([
             'branch:id,name',
             'manager:id,first_name,last_name',
@@ -138,5 +158,33 @@ class DepartmentController extends BaseController
         }
 
         return false;
+    }
+
+    private function cascadeDescendantLevels(int $rootId, int $rootLevel): void
+    {
+        $queue = [[$rootId, $rootLevel]];
+        $visited = [$rootId => true];
+
+        while ($queue !== []) {
+            [$parentId, $parentLevel] = array_shift($queue);
+
+            $children = Department::query()
+                ->where('parent_id', $parentId)
+                ->get(['id', 'level']);
+
+            foreach ($children as $child) {
+                if (isset($visited[$child->id])) {
+                    continue;
+                }
+                $visited[$child->id] = true;
+
+                $targetLevel = min(20, $parentLevel + 1);
+                if ((int) ($child->level ?? 1) !== $targetLevel) {
+                    $child->update(['level' => $targetLevel]);
+                }
+
+                $queue[] = [(int) $child->id, $targetLevel];
+            }
+        }
     }
 }

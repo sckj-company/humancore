@@ -1,6 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ZoomIn, ZoomOut, RotateCcw, Pencil, Trash2, Users, Shield, ArrowRight } from 'lucide-react'
+import {
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Pencil,
+  Trash2,
+  Users,
+  Shield,
+  ArrowRight,
+  GripVertical,
+  ArrowUpToLine,
+  Loader2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -20,6 +32,18 @@ export interface OrgChartNode {
   accentClass?: string
 }
 
+export interface OrgChartMovePayload {
+  nodeId: number
+  newParentId: number | null
+  newLevel: number
+}
+
+type DropTargetState =
+  | { kind: 'root' }
+  | { kind: 'node'; id: number }
+  | { kind: 'band'; level: number }
+  | null
+
 interface TreeEntry {
   node: OrgChartNode
   children: TreeEntry[]
@@ -38,6 +62,17 @@ function getLevelBadgeClass(level: number): string {
   return LEVEL_BADGE_COLORS[index]
 }
 
+interface NodeDragContext {
+  canDrag: boolean
+  draggingId: number | null
+  invalidDropIds: Set<number>
+  dropTarget: DropTargetState
+  setDropTarget: React.Dispatch<React.SetStateAction<DropTargetState>>
+  onDragStartNode: (e: DragEvent<HTMLDivElement>, node: OrgChartNode) => void
+  onDragEndNode: () => void
+  onDropOnNode: (e: DragEvent<HTMLDivElement>, targetNode: OrgChartNode) => void
+}
+
 function OrgNodeCard({
   node,
   selectedId,
@@ -45,6 +80,7 @@ function OrgNodeCard({
   onEditNode,
   onDeleteNode,
   selectHint,
+  dragContext,
 }: {
   node: OrgChartNode
   selectedId?: number | null
@@ -52,15 +88,67 @@ function OrgNodeCard({
   onEditNode?: (node: OrgChartNode) => void
   onDeleteNode?: (node: OrgChartNode) => void
   selectHint?: string
+  dragContext: NodeDragContext
 }) {
   const { t } = useTranslation()
   const isSelected = selectedId === node.id
+  const {
+    canDrag,
+    draggingId,
+    invalidDropIds,
+    dropTarget,
+    setDropTarget,
+    onDragStartNode,
+    onDragEndNode,
+    onDropOnNode,
+  } = dragContext
+
+  const isDragging = draggingId === node.id
+  const isInvalidTarget = draggingId !== null && invalidDropIds.has(node.id)
+  const isValidDropTarget =
+    draggingId !== null && !invalidDropIds.has(node.id)
+  const isDropHovered =
+    isValidDropTarget && dropTarget?.kind === 'node' && dropTarget.id === node.id
+  const nextLevel = Math.min(20, (node.level || 1) + 1)
 
   return (
     <div
       role={onSelectNode ? 'button' : undefined}
       tabIndex={onSelectNode ? 0 : undefined}
-      onClick={() => onSelectNode?.(node)}
+      draggable={canDrag}
+      onDragStart={(e) => {
+        if (canDrag) onDragStartNode(e, node)
+      }}
+      onDragEnd={onDragEndNode}
+      onDragOver={(e) => {
+        if (!canDrag || draggingId === null) return
+        if (isInvalidTarget) {
+          e.dataTransfer.dropEffect = 'none'
+          return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        e.dataTransfer.dropEffect = 'move'
+        setDropTarget((prev) =>
+          prev?.kind === 'node' && prev.id === node.id ? prev : { kind: 'node', id: node.id },
+        )
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setDropTarget((prev) =>
+            prev?.kind === 'node' && prev.id === node.id ? null : prev,
+          )
+        }
+      }}
+      onDrop={(e) => {
+        if (!canDrag) return
+        onDropOnNode(e, node)
+      }}
+      onClick={() => {
+        if (draggingId === null) {
+          onSelectNode?.(node)
+        }
+      }}
       onKeyDown={(e) => {
         if (onSelectNode && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault()
@@ -68,19 +156,29 @@ function OrgNodeCard({
         }
       }}
       className={cn(
-        'group relative w-[228px] rounded-xl border bg-card p-3.5 text-left shadow-xs transition-all',
-        onSelectNode && 'cursor-pointer hover:border-primary/60 hover:shadow-md',
-        isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-border',
+        'group relative w-[228px] rounded-xl border bg-card p-3.5 text-left shadow-xs transition-all select-none',
+        canDrag && 'cursor-grab active:cursor-grabbing',
+        onSelectNode && !canDrag && 'cursor-pointer',
+        onSelectNode && !isDragging && 'hover:border-primary/60 hover:shadow-md',
+        isSelected && !isDropHovered ? 'border-primary ring-2 ring-primary/20' : 'border-border',
         node.isInactive && 'opacity-65',
+        isDragging && 'scale-[0.98] border-dashed border-primary/60 opacity-40',
+        isInvalidTarget && !isDragging && 'opacity-55',
+        isDropHovered && 'scale-[1.02] border-primary bg-primary/10 ring-2 ring-primary shadow-md',
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <Badge
-          variant="outline"
-          className={cn('text-[10px] font-semibold', getLevelBadgeClass(node.level))}
-        >
-          {t('organizationPage.orgChart.levelBadge', { level: node.level })}
-        </Badge>
+        <div className="flex items-center gap-1">
+          {canDrag && (
+            <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground" />
+          )}
+          <Badge
+            variant="outline"
+            className={cn('text-[10px] font-semibold', getLevelBadgeClass(node.level))}
+          >
+            {t('organizationPage.orgChart.levelBadge', { level: node.level })}
+          </Badge>
+        </div>
 
         <div className="flex items-center gap-0.5">
           {node.badgeText && (
@@ -137,24 +235,33 @@ function OrgNodeCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <Users className="h-3 w-3 shrink-0" />
-          {node.employeeCount ?? 0}
-        </span>
+      {isDropHovered ? (
+        <div className="mt-3 rounded-md border border-dashed border-primary/60 bg-primary/10 px-2 py-1 text-center text-[11px] font-medium text-primary">
+          {t('organizationPage.orgChart.dropAsChild', {
+            level: nextLevel,
+            defaultValue: `Soltar aqui → Nível ${nextLevel}`,
+          })}
+        </div>
+      ) : (
+        <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Users className="h-3 w-3 shrink-0" />
+            {node.employeeCount ?? 0}
+          </span>
 
-        {typeof node.permissionsCount === 'number' && node.permissionsCount > 0 ? (
-          <span className="inline-flex items-center gap-1 font-medium text-primary">
-            <Shield className="h-3 w-3 shrink-0" />
-            {node.permissionsCount}
-          </span>
-        ) : selectHint ? (
-          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-            {selectHint}
-            <ArrowRight className="h-3 w-3" />
-          </span>
-        ) : null}
-      </div>
+          {typeof node.permissionsCount === 'number' && node.permissionsCount > 0 ? (
+            <span className="inline-flex items-center gap-1 font-medium text-primary">
+              <Shield className="h-3 w-3 shrink-0" />
+              {node.permissionsCount}
+            </span>
+          ) : selectHint ? (
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+              {selectHint}
+              <ArrowRight className="h-3 w-3" />
+            </span>
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }
@@ -166,6 +273,7 @@ function OrgTreeBranch({
   onEditNode,
   onDeleteNode,
   selectHint,
+  dragContext,
 }: {
   entry: TreeEntry
   selectedId?: number | null
@@ -173,6 +281,7 @@ function OrgTreeBranch({
   onEditNode?: (node: OrgChartNode) => void
   onDeleteNode?: (node: OrgChartNode) => void
   selectHint?: string
+  dragContext: NodeDragContext
 }) {
   return (
     <div className="flex flex-col items-center">
@@ -183,6 +292,7 @@ function OrgTreeBranch({
         onEditNode={onEditNode}
         onDeleteNode={onDeleteNode}
         selectHint={selectHint}
+        dragContext={dragContext}
       />
 
       {entry.children.length > 0 && (
@@ -213,6 +323,7 @@ function OrgTreeBranch({
                     onEditNode={onEditNode}
                     onDeleteNode={onDeleteNode}
                     selectHint={selectHint}
+                    dragContext={dragContext}
                   />
                 </div>
               )
@@ -230,6 +341,8 @@ export function OrgChartView({
   onSelectNode,
   onEditNode,
   onDeleteNode,
+  onMoveNode,
+  isMoving = false,
   hintText,
   selectHint,
 }: {
@@ -238,11 +351,17 @@ export function OrgChartView({
   onSelectNode?: (node: OrgChartNode) => void
   onEditNode?: (node: OrgChartNode) => void
   onDeleteNode?: (node: OrgChartNode) => void
+  onMoveNode?: (payload: OrgChartMovePayload) => Promise<void> | void
+  isMoving?: boolean
   hintText?: string
   selectHint?: string
 }) {
   const { t } = useTranslation()
   const [zoom, setZoom] = useState(1)
+  const [draggingId, setDraggingId] = useState<number | null>(null)
+  const [dropTarget, setDropTarget] = useState<DropTargetState>(null)
+
+  const canDrag = Boolean(onMoveNode) && !isMoving
 
   const { hasParentLinks, treeRoots, levelBands } = useMemo(() => {
     const sorted = [...nodes].sort((a, b) => a.level - b.level || a.title.localeCompare(b.title))
@@ -294,13 +413,159 @@ export function OrgChartView({
     }
   }, [nodes])
 
+  const invalidDropIds = useMemo(() => {
+    const invalid = new Set<number>()
+    if (draggingId === null) return invalid
+    invalid.add(draggingId)
+
+    let added = true
+    while (added) {
+      added = false
+      for (const n of nodes) {
+        if (n.parentId != null && invalid.has(n.parentId) && !invalid.has(n.id)) {
+          invalid.add(n.id)
+          added = true
+        }
+      }
+    }
+    return invalid
+  }, [nodes, draggingId])
+
+  const parseDraggedId = (e: DragEvent): number | null => {
+    if (draggingId !== null) return draggingId
+    const raw = Number(e.dataTransfer.getData('text/plain'))
+    return Number.isFinite(raw) && raw > 0 ? raw : null
+  }
+
+  const handleDragStartNode = (e: DragEvent<HTMLDivElement>, node: OrgChartNode) => {
+    e.stopPropagation()
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(node.id))
+    setDraggingId(node.id)
+  }
+
+  const handleDragEndNode = () => {
+    setDraggingId(null)
+    setDropTarget(null)
+  }
+
+  const handleDropOnNode = (e: DragEvent<HTMLDivElement>, targetNode: OrgChartNode) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const draggedNodeId = parseDraggedId(e)
+    setDraggingId(null)
+    setDropTarget(null)
+
+    if (!onMoveNode || draggedNodeId === null || invalidDropIds.has(targetNode.id)) {
+      return
+    }
+
+    const draggedNode = nodes.find((n) => n.id === draggedNodeId)
+    const newLevel = Math.min(20, (targetNode.level || 1) + 1)
+
+    if (
+      draggedNode &&
+      (draggedNode.parentId ?? null) === targetNode.id &&
+      draggedNode.level === newLevel
+    ) {
+      return
+    }
+
+    onMoveNode({
+      nodeId: draggedNodeId,
+      newParentId: targetNode.id,
+      newLevel,
+    })
+  }
+
+  const handleDropOnRoot = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const draggedNodeId = parseDraggedId(e)
+    setDraggingId(null)
+    setDropTarget(null)
+
+    if (!onMoveNode || draggedNodeId === null) {
+      return
+    }
+
+    const draggedNode = nodes.find((n) => n.id === draggedNodeId)
+    if (draggedNode && (draggedNode.parentId ?? null) === null && draggedNode.level === 1) {
+      return
+    }
+
+    onMoveNode({
+      nodeId: draggedNodeId,
+      newParentId: null,
+      newLevel: 1,
+    })
+  }
+
+  const handleDropOnBand = (e: DragEvent<HTMLDivElement>, targetLevel: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const draggedNodeId = parseDraggedId(e)
+    setDraggingId(null)
+    setDropTarget(null)
+
+    if (!onMoveNode || draggedNodeId === null) {
+      return
+    }
+
+    const clampedLevel = Math.max(1, Math.min(20, targetLevel))
+    const draggedNode = nodes.find((n) => n.id === draggedNodeId)
+    if (draggedNode && (draggedNode.parentId ?? null) === null && draggedNode.level === clampedLevel) {
+      return
+    }
+
+    onMoveNode({
+      nodeId: draggedNodeId,
+      newParentId: null,
+      newLevel: clampedLevel,
+    })
+  }
+
+  const dragContext: NodeDragContext = {
+    canDrag,
+    draggingId,
+    invalidDropIds,
+    dropTarget,
+    setDropTarget,
+    onDragStartNode: handleDragStartNode,
+    onDragEndNode: handleDragEndNode,
+    onDropOnNode: handleDropOnNode,
+  }
+
+  const maxBandLevel = levelBands.length > 0 ? levelBands[levelBands.length - 1].level : 1
+  const nextBandLevel = Math.min(20, maxBandLevel + 1)
+
   return (
     <Card>
       <CardContent className="p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
-          <div className="text-xs text-muted-foreground">
-            {hintText ?? t('organizationPage.orgChart.defaultHint')}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>{hintText ?? t('organizationPage.orgChart.defaultHint')}</span>
+            {onMoveNode && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                <GripVertical className="h-3 w-3 text-muted-foreground" />
+                {t('organizationPage.orgChart.dragHint', {
+                  defaultValue: 'Arraste os cards para reorganizar níveis e hierarquia.',
+                })}
+              </span>
+            )}
+            {isMoving && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                {t('organizationPage.orgChart.updatingHierarchy', {
+                  defaultValue: 'A atualizar hierarquia…',
+                })}
+              </span>
+            )}
           </div>
+
           <div className="flex items-center gap-1">
             <Button
               type="button"
@@ -337,6 +602,34 @@ export function OrgChartView({
           </div>
         </div>
 
+        {/* Zona para promover ao Nível 1 (topo / sem superior) durante o arrasto */}
+        {canDrag && draggingId !== null && (
+          <div
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              setDropTarget((prev) => (prev?.kind === 'root' ? prev : { kind: 'root' }))
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setDropTarget((prev) => (prev?.kind === 'root' ? null : prev))
+              }
+            }}
+            onDrop={handleDropOnRoot}
+            className={cn(
+              'mb-4 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-3 text-xs font-medium transition-all',
+              dropTarget?.kind === 'root'
+                ? 'border-primary bg-primary/10 text-primary shadow-xs'
+                : 'border-border/80 bg-muted/30 text-muted-foreground',
+            )}
+          >
+            <ArrowUpToLine className="h-4 w-4 shrink-0" />
+            {t('organizationPage.orgChart.dropToTopLevel', {
+              defaultValue: 'Soltar aqui para promover ao Nível 1 (Topo / sem superior)',
+            })}
+          </div>
+        )}
+
         <div className="overflow-x-auto pb-4">
           <div
             className="min-w-max origin-top-left transition-transform duration-150"
@@ -353,37 +646,120 @@ export function OrgChartView({
                     onEditNode={onEditNode}
                     onDeleteNode={onDeleteNode}
                     selectHint={selectHint}
+                    dragContext={dragContext}
                   />
                 ))}
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2 px-4 py-2">
-                {levelBands.map((band, bandIdx) => (
-                  <div key={band.level} className="flex w-full flex-col items-center">
-                    {bandIdx > 0 && <div className="mb-2 h-6 w-px bg-border" />}
-                    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-5 py-4">
-                      <Badge
-                        variant="outline"
-                        className={cn('text-xs font-semibold', getLevelBadgeClass(band.level))}
+                {levelBands.map((band, bandIdx) => {
+                  const isBandHovered =
+                    canDrag &&
+                    draggingId !== null &&
+                    dropTarget?.kind === 'band' &&
+                    dropTarget.level === band.level
+
+                  return (
+                    <div key={band.level} className="flex w-full flex-col items-center">
+                      {bandIdx > 0 && <div className="mb-2 h-6 w-px bg-border" />}
+                      <div
+                        onDragOver={(e) => {
+                          if (!canDrag || draggingId === null) return
+                          e.preventDefault()
+                          e.dataTransfer.dropEffect = 'move'
+                          setDropTarget((prev) =>
+                            prev?.kind === 'band' && prev.level === band.level
+                              ? prev
+                              : { kind: 'band', level: band.level },
+                          )
+                        }}
+                        onDragLeave={(e) => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                            setDropTarget((prev) =>
+                              prev?.kind === 'band' && prev.level === band.level ? null : prev,
+                            )
+                          }
+                        }}
+                        onDrop={(e) => {
+                          if (canDrag) handleDropOnBand(e, band.level)
+                        }}
+                        className={cn(
+                          'flex flex-col items-center gap-3 rounded-xl border border-dashed px-5 py-4 transition-all',
+                          isBandHovered
+                            ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                            : 'border-border/80 bg-muted/20',
+                        )}
                       >
-                        {t('organizationPage.orgChart.levelBadge', { level: band.level })}
-                      </Badge>
-                      <div className="flex flex-wrap items-stretch justify-center gap-4">
-                        {band.items.map((node) => (
-                          <OrgNodeCard
-                            key={node.id}
-                            node={node}
-                            selectedId={selectedId}
-                            onSelectNode={onSelectNode}
-                            onEditNode={onEditNode}
-                            onDeleteNode={onDeleteNode}
-                            selectHint={selectHint}
-                          />
-                        ))}
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={cn('text-xs font-semibold', getLevelBadgeClass(band.level))}
+                          >
+                            {t('organizationPage.orgChart.levelBadge', { level: band.level })}
+                          </Badge>
+                          {isBandHovered && (
+                            <span className="text-[11px] font-medium text-primary">
+                              {t('organizationPage.orgChart.dropIntoLevel', {
+                                level: band.level,
+                                defaultValue: `Mover para Nível ${band.level}`,
+                              })}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-stretch justify-center gap-4">
+                          {band.items.map((node) => (
+                            <OrgNodeCard
+                              key={node.id}
+                              node={node}
+                              selectedId={selectedId}
+                              onSelectNode={onSelectNode}
+                              onEditNode={onEditNode}
+                              onDeleteNode={onDeleteNode}
+                              selectHint={selectHint}
+                              dragContext={dragContext}
+                            />
+                          ))}
+                        </div>
                       </div>
                     </div>
+                  )
+                })}
+
+                {canDrag && draggingId !== null && maxBandLevel < 20 && (
+                  <div className="flex w-full flex-col items-center">
+                    <div className="mb-2 h-6 w-px bg-border" />
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        setDropTarget((prev) =>
+                          prev?.kind === 'band' && prev.level === nextBandLevel
+                            ? prev
+                            : { kind: 'band', level: nextBandLevel },
+                        )
+                      }}
+                      onDragLeave={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                          setDropTarget((prev) =>
+                            prev?.kind === 'band' && prev.level === nextBandLevel ? null : prev,
+                          )
+                        }
+                      }}
+                      onDrop={(e) => handleDropOnBand(e, nextBandLevel)}
+                      className={cn(
+                        'flex min-w-[260px] items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-4 text-xs font-medium transition-all',
+                        dropTarget?.kind === 'band' && dropTarget.level === nextBandLevel
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border/70 bg-muted/20 text-muted-foreground',
+                      )}
+                    >
+                      {t('organizationPage.orgChart.dropNewLevel', {
+                        level: nextBandLevel,
+                        defaultValue: `+ Soltar aqui para Nível ${nextBandLevel}`,
+                      })}
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>

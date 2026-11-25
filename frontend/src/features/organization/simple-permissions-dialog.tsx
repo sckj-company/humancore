@@ -34,7 +34,11 @@ import type {
   DepartmentEmployeeItem,
   PermissionCatalogItem,
   PermissionGroupSummary,
+  Position,
+  PositionEmployeeItem,
 } from './api'
+
+type PermissionEmployeeItem = DepartmentEmployeeItem | PositionEmployeeItem
 
 type ModuleAccessLevel = 'none' | 'view' | 'manage' | 'full' | 'custom'
 type SimplePresetKey = 'employee' | 'teamManager' | 'hrOps' | 'payroll' | 'fullAccess'
@@ -194,9 +198,10 @@ function resolveModuleLevel(bucket: ModuleBucket, selectedSet: Set<string>): Mod
 }
 
 function getInitialDialogState(
-  mode: 'department' | 'employees',
-  department: Department | null,
-  selectedEmployees: DepartmentEmployeeItem[],
+  mode: 'department' | 'position' | 'employees',
+  department: Department | null | undefined,
+  position: Position | null | undefined,
+  selectedEmployees: PermissionEmployeeItem[],
   permissionGroups: PermissionGroupSummary[],
 ) {
   if (mode === 'department' && department) {
@@ -215,7 +220,25 @@ function getInitialDialogState(
     }
   }
 
+  if (mode === 'position' && position) {
+    const group = permissionGroups.find((g) => g.id === position.permission_group_id)
+    const initialPerms =
+      position.default_permissions && position.default_permissions.length > 0
+        ? position.default_permissions
+        : group?.permissions ?? []
+
+    return {
+      selectedPermissions: [...initialPerms],
+      selectedGroupId: position.permission_group_id ?? null,
+      roleName: position.default_role_name ?? null,
+      allowSensitiveData: initialPerms.some(isSensitiveField),
+      scopeToDepartment: false,
+    }
+  }
+
   const single = selectedEmployees.length === 1 ? selectedEmployees[0] : null
+  const targetDeptId = department?.id ?? position?.department_id ?? -1
+  const hasTargetDept = Boolean(department?.id || position?.department_id)
   if (single && single.has_user_account) {
     const initialPerms = single.effective_permissions ?? []
     return {
@@ -225,18 +248,19 @@ function getInitialDialogState(
       allowSensitiveData: initialPerms.some(isSensitiveField),
       scopeToDepartment:
         single.department_scope_ids.length > 0
-          ? single.department_scope_ids.includes(department?.id ?? -1)
-          : true,
+          ? single.department_scope_ids.includes(targetDeptId)
+          : hasTargetDept,
     }
   }
 
-  const deptPerms = department?.default_permissions ?? []
+  const targetRule = department ?? position
+  const inheritedPerms = targetRule?.default_permissions ?? []
   return {
-    selectedPermissions: [...deptPerms],
-    selectedGroupId: department?.permission_group_id ?? null,
-    roleName: department?.default_role_name ?? 'employee',
-    allowSensitiveData: deptPerms.some(isSensitiveField),
-    scopeToDepartment: true,
+    selectedPermissions: [...inheritedPerms],
+    selectedGroupId: targetRule?.permission_group_id ?? null,
+    roleName: targetRule?.default_role_name ?? 'employee',
+    allowSensitiveData: inheritedPerms.some(isSensitiveField),
+    scopeToDepartment: hasTargetDept,
   }
 }
 
@@ -245,6 +269,7 @@ export function SimplePermissionsDialog({
   onOpenChange,
   mode,
   department,
+  position,
   selectedEmployees,
   catalogPermissions,
   permissionGroups,
@@ -253,15 +278,16 @@ export function SimplePermissionsDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  mode: 'department' | 'employees'
-  department: Department | null
-  selectedEmployees: DepartmentEmployeeItem[]
+  mode: 'department' | 'position' | 'employees'
+  department?: Department | null
+  position?: Position | null
+  selectedEmployees: PermissionEmployeeItem[]
   catalogPermissions: PermissionCatalogItem[]
   permissionGroups: PermissionGroupSummary[]
   isSaving: boolean
   onSave: (payload: SimplePermissionsSavePayload) => Promise<void> | void
 }) {
-  const instanceKey = `${mode}-${department?.id ?? 'none'}-${selectedEmployees.map((e) => e.id).join(',')}`
+  const instanceKey = `${mode}-${department?.id ?? 'none'}-${position?.id ?? 'none'}-${selectedEmployees.map((e) => e.id).join(',')}`
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -271,6 +297,7 @@ export function SimplePermissionsDialog({
           onOpenChange={onOpenChange}
           mode={mode}
           department={department}
+          position={position}
           selectedEmployees={selectedEmployees}
           catalogPermissions={catalogPermissions}
           permissionGroups={permissionGroups}
@@ -286,6 +313,7 @@ function SimplePermissionsDialogBody({
   onOpenChange,
   mode,
   department,
+  position,
   selectedEmployees,
   catalogPermissions,
   permissionGroups,
@@ -293,9 +321,10 @@ function SimplePermissionsDialogBody({
   onSave,
 }: {
   onOpenChange: (open: boolean) => void
-  mode: 'department' | 'employees'
-  department: Department | null
-  selectedEmployees: DepartmentEmployeeItem[]
+  mode: 'department' | 'position' | 'employees'
+  department?: Department | null
+  position?: Position | null
+  selectedEmployees: PermissionEmployeeItem[]
   catalogPermissions: PermissionCatalogItem[]
   permissionGroups: PermissionGroupSummary[]
   isSaving: boolean
@@ -303,7 +332,7 @@ function SimplePermissionsDialogBody({
 }) {
   const { t } = useTranslation()
   const [initialState] = useState(() =>
-    getInitialDialogState(mode, department, selectedEmployees, permissionGroups),
+    getInitialDialogState(mode, department, position, selectedEmployees, permissionGroups),
   )
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>(initialState.selectedPermissions)
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(initialState.selectedGroupId)
@@ -762,6 +791,10 @@ function SimplePermissionsDialogBody({
     { level: 'full', label: t('superAdminPage.levelFull', { defaultValue: 'Total' }) },
   ]
 
+  const isEntityRuleMode = mode === 'department' || mode === 'position'
+  const scopeDepartmentName = department?.name ?? position?.department?.name ?? ''
+  const canScopeToDepartment = scopeDepartmentName.trim() !== ''
+
   const handleSave = () => {
     const cleanedEmails: Record<number, string> = {}
     if (mode === 'employees' && autoCreateAccounts) {
@@ -775,10 +808,10 @@ function SimplePermissionsDialogBody({
       permissions: selectedGroupId ? null : selectedPermissions,
       permission_group_id: selectedGroupId,
       role_name: roleName,
-      ...(mode === 'department'
+      ...(isEntityRuleMode
         ? { apply_to_existing_overrides: applyToExistingOverrides }
         : {
-            scope_to_department: scopeToDepartment,
+            scope_to_department: canScopeToDepartment ? scopeToDepartment : false,
             auto_create_accounts: autoCreateAccounts,
             default_password: autoCreateAccounts && defaultPassword ? defaultPassword : null,
             ...(Object.keys(cleanedEmails).length > 0 ? { employee_emails: cleanedEmails } : {}),
@@ -829,15 +862,20 @@ function SimplePermissionsDialogBody({
                   name: department?.name ?? '',
                   defaultValue: `Permissões do departamento: ${department?.name ?? ''}`,
                 })
-              : selectedEmployees.length === 1
-                ? t('organizationPage.permissions.singleEmployeeTitle', {
-                    name: selectedEmployees[0].full_name,
-                    defaultValue: `Permissões de ${selectedEmployees[0].full_name}`,
+              : mode === 'position'
+                ? t('organizationPage.permissions.positionTitle', {
+                    name: position?.title ?? '',
+                    defaultValue: `Permissões do cargo: ${position?.title ?? ''}`,
                   })
-                : t('organizationPage.permissions.multiEmployeesTitle', {
-                    count: selectedEmployees.length,
-                    defaultValue: `Atribuir permissões a ${selectedEmployees.length} funcionários`,
-                  })}
+                : selectedEmployees.length === 1
+                  ? t('organizationPage.permissions.singleEmployeeTitle', {
+                      name: selectedEmployees[0].full_name,
+                      defaultValue: `Permissões de ${selectedEmployees[0].full_name}`,
+                    })
+                  : t('organizationPage.permissions.multiEmployeesTitle', {
+                      count: selectedEmployees.length,
+                      defaultValue: `Atribuir permissões a ${selectedEmployees.length} funcionários`,
+                    })}
           </DialogTitle>
           <DialogDescription className="text-xs">
             {mode === 'department'
@@ -845,10 +883,15 @@ function SimplePermissionsDialogBody({
                   defaultValue:
                     'Escolha um perfil rápido ou defina os módulos abaixo. Os funcionários deste departamento herdam estas permissões automaticamente.',
                 })
-              : t('organizationPage.permissions.employeesDescription', {
-                  defaultValue:
-                    'Escolha um perfil rápido ou ajuste os módulos de acesso para os funcionários selecionados.',
-                })}
+              : mode === 'position'
+                ? t('organizationPage.permissions.positionDescription', {
+                    defaultValue:
+                      'Escolha um perfil rápido ou defina os módulos abaixo. Os funcionários com este cargo herdam estas permissões automaticamente.',
+                  })
+                : t('organizationPage.permissions.employeesDescription', {
+                    defaultValue:
+                      'Escolha um perfil rápido ou ajuste os módulos de acesso para os funcionários selecionados.',
+                  })}
           </DialogDescription>
         </DialogHeader>
 
@@ -1140,7 +1183,7 @@ function SimplePermissionsDialogBody({
           </div>
 
           {/* 4. Opções Contextuais */}
-          {mode === 'department' && (
+          {isEntityRuleMode && (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/20 px-3.5 py-2.5">
               <div className="flex items-start gap-2.5">
                 <Users className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -1168,30 +1211,32 @@ function SimplePermissionsDialogBody({
 
           {mode === 'employees' && (
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/20 px-3.5 py-2.5">
-                <div className="flex items-start gap-2.5">
-                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div>
-                    <Label htmlFor="scope-dept" className="text-xs font-medium">
-                      {t('organizationPage.permissions.scopeToDepartmentLabel', {
-                        name: department?.name ?? '',
-                        defaultValue: `Limitar visualização apenas ao departamento (${department?.name ?? ''})`,
-                      })}
-                    </Label>
-                    <p className="text-[11px] text-muted-foreground">
-                      {t('organizationPage.permissions.scopeToDepartmentDesc', {
-                        defaultValue:
-                          'Quando ativo, estes utilizadores só acedem aos dados deste departamento.',
-                      })}
-                    </p>
+              {canScopeToDepartment && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/20 px-3.5 py-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div>
+                      <Label htmlFor="scope-dept" className="text-xs font-medium">
+                        {t('organizationPage.permissions.scopeToDepartmentLabel', {
+                          name: scopeDepartmentName,
+                          defaultValue: `Limitar visualização apenas ao departamento (${scopeDepartmentName})`,
+                        })}
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t('organizationPage.permissions.scopeToDepartmentDesc', {
+                          defaultValue:
+                            'Quando ativo, estes utilizadores só acedem aos dados deste departamento.',
+                        })}
+                      </p>
+                    </div>
                   </div>
+                  <Switch
+                    id="scope-dept"
+                    checked={scopeToDepartment}
+                    onCheckedChange={setScopeToDepartment}
+                  />
                 </div>
-                <Switch
-                  id="scope-dept"
-                  checked={scopeToDepartment}
-                  onCheckedChange={setScopeToDepartment}
-                />
-              </div>
+              )}
 
               {missingAccountsCount > 0 && (
                 <div className="space-y-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
@@ -1314,6 +1359,21 @@ function SimplePermissionsDialogBody({
               </Button>
             )}
 
+            {mode === 'position' && (position?.effective_permissions_count ?? 0) > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs text-destructive hover:text-destructive"
+                disabled={isSaving}
+                onClick={handleClearDepartment}
+              >
+                {t('organizationPage.permissions.clearPosition', {
+                  defaultValue: 'Remover regra do cargo',
+                })}
+              </Button>
+            )}
+
             {canRevertToDepartment && (
               <Button
                 type="button"
@@ -1323,9 +1383,13 @@ function SimplePermissionsDialogBody({
                 disabled={isSaving}
                 onClick={handleUseDepartmentPermissions}
               >
-                {t('organizationPage.permissions.useDepartmentDefault', {
-                  defaultValue: 'Usar permissões do departamento',
-                })}
+                {position && !department
+                  ? t('organizationPage.permissions.usePositionDefault', {
+                      defaultValue: 'Usar permissões do cargo',
+                    })
+                  : t('organizationPage.permissions.useDepartmentDefault', {
+                      defaultValue: 'Usar permissões do departamento',
+                    })}
               </Button>
             )}
           </div>

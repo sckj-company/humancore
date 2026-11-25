@@ -163,14 +163,14 @@ class User extends Authenticatable
             $employee = Employee::withoutGlobalScopes()
                 ->where('id', $this->employee_id)
                 ->where('tenant_id', $resolvedTenantId)
-                ->first(['id', 'tenant_id', 'department_id']);
+                ->first(['id', 'tenant_id', 'department_id', 'position_id']);
         }
 
         if (! $employee) {
             $employee = Employee::withoutGlobalScopes()
                 ->where('user_id', $this->id)
                 ->where('tenant_id', $resolvedTenantId)
-                ->first(['id', 'tenant_id', 'department_id']);
+                ->first(['id', 'tenant_id', 'department_id', 'position_id']);
         }
 
         if (! $employee) {
@@ -188,23 +188,33 @@ class User extends Authenticatable
             $pivotDeptIds,
         ))));
 
-        if ($deptIds === []) {
-            return static::$departmentPermissionsCache[$cacheKey] = null;
-        }
-
-        $departments = Department::withoutGlobalScopes()
-            ->with('permissionGroup')
-            ->where('tenant_id', $resolvedTenantId)
-            ->whereIn('id', $deptIds)
-            ->get();
-
         $combined = [];
         $hasConfigured = false;
 
-        foreach ($departments as $department) {
-            if ($department->hasConfiguredPermissions()) {
+        if ($deptIds !== []) {
+            $departments = Department::withoutGlobalScopes()
+                ->with('permissionGroup')
+                ->where('tenant_id', $resolvedTenantId)
+                ->whereIn('id', $deptIds)
+                ->get();
+
+            foreach ($departments as $department) {
+                if ($department->hasConfiguredPermissions()) {
+                    $hasConfigured = true;
+                    $combined = array_merge($combined, $department->resolvedPermissions());
+                }
+            }
+        }
+
+        if ($employee->position_id) {
+            $position = Position::withoutGlobalScopes()
+                ->with('permissionGroup')
+                ->where('tenant_id', $resolvedTenantId)
+                ->find($employee->position_id);
+
+            if ($position && $position->hasConfiguredPermissions()) {
                 $hasConfigured = true;
-                $combined = array_merge($combined, $department->resolvedPermissions());
+                $combined = array_merge($combined, $position->resolvedPermissions());
             }
         }
 

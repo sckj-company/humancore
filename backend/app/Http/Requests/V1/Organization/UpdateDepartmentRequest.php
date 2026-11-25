@@ -24,6 +24,7 @@ class UpdateDepartmentRequest extends FormRequest
             'cost_center' => ['nullable', 'string', 'max:50'],
             'description' => ['nullable', 'string'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'cascade_levels' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -36,7 +36,10 @@ export interface DepartmentPayload {
   cost_center?: string | null
   description?: string | null
   status?: 'active' | 'inactive'
+  cascade_levels?: boolean
 }
+
+export type DepartmentUpdatePayload = Partial<DepartmentPayload> & { cascade_levels?: boolean }
 
 export interface Position {
   id: number
@@ -51,6 +54,11 @@ export interface Position {
   salary_min?: number | null
   salary_max?: number | null
   is_management: boolean
+  permission_group_id?: number | null
+  permission_group_name?: string | null
+  default_permissions?: string[]
+  default_role_name?: string | null
+  effective_permissions_count?: number
   employee_count?: number
   department?: { id: number; name: string } | null
   parent?: { id: number; title: string; level?: number } | null
@@ -67,7 +75,10 @@ export interface PositionPayload {
   salary_min?: number | null
   salary_max?: number | null
   is_management?: boolean
+  cascade_levels?: boolean
 }
+
+export type PositionUpdatePayload = Partial<PositionPayload> & { cascade_levels?: boolean }
 
 export interface Branch {
   id: number
@@ -147,7 +158,13 @@ export interface DepartmentEmployeeItem {
   user_email?: string | null
   user_is_active: boolean
   role_name?: string | null
-  permission_source: 'individual' | 'department' | 'role' | 'none'
+  permission_source:
+    | 'individual'
+    | 'department'
+    | 'position'
+    | 'department_and_position'
+    | 'role'
+    | 'none'
   permission_group_id?: number | null
   permission_group_name?: string | null
   effective_permissions: string[]
@@ -172,11 +189,29 @@ export interface PositionEmployeeItem {
   department_id?: number | null
   department?: { id: number; name: string } | null
   departments?: Array<{ id: number; name: string }>
+  has_user_account: boolean
+  user_id?: number | null
+  user_email?: string | null
+  user_is_active: boolean
+  role_name?: string | null
+  permission_source:
+    | 'individual'
+    | 'department'
+    | 'position'
+    | 'department_and_position'
+    | 'role'
+    | 'none'
+  permission_group_id?: number | null
+  permission_group_name?: string | null
+  effective_permissions: string[]
+  custom_permissions?: string[] | null
+  department_scope_ids: number[]
 }
 
 export interface PositionEmployeesResponse {
   position: Position
   employees: PositionEmployeeItem[]
+  can_manage_permissions: boolean
   can_manage_employees: boolean
 }
 
@@ -243,7 +278,7 @@ export const useCreateDepartment = () => {
 export const useUpdateDepartment = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: DepartmentPayload }) =>
+    mutationFn: ({ id, data }: { id: number; data: DepartmentUpdatePayload }) =>
       api.put<Department>(`departments/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] })
@@ -361,7 +396,7 @@ export const useCreatePosition = () => {
 export const useUpdatePosition = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: PositionPayload }) =>
+    mutationFn: ({ id, data }: { id: number; data: PositionUpdatePayload }) =>
       api.put<Position>(`positions/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['positions'] })
@@ -426,6 +461,40 @@ export const useRemovePositionEmployee = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['positions'] })
       queryClient.invalidateQueries({ queryKey: ['position-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-picker'] })
+    },
+  })
+}
+
+export const useUpdatePositionPermissions = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ positionId, data }: { positionId: number; data: DepartmentPermissionsPayload }) =>
+      api.put<{ position: Position; affected_employees_count: number }>(
+        `positions/${positionId}/permissions`,
+        data,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['positions'] })
+      queryClient.invalidateQueries({ queryKey: ['position-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['department-employees'] })
+    },
+  })
+}
+
+export const useAssignPositionEmployeesPermissions = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ positionId, data }: { positionId: number; data: AssignEmployeePermissionsPayload }) =>
+      api.post<AssignEmployeePermissionsResponse>(
+        `positions/${positionId}/employees/permissions`,
+        data,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['position-employees'] })
+      queryClient.invalidateQueries({ queryKey: ['positions'] })
       queryClient.invalidateQueries({ queryKey: ['department-employees'] })
       queryClient.invalidateQueries({ queryKey: ['employees-summary'] })
       queryClient.invalidateQueries({ queryKey: ['employees-picker'] })

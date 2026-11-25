@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  ArrowLeft,
   Briefcase,
   Building2,
-  List,
+  Columns2,
+  Layers,
   Network,
   Pencil,
   Plus,
@@ -21,14 +23,8 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import {
   Table,
   TableBody,
@@ -69,17 +65,22 @@ import {
   type PositionEmployeeItem,
   type PositionPayload,
   useAddPositionEmployees,
+  useAssignPositionEmployeesPermissions,
   useCreatePosition,
   useDeletePosition,
   useDepartments,
+  usePermissionsCatalog,
   usePositionEmployees,
   usePositions,
   useRemovePositionEmployee,
   useUpdatePosition,
+  useUpdatePositionPermissions,
 } from './api'
-import { OrgChartView, type OrgChartNode } from './org-chart-view'
+import { OrgChartView, type OrgChartMovePayload, type OrgChartNode } from './org-chart-view'
+import { SimplePermissionsDialog, type SimplePermissionsSavePayload } from './simple-permissions-dialog'
 import { AssignEmployeesDialog, type AssignEmployeesSubmitPayload } from './assign-employees-dialog'
 import { getApiErrorMessage } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -90,15 +91,21 @@ export function PositionsPage() {
 
   const [search, setSearch] = useState('')
   const [departmentFilter, setDepartmentFilter] = useState<string>('all')
-  const [viewMode, setViewMode] = useState<'list' | 'orgchart'>('list')
-
-  // Selected position detail sheet (employees inside position)
+  const [viewMode, setViewMode] = useState<'columns' | 'orgchart'>('columns')
   const [selectedPositionId, setSelectedPositionId] = useState<number | null>(null)
+  const [cameFromOrgChart, setCameFromOrgChart] = useState(false)
+
+  // Employee panel states
   const [positionEmpSearch, setPositionEmpSearch] = useState('')
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([])
   const [isAddEmployeesOpen, setIsAddEmployeesOpen] = useState(false)
   const [removeEmployeeTarget, setRemoveEmployeeTarget] = useState<PositionEmployeeItem | null>(null)
 
-  // Dialog state
+  // Permissions modal states
+  const [permModalMode, setPermModalMode] = useState<'position' | 'employees' | null>(null)
+  const [permModalEmployees, setPermModalEmployees] = useState<PositionEmployeeItem[]>([])
+
+  // Create / Edit Dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingPosition, setEditingPosition] = useState<Position | null>(null)
   const [levelManuallySet, setLevelManuallySet] = useState(false)
@@ -124,19 +131,15 @@ export function PositionsPage() {
   // Hooks
   const { data: positions, isLoading, isError, refetch } = usePositions()
   const { data: departments } = useDepartments()
+  const { data: catalogData } = usePermissionsCatalog()
 
   const createMutation = useCreatePosition()
   const updateMutation = useUpdatePosition()
   const deleteMutation = useDeletePosition()
+  const updatePosPermissionsMutation = useUpdatePositionPermissions()
+  const assignEmployeesPermissionsMutation = useAssignPositionEmployeesPermissions()
   const addPositionEmployeesMutation = useAddPositionEmployees()
   const removePositionEmployeeMutation = useRemovePositionEmployee()
-
-  const {
-    data: positionEmployeesData,
-    isLoading: isLoadingPosEmployees,
-    isError: isErrorPosEmployees,
-    refetch: refetchPosEmployees,
-  } = usePositionEmployees(selectedPositionId, positionEmpSearch)
 
   // Filter and sort positions by level ASC, title ASC
   const filtered = useMemo(() => {
@@ -154,20 +157,56 @@ export function PositionsPage() {
       .sort((a, b) => (a.level ?? 1) - (b.level ?? 1) || a.title.localeCompare(b.title))
   }, [positions, search, departmentFilter])
 
+  const selectPosition = (posId: number | null, fromOrgChart = false) => {
+    setSelectedPositionId(posId)
+    setCameFromOrgChart(fromOrgChart)
+    setSelectedEmployeeIds([])
+    setPositionEmpSearch('')
+  }
+
+  const effectiveSelectedPositionId = useMemo(() => {
+    if (filtered.length === 0) return null
+    if (selectedPositionId !== null && filtered.some((p) => p.id === selectedPositionId)) {
+      return selectedPositionId
+    }
+    return filtered[0].id
+  }, [filtered, selectedPositionId])
+
+  const selectedPositionFromList = useMemo(
+    () =>
+      filtered.find((p) => p.id === effectiveSelectedPositionId) ??
+      positions?.find((p) => p.id === effectiveSelectedPositionId) ??
+      null,
+    [filtered, positions, effectiveSelectedPositionId],
+  )
+
+  const {
+    data: positionEmployeesData,
+    isLoading: isLoadingPosEmployees,
+    isError: isErrorPosEmployees,
+    refetch: refetchPosEmployees,
+  } = usePositionEmployees(effectiveSelectedPositionId, positionEmpSearch)
+
+  const positionEmployees = useMemo(
+    () => positionEmployeesData?.employees ?? [],
+    [positionEmployeesData?.employees],
+  )
+  const activePosDetail = positionEmployeesData?.position ?? selectedPositionFromList
+  const canManagePermissions =
+    positionEmployeesData?.can_manage_permissions ?? catalogData?.can_manage_permissions ?? false
+  const canManagePosEmployees =
+    positionEmployeesData?.can_manage_employees ?? canManagePermissions
+
+  const visibleSelectedEmployeeIds = useMemo(() => {
+    if (selectedEmployeeIds.length === 0) return []
+    const visibleIds = new Set(positionEmployees.map((e) => e.id))
+    return selectedEmployeeIds.filter((id) => visibleIds.has(id))
+  }, [positionEmployees, selectedEmployeeIds])
+
   const excludedParentIds = useMemo(() => {
     if (!editingPosition || !positions) return new Set<number>()
     return collectDescendantIds(positions, editingPosition.id)
   }, [editingPosition, positions])
-
-  const selectedPosition = useMemo(
-    () =>
-      positionEmployeesData?.position ??
-      positions?.find((p) => p.id === selectedPositionId) ??
-      null,
-    [positionEmployeesData?.position, positions, selectedPositionId],
-  )
-  const positionEmployees = positionEmployeesData?.employees ?? []
-  const canManagePosEmployees = positionEmployeesData?.can_manage_employees ?? false
 
   const orgNodes = useMemo<OrgChartNode[]>(() => {
     return filtered.map((p) => {
@@ -180,6 +219,7 @@ export function PositionsPage() {
         code: p.code,
         subtitle: deptName ?? t('organizationPage.positions.noDepartment'),
         employeeCount: p.employee_count ?? 0,
+        permissionsCount: p.effective_permissions_count ?? 0,
         badgeText: p.is_management ? t('organizationPage.positions.management') : null,
       }
     })
@@ -191,11 +231,6 @@ export function PositionsPage() {
       currency,
       maximumFractionDigits: 0,
     }).format(value)
-
-  const openPositionDetail = (posId: number) => {
-    setSelectedPositionId(posId)
-    setPositionEmpSearch('')
-  }
 
   // Open Create Dialog
   const handleOpenCreate = () => {
@@ -296,7 +331,8 @@ export function PositionsPage() {
           t('organizationPage.toast.updated', { entity: t('organizationPage.positions.singular') }),
         )
       } else {
-        await createMutation.mutateAsync(payload)
+        const created = await createMutation.mutateAsync(payload)
+        if (created?.id) selectPosition(created.id)
         toast.success(
           t('organizationPage.toast.created', { entity: t('organizationPage.positions.singular') }),
         )
@@ -320,8 +356,8 @@ export function PositionsPage() {
       toast.success(
         t('organizationPage.toast.deleted', { entity: t('organizationPage.positions.singular') }),
       )
-      if (selectedPositionId === deleteTarget.id) {
-        setSelectedPositionId(null)
+      if (effectiveSelectedPositionId === deleteTarget.id) {
+        selectPosition(null)
       }
       setDeleteTarget(null)
     } catch (err) {
@@ -334,14 +370,85 @@ export function PositionsPage() {
     }
   }
 
+  const handleSelectFromOrgChart = (node: OrgChartNode) => {
+    selectPosition(node.id, true)
+    setViewMode('columns')
+  }
+
+  const handleMovePosition = async ({
+    nodeId,
+    newParentId,
+    newLevel,
+  }: OrgChartMovePayload) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: nodeId,
+        data: {
+          parent_id: newParentId,
+          level: newLevel,
+          cascade_levels: true,
+        },
+      })
+      toast.success(
+        newParentId === null
+          ? t('organizationPage.orgChart.movedToTopToast', {
+              level: newLevel,
+              defaultValue: `Movido para o Nível ${newLevel} (topo).`,
+            })
+          : t('organizationPage.orgChart.movedToParentToast', {
+              level: newLevel,
+              defaultValue: `Hierarquia atualizada para o Nível ${newLevel}.`,
+            }),
+      )
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(
+          err,
+          t('organizationPage.orgChart.moveError', {
+            defaultValue: 'Não foi possível reorganizar a hierarquia.',
+          }),
+        ),
+      )
+    }
+  }
+
+  const allSelected =
+    positionEmployees.length > 0 && visibleSelectedEmployeeIds.length === positionEmployees.length
+
+  const toggleSelectAllEmployees = (checked: boolean) => {
+    if (checked) {
+      setSelectedEmployeeIds(positionEmployees.map((e) => e.id))
+    } else {
+      setSelectedEmployeeIds([])
+    }
+  }
+
+  const toggleEmployeeSelection = (employeeId: number, checked: boolean) => {
+    setSelectedEmployeeIds((prev) =>
+      checked ? (prev.includes(employeeId) ? prev : [...prev, employeeId]) : prev.filter((id) => id !== employeeId),
+    )
+  }
+
+  const openPositionPermissionsModal = () => {
+    if (!activePosDetail) return
+    setPermModalEmployees([])
+    setPermModalMode('position')
+  }
+
+  const openEmployeesPermissionsModal = (targets: PositionEmployeeItem[]) => {
+    if (targets.length === 0) return
+    setPermModalEmployees(targets)
+    setPermModalMode('employees')
+  }
+
   const handleAddEmployeesToPosition = async ({
     employeeIds,
     syncDepartment,
   }: AssignEmployeesSubmitPayload) => {
-    if (!selectedPosition || employeeIds.length === 0) return
+    if (!activePosDetail || employeeIds.length === 0) return
     try {
       const res = await addPositionEmployeesMutation.mutateAsync({
-        positionId: selectedPosition.id,
+        positionId: activePosDetail.id,
         employeeIds,
         syncDepartment,
       })
@@ -365,10 +472,10 @@ export function PositionsPage() {
   }
 
   const handleConfirmRemoveEmployee = async () => {
-    if (!selectedPosition || !removeEmployeeTarget) return
+    if (!activePosDetail || !removeEmployeeTarget) return
     try {
       await removePositionEmployeeMutation.mutateAsync({
-        positionId: selectedPosition.id,
+        positionId: activePosDetail.id,
         employeeId: removeEmployeeTarget.id,
       })
       toast.success(
@@ -376,6 +483,7 @@ export function PositionsPage() {
           defaultValue: 'Funcionário removido do cargo.',
         }),
       )
+      setSelectedEmployeeIds((prev) => prev.filter((id) => id !== removeEmployeeTarget.id))
       setRemoveEmployeeTarget(null)
     } catch (err) {
       toast.error(
@@ -389,7 +497,148 @@ export function PositionsPage() {
     }
   }
 
+  const handleSavePermissions = async (payload: SimplePermissionsSavePayload) => {
+    if (!activePosDetail) return
+
+    if (permModalMode === 'position') {
+      try {
+        const res = await updatePosPermissionsMutation.mutateAsync({
+          positionId: activePosDetail.id,
+          data: {
+            permissions: payload.permissions,
+            permission_group_id: payload.permission_group_id,
+            role_name: payload.role_name,
+            apply_to_existing_overrides: payload.apply_to_existing_overrides,
+          },
+        })
+        toast.success(
+          t('organizationPage.permissions.positionSavedToast', {
+            count: res.affected_employees_count ?? 0,
+            defaultValue: 'Permissões do cargo guardadas com sucesso.',
+          }),
+        )
+        setPermModalMode(null)
+      } catch (err) {
+        toast.error(
+          getApiErrorMessage(
+            err,
+            t('organizationPage.permissions.saveError', {
+              defaultValue: 'Não foi possível guardar as permissões.',
+            }),
+          ),
+        )
+      }
+      return
+    }
+
+    if (permModalMode === 'employees' && permModalEmployees.length > 0) {
+      try {
+        const res = await assignEmployeesPermissionsMutation.mutateAsync({
+          positionId: activePosDetail.id,
+          data: {
+            employee_ids: permModalEmployees.map((e) => e.id),
+            clear_individual: payload.clear_individual,
+            permissions: payload.permissions,
+            permission_group_id: payload.permission_group_id,
+            role_name: payload.role_name,
+            scope_to_department: payload.scope_to_department,
+            auto_create_accounts: payload.auto_create_accounts,
+            default_password: payload.default_password,
+            employee_emails: payload.employee_emails,
+          },
+        })
+
+        if (res.skipped && res.skipped.length > 0) {
+          const reasons = res.skipped.map((s) => `${s.name}: ${s.reason}`).join(' | ')
+          if (res.updated_count > 0) {
+            toast.warning(
+              t('organizationPage.permissions.partialAssignedToast', {
+                updated: res.updated_count,
+                skipped: res.skipped.length,
+                reasons,
+                defaultValue: `${res.updated_count} atualizado(s), ${res.skipped.length} ignorado(s): ${reasons}`,
+              }),
+            )
+          } else {
+            toast.error(reasons)
+          }
+        } else {
+          toast.success(
+            t('organizationPage.permissions.employeesSavedToast', {
+              count: res.updated_count,
+              defaultValue: `Permissões atribuídas a ${res.updated_count} funcionário(s).`,
+            }),
+          )
+        }
+        setSelectedEmployeeIds([])
+        setPermModalMode(null)
+      } catch (err) {
+        toast.error(
+          getApiErrorMessage(
+            err,
+            t('organizationPage.permissions.saveError', {
+              defaultValue: 'Não foi possível guardar as permissões.',
+            }),
+          ),
+        )
+      }
+    }
+  }
+
+  const getPermissionSourceBadge = (emp: PositionEmployeeItem) => {
+    if (!emp.has_user_account) {
+      return (
+        <Badge variant="outline" className="text-muted-foreground">
+          {t('organizationPage.permissions.source.none', { defaultValue: 'Sem conta' })}
+        </Badge>
+      )
+    }
+    if (emp.permission_source === 'individual') {
+      return (
+        <Badge variant="default" className="border-primary/30 bg-primary/15 text-primary">
+          {t('organizationPage.permissions.source.individual', { defaultValue: 'Individual' })}
+        </Badge>
+      )
+    }
+    if (emp.permission_source === 'department_and_position') {
+      return (
+        <Badge
+          variant="secondary"
+          className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+        >
+          {t('organizationPage.permissions.source.department_and_position', {
+            defaultValue: 'Depto + Cargo',
+          })}
+        </Badge>
+      )
+    }
+    if (emp.permission_source === 'position') {
+      return (
+        <Badge variant="secondary" className="bg-sky-500/15 text-sky-700 dark:text-sky-300">
+          {t('organizationPage.permissions.source.position', { defaultValue: 'Do cargo' })}
+        </Badge>
+      )
+    }
+    if (emp.permission_source === 'department') {
+      return (
+        <Badge
+          variant="secondary"
+          className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+        >
+          {t('organizationPage.permissions.source.department', { defaultValue: 'Do departamento' })}
+        </Badge>
+      )
+    }
+    return (
+      <Badge variant="secondary">
+        {emp.role_name || t('organizationPage.permissions.source.role', { defaultValue: 'Padrão' })}
+      </Badge>
+    )
+  }
+
   const isSaving = createMutation.isPending || updateMutation.isPending
+  const isSavingPermissions =
+    updatePosPermissionsMutation.isPending || assignEmployeesPermissionsMutation.isPending
 
   return (
     <div className="space-y-5">
@@ -402,12 +651,12 @@ export function PositionsPage() {
               <Button
                 type="button"
                 size="sm"
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                variant={viewMode === 'columns' ? 'default' : 'ghost'}
                 className="h-8 gap-1.5 px-3 text-xs"
-                onClick={() => setViewMode('list')}
+                onClick={() => setViewMode('columns')}
               >
-                <List className="h-3.5 w-3.5" />
-                {t('organizationPage.views.list', { defaultValue: 'Listagem' })}
+                <Columns2 className="h-3.5 w-3.5" />
+                {t('organizationPage.views.columns', { defaultValue: 'Colunas' })}
               </Button>
               <Button
                 type="button"
@@ -477,8 +726,8 @@ export function PositionsPage() {
       {positions && filtered.length > 0 && viewMode === 'orgchart' && (
         <OrgChartView
           nodes={orgNodes}
-          selectedId={selectedPositionId}
-          onSelectNode={(node) => openPositionDetail(node.id)}
+          selectedId={effectiveSelectedPositionId}
+          onSelectNode={handleSelectFromOrgChart}
           onEditNode={(node) => {
             const pos = positions.find((p) => p.id === node.id)
             if (pos) handleOpenEdit(pos)
@@ -487,420 +736,596 @@ export function PositionsPage() {
             const pos = positions.find((p) => p.id === node.id)
             if (pos) setDeleteTarget(pos)
           }}
+          onMoveNode={handleMovePosition}
+          isMoving={updateMutation.isPending}
           hintText={t('organizationPage.positions.orgChartHintMembers', {
-            defaultValue: 'Hierarquia de cargos organizada por nível. Clique num cargo para gerir os funcionários atribuídos.',
+            defaultValue:
+              'Hierarquia de cargos organizada por nível. Clique num cargo para gerir os seus funcionários e permissões.',
           })}
-          selectHint={t('organizationPage.positions.manageMembersHint', {
-            defaultValue: 'Gerir funcionários',
+          selectHint={t('organizationPage.positions.orgChartOpenFlow', {
+            defaultValue: 'Gerir equipa e permissões',
           })}
         />
       )}
 
-      {/* Vista Listagem */}
-      {positions && filtered.length > 0 && viewMode === 'list' && (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-24">
-                    {t('organizationPage.fields.level', { defaultValue: 'Nível' })}
-                  </TableHead>
-                  <TableHead>{t('organizationPage.positions.titleLabel')}</TableHead>
-                  <TableHead>
-                    {t('organizationPage.positions.parent', { defaultValue: 'Cargo superior' })}
-                  </TableHead>
-                  <TableHead>{t('organizationPage.fields.department')}</TableHead>
-                  <TableHead>
-                    {t('organizationPage.positions.salaryBand', { defaultValue: 'Faixa salarial' })}
-                  </TableHead>
-                  <TableHead>
-                    {t('organizationPage.positions.employeesCol', { defaultValue: 'Funcionários' })}
-                  </TableHead>
-                  <TableHead className="w-28 text-right">
-                    {t('organizationPage.departments.table.actions', { defaultValue: 'Ações' })}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+      {/* Vista em Colunas 25% / 75% */}
+      {positions && filtered.length > 0 && viewMode === 'columns' && (
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+          {/* Coluna Esquerda (25%) - Lista de Cargos */}
+          <Card className="w-full lg:w-[25%] lg:min-w-[240px] lg:shrink-0">
+            <CardContent className="p-2.5">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('organizationPage.positions.title')} ({filtered.length})
+                </span>
+              </div>
+
+              <div className="max-h-[68vh] space-y-1.5 overflow-y-auto pr-1">
                 {filtered.map((p) => {
+                  const isSelected = p.id === effectiveSelectedPositionId
+                  const hasPerms = (p.effective_permissions_count ?? 0) > 0
                   const deptName =
                     p.department?.name ?? departments?.find((d) => d.id === p.department_id)?.name
-                  const parentTitle =
-                    p.parent?.title ?? positions.find((parent) => parent.id === p.parent_id)?.title
 
                   return (
-                    <TableRow
+                    <div
                       key={p.id}
-                      className="cursor-pointer"
-                      onClick={() => openPositionDetail(p.id)}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => selectPosition(p.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          selectPosition(p.id)
+                        }
+                      }}
+                      className={cn(
+                        'group cursor-pointer rounded-lg border p-2.5 transition-all',
+                        isSelected
+                          ? 'border-primary bg-primary/5 shadow-xs'
+                          : 'border-border/60 bg-card hover:border-primary/40 hover:bg-muted/30',
+                      )}
                     >
-                      <TableCell>
-                        <Badge variant="outline" className="font-semibold">
-                          {t('organizationPage.orgChart.levelBadge', { level: p.level ?? 1 })}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-normal">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-info/10 text-info">
-                            <Briefcase className="h-4 w-4" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-start gap-2">
+                          <div
+                            className={cn(
+                              'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
+                              isSelected
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-info/10 text-info',
+                            )}
+                          >
+                            <Briefcase className="h-3.5 w-3.5" />
                           </div>
-                          <div>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-medium text-foreground">{p.title}</span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">
+                              {p.title}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-medium">
+                                {t('organizationPage.orgChart.levelBadge', { level: p.level ?? 1 })}
+                              </Badge>
+                              {p.code && (
+                                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                  {p.code}
+                                </span>
+                              )}
                               {p.is_management && (
-                                <Badge variant="secondary" className="gap-1 px-1.5 py-0 text-[10px]">
-                                  <Shield className="h-2.5 w-2.5 text-warning" />
+                                <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
                                   {t('organizationPage.positions.management')}
                                 </Badge>
                               )}
                             </div>
-                            {p.code && (
-                              <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                                {p.code}
-                              </span>
+                            {deptName && (
+                              <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                                {deptName}
+                              </p>
                             )}
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {parentTitle ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {deptName ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Building2 className="h-3.5 w-3.5 shrink-0" />
-                            {deptName}
-                          </span>
-                        ) : (
-                          <span className="italic opacity-70">
-                            {t('organizationPage.positions.noDepartment')}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {p.salary_min !== null || p.salary_max !== null ? (
-                          <span>
-                            {p.salary_min ? formatMoney(p.salary_min) : '—'} –{' '}
-                            {p.salary_max ? formatMoney(p.salary_max) : '—'}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                          <Users className="h-3.5 w-3.5 text-primary" />
-                          {p.employee_count ?? 0}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div
-                          className="inline-flex items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+
+                        <div className="flex shrink-0 items-center gap-0.5">
                           <Button
+                            type="button"
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => openPositionDetail(p.id)}
-                            title={t('organizationPage.positions.manageMembersHint', {
-                              defaultValue: 'Gerir funcionários',
-                            })}
-                            className="text-muted-foreground hover:text-primary"
-                          >
-                            <Users className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => handleOpenEdit(p)}
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenEdit(p)
+                            }}
                             title={t('organizationPage.actions.edit', {
                               entity: t('organizationPage.positions.singular'),
                             })}
-                            className="text-muted-foreground hover:text-foreground"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
+                            type="button"
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => setDeleteTarget(p)}
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDeleteTarget(p)
+                            }}
                             title={t('organizationPage.actions.delete', {
                               entity: t('organizationPage.positions.singular'),
                             })}
-                            className="text-muted-foreground hover:text-destructive"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+
+                      <div className="mt-2.5 flex items-center justify-between border-t border-border/40 pt-2 text-[11px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 font-medium">
+                          <Users className="h-3 w-3" />
+                          {t('organizationPage.departments.employeeCount', {
+                            count: p.employee_count ?? 0,
+                          })}
+                        </span>
+
+                        {hasPerms && (
+                          <span className="inline-flex items-center gap-1 font-medium text-primary">
+                            <Shield className="h-3 w-3" />
+                            {p.effective_permissions_count}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   )
                 })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Sheet Lateral: Funcionários dentro do Cargo */}
-      <Sheet
-        open={selectedPositionId !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedPositionId(null)
-        }}
-      >
-        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
-          {selectedPosition && (
-            <>
-              <SheetHeader className="border-b px-6 py-5 pr-12">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <SheetTitle className="text-lg">{selectedPosition.title}</SheetTitle>
-                      <Badge variant="outline" className="text-xs">
-                        {t('organizationPage.orgChart.levelBadge', {
-                          level: selectedPosition.level ?? 1,
-                        })}
-                      </Badge>
-                      {selectedPosition.code && (
-                        <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
-                          {selectedPosition.code}
-                        </span>
-                      )}
-                      {selectedPosition.is_management && (
-                        <Badge variant="secondary" className="gap-1 text-xs">
-                          <Shield className="h-3 w-3 text-warning" />
-                          {t('organizationPage.positions.management')}
-                        </Badge>
-                      )}
-                    </div>
+          {/* Coluna Direita (75%) - Detalhe do Cargo + Tabela de Funcionários */}
+          <div className="w-full min-w-0 space-y-4 lg:flex-1">
+            {activePosDetail && (
+              <>
+                <Card>
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 space-y-1.5">
+                        {cameFromOrgChart && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCameFromOrgChart(false)
+                              setViewMode('orgchart')
+                            }}
+                            className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                          >
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                            {t('organizationPage.departments.backToOrgChart', {
+                              defaultValue: 'Voltar ao organograma',
+                            })}
+                          </button>
+                        )}
 
-                    <SheetDescription className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                      <span>
-                        {selectedPosition.department?.name ??
-                          departments?.find((d) => d.id === selectedPosition.department_id)?.name ??
-                          t('organizationPage.positions.noDepartment')}
-                      </span>
-                      {(selectedPosition.parent?.title ||
-                        positions?.find((par) => par.id === selectedPosition.parent_id)?.title) && (
-                        <span>
-                          ·{' '}
-                          {t('organizationPage.positions.parent', { defaultValue: 'Superior' })}:{' '}
-                          {selectedPosition.parent?.title ??
-                            positions?.find((par) => par.id === selectedPosition.parent_id)?.title}
-                        </span>
-                      )}
-                      {(selectedPosition.salary_min !== null ||
-                        selectedPosition.salary_max !== null) && (
-                        <span className="font-mono">
-                          ·{' '}
-                          {selectedPosition.salary_min
-                            ? formatMoney(selectedPosition.salary_min)
-                            : '—'}{' '}
-                          –{' '}
-                          {selectedPosition.salary_max
-                            ? formatMoney(selectedPosition.salary_max)
-                            : '—'}
-                        </span>
-                      )}
-                    </SheetDescription>
-                  </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-lg font-semibold text-foreground">
+                            {activePosDetail.title}
+                          </h2>
+                          <Badge variant="outline" className="text-xs">
+                            {t('organizationPage.orgChart.levelBadge', {
+                              level: activePosDetail.level ?? 1,
+                            })}
+                          </Badge>
+                          {activePosDetail.code && (
+                            <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                              {activePosDetail.code}
+                            </span>
+                          )}
+                          {activePosDetail.is_management && (
+                            <Badge variant="secondary" className="gap-1 text-xs">
+                              <Shield className="h-3 w-3 text-warning" />
+                              {t('organizationPage.positions.management')}
+                            </Badge>
+                          )}
+                        </div>
 
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-xs"
-                    onClick={() => handleOpenEdit(selectedPosition)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    {t('organizationPage.common.edit', { defaultValue: 'Editar' })}
-                  </Button>
-                </div>
-              </SheetHeader>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <Building2 className="h-3.5 w-3.5" />
+                            {activePosDetail.department?.name ??
+                              departments?.find((d) => d.id === activePosDetail.department_id)
+                                ?.name ??
+                              t('organizationPage.positions.noDepartment')}
+                          </span>
+                          {(activePosDetail.parent?.title ||
+                            positions?.find((par) => par.id === activePosDetail.parent_id)
+                              ?.title) && (
+                              <span className="inline-flex items-center gap-1">
+                                <Layers className="h-3.5 w-3.5" />
+                                {t('organizationPage.departments.parentLabel', {
+                                  name:
+                                    activePosDetail.parent?.title ??
+                                    positions?.find((par) => par.id === activePosDetail.parent_id)
+                                      ?.title,
+                                })}
+                              </span>
+                            )}
+                          {(activePosDetail.salary_min !== null ||
+                            activePosDetail.salary_max !== null) && (
+                              <span className="font-mono">
+                                {activePosDetail.salary_min
+                                  ? formatMoney(activePosDetail.salary_min)
+                                  : '—'}{' '}
+                                –{' '}
+                                {activePosDetail.salary_max
+                                  ? formatMoney(activePosDetail.salary_max)
+                                  : '—'}
+                              </span>
+                            )}
+                        </div>
 
-              <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      value={positionEmpSearch}
-                      onChange={(e) => setPositionEmpSearch(e.target.value)}
-                      placeholder={t('organizationPage.positions.searchEmployeesPlaceholder', {
-                        defaultValue: 'Pesquisar funcionário neste cargo…',
-                      })}
-                      className="h-9 pl-9 text-sm"
-                    />
-                  </div>
+                        <div className="pt-1">
+                          {(activePosDetail.effective_permissions_count ?? 0) > 0 ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1.5 border-primary/30 bg-primary/5 text-xs text-primary"
+                            >
+                              <Shield className="h-3 w-3" />
+                              {activePosDetail.permission_group_name
+                                ? t('organizationPage.permissions.posGroupActive', {
+                                  group: activePosDetail.permission_group_name,
+                                  count: activePosDetail.effective_permissions_count,
+                                  defaultValue: `Grupo "${activePosDetail.permission_group_name}" (${activePosDetail.effective_permissions_count} permissões)`,
+                                })
+                                : t('organizationPage.permissions.posRuleActive', {
+                                  count: activePosDetail.effective_permissions_count,
+                                  defaultValue: `${activePosDetail.effective_permissions_count} permissões padrão definidas no cargo`,
+                                })}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {t('organizationPage.permissions.posRuleEmpty', {
+                                defaultValue:
+                                  'Sem regra de permissões específica no cargo (funcionários herdam do departamento ou perfil padrão).',
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                  {canManagePosEmployees && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-9 gap-1.5"
-                      onClick={() => setIsAddEmployeesOpen(true)}
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      {t('organizationPage.assignEmployees.addButton', {
-                        defaultValue: 'Adicionar funcionários',
-                      })}
-                    </Button>
-                  )}
-                </div>
-
-                {isLoadingPosEmployees && <LoadingState />}
-                {isErrorPosEmployees && (
-                  <ErrorState
-                    message={t('organizationPage.positions.employeesLoadError', {
-                      defaultValue: 'Não foi possível carregar os funcionários deste cargo.',
-                    })}
-                    onRetry={refetchPosEmployees}
-                  />
-                )}
-
-                {!isLoadingPosEmployees && !isErrorPosEmployees && positionEmployees.length === 0 && (
-                  <EmptyState
-                    title={t('organizationPage.positions.noEmployeesTitle', {
-                      defaultValue: 'Nenhum funcionário com este cargo',
-                    })}
-                    description={
-                      positionEmpSearch
-                        ? t('organizationPage.empty.filterHint')
-                        : t('organizationPage.positions.noEmployeesDesc', {
-                            defaultValue:
-                              'Adicione funcionários da empresa para ocuparem este cargo.',
-                          })
-                    }
-                    action={
-                      canManagePosEmployees && !positionEmpSearch ? (
+                      {canManagePermissions && (
                         <Button
                           type="button"
-                          size="sm"
-                          onClick={() => setIsAddEmployeesOpen(true)}
+                          onClick={openPositionPermissionsModal}
+                          className="shrink-0 gap-2"
                         >
-                          <UserPlus className="mr-1.5 h-4 w-4" />
-                          {t('organizationPage.assignEmployees.addButton', {
-                            defaultValue: 'Adicionar funcionários',
+                          <Shield className="h-4 w-4" />
+                          {t('organizationPage.permissions.assignToPositionBtn', {
+                            defaultValue: 'Permissões do cargo',
                           })}
                         </Button>
-                      ) : undefined
-                    }
-                  />
-                )}
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
-                {!isLoadingPosEmployees && !isErrorPosEmployees && positionEmployees.length > 0 && (
-                  <div className="rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>
-                            {t('organizationPage.departments.table.employee', {
-                              defaultValue: 'Funcionário',
+                {/* Tabela de Funcionários do Cargo */}
+                <Card>
+                  <CardContent className="space-y-4 p-4 sm:p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="relative flex-1 sm:max-w-xs">
+                        <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          value={positionEmpSearch}
+                          onChange={(e) => setPositionEmpSearch(e.target.value)}
+                          placeholder={t('organizationPage.positions.searchEmployeesPlaceholder', {
+                            defaultValue: 'Pesquisar funcionário neste cargo…',
+                          })}
+                          className="h-9 pl-9 text-sm"
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {canManagePosEmployees && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-9 gap-1.5 text-xs"
+                            onClick={() => setIsAddEmployeesOpen(true)}
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                            {t('organizationPage.assignEmployees.addButton', {
+                              defaultValue: 'Adicionar funcionários',
                             })}
-                          </TableHead>
-                          <TableHead>
-                            {t('organizationPage.departments.table.departments', {
-                              defaultValue: 'Departamentos',
-                            })}
-                          </TableHead>
-                          {canManagePosEmployees && (
-                            <TableHead className="w-16 text-right">
-                              {t('organizationPage.departments.table.actions', {
-                                defaultValue: 'Ações',
+                          </Button>
+                        )}
+
+                        {canManagePermissions && visibleSelectedEmployeeIds.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5">
+                            <span className="text-xs font-medium text-foreground">
+                              {t('organizationPage.permissions.selectedCount', {
+                                count: visibleSelectedEmployeeIds.length,
+                                defaultValue: `${visibleSelectedEmployeeIds.length} selecionado(s)`,
                               })}
-                            </TableHead>
-                          )}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {positionEmployees.map((emp) => {
-                          const initials = emp.full_name
-                            .split(' ')
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((part) => part[0]?.toUpperCase())
-                            .join('')
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 gap-1.5 px-3 text-xs"
+                              onClick={() =>
+                                openEmployeesPermissionsModal(
+                                  positionEmployees.filter((e) =>
+                                    visibleSelectedEmployeeIds.includes(e.id),
+                                  ),
+                                )
+                              }
+                            >
+                              <Shield className="h-3.5 w-3.5" />
+                              {t('organizationPage.permissions.assignPermissionsBtn', {
+                                defaultValue: 'Atribuir permissões',
+                              })}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => setSelectedEmployeeIds([])}
+                            >
+                              {t('organizationPage.permissions.clearSelection', {
+                                defaultValue: 'Limpar',
+                              })}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-                          return (
-                            <TableRow key={emp.id}>
-                              <TableCell className="whitespace-normal">
-                                <div className="flex items-center gap-2.5">
-                                  <Avatar size="sm" className="h-8 w-8">
-                                    <AvatarImage src={emp.photo_path ?? undefined} alt={emp.full_name} />
-                                    <AvatarFallback className="text-[11px] font-medium">
-                                      {initials || '?'}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <div className="min-w-0">
-                                    <p className="truncate font-medium text-foreground">
-                                      {emp.full_name}
-                                    </p>
-                                    <p className="truncate text-xs text-muted-foreground">
-                                      {[emp.employee_code, emp.email].filter(Boolean).join(' · ') ||
-                                        '—'}
-                                    </p>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell className="whitespace-normal">
-                                {emp.departments && emp.departments.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1">
-                                    {emp.departments.map((dept) => (
-                                      <Badge
-                                        key={dept.id}
-                                        variant="secondary"
-                                        className="text-[11px] font-normal"
-                                      >
-                                        {dept.name}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                ) : emp.department?.name ? (
-                                  <Badge variant="secondary" className="text-[11px] font-normal">
-                                    {emp.department.name}
-                                  </Badge>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
-                                )}
-                              </TableCell>
-                              {canManagePosEmployees && (
-                                <TableCell className="text-right">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={() => setRemoveEmployeeTarget(emp)}
-                                    title={t('organizationPage.assignEmployees.removeFromPosition', {
-                                      defaultValue: 'Remover do cargo',
+                    {isLoadingPosEmployees && <LoadingState />}
+                    {isErrorPosEmployees && (
+                      <ErrorState
+                        message={t('organizationPage.positions.employeesLoadError', {
+                          defaultValue: 'Não foi possível carregar os funcionários deste cargo.',
+                        })}
+                        onRetry={refetchPosEmployees}
+                      />
+                    )}
+
+                    {!isLoadingPosEmployees && !isErrorPosEmployees && positionEmployees.length === 0 && (
+                      <EmptyState
+                        title={t('organizationPage.positions.noEmployeesTitle', {
+                          defaultValue: 'Nenhum funcionário com este cargo',
+                        })}
+                        description={
+                          positionEmpSearch
+                            ? t('organizationPage.empty.filterHint')
+                            : t('organizationPage.positions.noEmployeesDesc', {
+                              defaultValue:
+                                'Adicione funcionários da empresa para ocuparem este cargo.',
+                            })
+                        }
+                        action={
+                          canManagePosEmployees && !positionEmpSearch ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => setIsAddEmployeesOpen(true)}
+                            >
+                              <UserPlus className="mr-1.5 h-4 w-4" />
+                              {t('organizationPage.assignEmployees.addButton', {
+                                defaultValue: 'Adicionar funcionários',
+                              })}
+                            </Button>
+                          ) : undefined
+                        }
+                      />
+                    )}
+
+                    {!isLoadingPosEmployees && !isErrorPosEmployees && positionEmployees.length > 0 && (
+                      <div className="rounded-lg border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              {canManagePermissions && (
+                                <TableHead className="w-10">
+                                  <Checkbox
+                                    checked={allSelected}
+                                    onCheckedChange={(checked) =>
+                                      toggleSelectAllEmployees(checked === true)
+                                    }
+                                    aria-label={t('organizationPage.permissions.selectAllEmployees', {
+                                      defaultValue: 'Selecionar todos os funcionários',
                                     })}
-                                    className="text-muted-foreground hover:text-destructive"
-                                  >
-                                    <UserMinus className="h-4 w-4" />
-                                  </Button>
-                                </TableCell>
+                                  />
+                                </TableHead>
+                              )}
+                              <TableHead>
+                                {t('organizationPage.departments.table.employee', {
+                                  defaultValue: 'Funcionário',
+                                })}
+                              </TableHead>
+                              <TableHead>
+                                {t('organizationPage.departments.table.departments', {
+                                  defaultValue: 'Departamentos',
+                                })}
+                              </TableHead>
+                              <TableHead>
+                                {t('organizationPage.departments.table.permissions', {
+                                  defaultValue: 'Permissões no sistema',
+                                })}
+                              </TableHead>
+                              {(canManagePermissions || canManagePosEmployees) && (
+                                <TableHead className="w-20 text-right">
+                                  {t('organizationPage.departments.table.actions', {
+                                    defaultValue: 'Ações',
+                                  })}
+                                </TableHead>
                               )}
                             </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+                          </TableHeader>
+                          <TableBody>
+                            {positionEmployees.map((emp) => {
+                              const isChecked = visibleSelectedEmployeeIds.includes(emp.id)
+                              const initials = emp.full_name
+                                .split(' ')
+                                .filter(Boolean)
+                                .slice(0, 2)
+                                .map((part) => part[0]?.toUpperCase())
+                                .join('')
 
-      {/* Assign Employees to Position Dialog */}
+                              return (
+                                <TableRow
+                                  key={emp.id}
+                                  data-state={isChecked ? 'selected' : undefined}
+                                  onClick={() => {
+                                    if (canManagePermissions) {
+                                      toggleEmployeeSelection(emp.id, !isChecked)
+                                    }
+                                  }}
+                                  className={cn(canManagePermissions && 'cursor-pointer')}
+                                >
+                                  {canManagePermissions && (
+                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                      <Checkbox
+                                        checked={isChecked}
+                                        onCheckedChange={(checked) =>
+                                          toggleEmployeeSelection(emp.id, checked === true)
+                                        }
+                                        aria-label={emp.full_name}
+                                      />
+                                    </TableCell>
+                                  )}
+                                  <TableCell className="whitespace-normal">
+                                    <div className="flex items-center gap-2.5">
+                                      <Avatar size="sm" className="h-8 w-8">
+                                        <AvatarImage src={emp.photo_path ?? undefined} alt={emp.full_name} />
+                                        <AvatarFallback className="text-[11px] font-medium">
+                                          {initials || '?'}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div className="min-w-0">
+                                        <p className="truncate font-medium text-foreground">
+                                          {emp.full_name}
+                                        </p>
+                                        <p className="truncate text-xs text-muted-foreground">
+                                          {[emp.employee_code, emp.user_email ?? emp.email]
+                                            .filter(Boolean)
+                                            .join(' · ') || '—'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="whitespace-normal">
+                                    {emp.departments && emp.departments.length > 0 ? (
+                                      <div className="flex flex-wrap gap-1">
+                                        {emp.departments.map((dept) => (
+                                          <Badge
+                                            key={dept.id}
+                                            variant={
+                                              dept.id === activePosDetail.department_id
+                                                ? 'default'
+                                                : 'secondary'
+                                            }
+                                            className="text-[11px] font-normal"
+                                          >
+                                            {dept.name}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    ) : emp.department?.name ? (
+                                      <Badge variant="secondary" className="text-[11px] font-normal">
+                                        {emp.department.name}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="whitespace-normal">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {getPermissionSourceBadge(emp)}
+                                      {emp.has_user_account && (
+                                        <span className="text-xs text-muted-foreground">
+                                          {emp.permission_group_name
+                                            ? emp.permission_group_name
+                                            : `${emp.effective_permissions.length} ${t('organizationPage.permissions.permsSuffix', { defaultValue: 'permissões' })}`}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  {(canManagePermissions || canManagePosEmployees) && (
+                                    <TableCell
+                                      className="text-right"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div className="inline-flex items-center gap-0.5">
+                                        {canManagePermissions && (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            onClick={() => openEmployeesPermissionsModal([emp])}
+                                            title={t('organizationPage.permissions.assignPermissionsBtn', {
+                                              defaultValue: 'Atribuir permissões',
+                                            })}
+                                            className="text-muted-foreground hover:text-primary"
+                                          >
+                                            <Shield className="h-4 w-4" />
+                                          </Button>
+                                        )}
+                                        {canManagePosEmployees && (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            onClick={() => setRemoveEmployeeTarget(emp)}
+                                            title={t('organizationPage.assignEmployees.removeFromPosition', {
+                                              defaultValue: 'Remover do cargo',
+                                            })}
+                                            className="text-muted-foreground hover:text-destructive"
+                                          >
+                                            <UserMinus className="h-4 w-4" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  )}
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Assign Employees Dialog */}
       <AssignEmployeesDialog
         open={isAddEmployeesOpen}
         onOpenChange={setIsAddEmployeesOpen}
         mode="position"
-        targetPosition={selectedPosition}
+        targetPosition={activePosDetail ?? null}
         isSaving={addPositionEmployeesMutation.isPending}
         onSubmit={handleAddEmployeesToPosition}
+      />
+
+      {/* Simple Permissions Dialog */}
+      <SimplePermissionsDialog
+        open={permModalMode !== null}
+        onOpenChange={(open) => {
+          if (!open) setPermModalMode(null)
+        }}
+        mode={permModalMode === 'position' ? 'position' : 'employees'}
+        position={activePosDetail ?? null}
+        selectedEmployees={permModalEmployees}
+        catalogPermissions={catalogData?.permissions ?? []}
+        permissionGroups={catalogData?.permission_groups ?? []}
+        isSaving={isSavingPermissions}
+        onSave={handleSavePermissions}
       />
 
       {/* Create / Edit Dialog */}
@@ -910,8 +1335,8 @@ export function PositionsPage() {
             <DialogTitle>
               {editingPosition
                 ? t('organizationPage.actions.edit', {
-                    entity: t('organizationPage.positions.singular'),
-                  })
+                  entity: t('organizationPage.positions.singular'),
+                })
                 : t('organizationPage.positions.new')}
             </DialogTitle>
             <DialogDescription>
@@ -1192,8 +1617,8 @@ export function PositionsPage() {
             <AlertDialogDescription>
               {t('organizationPage.assignEmployees.removePositionConfirm', {
                 name: removeEmployeeTarget?.full_name ?? '',
-                position: selectedPosition?.title ?? '',
-                defaultValue: `Deseja remover ${removeEmployeeTarget?.full_name ?? ''} do cargo ${selectedPosition?.title ?? ''}?`,
+                position: activePosDetail?.title ?? '',
+                defaultValue: `Deseja remover ${removeEmployeeTarget?.full_name ?? ''} do cargo ${activePosDetail?.title ?? ''}?`,
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1209,8 +1634,8 @@ export function PositionsPage() {
               {removePositionEmployeeMutation.isPending
                 ? t('organizationPage.common.deleting')
                 : t('organizationPage.assignEmployees.removeAction', {
-                    defaultValue: 'Remover',
-                  })}
+                  defaultValue: 'Remover',
+                })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

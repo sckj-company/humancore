@@ -27,7 +27,16 @@ class Position extends Model
         'salary_min',
         'salary_max',
         'is_management',
+        'permission_group_id',
+        'default_permissions',
+        'default_role_name',
     ];
+
+    protected static function booted(): void
+    {
+        static::saved(static fn () => User::clearDepartmentPermissionCache());
+        static::deleted(static fn () => User::clearDepartmentPermissionCache());
+    }
 
     protected function casts(): array
     {
@@ -36,6 +45,7 @@ class Position extends Model
             'is_management' => 'boolean',
             'salary_min' => 'decimal:2',
             'salary_max' => 'decimal:2',
+            'default_permissions' => 'array',
         ];
     }
 
@@ -59,8 +69,30 @@ class Position extends Model
         return $this->hasMany(self::class, 'parent_id');
     }
 
+    public function permissionGroup()
+    {
+        return $this->belongsTo(PermissionGroup::class);
+    }
+
     public function employees()
     {
         return $this->hasMany(Employee::class);
+    }
+
+    public function hasConfiguredPermissions(): bool
+    {
+        return $this->permission_group_id !== null
+            || (is_array($this->default_permissions) && $this->default_permissions !== []);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function resolvedPermissions(): array
+    {
+        $groupPermissions = $this->permissionGroup?->permissions ?? [];
+        $customPermissions = is_array($this->default_permissions) ? $this->default_permissions : [];
+
+        return array_values(array_unique(array_map('strval', array_merge($groupPermissions, $customPermissions))));
     }
 }

@@ -25,6 +25,7 @@ class UpdatePositionRequest extends FormRequest
             'salary_min' => ['nullable', 'numeric', 'min:0'],
             'salary_max' => ['nullable', 'numeric', 'min:0', 'gte:salary_min'],
             'is_management' => ['nullable', 'boolean'],
+            'cascade_levels' => ['sometimes', 'boolean'],
         ];
     }
 }

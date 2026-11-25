@@ -195,6 +195,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('positions/{position}/employees', [PositionController::class, 'employees']);
                 Route::post('positions/{position}/employees', [PositionController::class, 'addEmployees']);
                 Route::delete('positions/{position}/employees/{employee}', [PositionController::class, 'removeEmployee']);
+                Route::put('positions/{position}/permissions', [PositionController::class, 'updatePositionPermissions']);
+                Route::post('positions/{position}/employees/permissions', [PositionController::class, 'assignEmployeePermissions']);
             });
             Route::apiResource('branches', BranchController::class)
                 ->middleware(['plan.feature:branches', 'plan.quota:max_branches']);

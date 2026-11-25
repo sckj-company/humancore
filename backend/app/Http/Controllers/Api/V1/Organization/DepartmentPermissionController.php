@@ -93,7 +93,8 @@ class DepartmentPermissionController extends BaseController
                     ->orWhereHas('departments', fn ($dq) => $dq->where('departments.id', $department->id));
             })
             ->with([
-                'position:id,title,level',
+                'position:id,title,level,permission_group_id,default_permissions',
+                'position.permissionGroup:id,name,permissions',
                 'department:id,name',
                 'departments:id,name,permission_group_id,default_permissions',
             ])
@@ -178,10 +179,13 @@ class DepartmentPermissionController extends BaseController
             $isPrivilegedRole = $linkedUser->hasRole('super-admin') || $linkedUser->hasRole('admin');
             $hasConfiguredDeptPermissions = $department->hasConfiguredPermissions()
                 || $emp->departments->contains(fn (Department $d) => $d->hasConfiguredPermissions());
+            $hasConfiguredPosPermissions = $emp->position !== null && $emp->position->hasConfiguredPermissions();
 
             $source = match (true) {
                 $hasIndividual => 'individual',
+                ! $isPrivilegedRole && $hasConfiguredDeptPermissions && $hasConfiguredPosPermissions => 'department_and_position',
                 ! $isPrivilegedRole && $hasConfiguredDeptPermissions => 'department',
+                ! $isPrivilegedRole && $hasConfiguredPosPermissions => 'position',
                 default => 'role',
             };
 

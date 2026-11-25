@@ -133,48 +133,53 @@ class TenantProvisioningService
                 ->doesntExist();
 
             if ($shouldSeedDepartments) {
-                $dg = Department::query()->withoutGlobalScopes()->firstOrCreate(
-                    ['tenant_id' => $tenant->id, 'code' => 'DG'],
+                $geral = Department::query()->withoutGlobalScopes()->firstOrCreate(
+                    ['tenant_id' => $tenant->id, 'code' => 'GER'],
                     [
                         'tenant_id' => $tenant->id,
-                        'name' => 'Direção Geral',
+                        'name' => 'Geral',
                         'level' => 1,
                         'parent_id' => null,
-                        'description' => 'Direção executiva e coordenação estratégica da empresa.',
+                        'description' => 'Direção e coordenação geral da empresa.',
                         'status' => 'active',
                     ],
                 );
 
                 $level2Departments = [
                     [
+                        'code' => 'ADM',
+                        'name' => 'Administração',
+                        'description' => 'Gestão administrativa, expediente e apoio institucional.',
+                    ],
+                    [
                         'code' => 'RH',
-                        'name' => 'Recursos Humanos',
-                        'description' => 'Gestão de pessoas, recrutamento, contratos, assiduidade e processamento salarial.',
+                        'name' => 'RH',
+                        'description' => 'Recursos Humanos: gestão de pessoas, contratos, assiduidade e processamento salarial.',
                     ],
                     [
                         'code' => 'FIN',
-                        'name' => 'Financeiro e Contabilidade',
+                        'name' => 'Finanças',
                         'description' => 'Controlo financeiro, tesouraria, contabilidade e obrigações fiscais.',
                     ],
                     [
-                        'code' => 'ADM',
-                        'name' => 'Administrativo',
-                        'description' => 'Serviços gerais, expediente administrativo e apoio institucional.',
+                        'code' => 'REC',
+                        'name' => 'Recepção',
+                        'description' => 'Atendimento ao público, receção de visitantes e apoio de secretaria.',
+                    ],
+                    [
+                        'code' => 'COM',
+                        'name' => 'Comercial',
+                        'description' => 'Vendas, prospeção comercial e relacionamento com clientes.',
                     ],
                     [
                         'code' => 'OPS',
                         'name' => 'Operações',
-                        'description' => 'Execução operacional, logística e entrega de serviços ou produção.',
-                    ],
-                    [
-                        'code' => 'COM',
-                        'name' => 'Comercial e Vendas',
-                        'description' => 'Desenvolvimento comercial, atendimento ao cliente e gestão de vendas.',
+                        'description' => 'Execução operacional, logística e entrega de serviços.',
                     ],
                     [
                         'code' => 'TI',
-                        'name' => 'Tecnologia e Sistemas',
-                        'description' => 'Infraestrutura tecnológica, suporte técnico e sistemas de informação.',
+                        'name' => 'TI',
+                        'description' => 'Tecnologia de informação, sistemas e suporte técnico.',
                     ],
                 ];
 
@@ -184,7 +189,7 @@ class TenantProvisioningService
                         [
                             'tenant_id' => $tenant->id,
                             'name' => $dept['name'],
-                            'parent_id' => $dg->id,
+                            'parent_id' => $geral->id,
                             'level' => 2,
                             'description' => $dept['description'],
                             'status' => 'active',
@@ -207,11 +212,11 @@ class TenantProvisioningService
                     ->pluck('id', 'code');
 
                 $director = Position::query()->withoutGlobalScopes()->firstOrCreate(
-                    ['tenant_id' => $tenant->id, 'code' => 'DG-01'],
+                    ['tenant_id' => $tenant->id, 'code' => 'GER-01'],
                     [
                         'tenant_id' => $tenant->id,
                         'title' => 'Diretor Geral',
-                        'department_id' => $deptIdsByCode->get('DG'),
+                        'department_id' => $deptIdsByCode->get('GER'),
                         'parent_id' => null,
                         'level' => 1,
                         'is_management' => true,
@@ -220,11 +225,11 @@ class TenantProvisioningService
                 );
 
                 $level2Positions = [
-                    ['code' => 'RH-01', 'title' => 'Gestor de Recursos Humanos', 'dept' => 'RH'],
+                    ['code' => 'ADM-01', 'title' => 'Gestor de Administração', 'dept' => 'ADM'],
+                    ['code' => 'RH-01', 'title' => 'Gestor de RH', 'dept' => 'RH'],
                     ['code' => 'FIN-01', 'title' => 'Gestor Financeiro', 'dept' => 'FIN'],
-                    ['code' => 'ADM-01', 'title' => 'Coordenador Administrativo', 'dept' => 'ADM'],
-                    ['code' => 'OPS-01', 'title' => 'Coordenador de Operações', 'dept' => 'OPS'],
                     ['code' => 'COM-01', 'title' => 'Gestor Comercial', 'dept' => 'COM'],
+                    ['code' => 'OPS-01', 'title' => 'Gestor de Operações', 'dept' => 'OPS'],
                     ['code' => 'TI-01', 'title' => 'Responsável de TI', 'dept' => 'TI'],
                 ];
 
@@ -244,12 +249,13 @@ class TenantProvisioningService
                 }
 
                 $level3Positions = [
-                    ['code' => 'RH-02', 'title' => 'Técnico de Recursos Humanos', 'dept' => 'RH', 'parent' => 'RH-01'],
-                    ['code' => 'FIN-02', 'title' => 'Contabilista', 'dept' => 'FIN', 'parent' => 'FIN-01'],
                     ['code' => 'ADM-02', 'title' => 'Assistente Administrativo', 'dept' => 'ADM', 'parent' => 'ADM-01'],
-                    ['code' => 'OPS-02', 'title' => 'Técnico Operacional', 'dept' => 'OPS', 'parent' => 'OPS-01'],
+                    ['code' => 'RH-02', 'title' => 'Técnico de RH', 'dept' => 'RH', 'parent' => 'RH-01'],
+                    ['code' => 'FIN-02', 'title' => 'Contabilista', 'dept' => 'FIN', 'parent' => 'FIN-01'],
+                    ['code' => 'REC-01', 'title' => 'Recepcionista', 'dept' => 'REC', 'parent' => 'ADM-01'],
                     ['code' => 'COM-02', 'title' => 'Comercial / Vendedor', 'dept' => 'COM', 'parent' => 'COM-01'],
-                    ['code' => 'TI-02', 'title' => 'Técnico de Informática', 'dept' => 'TI', 'parent' => 'TI-01'],
+                    ['code' => 'OPS-02', 'title' => 'Técnico Operacional', 'dept' => 'OPS', 'parent' => 'OPS-01'],
+                    ['code' => 'TI-02', 'title' => 'Técnico de TI', 'dept' => 'TI', 'parent' => 'TI-01'],
                 ];
 
                 foreach ($level3Positions as $pos) {

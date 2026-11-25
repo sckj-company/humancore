@@ -418,35 +418,47 @@ class OrganizationHierarchyAndPermissionsTest extends TestCase
 
         app(TenantManager::class)->set($tenant);
 
-        // Deve ter 7 departamentos base (1 nível 1 + 6 nível 2) e 13 cargos base (1 N1 + 6 N2 + 6 N3)
+        // Deve ter 8 departamentos base (1 nível 1 + 7 nível 2) e 14 cargos base (1 N1 + 6 N2 + 7 N3)
         $deptsRes = $this->actingAs($tenantAdmin, 'sanctum')
             ->getJson('/api/v1/departments')
             ->assertOk();
         $depts = collect($deptsRes->json('data'));
-        $this->assertCount(7, $depts);
+        $this->assertCount(8, $depts);
 
-        $dgDept = $depts->firstWhere('code', 'DG');
+        $gerDept = $depts->firstWhere('code', 'GER');
         $rhDept = $depts->firstWhere('code', 'RH');
-        $this->assertNotNull($dgDept);
-        $this->assertSame(1, $dgDept['level']);
+        $recDept = $depts->firstWhere('code', 'REC');
+        $finDept = $depts->firstWhere('code', 'FIN');
+        $admDept = $depts->firstWhere('code', 'ADM');
+        $this->assertNotNull($gerDept);
+        $this->assertSame('Geral', $gerDept['name']);
+        $this->assertSame(1, $gerDept['level']);
         $this->assertNotNull($rhDept);
+        $this->assertSame('RH', $rhDept['name']);
         $this->assertSame(2, $rhDept['level']);
-        $this->assertSame($dgDept['id'], $rhDept['parent_id']);
+        $this->assertSame($gerDept['id'], $rhDept['parent_id']);
+        $this->assertNotNull($recDept);
+        $this->assertSame('Recepção', $recDept['name']);
+        $this->assertSame('Finanças', $finDept['name'] ?? null);
+        $this->assertSame('Administração', $admDept['name'] ?? null);
 
         $posRes = $this->actingAs($tenantAdmin, 'sanctum')
             ->getJson('/api/v1/positions')
             ->assertOk();
         $positions = collect($posRes->json('data'));
-        $this->assertCount(13, $positions);
+        $this->assertCount(14, $positions);
 
-        $dgPos = $positions->firstWhere('code', 'DG-01');
+        $gerPos = $positions->firstWhere('code', 'GER-01');
         $rhMgrPos = $positions->firstWhere('code', 'RH-01');
         $rhTechPos = $positions->firstWhere('code', 'RH-02');
-        $this->assertSame(1, $dgPos['level']);
+        $recPos = $positions->firstWhere('code', 'REC-01');
+        $this->assertSame(1, $gerPos['level']);
         $this->assertSame(2, $rhMgrPos['level']);
-        $this->assertSame($dgPos['id'], $rhMgrPos['parent_id']);
+        $this->assertSame($gerPos['id'], $rhMgrPos['parent_id']);
         $this->assertSame(3, $rhTechPos['level']);
         $this->assertSame($rhMgrPos['id'], $rhTechPos['parent_id']);
+        $this->assertNotNull($recPos);
+        $this->assertSame('Recepcionista', $recPos['title']);
 
         // Editar departamento e cargo base livremente
         $this->actingAs($tenantAdmin, 'sanctum')
@@ -465,9 +477,9 @@ class OrganizationHierarchyAndPermissionsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.title', 'Especialista de Pessoas');
 
-        // Eliminar departamento pai (Direção Geral) deve reparentar filhos para null sem bloquear
+        // Eliminar departamento pai (Geral) deve reparentar filhos para null sem bloquear
         $this->actingAs($tenantAdmin, 'sanctum')
-            ->deleteJson("/api/v1/departments/{$dgDept['id']}")
+            ->deleteJson("/api/v1/departments/{$gerDept['id']}")
             ->assertOk();
 
         $this->assertDatabaseHas('departments', [
@@ -475,14 +487,14 @@ class OrganizationHierarchyAndPermissionsTest extends TestCase
             'parent_id' => null,
         ]);
 
-        // Eliminar cargo intermediário (RH-01) deve reparentar RH-02 para DG-01
+        // Eliminar cargo intermediário (RH-01) deve reparentar RH-02 para GER-01
         $this->actingAs($tenantAdmin, 'sanctum')
             ->deleteJson("/api/v1/positions/{$rhMgrPos['id']}")
             ->assertOk();
 
         $this->assertDatabaseHas('positions', [
             'id' => $rhTechPos['id'],
-            'parent_id' => $dgPos['id'],
+            'parent_id' => $gerPos['id'],
         ]);
 
         // Garantir que também funciona via TenantProvisioningService diretamente (ex.: empresa gerida)
@@ -491,8 +503,8 @@ class OrganizationHierarchyAndPermissionsTest extends TestCase
             'slug' => 'empresa-gerida-base',
             'origin_type' => 'agency',
         ]);
-        $this->assertSame(7, Department::withoutGlobalScopes()->where('tenant_id', $managed->id)->count());
-        $this->assertSame(13, Position::withoutGlobalScopes()->where('tenant_id', $managed->id)->count());
+        $this->assertSame(8, Department::withoutGlobalScopes()->where('tenant_id', $managed->id)->count());
+        $this->assertSame(14, Position::withoutGlobalScopes()->where('tenant_id', $managed->id)->count());
     }
 
     public function test_can_add_and_remove_employees_within_a_department(): void
@@ -810,5 +822,345 @@ class OrganizationHierarchyAndPermissionsTest extends TestCase
             ->assertOk();
         $this->assertContains('field.employee.salary.view', $meRes->json('data.permissions'));
         $this->assertContains('field.employee.fiscal_ids.edit', $meRes->json('data.permissions'));
+    }
+
+    public function test_position_permissions_apply_to_employees_and_combine_with_department_permissions(): void
+    {
+        [$tenant, $admin] = $this->createTenantWithAdmin();
+
+        $dept = Department::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Finanças',
+            'level' => 2,
+            'status' => 'active',
+        ]);
+
+        $pos = Position::create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $dept->id,
+            'title' => 'Gestor Financeiro',
+            'level' => 2,
+            'is_management' => true,
+        ]);
+
+        $emp = Employee::factory()->create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'first_name' => 'Sofia',
+            'last_name' => 'Castro',
+        ]);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $emp->id,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+        $user->assignRole('employee');
+
+        $overrideEmp = Employee::factory()->create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'first_name' => 'Rui',
+            'last_name' => 'Nogueira',
+        ]);
+        $overrideUser = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'employee_id' => $overrideEmp->id,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+        $overrideUser->assignRole('employee');
+        UserTenantAccess::create([
+            'user_id' => $overrideUser->id,
+            'tenant_id' => $tenant->id,
+            'role_name' => 'employee',
+            'permissions' => ['view_leave'],
+            'is_active' => true,
+        ]);
+
+        // Admin também ligado ao cargo nunca perde acesso total
+        Employee::factory()->create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'user_id' => $admin->id,
+            'email' => $admin->email,
+        ]);
+
+        // Definir permissões no cargo sem sobrescrever individuais
+        $this->actingAs($admin, 'sanctum')
+            ->putJson("/api/v1/positions/{$pos->id}/permissions", [
+                'permissions' => ['view_any_payroll', 'view_payroll', 'field.employee.salary.view'],
+                'role_name' => 'hr-manager',
+                'apply_to_existing_overrides' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.position.effective_permissions_count', 3)
+            ->assertJsonPath('data.affected_employees_count', 1);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/payroll/periods')
+            ->assertOk();
+
+        // Override individual mantém apenas view_leave
+        $this->actingAs($overrideUser, 'sanctum')
+            ->getJson('/api/v1/payroll/periods')
+            ->assertForbidden();
+
+        // Admin continua com acesso total
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/settings')
+            ->assertOk();
+
+        $posEmpsRes = $this->actingAs($admin, 'sanctum')
+            ->getJson("/api/v1/positions/{$pos->id}/employees")
+            ->assertOk();
+        $rows = collect($posEmpsRes->json('data.employees'))->keyBy('id');
+        $this->assertSame('position', $rows[$emp->id]['permission_source']);
+        $this->assertSame('individual', $rows[$overrideEmp->id]['permission_source']);
+
+        // Adicionar permissões no departamento combina ambas e muda fonte para department_and_position
+        $this->actingAs($admin, 'sanctum')
+            ->putJson("/api/v1/departments/{$dept->id}/permissions", [
+                'permissions' => ['approve_leave', 'view_any_leave'],
+            ])
+            ->assertOk();
+
+        $meRes = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/auth/me')
+            ->assertOk();
+        $effectivePerms = $meRes->json('data.permissions');
+        $this->assertContains('view_any_payroll', $effectivePerms);
+        $this->assertContains('approve_leave', $effectivePerms);
+
+        $posEmpsCombined = $this->actingAs($admin, 'sanctum')
+            ->getJson("/api/v1/positions/{$pos->id}/employees")
+            ->assertOk();
+        $rowsCombined = collect($posEmpsCombined->json('data.employees'))->keyBy('id');
+        $this->assertSame('department_and_position', $rowsCombined[$emp->id]['permission_source']);
+
+        // Aplicar também aos overrides existentes remove individualidade e passa a herdar
+        $this->actingAs($admin, 'sanctum')
+            ->putJson("/api/v1/positions/{$pos->id}/permissions", [
+                'permissions' => ['view_any_payroll', 'view_payroll', 'field.employee.salary.view'],
+                'apply_to_existing_overrides' => true,
+            ])
+            ->assertOk();
+
+        $this->actingAs($overrideUser, 'sanctum')
+            ->getJson('/api/v1/payroll/periods')
+            ->assertOk();
+    }
+
+    public function test_assign_employee_permissions_from_position_supports_bulk_and_account_creation_with_email(): void
+    {
+        [$tenant, $admin] = $this->createTenantWithAdmin();
+
+        $dept = Department::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Recepção',
+            'level' => 2,
+            'status' => 'active',
+        ]);
+
+        $pos = Position::create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $dept->id,
+            'title' => 'Recepcionista',
+            'level' => 3,
+            'default_permissions' => ['view_any_attendance', 'view_attendance'],
+        ]);
+
+        $empWithoutEmail = Employee::factory()->create([
+            'tenant_id' => $tenant->id,
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'first_name' => 'Lúcia',
+            'last_name' => 'Tavares',
+            'email' => null,
+            'user_id' => null,
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/positions/{$pos->id}/employees/permissions", [
+                'employee_ids' => [$empWithoutEmail->id],
+                'permissions' => ['view_any_employee', 'view_employee'],
+                'role_name' => 'manager',
+                'scope_to_department' => true,
+                'auto_create_accounts' => true,
+                'default_password' => 'SenhaSegura123',
+                'employee_emails' => [
+                    $empWithoutEmail->id => 'lucia.tavares@empresa.ao',
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.updated_count', 1)
+            ->assertJsonPath('data.created_accounts_count', 1)
+            ->assertJsonPath('data.skipped', []);
+
+        $empWithoutEmail->refresh();
+        $this->assertNotNull($empWithoutEmail->user_id);
+        $this->assertSame('lucia.tavares@empresa.ao', $empWithoutEmail->email);
+
+        $createdUser = User::findOrFail($empWithoutEmail->user_id);
+        $this->actingAs($createdUser, 'sanctum')
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+
+        // Limpar regra individual faz reverter para as permissões do cargo
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/positions/{$pos->id}/employees/permissions", [
+                'employee_ids' => [$empWithoutEmail->id],
+                'clear_individual' => true,
+            ])
+            ->assertOk();
+
+        $this->actingAs($createdUser, 'sanctum')
+            ->getJson('/api/v1/employees')
+            ->assertForbidden();
+
+        $meAfterClear = $this->actingAs($createdUser, 'sanctum')
+            ->getJson('/api/v1/auth/me')
+            ->assertOk();
+        $this->assertContains('view_any_attendance', $meAfterClear->json('data.permissions'));
+    }
+
+    public function test_moving_department_or_position_with_cascade_levels_adjusts_descendant_levels(): void
+    {
+        [$tenant, $admin] = $this->createTenantWithAdmin();
+        $this->actingAs($admin, 'sanctum');
+
+        // Departamentos: Geral (N1) -> RH (N2) -> Recrutamento (N3), e Finanças (N2)
+        $ger = Department::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Geral',
+            'level' => 1,
+            'status' => 'active',
+        ]);
+        $rh = Department::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'RH',
+            'parent_id' => $ger->id,
+            'level' => 2,
+            'status' => 'active',
+        ]);
+        $recrut = Department::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Recrutamento',
+            'parent_id' => $rh->id,
+            'level' => 3,
+            'status' => 'active',
+        ]);
+        $fin = Department::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Finanças',
+            'parent_id' => $ger->id,
+            'level' => 2,
+            'status' => 'active',
+        ]);
+
+        // Arrastar RH para ficar abaixo de Finanças (N3) -> Recrutamento ajusta para N4
+        $this->putJson("/api/v1/departments/{$rh->id}", [
+            'parent_id' => $fin->id,
+            'level' => 3,
+            'cascade_levels' => true,
+        ])->assertOk()
+            ->assertJsonPath('data.parent_id', $fin->id)
+            ->assertJsonPath('data.level', 3);
+
+        $this->assertDatabaseHas('departments', [
+            'id' => $recrut->id,
+            'parent_id' => $rh->id,
+            'level' => 4,
+        ]);
+
+        // Tentar criar ciclo continua a devolver 422
+        $this->putJson("/api/v1/departments/{$rh->id}", [
+            'parent_id' => $recrut->id,
+            'level' => 5,
+            'cascade_levels' => true,
+        ])->assertStatus(422);
+
+        // Promover RH para o topo (N1, sem superior) -> Recrutamento ajusta para N2
+        $this->putJson("/api/v1/departments/{$rh->id}", [
+            'parent_id' => null,
+            'level' => 1,
+            'cascade_levels' => true,
+        ])->assertOk()
+            ->assertJsonPath('data.parent_id', null)
+            ->assertJsonPath('data.level', 1);
+
+        $this->assertDatabaseHas('departments', [
+            'id' => $recrut->id,
+            'parent_id' => $rh->id,
+            'level' => 2,
+        ]);
+
+        // Cargos: Diretor (N1) -> Gestor RH (N2) -> Técnico RH (N3), e Gestor Fin (N2)
+        $dirPos = Position::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Diretor Geral',
+            'level' => 1,
+            'is_management' => true,
+        ]);
+        $rhMgrPos = Position::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Gestor de RH',
+            'parent_id' => $dirPos->id,
+            'level' => 2,
+            'is_management' => true,
+        ]);
+        $rhTechPos = Position::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Técnico de RH',
+            'parent_id' => $rhMgrPos->id,
+            'level' => 3,
+        ]);
+        $finMgrPos = Position::create([
+            'tenant_id' => $tenant->id,
+            'title' => 'Gestor Financeiro',
+            'parent_id' => $dirPos->id,
+            'level' => 2,
+            'is_management' => true,
+        ]);
+
+        // Arrastar Gestor RH para abaixo de Gestor Financeiro (N3) -> Técnico RH ajusta para N4
+        $this->putJson("/api/v1/positions/{$rhMgrPos->id}", [
+            'parent_id' => $finMgrPos->id,
+            'level' => 3,
+            'cascade_levels' => true,
+        ])->assertOk()
+            ->assertJsonPath('data.parent_id', $finMgrPos->id)
+            ->assertJsonPath('data.level', 3);
+
+        $this->assertDatabaseHas('positions', [
+            'id' => $rhTechPos->id,
+            'parent_id' => $rhMgrPos->id,
+            'level' => 4,
+        ]);
+
+        // Promover Gestor RH para N1 -> Técnico RH ajusta para N2
+        $this->putJson("/api/v1/positions/{$rhMgrPos->id}", [
+            'parent_id' => null,
+            'level' => 1,
+            'cascade_levels' => true,
+        ])->assertOk()
+            ->assertJsonPath('data.parent_id', null)
+            ->assertJsonPath('data.level', 1);
+
+        $this->assertDatabaseHas('positions', [
+            'id' => $rhTechPos->id,
+            'parent_id' => $rhMgrPos->id,
+            'level' => 2,
+        ]);
+
+        // Ciclo em cargo continua bloqueado
+        $this->putJson("/api/v1/positions/{$rhMgrPos->id}", [
+            'parent_id' => $rhTechPos->id,
+            'level' => 3,
+            'cascade_levels' => true,
+        ])->assertStatus(422);
     }
 }
