@@ -50,7 +50,9 @@ class SuperAdminController extends BaseController
             return null;
         }
 
-        if ($user->hasRole('super-admin-limited') && ! $user->tenantAccesses()->exists()) {
+        if ($user->hasRole('super-admin-limited')
+            && ! $user->tenantAccesses()->where('is_exception', false)->exists()
+            && ! $user->tenantAccesses()->where('is_exception', true)->where('is_active', false)->exists()) {
             return null;
         }
 
@@ -930,11 +932,16 @@ class SuperAdminController extends BaseController
                 'role_name' => $roleName,
                 'permissions' => $perms,
                 'department_ids' => $deptIds === [] ? null : $deptIds,
+                'is_exception' => false,
+                'is_active' => true,
             ];
         }
 
         $keepTenantIds = array_keys($normalized);
-        $user->tenantAccesses()->whereNotIn('tenant_id', $keepTenantIds === [] ? [0] : $keepTenantIds)->delete();
+        $user->tenantAccesses()
+            ->where('is_exception', false)
+            ->whereNotIn('tenant_id', $keepTenantIds === [] ? [0] : $keepTenantIds)
+            ->delete();
 
         foreach ($normalized as $tenantId => $payload) {
             UserTenantAccess::query()->updateOrCreate(
@@ -949,7 +956,9 @@ class SuperAdminController extends BaseController
      */
     private function formatTenantAccesses(User $user): array
     {
-        return $user->tenantAccesses->map(fn (UserTenantAccess $access) => [
+        return $user->tenantAccesses
+            ->filter(fn (UserTenantAccess $access) => ! $access->is_exception)
+            ->map(fn (UserTenantAccess $access) => [
             'id' => $access->id,
             'tenant_id' => $access->tenant_id,
             'tenant_name' => $access->tenant?->name,

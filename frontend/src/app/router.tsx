@@ -19,6 +19,7 @@ const OrganizationLayout = lazy(() => import('@/features/organization/organizati
 const DepartmentsPage = lazy(() => import('@/features/organization/departments-page').then((m) => ({ default: m.DepartmentsPage })))
 const PositionsPage = lazy(() => import('@/features/organization/positions-page').then((m) => ({ default: m.PositionsPage })))
 const BranchesPage = lazy(() => import('@/features/organization/branches-page').then((m) => ({ default: m.BranchesPage })))
+const ExternalTeamPage = lazy(() => import('@/features/organization/external-team-page').then((m) => ({ default: m.ExternalTeamPage })))
 const PayrollPeriodsPage = lazy(() => import('@/features/payroll/payroll-periods-page').then((m) => ({ default: m.PayrollPeriodsPage })))
 const PayrollPeriodDetailPage = lazy(() => import('@/features/payroll/payroll-period-detail-page').then((m) => ({ default: m.PayrollPeriodDetailPage })))
 const PayslipsPage = lazy(() => import('@/features/payslips/payslips-page').then((m) => ({ default: m.PayslipsPage })))
@@ -118,6 +119,7 @@ export function AppRouter() {
             <Route index element={<DepartmentsPage />} />
             <Route path="positions" element={<PositionsPage />} />
             <Route path="branches" element={<BranchesPage />} />
+            <Route path="external-access" element={<ExternalTeamPage />} />
           </Route>
 
           <Route path="/attendance" element={<TenantRoute><AttendancePage /></TenantRoute>} />

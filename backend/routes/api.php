@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\Onboarding\OnboardingTemplateController;
 use App\Http\Controllers\Api\V1\Organization\BranchController;
 use App\Http\Controllers\Api\V1\Organization\DepartmentController;
 use App\Http\Controllers\Api\V1\Organization\DepartmentPermissionController;
+use App\Http\Controllers\Api\V1\Organization\ExternalTeamPermissionController;
 use App\Http\Controllers\Api\V1\Organization\PositionController;
 use App\Http\Controllers\Api\V1\Payroll\EmployeePayrollSettingsController;
 use App\Http\Controllers\Api\V1\Payroll\MyPayslipsController;
@@ -198,6 +199,9 @@ Route::prefix('v1')->group(function () {
                 Route::put('positions/{position}/permissions', [PositionController::class, 'updatePositionPermissions']);
                 Route::post('positions/{position}/employees/permissions', [PositionController::class, 'assignEmployeePermissions']);
             });
+            Route::get('organization/external-team', [ExternalTeamPermissionController::class, 'index']);
+            Route::post('organization/external-team/permissions', [ExternalTeamPermissionController::class, 'updatePermissions']);
+            Route::post('organization/external-team/platform-users', [ExternalTeamPermissionController::class, 'storePlatformUser']);
             Route::apiResource('branches', BranchController::class)
                 ->middleware(['plan.feature:branches', 'plan.quota:max_branches']);
 

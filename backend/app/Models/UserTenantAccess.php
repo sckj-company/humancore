@@ -18,6 +18,7 @@ class UserTenantAccess extends Model
         'permissions',
         'department_ids',
         'is_active',
+        'is_exception',
     ];
 
     protected function casts(): array
@@ -26,6 +27,7 @@ class UserTenantAccess extends Model
             'permissions' => 'array',
             'department_ids' => 'array',
             'is_active' => 'boolean',
+            'is_exception' => 'boolean',
         ];
     }
 
@@ -52,7 +54,7 @@ class UserTenantAccess extends Model
     public function hasExplicitPermissions(): bool
     {
         return $this->permission_group_id !== null
-            || (is_array($this->permissions) && $this->permissions !== []);
+            || (is_array($this->permissions) && ($this->permissions !== [] || (bool) $this->is_exception));
     }
 
     /**

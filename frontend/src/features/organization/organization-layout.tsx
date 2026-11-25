@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Building2, Briefcase, MapPin } from 'lucide-react'
+import { Building2, Briefcase, MapPin, ShieldCheck } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { hasAnyRole, hasPermission, isPlatformAdmin, useAuthStore } from '@/stores/auth-store'
 
-const subPages = [
+const baseSubPages = [
   { href: '/organization', labelKey: 'organizationPage.departments.title', icon: Building2 },
   { href: '/organization/positions', labelKey: 'organizationPage.positions.title', icon: Briefcase },
   { href: '/organization/branches', labelKey: 'organizationPage.branches.title', icon: MapPin },
@@ -13,6 +14,24 @@ export function OrganizationLayout() {
   const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+
+  const canManageExternalTeam =
+    isPlatformAdmin(user) ||
+    hasAnyRole(user, ['admin']) ||
+    hasPermission(user, 'update_user') ||
+    hasPermission(user, 'create_user')
+
+  const subPages = canManageExternalTeam
+    ? [
+        ...baseSubPages,
+        {
+          href: '/organization/external-access',
+          labelKey: 'organizationPage.externalTeam.tabTitle',
+          icon: ShieldCheck,
+        },
+      ]
+    : baseSubPages
 
   const activeTab =
     subPages.find((page) =>

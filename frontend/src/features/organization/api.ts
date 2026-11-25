@@ -215,6 +215,52 @@ export interface PositionEmployeesResponse {
   can_manage_employees: boolean
 }
 
+export interface ExternalTeamMember {
+  id: number
+  name: string
+  email: string
+  is_active: boolean
+  source_type: 'super_admin_full' | 'super_admin_limited' | 'manager_tenant'
+  source_label: string
+  is_protected: boolean
+  is_current_user: boolean
+  status_in_company: 'global_default' | 'customized' | 'blocked'
+  role_name?: string | null
+  permission_group_id?: number | null
+  permission_group_name?: string | null
+  effective_permissions: string[]
+  has_salary_access: boolean
+  department_scope_ids: number[]
+}
+
+export interface ExternalTeamResponse {
+  members: ExternalTeamMember[]
+  departments: Array<{ id: number; name: string; code?: string | null; level: number }>
+  can_manage_permissions: boolean
+  can_create_platform_users: boolean
+  can_create_full_super_admin: boolean
+}
+
+export interface UpdateExternalTeamPermissionsPayload {
+  user_ids: number[]
+  mode: 'customize' | 'hide_salaries' | 'restore_default' | 'block'
+  permissions?: string[] | null
+  permission_group_id?: number | null
+  role_name?: string | null
+  department_ids?: number[] | null
+}
+
+export interface CreatePlatformAdminPayload {
+  name: string
+  email: string
+  password: string
+  role: 'super-admin' | 'super-admin-limited'
+  permissions?: string[]
+  role_name?: string | null
+  can_manage_super_admins?: boolean
+  hide_salaries_in_current_company?: boolean
+}
+
 export interface DepartmentPermissionsPayload {
   permissions?: string[] | null
   permission_group_id?: number | null
@@ -565,3 +611,38 @@ export const useEmployeesPicker = (search: string, enabled: boolean) =>
     },
     enabled,
   })
+
+// ================= External Team / Platform Admins Hooks =================
+export const useExternalTeam = () =>
+  useQuery({
+    queryKey: ['external-team'],
+    queryFn: () => api.get<ExternalTeamResponse>('organization/external-team'),
+  })
+
+export const useUpdateExternalTeamPermissions = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: UpdateExternalTeamPermissionsPayload) =>
+      api.post<{ updated_count: number; skipped: Array<{ user_id: number; name: string; reason: string }> }>(
+        'organization/external-team/permissions',
+        data,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['external-team'] })
+    },
+  })
+}
+
+export const useCreatePlatformAdminFromOrg = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreatePlatformAdminPayload) =>
+      api.post<{ id: number; name: string; email: string; role: string }>(
+        'organization/external-team/platform-users',
+        data,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['external-team'] })
+    },
+  })
+}

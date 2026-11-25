@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\EmployeeContract;
 use App\Models\PermissionGroup;
 use App\Models\Position;
 use App\Models\Tenant;
@@ -1162,5 +1163,176 @@ class OrganizationHierarchyAndPermissionsTest extends TestCase
             'level' => 3,
             'cascade_levels' => true,
         ])->assertStatus(422);
+    }
+
+    public function test_external_team_flow_allows_per_company_salary_exception_blocking_and_creating_platform_admins(): void
+    {
+        $fullAdmin = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+        $fullAdmin->assignRole('super-admin');
+
+        $t1 = Tenant::factory()->create(['name' => 'Empresa Sem Salário 1', 'status' => 'active']);
+        $t2 = Tenant::factory()->create(['name' => 'Empresa Sem Salário 2', 'status' => 'active']);
+        $t3 = Tenant::factory()->create(['name' => 'Empresa Completa 3', 'status' => 'active']);
+
+        foreach ([$t1, $t2, $t3] as $tnt) {
+            app(TenantManager::class)->set($tnt);
+            $emp = Employee::factory()->create(['tenant_id' => $tnt->id, 'status' => 'active']);
+            EmployeeContract::factory()->create([
+                'tenant_id' => $tnt->id,
+                'employee_id' => $emp->id,
+                'base_salary' => 450000,
+                'is_active' => true,
+                'start_date' => '2026-01-01',
+            ]);
+        }
+
+        // 1. Criar Super-Admin Limitado diretamente pelo fluxo em Organização (com exceção imediata na Empresa 1)
+        $createLimitedRes = $this->actingAs($fullAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t1->id)
+            ->postJson('/api/v1/organization/external-team/platform-users', [
+                'name' => 'Técnica RH Plataforma',
+                'email' => 'rh.plataforma@holding.ao',
+                'password' => 'SenhaForte123',
+                'role' => 'super-admin-limited',
+                'permissions' => [
+                    'view_any_employee',
+                    'view_employee',
+                    'view_any_contract',
+                    'view_contract',
+                    'field.employee.salary.view',
+                    'field.contract.base_salary.view',
+                ],
+                'role_name' => 'hr-manager',
+                'hide_salaries_in_current_company' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.role', 'super-admin-limited');
+
+        $hrUser = User::query()->findOrFail($createLimitedRes->json('data.id'));
+
+        // Na Empresa 1 (exceção criada na criação), salário está oculto
+        $resT1 = $this->actingAs($hrUser, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t1->id)
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+        $this->assertNull($resT1->json('data.data.0.active_contract.base_salary'));
+
+        // Na Empresa 3 (sem exceção), vê o salário normalmente
+        $resT3 = $this->actingAs($hrUser, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t3->id)
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+        $this->assertEquals(450000, (float) $resT3->json('data.data.0.active_contract.base_salary'));
+
+        // 2. Na Empresa 2, aplicar ocultação de salários em 1 clique pela aba Equipa Externa
+        $this->actingAs($fullAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t2->id)
+            ->postJson('/api/v1/organization/external-team/permissions', [
+                'user_ids' => [$hrUser->id],
+                'mode' => 'hide_salaries',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.updated_count', 1);
+
+        $resT2 = $this->actingAs($hrUser, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t2->id)
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+        $this->assertNull($resT2->json('data.data.0.active_contract.base_salary'));
+
+        // Verificar que a listagem externa em t2 sinaliza salários ocultos e estado customized
+        $extListT2 = $this->actingAs($fullAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t2->id)
+            ->getJson('/api/v1/organization/external-team')
+            ->assertOk();
+        $hrRowT2 = collect($extListT2->json('data.members'))->firstWhere('id', $hrUser->id);
+        $this->assertSame('customized', $hrRowT2['status_in_company']);
+        $this->assertFalse($hrRowT2['has_salary_access']);
+
+        // 3. Empresa 4 criada DEPOIS das exceções continua acessível e vendo salários automaticamente
+        $t4 = Tenant::factory()->create(['name' => 'Empresa Nova 4', 'status' => 'active']);
+        app(TenantManager::class)->set($t4);
+        $emp4 = Employee::factory()->create(['tenant_id' => $t4->id, 'status' => 'active']);
+        EmployeeContract::factory()->create([
+            'tenant_id' => $t4->id,
+            'employee_id' => $emp4->id,
+            'base_salary' => 500000,
+            'is_active' => true,
+            'start_date' => '2026-01-01',
+        ]);
+
+        $resT4 = $this->actingAs($hrUser, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t4->id)
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+        $this->assertEquals(500000, (float) $resT4->json('data.data.0.active_contract.base_salary'));
+
+        // 4. Bloquear acesso apenas na Empresa 2 (mantendo 1, 3 e 4 acessíveis)
+        $this->actingAs($fullAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t2->id)
+            ->postJson('/api/v1/organization/external-team/permissions', [
+                'user_ids' => [$hrUser->id],
+                'mode' => 'block',
+            ])
+            ->assertOk();
+
+        $this->actingAs($hrUser, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t2->id)
+            ->getJson('/api/v1/employees')
+            ->assertForbidden();
+
+        $this->flushHeaders();
+        app(TenantManager::class)->clear();
+
+        $accessibleIds = collect(
+            $this->actingAs($hrUser, 'sanctum')
+                ->getJson('/api/v1/companies/accessible')
+                ->assertOk()
+                ->json('data')
+        )->pluck('id')->all();
+        $this->assertContains($t1->id, $accessibleIds);
+        $this->assertNotContains($t2->id, $accessibleIds);
+        $this->assertContains($t3->id, $accessibleIds);
+        $this->assertContains($t4->id, $accessibleIds);
+
+        // 5. Restaurar padrão global na Empresa 1 volta a exibir o salário
+        $this->actingAs($fullAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t1->id)
+            ->postJson('/api/v1/organization/external-team/permissions', [
+                'user_ids' => [$hrUser->id],
+                'mode' => 'restore_default',
+            ])
+            ->assertOk();
+
+        $resT1Restored = $this->actingAs($hrUser, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t1->id)
+            ->getJson('/api/v1/employees')
+            ->assertOk();
+        $this->assertEquals(450000, (float) $resT1Restored->json('data.data.0.active_contract.base_salary'));
+
+        // 6. Super-Admin Limitado não pode criar Super-Admin Total; Super-Admin Total pode criar outro Total
+        $this->actingAs($hrUser, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t3->id)
+            ->postJson('/api/v1/organization/external-team/platform-users', [
+                'name' => 'Tentativa Indevida',
+                'email' => 'indevido@holding.ao',
+                'password' => 'SenhaForte123',
+                'role' => 'super-admin',
+            ])
+            ->assertForbidden();
+
+        $createFullRes = $this->actingAs($fullAdmin, 'sanctum')
+            ->withHeader('X-Tenant-ID', (string) $t1->id)
+            ->postJson('/api/v1/organization/external-team/platform-users', [
+                'name' => 'Diretor Plataforma Total',
+                'email' => 'total2@holding.ao',
+                'password' => 'SenhaForte123',
+                'role' => 'super-admin',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.role', 'super-admin');
+
+        $secondFullAdmin = User::query()->findOrFail($createFullRes->json('data.id'));
+        $this->assertTrue($secondFullAdmin->hasRole('super-admin'));
     }
 }

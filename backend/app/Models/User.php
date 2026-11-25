@@ -364,6 +364,27 @@ class User extends Authenticatable
         return $ids === [] ? null : $ids;
     }
 
+    public function isBlockedFromTenant(int $tenantId): bool
+    {
+        if ($this->hasRole('super-admin')) {
+            return false;
+        }
+
+        if ($this->relationLoaded('tenantAccesses')) {
+            return $this->tenantAccesses->contains(
+                fn (UserTenantAccess $access) => (int) $access->tenant_id === $tenantId
+                    && (bool) $access->is_exception
+                    && $access->is_active === false
+            );
+        }
+
+        return $this->tenantAccesses()
+            ->where('tenant_id', $tenantId)
+            ->where('is_exception', true)
+            ->where('is_active', false)
+            ->exists();
+    }
+
     public function canAccessTenant(int|string|null $tenantId): bool
     {
         if ($this->hasRole('super-admin')) {
@@ -376,12 +397,16 @@ class User extends Authenticatable
 
         $targetId = (int) $tenantId;
 
-        if ($this->hasRole('super-admin-limited')) {
-            $hasConfiguredAccesses = $this->relationLoaded('tenantAccesses')
-                ? $this->tenantAccesses->isNotEmpty()
-                : $this->tenantAccesses()->exists();
+        if ($this->isBlockedFromTenant($targetId)) {
+            return false;
+        }
 
-            if (! $hasConfiguredAccesses) {
+        if ($this->hasRole('super-admin-limited')) {
+            $hasWhitelistAccesses = $this->relationLoaded('tenantAccesses')
+                ? $this->tenantAccesses->contains(fn (UserTenantAccess $access) => ! $access->is_exception)
+                : $this->tenantAccesses()->where('is_exception', false)->exists();
+
+            if (! $hasWhitelistAccesses) {
                 return true;
             }
 
@@ -431,21 +456,33 @@ class User extends Authenticatable
             return $query->get($columns)->map(fn (Tenant $t) => $mapTenant($t));
         }
 
-        $accessTenantIds = $this->tenantAccesses()
+        $blockedTenantIds = $this->tenantAccesses()
+            ->where('is_exception', true)
+            ->where('is_active', false)
+            ->pluck('tenant_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $whitelistTenantIds = $this->tenantAccesses()
+            ->where('is_exception', false)
             ->where('is_active', true)
             ->pluck('tenant_id')
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        if ($this->hasRole('super-admin-limited') && $accessTenantIds === []) {
-            return $query->get($columns)->map(fn (Tenant $t) => $mapTenant($t));
+        if ($this->hasRole('super-admin-limited') && $whitelistTenantIds === []) {
+            return $query
+                ->when($blockedTenantIds !== [], fn ($q) => $q->whereNotIn('id', $blockedTenantIds))
+                ->get($columns)
+                ->map(fn (Tenant $t) => $mapTenant($t));
         }
 
         $managedIds = app(\App\Services\SaaS\TenantHierarchyService::class)->accessibleManagedTenantIdsForUser($this);
 
-        $ids = collect($accessTenantIds)
+        $ids = collect($whitelistTenantIds)
             ->merge($managedIds)
             ->when($this->tenant_id, fn (Collection $c) => $c->push((int) $this->tenant_id))
+            ->reject(fn (int $id) => in_array($id, $blockedTenantIds, true))
             ->unique()
             ->values()
             ->all();

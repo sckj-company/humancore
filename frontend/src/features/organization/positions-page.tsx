@@ -752,7 +752,7 @@ export function PositionsPage() {
       {positions && filtered.length > 0 && viewMode === 'columns' && (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           {/* Coluna Esquerda (25%) - Lista de Cargos */}
-          <Card className="w-full lg:w-[25%] lg:min-w-[240px] lg:shrink-0">
+          <Card className="w-full lg:sticky lg:top-4 lg:w-[25%] lg:min-w-[240px] lg:shrink-0 lg:self-start">
             <CardContent className="p-2.5">
               <div className="mb-2 flex items-center justify-between px-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -760,7 +760,7 @@ export function PositionsPage() {
                 </span>
               </div>
 
-              <div className="max-h-[68vh] space-y-1.5 overflow-y-auto pr-1">
+              <div className="max-h-[calc(100vh-5.5rem)] space-y-1.5 overflow-y-auto pr-1">
                 {filtered.map((p) => {
                   const isSelected = p.id === effectiveSelectedPositionId
                   const hasPerms = (p.effective_permissions_count ?? 0) > 0
